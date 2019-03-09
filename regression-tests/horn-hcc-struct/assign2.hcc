@@ -1,0 +1,14 @@
+struct{
+    struct {
+        int a;
+    } s1, s2;
+} s;
+
+void main() {
+    s.s1.a = 3;
+    s.s2.a = 42;
+    assert(s.s1.a == 3);
+    assert(s.s2.a == 42);
+    s.s1 = s.s2;
+    assert(s.s1.a == 42);
+}

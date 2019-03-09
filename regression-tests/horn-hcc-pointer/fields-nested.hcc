@@ -1,0 +1,26 @@
+struct{
+    int a;
+    struct{
+        int a;
+        struct{
+            int a;
+        }b;
+    }b;
+} s1 = {1,2,3}, s2 = {4,5,6};
+
+void swap(int *x, int *y){
+    int tmp = *x;
+    *x = *y;
+    *y = tmp; 
+}
+
+void main() {
+    swap(&s1.b.b.a, &s2.b.b.a);
+    assert(s1.b.b.a == 6 && s2.b.b.a == 3);
+
+    int *x1 = &s1.b.a;
+    swap(&s2.b.a, x1);
+    assert(*x1 == s1.b.a && 
+           *x1 == 2 &&
+           s2.b.a == 5);
+}

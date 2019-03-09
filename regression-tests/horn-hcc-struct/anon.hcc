@@ -1,0 +1,17 @@
+struct{
+    int a;
+    struct {
+        int b;
+    } b;
+} b;
+
+thread A {   
+    b.a = 42;
+    b.b.b = 41;
+
+    b.b = b.b;
+    b.a = b.b.b - 1;
+
+    assert(b.a == 40);
+    assert(b.b.b == 41);
+}

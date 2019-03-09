@@ -1,0 +1,15 @@
+typedef struct{
+    int a;
+}MyStruct;
+
+typedef struct S{
+    int a;
+}MyStruct2;
+
+MyStruct s;
+MyStruct2 s2;
+
+thread A {
+    assert(s.a == 0);
+    assert(s2.a == 0);
+}

@@ -1,0 +1,15 @@
+
+typedef struct {
+  int x;
+} S1;
+
+typedef struct {
+  int x;
+} S2;
+
+S1 s1;
+
+int main() {
+ S2 s2;
+ s2 = s1; //this should fail (does not compile)
+}

@@ -1,0 +1,43 @@
+
+basic.hcc
+SAFE
+
+fields.hcc
+SAFE
+
+fields-nested.hcc
+UNSAFE
+
+-----------------------------------------------------------------
+Init:
+   main2(.AS0(1, .AS1(2, .AS2(3))), .AS0(4, .AS1(5, .AS2(6))))   
+-----------------------------------------------------------------
+                                |                                
+                                |                                
+                                V                                
+   main3(.AS0(1, .AS1(2, .AS2(6))), .AS0(4, .AS1(5, .AS2(3))))   
+-----------------------------------------------------------------
+                                |                                
+                                |                                
+                                V                                
+ main12(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
+-----------------------------------------------------------------
+Final:
+ main12(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
+-----------------------------------------------------------------
+
+struct-pointer.hcc
+SAFE
+
+struct-pointer2.hcc
+Warning: no definition of function "nondet" available
+SAFE
+
+unary.hcc
+SAFE
+
+unary-struct.hcc
+SAFE
+
+unary-struct-nested.hcc
+SAFE

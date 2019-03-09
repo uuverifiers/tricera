@@ -1,0 +1,20 @@
+typedef struct {
+    int a;
+    int b;
+} S;
+
+S s;
+
+void main() {
+  S *p = &s;
+  s.b = 42;
+  s.a = p->b;
+  assert(s.a == 42);
+  assert(p->b == 42);
+  (*p).a = 3;
+  assert(s.a == 3);
+  p->b = p->a;
+  assert(s.b == 3);
+  (&s)->a = 1;
+  assert(s.a == 1);
+}

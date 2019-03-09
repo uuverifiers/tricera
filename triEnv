@@ -1,0 +1,38 @@
+# Figures out where TriCera is installed and runs it with the proper classpath
+# (partially copied from the scala dist.)
+SOURCE=$0;
+SCRIPT=`basename "${SOURCE}"`;
+
+# Finds the root folder of the distribution, through the tempest (and the
+# symbolic links)
+while [ -h "${SOURCE}" ]; do
+    SCRIPT=`basename "${SOURCE}"`;
+    LOOKUP=`ls -ld "${SOURCE}"`;
+    TARGET=`expr "${LOOKUP}" : '.*-> \(.*\)$'`;
+    if expr "${TARGET:-.}/" : '/.*/$' > /dev/null; then
+        SOURCE=${TARGET:-.};
+    else
+        SOURCE=`dirname "${SOURCE}"`/${TARGET:-.};
+    fi;
+done;
+
+LAZABS_HOME=`dirname "${SOURCE}"`;
+
+export JAVA_OPTS="-Xmx2024m -Xss20000k";
+
+if [ -f ${LAZABS_HOME}/dist/tricera.jar ]; then
+
+   	# binary distribution
+	export LAZABS_CMD="java ${JAVA_OPTS} -cp ${LAZABS_HOME}/dist/tricera.jar"
+
+else if [ -f ${LAZABS_HOME}/target/scala-2.*/TriCera-assembly*.jar ]; then
+
+        # binary distribution from sbt
+	export LAZABS_CMD="java ${JAVA_OPTS} -cp ${LAZABS_HOME}/target/scala-2.*/TriCera-assembly*.jar"
+
+else
+
+        echo "Could not find TriCera jar" >&2
+        exit 1
+
+fi; fi

@@ -1,0 +1,13 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="anon.hcc assign.hcc assign2.hcc assign-exp-eval-order.hcc assign-illegal.hcc \
+       init.hcc loop.hcc nested.hcc race.hcc typedef.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done
+

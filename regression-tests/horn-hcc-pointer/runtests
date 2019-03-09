@@ -1,0 +1,12 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="basic.hcc fields.hcc fields-nested.hcc struct-pointer.hcc struct-pointer2.hcc unary.hcc unary-struct.hcc unary-struct-nested.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done
+

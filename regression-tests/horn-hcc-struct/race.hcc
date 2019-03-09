@@ -1,0 +1,28 @@
+
+typedef struct {
+  int x;
+} S1;
+
+S1 s;
+
+int flag = 0;
+
+int main() {
+  int n;
+
+  assert(s.x == 0);
+
+  s.x = n;
+
+  flag = 1;
+  ++s.x;
+
+  assume(flag == 2);
+  assert(s.x == n + 2); // should not hold
+}
+
+thread A {
+  assume(flag == 1);
+  ++s.x;
+  flag = 2;
+}

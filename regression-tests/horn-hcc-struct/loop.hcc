@@ -1,0 +1,21 @@
+
+typedef struct {
+  int x;
+  unsigned y;
+} S1;
+
+int main() {
+  S1 s1;
+  int i;
+
+  s1.x -= s1.x;
+
+  assert(s1.x == 0); // currently failing, but should hold
+
+  for (i = 0; i < s1.y; ++i) {
+    ++s1.x;
+  }
+
+  assert(s1.x == s1.y);
+  assert(s1.y >= 0);
+}

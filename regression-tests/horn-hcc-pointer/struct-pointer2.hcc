@@ -1,0 +1,22 @@
+
+
+typedef struct {
+  int x, y;
+} Pair;
+
+void inc(Pair *p) {
+  p->y = p->x;
+  ++(p->x);
+}
+
+int nondet();
+
+void main() {
+  Pair p = { 0, 1 };
+
+  while(nondet()) {
+    inc(&p);
+  }
+
+  assert(p.x != p.y);
+}

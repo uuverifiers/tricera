@@ -1,0 +1,26 @@
+struct{
+    struct {
+        int a;
+        int b;
+    } s;
+} s = {1, 2};
+
+void main() {
+    int *x = &s.s.a;
+    ++(*x);
+    assert(s.s.a == 2 && 
+           *x == s.s.a);
+    --(*x);
+    assert(s.s.a == 1 &&
+           *x == s.s.a); 
+
+    s.s.b = (*x)++;
+    assert(s.s.a == 2 &&
+           *x == s.s.a &&
+           s.s.b == (s.s.a - 1) ); 
+
+    s.s.b = (*x)--;
+    assert(s.s.a == 1 &&
+           *x == s.s.a &&
+           s.s.b == (s.s.a + 1) ); 
+}

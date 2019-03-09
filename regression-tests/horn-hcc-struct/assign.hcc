@@ -1,0 +1,20 @@
+struct {
+    int x;
+    struct{
+        int x;
+    } s;
+} s1, s2;
+
+int main() {
+    s2.x = 1;
+    assert(s2.x == 1);
+    assert(s2.s.x == 0);
+    s1.s.x = 42;
+    s1.x = 2;
+    assert(s1.x == 2);
+    assert(s1.s.x == 42);
+
+    s2.s = s1.s;
+    assert(s2.x == 1);
+    assert(s2.s.x == 42);
+}

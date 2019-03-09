@@ -1,0 +1,27 @@
+int x;
+int *y = &x;
+
+void swap(int *x, int *y){
+    int tmp = *x;
+    *x = *y;
+    *y = tmp; 
+}
+
+void main() {
+    assert(*y == 0); //global *y -> global x
+    x = 1;
+    assert(*y == 1);
+    *y = 2;
+    assert(x == 2);
+
+    int a = 3;
+    int b = 42;
+    swap(&a, &b);
+    assert(a == 42 && b == 3);
+
+    int *x = &a, *y = &b; //local *x and *y shadows the global ones
+    swap(x, y);
+    assert(a == 3 && b == 42);
+    assert(*x == a && *y == b);
+}
+

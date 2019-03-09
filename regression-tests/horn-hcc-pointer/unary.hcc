@@ -1,0 +1,24 @@
+
+void main() {
+    int a = 0;
+    int b;
+    int *x = &a;
+    ++(*x);
+    assert(a == 1 && 
+           *x == a);
+
+    b = --(*x);
+    assert(a == 0 && 
+           *x == a && 
+           b == a);
+
+    b = (*x)++;
+    assert(a == 1 && 
+           *x == a && 
+           b == (a-1));
+
+    b = (*x)--;
+    assert(a == 0 &&
+           *x == a &&
+           b == (a+1));
+}

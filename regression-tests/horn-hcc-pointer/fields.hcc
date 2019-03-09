@@ -1,0 +1,15 @@
+struct{
+    int a;
+    int b;
+} s = {1, 2};
+
+void swap(int *x, int *y){
+    int tmp = *x;
+    *x = *y;
+    *y = tmp; 
+}
+
+void main() {
+    swap(&s.a, &s.b);
+    assert(s.a == 2 && s.b == 1);
+}
