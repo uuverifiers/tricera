@@ -1,0 +1,22 @@
+
+
+typedef enum {
+  A, B, C
+} E;
+
+void main() {
+  E x;
+  int res;
+
+  switch(x) {
+    case A:
+    case B:
+      res = 5;
+      break;
+    case C:
+      res = 10;
+      break;
+  }
+
+  assert(res <= 100);
+}

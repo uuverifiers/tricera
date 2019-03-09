@@ -1,0 +1,49 @@
+typedef enum {
+x=0,
+y=1,
+z=0x8C
+}b_Ans;
+
+// int x[10];
+
+typedef struct {
+  int x0, x1, x2, x3, x4, x5, x6, x7, x8, x9;
+} int_ar_10;
+
+/*
+typedef union {
+  int x; unsigned int y;
+} U;
+
+typedef struct {
+  int x; unsigned int y;
+} U2;
+*/
+
+
+struct {
+//  int32 _db_32[N];
+  struct {
+    int32 _SIGNAL_WHEEL;
+    int32 _XYZ;
+    ...
+  }_db_32;
+  int16 _db_16[M];
+} db;
+
+
+int read(E index) {
+  switch(index) {
+    case SIGNAL_WHEEL: return db._db_32._SIGNAL_WHEEL;
+    case XYZ: return db._db_32._XYZ;
+    ...
+  }
+}
+
+
+int main() {
+  
+  db._db_32._SIGNAL_WHEEL = ...;
+
+  assert(z == 0x8c);
+}

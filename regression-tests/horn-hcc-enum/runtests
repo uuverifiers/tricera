@@ -1,0 +1,18 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="enum1.hcc \
+       enum2.hcc \
+       enum3.hcc \
+       enum4.hcc \
+       enum-typedef.hcc \
+       enum-typedef2.hcc \
+       enum-typedef-pointer.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done
+

@@ -1,0 +1,10 @@
+
+
+enum E {
+  A, B, C
+};
+
+void main() {
+  enum E x;
+  assert(x == A || x == B || x == C);
+}

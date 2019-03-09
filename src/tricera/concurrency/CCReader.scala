@@ -145,6 +145,7 @@ object CCReader {
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = true
   }
+
   private case class CCStruct(adt: ADT, name: String, fields: List[(String, CCType)])
     extends CCType{
     override def toString : String =
@@ -232,10 +233,32 @@ object CCReader {
       adt.constructors.head(const: _*)
     }
   }
+
+  /**
+   * Type for enums that are encoded as an ADT
+   */
+  private case class CCADTEnum(adt: ADT, name: String,
+                               enumerators: Seq[String])
+    extends CCType{
+    override def toString : String =
+      "enum-adt " + name + ": (" + enumerators.mkString + ")"
+  }
+
+  /**
+   * Type for enums that are directly mapped to integers
+   */
+  private case class CCIntEnum(name: String,
+                               enumerators: Seq[(String, IdealInt)])
+    extends CCType{
+    override def toString : String =
+      "enum-int " + name + ": (" + enumerators.mkString + ")"
+  }
+
   private case class CCStackPointer(targetInd : Int, typ : CCType,
                                fieldAddress : List[Int] = Nil) extends CCType {
     override def toString :String = typ + " pointer (to: " + targetInd + ")"
   }
+
   private case object CCClock extends CCType {
     override def toString : String = "clock"
   }
@@ -293,9 +316,11 @@ class CCReader private (prog : Program,
 
     def toSort: Sort = typ match {
       case CCStackPointer(_,_,_) => Sort.Integer
-      case CCStruct(adt, _, _) => adt.sorts.head
-      case CCDuration => Sort.Nat
-      case CCClock => Sort.Integer
+      case CCStruct(adt, _, _)   => adt.sorts.head
+      case CCADTEnum(adt, _, _)  => adt.sorts.head
+      case CCIntEnum(_, _)       => Sort.Integer // toRichType(CCInt).toSort
+      case CCDuration            => Sort.Nat
+      case CCClock               => Sort.Integer
       case typ: CCArithType => arithmeticMode match {
         case ArithmeticMode.Mathematical => typ match {
           case typ: CCArithType if typ.isUnsigned => Sort.Nat
@@ -332,6 +357,7 @@ class CCReader private (prog : Program,
     }
 
     def rangePred(t : ITerm) : IFormula =
+      // is this actually necessary?
       toSort membershipConstraint t
 
     def newConstant(name : String) =
@@ -462,6 +488,9 @@ class CCReader private (prog : Program,
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val structDefs    = new MHashMap[String, CCStruct]
+  private val enumDefs      = new MHashMap[String, CCType]
+
+  private val enumeratorDefs= new MHashMap[String, CCExpr]
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -865,6 +894,19 @@ class CCReader private (prog : Program,
               }
             case _ => buildStructType(structDec) // use X in "struct X"
           }
+        case enumDec : Tenum =>
+          enumDec.enum_specifier_ match {
+            case dec : EnumDec =>
+              for (initDecl <- decl.listinit_declarator_) {
+                val declarator = initDecl match {
+                  case initDecl: OnlyDecl => initDecl.declarator_
+                  case initDecl: HintDecl => initDecl.declarator_
+                }
+                buildEnumType(dec.listenumerator_,
+                              getName(declarator)) //use typedef name
+              }
+            case _ => buildEnumType(enumDec) // use X in "enum X"
+          }
         case _ => // nothing required, handled by replacing lexer
       }
     }
@@ -876,8 +918,9 @@ class CCReader private (prog : Program,
       }
       typ match {
         case structDec : Tstruct => buildStructType(structDec)
+        case enumDec : Tenum => buildEnumType(enumDec)
         case _ => throw new
-            TranslationException("NoDeclarator only for structs")
+            TranslationException("NoDeclarator only for structs or enums!")
       }
     }
   }
@@ -970,11 +1013,17 @@ class CCReader private (prog : Program,
       yield qual.asInstanceOf[TypeSpec].type_specifier_)
   }
 
-  private var anonStructCount = 0
-  private def getAnonStructName: String = {
-    anonStructCount += 1
-    ".AS" + (anonStructCount - 1)
+  private var anonCount = 0
+  private def getAnonName(prefix : String): String = {
+    anonCount += 1
+    prefix + (anonCount - 1)
   }
+
+  private def getAnonStructName: String =
+    getAnonName(".AS")
+
+  private def getAnonEnumName: String =
+    getAnonName(".ES")
 
   private def getStructType(spec: Tstruct) : Option[CCStruct] = {
     val structName = spec.struct_or_union_spec_ match {
@@ -982,10 +1031,9 @@ class CCReader private (prog : Program,
       case tagged: Tag => tagged.cident_
       case tagged: TagType => tagged.cident_
     }
-    if (structDefs contains structName)
-      Some(structDefs(structName))
-    else None
+    structDefs get structName
   }
+
   private def buildStructType(spec: Tstruct) : CCStruct = {
     spec.struct_or_union_spec_ match {
       case _ : Unique => buildStructType(spec, getAnonStructName)
@@ -1057,6 +1105,96 @@ class CCReader private (prog : Program,
     initStack
   }
 
+  private def getEnumType(spec: Tenum) : CCType =
+    spec.enum_specifier_ match {
+      case dec : EnumDec =>
+        buildEnumType(dec.listenumerator_, getAnonEnumName)
+      case named : EnumName =>
+        buildEnumType(named.listenumerator_, named.cident_)
+      case vared : EnumVar =>
+        (enumDefs get vared.cident_) match {
+          case Some(t) => t
+          case None =>
+            throw new TranslationException(
+              "enum " + vared.cident_ + " is not defined")
+        }
+    }
+
+  private def buildEnumType(spec: Tenum) : CCType = {
+    spec.enum_specifier_ match {
+      case dec : EnumDec =>
+        buildEnumType(dec.listenumerator_, getAnonEnumName)
+      case named : EnumName =>
+        buildEnumType(named.listenumerator_, named.cident_)
+      case _ => throw new TranslationException("enum not completely specified")
+    }
+  }
+
+  private def buildEnumType (specs: Seq[Enumerator],
+                             enumName: String): CCType = {
+    if (enumDefs contains enumName)
+      throw new TranslationException(
+        "enum " + enumName + " is already defined")
+
+    def addEnumerator(name : String, t : CCExpr) = {
+      if (enumeratorDefs contains name)
+        throw new TranslationException(
+          "enumerator " + name + " already defined")
+      enumeratorDefs.put(name, t)
+    }
+
+    if (specs forall (_.isInstanceOf[Plain])) {
+      // encode the enum as an ADT
+
+      import ADT._
+      val enumSig = CtorSignature(List(), ADTSort(0))
+
+      val enumerators = for (s <- specs) yield s match {
+        case s : Plain => s.cident_
+      }
+      val ctors = for (s <- enumerators) yield (s, enumSig)
+
+      val adt = new ADT (List("enum" + enumName), ctors)
+      val newEnum = CCADTEnum(adt, enumName, enumerators)
+      enumDefs.put(enumName, newEnum)
+
+      for ((n, f) <- enumerators.iterator zip adt.constructors.iterator)
+        addEnumerator(n, CCTerm(f(), newEnum))
+
+      newEnum
+
+    } else {
+      // map the enumerators to integers directly
+
+      var nextInd = IdealInt.ZERO
+      val enumerators = for (s <- specs) yield s match {
+        case s : Plain => {
+          val ind = nextInd
+          nextInd = nextInd + 1
+          (s.cident_, ind)
+        }
+        case s : EnumInit => {
+          val ind = translateConstantExpr(s.constant_expression_).toTerm match {
+            case IIntLit(v) => v
+            case _ =>
+              throw new TranslationException("cannot handle enumerator " +
+                                             (printer print s))
+          }
+          nextInd = ind + 1
+          (s.cident_, ind)
+        }
+      }
+      
+      val newEnum = CCIntEnum(enumName, enumerators)
+
+      for ((n, v) <- enumerators)
+        addEnumerator(n, CCTerm(v, newEnum))
+
+      newEnum
+
+    }
+  }
+
   private def getType(specs : Iterator[Type_specifier]) : CCType = {
     // by default assume that the type is int
     var typ : CCType = CCInt
@@ -1086,6 +1224,8 @@ class CCReader private (prog : Program,
                 case None => buildStructType(structOrUnion)
                 case Some(structType) => structType
               }
+            case enum : Tenum =>
+              typ = getEnumType(enum)
             case _ : Tclock => {
               if (!useTime)
                 throw NeedsTimeException
@@ -1907,7 +2047,20 @@ class CCReader private (prog : Program,
             (topVal.mapTerm(_ + op), getVarType(lhsName), lookupVar(lhsName))
         setValue(lhsInd, actualLhsTerm, isIndirection(postExp))
 
-      case exp : Evar => pushVal(getValue(exp.cident_))
+      case exp : Evar => {
+        val name = exp.cident_
+        pushVal(lookupVarNoException(name) match {
+                  case -1 =>
+                    (enumeratorDefs get name) match {
+                      case Some(e) => e
+                      case None => throw new TranslationException(
+                                     "Symbol " + name + " is not declared")
+                    }
+                  case ind =>
+                    getValue(ind, false)
+                })
+      }
+
       case exp : Econst => evalHelp(exp.constant_)
 //      case exp : Estring.     Exp17 ::= String;
     }

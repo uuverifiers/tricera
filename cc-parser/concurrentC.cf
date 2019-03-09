@@ -117,7 +117,7 @@ EnumName.  Enum_specifier ::= "enum" CIdent "{" [Enumerator] "}" ;
 EnumVar.   Enum_specifier ::= "enum" CIdent ;
 
 Plain.     Enumerator ::= CIdent ;
--- EnumInit.  Enumerator ::= CIdent "=" Constant_expression ;
+EnumInit.  Enumerator ::= CIdent "=" Constant_expression ;
 
 separator nonempty Enumerator ",";
 

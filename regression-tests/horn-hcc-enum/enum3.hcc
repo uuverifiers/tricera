@@ -1,0 +1,8 @@
+
+
+enum week{Mon, Tue, Wed}day;
+
+void main() {
+  day = Mon;
+  assert(day != Tue);
+}

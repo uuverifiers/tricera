@@ -1,0 +1,31 @@
+
+enum1.hcc
+SAFE
+
+enum2.hcc
+UNSAFE
+
+----------
+Init:
+ main3(C) 
+----------
+Final:
+ main3(C) 
+----------
+
+enum3.hcc
+SAFE
+
+enum4.hcc
+SAFE
+
+enum-typedef.hcc
+SAFE
+
+enum-typedef2.hcc
+Warning: no definition of function "nondet" available
+SAFE
+
+enum-typedef-pointer.hcc
+Warning: no definition of function "nondet" available
+SAFE
