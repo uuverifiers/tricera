@@ -1,0 +1,31 @@
+
+
+typedef enum {
+  A, B, C
+} E;
+
+typedef struct {
+  E x;
+  E y;
+} Pair;
+
+void inc(E *x) {
+  switch(*x) {
+    case A: *x = B; break;
+    case B: *x = C; break;
+    case C: *x = A; break;
+  }
+}
+
+int nondet();
+
+void main() {
+  Pair p = { A, B };
+
+  while(nondet()) {
+    inc(&p.x);
+    inc(&p.y);
+  }
+
+  assert(p.x != p.y);
+}

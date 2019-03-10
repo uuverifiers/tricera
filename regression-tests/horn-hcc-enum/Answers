@@ -29,3 +29,7 @@ SAFE
 enum-typedef-pointer.hcc
 Warning: no definition of function "nondet" available
 SAFE
+
+enum-typedef-pointer2.hcc
+Warning: no definition of function "nondet" available
+SAFE
