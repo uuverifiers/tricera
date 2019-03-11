@@ -314,11 +314,11 @@ class CCReader private (prog : Program,
   private implicit def toRichType(typ : CCType) = new Object {
     import ModuloArithmetic._
 
-    def toSort: Sort = typ match {
+    private def type2Sort(t : CCType) : Sort = t match {
       case CCStackPointer(_,_,_) => Sort.Integer
       case CCStruct(adt, _, _)   => adt.sorts.head
       case CCADTEnum(adt, _, _)  => adt.sorts.head
-      case CCIntEnum(_, _)       => Sort.Integer // toRichType(CCInt).toSort
+      case CCIntEnum(_, _)       => type2Sort(CCInt)
       case CCDuration            => Sort.Nat
       case CCClock               => Sort.Integer
       case typ: CCArithType => arithmeticMode match {
@@ -355,6 +355,8 @@ class CCReader private (prog : Program,
         }
       }
     }
+
+    def toSort: Sort = type2Sort(typ)
 
     def rangePred(t : ITerm) : IFormula =
       // is this actually necessary?
@@ -1143,7 +1145,7 @@ class CCReader private (prog : Program,
       enumeratorDefs.put(name, t)
     }
 
-    if (specs forall (_.isInstanceOf[Plain])) {
+/*    if (specs forall (_.isInstanceOf[Plain])) {
       // encode the enum as an ADT
 
       import ADT._
@@ -1163,7 +1165,7 @@ class CCReader private (prog : Program,
 
       newEnum
 
-    } else {
+    } else */ {
       // map the enumerators to integers directly
 
       var nextInd = IdealInt.ZERO
@@ -1186,6 +1188,7 @@ class CCReader private (prog : Program,
       }
       
       val newEnum = CCIntEnum(enumName, enumerators)
+      enumDefs.put(enumName, newEnum)
 
       for ((n, v) <- enumerators)
         addEnumerator(n, CCTerm(v, newEnum))

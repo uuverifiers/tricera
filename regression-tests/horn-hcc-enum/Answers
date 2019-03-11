@@ -1,16 +1,24 @@
 
 enum1.hcc
-SAFE
+UNSAFE
+
+----------
+Init:
+ main3(3) 
+----------
+Final:
+ main3(3) 
+----------
 
 enum2.hcc
 UNSAFE
 
 ----------
 Init:
- main3(C) 
+ main3(2) 
 ----------
 Final:
- main3(C) 
+ main3(2) 
 ----------
 
 enum3.hcc

@@ -1,12 +1,14 @@
 
 
 typedef enum {
-  A, B, C
+  A, B, C, NUM
 } E;
 
 void main() {
   E x;
   int res;
+
+  assume(x >= 0 && x < NUM);
 
   switch(x) {
     case A:
