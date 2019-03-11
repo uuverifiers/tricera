@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018 Hossein Hojjat and Philipp Ruemmer.
+ * Copyright (c) 2018-2019 Hossein Hojjat and Philipp Ruemmer.
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ object ParallelComputation {
    * <code>parameters</code> list is empty, the computation will just be
    * run with the current global parameters.
    */
-  def apply[A](parameters : Seq[GlobalParameters],
+  def apply[A](parameters : Seq[TriCeraParameters],
                startDelay : Int = 200,
                checkPeriod : Int = 50)
               (comp: => A) =
@@ -53,7 +53,7 @@ object ParallelComputation {
  * and stop all threads as soon as one of them has produced a result.
  */
 class ParallelComputation[A](comp: => A,
-                             parameters : Seq[GlobalParameters],
+                             parameters : Seq[TriCeraParameters],
                              startDelay : Int = 100,
                              checkPeriod : Int = 50) {
 
@@ -64,7 +64,7 @@ class ParallelComputation[A](comp: => A,
     (for (p <- parameters.iterator; if resultOpt.isEmpty) yield {
        val thread = new Thread(new Runnable { def run : Unit = {
 
-         GlobalParameters.parameters.value = p
+         TriCeraParameters.parameters.value = p
          p.timeoutChecker = () => {
            if (resultOpt.isDefined || exceptionOpt.isDefined)
              throw StoppedException
@@ -89,7 +89,7 @@ class ParallelComputation[A](comp: => A,
 
   while (resultOpt.isEmpty && exceptionOpt.isEmpty)
     try {
-      GlobalParameters.get.timeoutChecker()
+      TriCeraParameters.get.timeoutChecker()
       threads.head join checkPeriod
     } catch {
       case t : Throwable =>

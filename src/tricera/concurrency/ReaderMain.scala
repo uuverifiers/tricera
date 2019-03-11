@@ -88,7 +88,7 @@ object ReaderMain {
 
   def main(args: Array[String]) : Unit = {
     ap.util.Debug enableAllAssertions false
-    lazabs.GlobalParameters.get.assertions = false
+    tricera.TriCeraParameters.get.assertions = false
 
     for (name <- args) {
       val system = 

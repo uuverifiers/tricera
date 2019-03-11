@@ -34,160 +34,33 @@ import tricera.concurrency.CCReader
 import java.io.{FileInputStream, InputStream, FileNotFoundException}
 import lazabs.prover._
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
+import lazabs.GlobalParameters
 
-object GlobalParameters {
+object TriCeraParameters {
+  def get : TriCeraParameters =
+    GlobalParameters.get.asInstanceOf[TriCeraParameters]
   val parameters =
-    new scala.util.DynamicVariable[GlobalParameters](new GlobalParameters)
-
-  def get: GlobalParameters = parameters.value
+    GlobalParameters.parameters
 }
 
-class GlobalParameters extends Cloneable {
-  var in: InputStream = null
-  var fileName = ""
-  var funcName = "main"
-  var solFileName = ""
-  var timeout: Option[Int] = None
-  var spuriousness = true
-  //  var searchMethod = DFS
-  var drawRTree = false
-  //var drawCFG = false
-  var absInFile = false
-  var lbe = false
-  var slicing = true
-  var prettyPrint = false
-  var smtPrettyPrint = false
-  //  var interpolation = false
-  var ntsPrint = false
-  var printIntermediateClauseSets = false
-  var horn = false
-  var concurrentC = false
-  var global = false
-  var disjunctive = false
-  var splitClauses = false
-  var displaySolutionProlog = false
-  var displaySolutionSMT = false
-  //var format = GlobalParameters.InputFormat.AutoDetect
-  var didIncompleteTransformation = false
-  var templateBasedInterpolation = true
-  var templateBasedInterpolationType: AbstractionType.Value =
-    AbstractionType.RelationalEqs
-  var templateBasedInterpolationTimeout = 2000
-  var templateBasedInterpolationPortfolio = false
-  var cegarHintsFile: String = ""
-  var arithmeticMode: CCReader.ArithmeticMode.Value =
+class TriCeraParameters extends GlobalParameters {
+
+  var arithMode : CCReader.ArithmeticMode.Value =
     CCReader.ArithmeticMode.Mathematical
-  var arrayRemoval = false
-  var arrayQuantification: Option[Int] = Some(1)
-  var princess = false
-  var staticAccelerate = false
-  var dynamicAccelerate = false
-  var underApproximate = false
-  var template = false
-  var dumpInterpolationQuery = false
-  var babarew = false
-  var log = false
-  var logCEX = false
-  var logStat = false
-  var printHornSimplified = false
-  var dotSpec = false
-  var dotFile: String = null
-  var pngNo = true;
-  var eogCEX = false;
-  var plainCEX = false;
-  var assertions = false
-  var timeoutChecker: () => Unit = () => ()
 
-  def needFullSolution = assertions || displaySolutionProlog || displaySolutionSMT
-
-  def needFullCEX = assertions || plainCEX || !pngNo
-
-  def setLogLevel(level: Int): Unit = level match {
-    case x if x <= 0 => { // no logging
-      log = false
-      logStat = false
-      logCEX = false
-    }
-    case 1 => { // statistics only
-      log = false
-      logStat = true
-      logCEX = false
-    }
-    case 2 => { // full logging
-      log = true
-      logStat = true
-      logCEX = false
-    }
-    case x if x >= 3 => { // full logging + detailed counterexamples
-      log = true
-      logStat = true
-      logCEX = true
-    }
+  protected def copyTo(that : TriCeraParameters) = {
+    super.copyTo(that)
+    that.arithMode = this.arithMode
   }
 
-  override def clone: GlobalParameters = {
-    val res = new GlobalParameters
-
-    res.in = this.in
-    res.fileName = this.fileName
-    res.funcName = this.funcName
-    res.solFileName = this.solFileName
-    res.timeout = this.timeout
-    res.spuriousness = this.spuriousness
-    //res.searchMethod = this.searchMethod
-    res.drawRTree = this.drawRTree
-    res.absInFile = this.absInFile
-    res.lbe = this.lbe
-    res.slicing = this.slicing
-    res.prettyPrint = this.prettyPrint
-    res.smtPrettyPrint = this.smtPrettyPrint
-    res.ntsPrint = this.ntsPrint
-    res.printIntermediateClauseSets = this.printIntermediateClauseSets
-    res.horn = this.horn
-    res.concurrentC = this.concurrentC
-    res.global = this.global
-    res.disjunctive = this.disjunctive
-    res.splitClauses = this.splitClauses
-    res.displaySolutionProlog = this.displaySolutionProlog
-    res.displaySolutionSMT = this.displaySolutionSMT
-    //res.format = this.format
-    res.didIncompleteTransformation = this.didIncompleteTransformation
-    res.templateBasedInterpolation = this.templateBasedInterpolation
-    res.templateBasedInterpolationType = this.templateBasedInterpolationType
-    res.templateBasedInterpolationTimeout = this.templateBasedInterpolationTimeout
-    res.templateBasedInterpolationPortfolio = this.templateBasedInterpolationPortfolio
-    res.cegarHintsFile = this.cegarHintsFile
-    res.arithmeticMode = this.arithmeticMode
-    res.arrayRemoval = this.arrayRemoval
-    res.princess = this.princess
-    res.staticAccelerate = this.staticAccelerate
-    res.dynamicAccelerate = this.dynamicAccelerate
-    res.underApproximate = this.underApproximate
-    res.template = this.template
-    res.dumpInterpolationQuery = this.dumpInterpolationQuery
-    res.babarew = this.babarew
-    res.log = this.log
-    res.logCEX = this.logCEX
-    res.logStat = this.logStat
-    res.printHornSimplified = this.printHornSimplified
-    res.dotSpec = this.dotSpec
-    res.dotFile = this.dotFile
-    res.pngNo = this.pngNo
-    res.eogCEX = this.eogCEX
-    res.plainCEX = this.plainCEX
-    res.assertions = this.assertions
-    res.timeoutChecker = this.timeoutChecker
-
+  override def clone: TriCeraParameters = {
+    val res = new TriCeraParameters
+    this copyTo res
     res
   }
 
-  def withAndWOTemplates: Seq[GlobalParameters] =
-    List({
-      val p = this.clone
-      p.templateBasedInterpolation = false
-      p
-    },
-      this.clone)
+  override def withAndWOTemplates : Seq[TriCeraParameters] =
+    for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
 }
 
@@ -203,7 +76,7 @@ object Main {
   object StoppedException extends MainException("stopped")
 
   def openInputFile {
-    val params = GlobalParameters.parameters.value
+    val params = TriCeraParameters.get
     import params._
     in = new FileInputStream(fileName)
   }
@@ -211,11 +84,11 @@ object Main {
   def main(args: Array[String]): Unit = doMain(args, false)
 
   val greeting =
-    "TriCera v2.0.\n(C) Copyright 2012-2019 Hossein Hojjat and Philipp Ruemmer"
+    "TriCera v0.1.\n(C) Copyright 2012-2019 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer"
 
   def doMain(args: Array[String],
              stoppingCond: => Boolean): Unit = try {
-    val params = new GlobalParameters
+    val params = new TriCeraParameters
     GlobalParameters.parameters.value = params
 
     // work-around: make the Princess wrapper thread-safe
@@ -281,14 +154,14 @@ object Main {
 
       case "-splitClauses" :: rest => splitClauses = true; arguments(rest)
 
-      case arithMode :: rest if (arithMode startsWith "-arithMode:") => {
-        arithmeticMode = arithMode match {
+      case aMode :: rest if (aMode startsWith "-arithMode:") => {
+        arithMode = aMode match {
           case "-arithMode:math" => CCReader.ArithmeticMode.Mathematical
           case "-arithMode:ilp32" => CCReader.ArithmeticMode.ILP32
           case "-arithMode:lp64" => CCReader.ArithmeticMode.LP64
           case "-arithMode:llp64" => CCReader.ArithmeticMode.LLP64
           case _ =>
-            throw new MainException("Unrecognised mode " + arithMode)
+            throw new MainException("Unrecognised mode " + aMode)
         }
         arguments(rest)
       }
@@ -333,7 +206,7 @@ object Main {
       case "-dotCEX" :: rest => pngNo = false; arguments(rest)
       case "-eogCEX" :: rest => pngNo = false; eogCEX = true; arguments(rest)
       case "-cex" :: rest => plainCEX = true; arguments(rest)
-      case "-assert" :: rest => GlobalParameters.get.assertions = true; arguments(rest)
+      case "-assert" :: rest => TriCeraParameters.get.assertions = true; arguments(rest)
       case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +
         "General options:\n" +
         " -h\t\tShow this information\n" +
@@ -418,7 +291,7 @@ object Main {
       CCReader(new java.io.BufferedReader(
         new java.io.FileReader(new java.io.File(fileName))),
         funcName,
-        arithmeticMode)
+        arithMode)
 
     if (prettyPrint)
       tricera.concurrency.ReaderMain.printClauses(system)
