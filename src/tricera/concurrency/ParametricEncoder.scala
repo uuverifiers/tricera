@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2018 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2011-2019 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -103,33 +103,80 @@ object ParametricEncoder {
 
   //////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Specification of possible background axioms that can be used in the
+   * transition or assertion clauses. Background predicates are not
+   * allowed in time invariant clauses
+   */
+  sealed abstract class BackgroundAxioms {
+    def predicates : Seq[IExpression.Predicate]
+    def clauses : Seq[HornClauses.Clause]
+  }
+
+  case object NoBackgroundAxioms
+              extends BackgroundAxioms {
+    def predicates : Seq[IExpression.Predicate] = List()
+    def clauses : Seq[HornClauses.Clause] = List()
+  }
+
+  case class  SomeBackgroundAxioms(predicates : Seq[IExpression.Predicate],
+                                   clauses : Seq[HornClauses.Clause])
+              extends BackgroundAxioms
+
+  //////////////////////////////////////////////////////////////////////////////
+
   import HornPreprocessor.{VerificationHints, VerifHintElement,
                            VerifHintTplElement, VerifHintTplPred,
                            VerifHintTplEqTerm, EmptyVerificationHints,
                            InitPredicateVerificationHints}
 
-  case class System(processes : ParametricEncoder.ProcessSet,
-                    globalVarNum : Int,
-                    backgroundAxioms : Option[Seq[ITerm] => IFormula],
-                    timeSpec : ParametricEncoder.TimeSpec,
-                    timeInvariants : Seq[HornClauses.Clause],
-                    assertions : Seq[HornClauses.Clause],
-                    hints : VerificationHints = EmptyVerificationHints) {
+  case class System(processes            : ParametricEncoder.ProcessSet,
+                    globalVarNum         : Int,
+                    globalVarAssumptions : Option[Seq[ITerm] => IFormula],
+                    timeSpec             : ParametricEncoder.TimeSpec,
+                    timeInvariants       : Seq[HornClauses.Clause],
+                    assertions           : Seq[HornClauses.Clause],
+                    hints                : VerificationHints =
+                                             EmptyVerificationHints,
+                    backgroundAxioms     : BackgroundAxioms =
+                                             NoBackgroundAxioms) {
 
     import HornClauses.Clause
     import IExpression._
 
+    val backgroundPreds = backgroundAxioms.predicates.toSet
+
+    def isBackgroundAtom(a : IAtom) : Boolean = backgroundPreds contains a.pred
+
+    for (c <- backgroundAxioms.clauses)
+      assert(c.predicates subsetOf (backgroundPreds + HornClauses.FALSE))
+
+    for (c <- timeInvariants)
+      assert(Seqs.disjoint(c.predicates - HornClauses.FALSE, backgroundPreds))
+
+    // Extractor to partition the body of a clause into the local process
+    // predicates and the background predicates
+    object ClauseBody {
+      def unapply(body : List[IAtom]) : Option[(List[IAtom], List[IAtom])] =
+        if (backgroundPreds.isEmpty)
+          Some(body, List())
+        else
+          Some(body partition ((a) => !isBackgroundAtom(a)))
+    }
+
     val localPreds = for ((process, _) <- processes) yield {
       val preds = new LinkedHashSet[Predicate]
       for ((c, _) <- process)
-        preds ++= c.predicates
+        for (p <- c.predicates)
+          if (!(backgroundPreds contains p))
+            preds += p
       preds.toSeq
     }
 
     val allLocalPreds =
       (for (preds <- localPreds.iterator; p <- preds.iterator) yield p).toSet
 
-    assert(hints.predicateHints.keys forall allLocalPreds)
+    assert(hints.predicateHints.keys forall (allLocalPreds ++ backgroundPreds))
 
     val globalVarSorts =
       predArgumentSorts(allLocalPreds.iterator.next) take globalVarNum
@@ -146,13 +193,14 @@ object ParametricEncoder {
       val allPreds = new MHashSet[Predicate]
       for (preds <- localPreds.iterator; p <- preds.iterator) {
         val b = allPreds add p
-        assert(b)
+        assert(b, "Processes need to use distinct control predicates")
       }
     }
   
     val localInitClauses =
       for ((process, _) <- processes) yield
-        (for ((c@Clause(_, List(), _), NoSync) <- process.iterator)
+        (for ((c@Clause(_, body, _), NoSync) <- process.iterator;
+              if body forall isBackgroundAtom)
          yield c).toList
   
     val localPredRanking =
@@ -224,7 +272,8 @@ object ParametricEncoder {
                case None => // nothing
              }
 
-           (mapping + (HornClauses.FALSE -> HornClauses.FALSE),
+           (mapping + (HornClauses.FALSE -> HornClauses.FALSE) ++
+                      (for (p <- backgroundPreds) yield (p -> p)),
             i, for (_ <- n) yield j)
          }).toList
 
@@ -279,18 +328,19 @@ object ParametricEncoder {
          yield updateClause(clause, mapping, j)).toList
 
       val newAssertions =
-        (for (Clause(head, body, constraint) <- assertions.iterator;
+        (for (Clause(head, ClauseBody(processAtoms, backgroundAtoms),
+                     constraint) <- assertions.iterator;
               allAtomsVec =
-                for (IAtom(p, args) <- body) yield (
+                for (IAtom(p, args) <- processAtoms) yield (
                    for ((m, _, _) <- predMappings;
                       if (m contains p)) yield IAtom(m(p), args));
               newBody <- cartesianProduct(allAtomsVec);
               if ((for (IAtom(p, _) <- newBody.iterator) yield p).toSet.size ==
-                  body.size))
-         yield (Clause(head, newBody, constraint))).toList
+                  processAtoms.size))
+         yield (Clause(head, newBody ++ backgroundAtoms, constraint))).toList
 
       val newSystem =
-        System(newProcesses, globalVarNum, backgroundAxioms,
+        System(newProcesses, globalVarNum, globalVarAssumptions,
                timeSpec, newTimeInvs, newAssertions,
                VerificationHints(newPredicateHints.toMap))
       newSystem
@@ -316,13 +366,11 @@ object ParametricEncoder {
       for (clauses <- localInitClauses.iterator; c <- clauses.iterator)
         predsToKeep ++= c.predicates
 
-      def isLocalClause(p : (Clause, Synchronisation)) =
-        p._2 == NoSync &&
-        p._1.body.size == 1 &&
-        Seqs.disjoint(predsWithTimeInvs, p._1.predicates) && {
-          val Clause(head@IAtom(_, headArgs),
-                     body@List(IAtom(_, bodyArgs)),
-                     constraint) = p._1
+      def isLocalClause(p : (Clause, Synchronisation)) = p match {
+        case (clause@Clause(head@IAtom(_, headArgs),
+                            ClauseBody(body@List(IAtom(_, bodyArgs)), _),
+                            constraint), NoSync) =>
+          Seqs.disjoint(predsWithTimeInvs, clause.predicates) && {
           val globalHeadArgs =
             (for (IConstant(c) <- headArgs take globalVarNum) yield c).toSet
 
@@ -337,6 +385,8 @@ object ParametricEncoder {
             Seqs.disjoint(globalHeadArgs, occurringConstants)
           }
         }
+        case _ => false
+      }
 
       val newProcesses =
         (for (((clauses, repl), preds) <-
@@ -367,7 +417,8 @@ object ParametricEncoder {
                 yield p
 
               val outgoing =
-                for (p@(Clause(_, List(IAtom(`pred`, _)), _), _) <-clauseBuffer)
+                for (p@(Clause(_, ClauseBody(List(IAtom(`pred`, _)), _), _), _)
+                       <- clauseBuffer)
                 yield p
 
               if (// avoid blow-up
@@ -420,7 +471,7 @@ object ParametricEncoder {
 
       System(newProcesses,
              globalVarNum,
-             backgroundAxioms,
+             globalVarAssumptions,
              timeSpec,
              timeInvariants,
              newAssertions,
@@ -610,7 +661,7 @@ class ParametricEncoder(system : ParametricEncoder.System,
   }
 
   def allAxioms(globalParams : Seq[ITerm]) : IFormula =
-    timeAxioms(globalParams) &&& (backgroundAxioms match {
+    timeAxioms(globalParams) &&& (globalVarAssumptions match {
       case Some(fun) => fun(globalParams)
       case None      => true
     })

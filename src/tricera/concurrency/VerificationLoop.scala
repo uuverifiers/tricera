@@ -163,7 +163,7 @@ class VerificationLoop(system : ParametricEncoder.System) {
   import HornClauses.{Clause, FALSE}
   import Util._
 
-  val result = {
+  val result : Either[Unit, Counterexample] = {
     val processNum = system.processes.size
     var invariants : Seq[Seq[Int]] =
       for (i <- 0 until processNum)
@@ -427,8 +427,7 @@ class VerificationLoop(system : ParametricEncoder.System) {
                             newState2@IAtom(newP2, _))) =
                     findModifiedIndexes(localAtoms)
 
-                  assert(oldSendP != oldRecP &&
-                         Set(newSendP, newRecP) == Set(newP1, newP2))
+                  assert(Set(newSendP, newRecP) == Set(newP1, newP2))
 
                   val (senderIndex, receiverIndex) =
                     if (oldSendP == currentStates(index1).pred)
@@ -438,7 +437,12 @@ class VerificationLoop(system : ParametricEncoder.System) {
 
                   updateGlobalVars(newArgs1 take globalVarNum)
 
-                  if (newSendP == newP1) {
+                  if (newSendP == newP1 &&
+                      (newSendP != newRecP ||
+                       // special case: sender and receiver have the same
+                       // target predicate; in this case check the process id
+                       currentStates(senderIndex).args(globalVarNum) ==
+                         newState1.args(globalVarNum))) {
                     currentStates(senderIndex) = newState1
                     currentStates(receiverIndex) = newState2
                     CEXCommStep(currentStates.toList, commChannel,
