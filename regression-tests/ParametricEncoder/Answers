@@ -15,39 +15,40 @@ Send non-interference clauses:                         1
 Receive non-interference clauses:                      1
 Send/receive non-interference clauses:                 3
 Barrier clauses:                                       0
+Background axiom clauses:                              3
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
-Initially:                                             8         3
+Initially:                                             11        4
 
 
+------------------------------ Analysing loops ---------------------------------
+Loop heads:
+   inv_p0/2 (3 clauses, 2 templates)
+   inv_p1/3 (1 clauses, 3 templates)
+   inv_p2/2 (1 clauses, 2 templates)
+   mmult/3 (2 clauses, 5 templates)
 
 ----------------------------------- CEGAR --------------------------------------
-Theories: Types, GroebnerMultiplication
-State hashing enabled
-Unique satisfiable clauses: 8
-   1 clauses with 0 body literals
-   2 clauses with 1 body literals
-   2 clauses with 2 body literals
+Theories: Types
+Unique satisfiable clauses: 11
+   2 clauses with 0 body literals
+   3 clauses with 1 body literals
+   3 clauses with 2 body literals
    3 clauses with 3 body literals
 
 --------------------------------- Statistics -----------------------------------
-CEGAR iterations:                                      1
-Final number of abstract states:                       2
-Final number of matched abstract states:               2
-Final number of abstract edges:                        2
-Number of generated predicates:                        1
-Average predicate size (# of sub-formulas):            1.00
-Number of implication checks:                          5
+CEGAR iterations:                                      5
+Final number of abstract states:                       8
+Final number of matched abstract states:               10
+Final number of abstract edges:                        17
+Number of generated predicates:                        12
+Average predicate size (# of sub-formulas):            1.50
+Number of implication checks:                          304
 
-Number of implication checks (setup):                  4
-Number of implication checks (positive):               1
-Number of implication checks (negative):               0
-
-Number of models in hasher:                            4
-Number of hasher evals:                                34
-Time for hasher eval:                                  27
-Hasher hits/misses:                                    3/1 (75%)
+Number of implication checks (setup):                  56
+Number of implication checks (positive):               61
+Number of implication checks (negative):               187
 --------------------------------------------------------------------------------
 
 SAFE
@@ -65,39 +66,91 @@ Send non-interference clauses:                         1
 Receive non-interference clauses:                      1
 Send/receive non-interference clauses:                 3
 Barrier clauses:                                       0
+Background axiom clauses:                              3
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
-Initially:                                             8         3
+Initially:                                             11        4
 
 
+------------------------------ Analysing loops ---------------------------------
+Loop heads:
+   inv_p0/2 (3 clauses, 2 templates)
+   inv_p1/3 (1 clauses, 3 templates)
+   inv_p2/2 (1 clauses, 2 templates)
+   mmult/3 (2 clauses, 5 templates)
 
 ----------------------------------- CEGAR --------------------------------------
-Theories: Types, GroebnerMultiplication
-State hashing enabled
-Unique satisfiable clauses: 8
-   1 clauses with 0 body literals
-   2 clauses with 1 body literals
-   2 clauses with 2 body literals
+Theories: Types
+Unique satisfiable clauses: 11
+   2 clauses with 0 body literals
+   3 clauses with 1 body literals
+   3 clauses with 2 body literals
+   3 clauses with 3 body literals
+
+--------------------------------- Statistics -----------------------------------
+CEGAR iterations:                                      6
+Final number of abstract states:                       12
+Final number of matched abstract states:               15
+Final number of abstract edges:                        28
+Number of generated predicates:                        27
+Average predicate size (# of sub-formulas):            2.00
+Number of implication checks:                          1054
+
+Number of implication checks (setup):                  80
+Number of implication checks (positive):               185
+Number of implication checks (negative):               789
+--------------------------------------------------------------------------------
+
+SAFE
+
+Using invariants List(1)
+
+Symmetry clauses:                                      0
+Init clauses:                                          1
+Time elapse clauses:                                   0
+Assertion clauses:                                     1
+Local transition clauses:                              1
+Local non-interference clauses:                        0
+Send/receive clauses:                                  0
+Send non-interference clauses:                         1
+Receive non-interference clauses:                      1
+Send/receive non-interference clauses:                 3
+Barrier clauses:                                       0
+Background axiom clauses:                              3
+
+------------------------------- Preprocessing ----------------------------------
+                                                       #clauses  #relation syms
+Initially:                                             11        4
+
+
+------------------------------ Analysing loops ---------------------------------
+Loop heads:
+   inv_p0/2 (3 clauses, 2 templates)
+   inv_p1/3 (1 clauses, 3 templates)
+   inv_p2/2 (1 clauses, 2 templates)
+   mmult/3 (2 clauses, 5 templates)
+
+----------------------------------- CEGAR --------------------------------------
+Theories: Types
+Unique satisfiable clauses: 11
+   2 clauses with 0 body literals
+   3 clauses with 1 body literals
+   3 clauses with 2 body literals
    3 clauses with 3 body literals
 
 --------------------------------- Statistics -----------------------------------
 CEGAR iterations:                                      1
-Final number of abstract states:                       3
-Final number of matched abstract states:               3
-Final number of abstract edges:                        3
+Final number of abstract states:                       4
+Final number of matched abstract states:               4
+Final number of abstract edges:                        7
 Number of generated predicates:                        0
 Average predicate size (# of sub-formulas):            0.00
-Number of implication checks:                          4
+Number of implication checks:                          8
 
-Number of implication checks (setup):                  4
+Number of implication checks (setup):                  8
 Number of implication checks (positive):               0
 Number of implication checks (negative):               0
-
-Number of models in hasher:                            4
-Number of hasher evals:                                31
-Time for hasher eval:                                  13
-Hasher hits/misses:                                    3/1 (75%)
 --------------------------------------------------------------------------------
 
 Unsat, trying again with higher precision ...
@@ -115,39 +168,43 @@ Send non-interference clauses:                         3
 Receive non-interference clauses:                      3
 Send/receive non-interference clauses:                 6
 Barrier clauses:                                       0
+Background axiom clauses:                              3
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
-Initially:                                             23        6
+Initially:                                             26        7
 
 
+------------------------------ Analysing loops ---------------------------------
+Loop heads:
+   inv_p1_p2/5 (2 clauses, 5 templates)
+   inv_p0_p2/4 (2 clauses, 8 templates)
+   inv_p2_p2/5 (2 clauses, 5 templates)
+   inv_p0_p0/3 (10 clauses, 3 templates)
+   mmult/3 (2 clauses, 5 templates)
+   inv_p1_p1/5 (3 clauses, 5 templates)
+   inv_p0_p1/4 (6 clauses, 6 templates)
 
 ----------------------------------- CEGAR --------------------------------------
-Theories: Types, GroebnerMultiplication
-State hashing enabled
-Unique satisfiable clauses: 30
-   1 clauses with 0 body literals
-   10 clauses with 1 body literals
-   6 clauses with 2 body literals
+Theories: Types
+Unique satisfiable clauses: 33
+   2 clauses with 0 body literals
+   9 clauses with 1 body literals
+   9 clauses with 2 body literals
    13 clauses with 3 body literals
 
 --------------------------------- Statistics -----------------------------------
 CEGAR iterations:                                      1
-Final number of abstract states:                       8
-Final number of matched abstract states:               8
-Final number of abstract edges:                        10
+Final number of abstract states:                       9
+Final number of matched abstract states:               9
+Final number of abstract edges:                        13
 Number of generated predicates:                        0
 Average predicate size (# of sub-formulas):            0.00
-Number of implication checks:                          11
+Number of implication checks:                          14
 
-Number of implication checks (setup):                  11
+Number of implication checks (setup):                  14
 Number of implication checks (positive):               0
 Number of implication checks (negative):               0
-
-Number of models in hasher:                            5
-Number of hasher evals:                                119
-Time for hasher eval:                                  77
-Hasher hits/misses:                                    5/6 (45%)
 --------------------------------------------------------------------------------
 
 Unsat, trying again with higher precision ...
@@ -165,39 +222,47 @@ Send non-interference clauses:                         6
 Receive non-interference clauses:                      6
 Send/receive non-interference clauses:                 10
 Barrier clauses:                                       0
+Background axiom clauses:                              3
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
-Initially:                                             50        10
+Initially:                                             53        11
 
 
+------------------------------ Analysing loops ---------------------------------
+Loop heads:
+   inv_p2_p2_p2/7 (4 clauses, 7 templates)
+   inv_p0_p2_p2/6 (3 clauses, 6 templates)
+   inv_p0_p0_p1/5 (15 clauses, 5 templates)
+   inv_p1_p2_p2/7 (3 clauses, 7 templates)
+   inv_p0_p1_p2/6 (2 clauses, 6 templates)
+   inv_p0_p0_p0/4 (22 clauses, 4 templates)
+   inv_p1_p1_p2/7 (4 clauses, 9 templates)
+   inv_p1_p1_p1/7 (5 clauses, 7 templates)
+   mmult/3 (2 clauses, 5 templates)
+   inv_p0_p0_p2/5 (3 clauses, 5 templates)
+   inv_p0_p1_p1/6 (10 clauses, 6 templates)
 
 ----------------------------------- CEGAR --------------------------------------
-Theories: Types, GroebnerMultiplication
-State hashing enabled
-Unique satisfiable clauses: 72
-   1 clauses with 0 body literals
-   27 clauses with 1 body literals
-   22 clauses with 2 body literals
+Theories: Types
+Unique satisfiable clauses: 75
+   2 clauses with 0 body literals
+   23 clauses with 1 body literals
+   28 clauses with 2 body literals
    22 clauses with 3 body literals
 
 --------------------------------- Statistics -----------------------------------
 CEGAR iterations:                                      1
-Final number of abstract states:                       8
-Final number of matched abstract states:               8
-Final number of abstract edges:                        11
+Final number of abstract states:                       9
+Final number of matched abstract states:               9
+Final number of abstract edges:                        14
 Number of generated predicates:                        0
 Average predicate size (# of sub-formulas):            0.00
-Number of implication checks:                          12
+Number of implication checks:                          15
 
-Number of implication checks (setup):                  12
+Number of implication checks (setup):                  15
 Number of implication checks (positive):               0
 Number of implication checks (negative):               0
-
-Number of models in hasher:                            5
-Number of hasher evals:                                244
-Time for hasher eval:                                  133
-Hasher hits/misses:                                    5/7 (41%)
 --------------------------------------------------------------------------------
 
 UNSAFE
@@ -239,6 +304,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       2
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -282,6 +348,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       3
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -324,6 +391,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       2
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -368,6 +436,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       3
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -411,6 +480,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       6
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -487,6 +557,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       14
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -531,6 +602,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       38
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -574,6 +646,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       72
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -673,6 +746,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       3
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -717,6 +791,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       6
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -760,6 +835,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       19
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -803,6 +879,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       1
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -846,6 +923,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       2
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -890,6 +968,7 @@ Send non-interference clauses:                         5
 Receive non-interference clauses:                      5
 Send/receive non-interference clauses:                 15
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -934,6 +1013,7 @@ Send non-interference clauses:                         10
 Receive non-interference clauses:                      15
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -977,6 +1057,7 @@ Send non-interference clauses:                         30
 Receive non-interference clauses:                      45
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1021,6 +1102,7 @@ Send non-interference clauses:                         5
 Receive non-interference clauses:                      5
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1065,6 +1147,7 @@ Send non-interference clauses:                         10
 Receive non-interference clauses:                      15
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1108,6 +1191,7 @@ Send non-interference clauses:                         30
 Receive non-interference clauses:                      45
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1151,6 +1235,7 @@ Send non-interference clauses:                         70
 Receive non-interference clauses:                      105
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1196,6 +1281,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1239,6 +1325,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1283,6 +1370,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1326,6 +1414,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1370,6 +1459,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1413,6 +1503,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1459,6 +1550,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1502,6 +1594,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1546,6 +1639,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1590,6 +1684,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1633,6 +1728,7 @@ Send non-interference clauses:                         0
 Receive non-interference clauses:                      0
 Send/receive non-interference clauses:                 0
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms
@@ -1676,6 +1772,7 @@ Send non-interference clauses:                         1
 Receive non-interference clauses:                      1
 Send/receive non-interference clauses:                 3
 Barrier clauses:                                       0
+Background axiom clauses:                              0
 
 ------------------------------- Preprocessing ----------------------------------
                                                        #clauses  #relation syms

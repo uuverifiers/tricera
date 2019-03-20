@@ -31,8 +31,9 @@ package tricera.concurrency
 
 import ap.parser._
 import ap.types.MonoSortedPredicate
+import ap.terfor.ConstantTerm
 import ap.util.{Seqs, Combinatorics}
-import lazabs.horn.bottomup.HornClauses
+import lazabs.horn.bottomup.{HornClauses, Util}
 import lazabs.horn.preprocessor.HornPreprocessor
 
 import lazabs.horn.bottomup.HornPredAbs.predArgumentSorts
@@ -437,13 +438,13 @@ object ParametricEncoder {
                 val newClauses =
                   if (incoming forall (isLocalClause(_)))
                     for ((c1, _) <- incoming; (c2, s) <- outgoing;
-                         newClause = c2 mergeWith c1;
+                         newClause = merge(c2, c1);
                          if !newClause.hasUnsatConstraint)
                     yield (newClause, s)
                   else if (!outgoing.isEmpty &&
                            (outgoing forall (isLocalClause(_))))
                     for ((c1, s) <- incoming; (c2, _) <- outgoing;
-                         newClause = c2 mergeWith c1;
+                         newClause = merge(c2, c1);
                          if !newClause.hasUnsatConstraint)
                     yield (newClause, s)
                   else
@@ -475,10 +476,62 @@ object ParametricEncoder {
              timeSpec,
              timeInvariants,
              newAssertions,
-             hints filterPredicates allPreds)
+             hints filterPredicates allPreds,
+             backgroundAxioms)
     }
 
   }
+
+    /**
+     * Given clauses p(...) :- ..., q(...), ... (clause1)
+     * and q(...) :- body (clause2),
+     * generate a clause p(...) :- ..., body, ... by inlining.
+     */
+    private def merge(clause1 : HornClauses.Clause,
+                      clause2 : HornClauses.Clause) : HornClauses.Clause = {
+      import clause1._
+      import HornClauses.Clause
+      import IExpression._
+      if (body.size == 1) {
+        clause1 mergeWith clause2
+      } else {
+        val Clause(IAtom(thatHeadPred, thatHeadArgs),
+                   thatBody, thatConstraint) = clause2
+        val (List(IAtom(_, thisBodyArgs)), thisBodyRem) =
+          body partition (_.pred == thatHeadPred)
+
+        if ((thisBodyArgs forall (_.isInstanceOf[IConstant])) &&
+            (thisBodyArgs.toSet.size == thisBodyArgs.size)) {
+          // can directly inline
+
+          val replacement =
+            new MHashMap[ConstantTerm, ITerm]
+          val definedConsts =
+            (for (IConstant(c) <- thisBodyArgs.iterator) yield c).toSet
+          for (c <- constants)
+            if (!(definedConsts contains c))
+              replacement.put(c, i(c.clone))
+
+          for ((IConstant(c), t) <-
+                 thisBodyArgs.iterator zip thatHeadArgs.iterator)
+            replacement.put(c, t)
+
+          def replace(f : IFormula) =
+            SimplifyingConstantSubstVisitor(f, replacement)
+
+          Clause(replace(head).asInstanceOf[IAtom],
+                 (for (a <- thisBodyRem)
+                    yield replace(a).asInstanceOf[IAtom]) ::: thatBody,
+                 replace(constraint) &&& thatConstraint)
+        } else {
+          val (Clause(newHead, List(IAtom(_, newBodyArgs)), newConstraint), _) =
+            refresh
+          Clause(newHead, thisBodyRem ::: thatBody,
+                 newConstraint &&& thatConstraint &&&
+                 (newBodyArgs === thatHeadArgs))
+        }
+      }
+    }
 
 }
 
@@ -707,7 +760,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
          and(for (Clause(IAtom(_, a), _, constraint) <- freshClauses)
              yield (constraint & ((a take globalVarNum) === globalParams)))
 
-       (Clause(invPred(globalParams, localParams), List(),
+       (Clause(invPred(globalParams, localParams),
+               for (c <- freshClauses; a <- c.body) yield a,
                constraint &&& allAxioms(globalParams)),
         sortedLocalClauses)
      }).toList
@@ -717,7 +771,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
   val localTransitions =
     (for ((process, _) <- processes.iterator;
           (clause@Clause(IAtom(headPred, headParams),
-                         List(IAtom(bodyPred, bodyParams)),
+                         ClauseBody(List(IAtom(bodyPred, bodyParams)),
+                                    backgroundAtoms),
                          constraint),
            NoSync) <- process.iterator;
           (localPreds, _) <- globalPredsSeq.iterator;
@@ -730,7 +785,7 @@ class ParametricEncoder(system : ParametricEncoder.System,
        val newHeadLit = invPred(headParams take globalVarNum,
                                 (headPred, (headParams drop globalVarNum)) :: otherParams)
 
-       (Clause(newHeadLit, List(newBodyLit),
+       (Clause(newHeadLit, newBodyLit :: backgroundAtoms,
                constraint &&&
                distinctIds((bodyPred, (bodyParams drop globalVarNum)) :: otherParams) &&&
                allAxioms(bodyParams take globalVarNum)),
@@ -742,7 +797,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
   val nonInterferenceTransitions =
     (for ((process, repl) <- processes.iterator;
           (clause@Clause(IAtom(headPred, headParams),
-                         List(IAtom(bodyPred, bodyParams)),
+                         ClauseBody(List(IAtom(bodyPred, bodyParams)),
+                                    backgroundAtoms),
                          constraint),
            NoSync) <- process.iterator;
           if ((headParams take globalVarNum) != (bodyParams take globalVarNum));
@@ -759,7 +815,7 @@ class ParametricEncoder(system : ParametricEncoder.System,
          allInvariants(bodyParams take globalVarNum, allParams)
        val newHeadLit = invPred(headParams take globalVarNum, otherParams)
 
-       (Clause(newHeadLit, bodyLits,
+       (Clause(newHeadLit, bodyLits ::: backgroundAtoms,
                constraint &&& distinctIds(allParams) &&&
                allAxioms(bodyParams take globalVarNum)),
         clause)
@@ -771,20 +827,24 @@ class ParametricEncoder(system : ParametricEncoder.System,
     for (((process1, repl), processNum1) <- processes.iterator.zipWithIndex;
          ((process2, _),    processNum2) <- processes.iterator.zipWithIndex;
          if (processNum1 != processNum2 || repl != Singleton);
-         (sendC@Clause(_, List(_), _), Send(commChannel)) <- process1.iterator;
-         (recC@Clause(_, List(_), _),  Receive(`commChannel`)) <- process2.iterator)
+         (sendC@Clause(_, ClauseBody(List(_), _), _), Send(commChannel)) <-
+            process1.iterator;
+         (recC@Clause(_, ClauseBody(List(_), _), _),  Receive(`commChannel`)) <-
+            process2.iterator)
     yield (sendC, recC, commChannel)
 
   val sendReceiveTransitions =
     (for ((sendC@Clause(IAtom(headPred, headParams),
-                        List(IAtom(bodyPred, bodyParams)),
+                        ClauseBody(List(IAtom(bodyPred, bodyParams)),
+                                   backgroundAtoms1),
                         constraint),
-           recC@Clause(_, List(IAtom(bodyPred2, _)), _),
+           recC@Clause(_, ClauseBody(List(IAtom(bodyPred2, _)), _), _),
            commChannel) <- sendReceivePairs;
           (localPreds, _) <- globalPredsSeq.iterator;
           if ((localPreds intersect List(bodyPred, bodyPred2)).size == 2)) yield {
        val (Clause(IAtom(headPred2, headParams2),
-                   List(IAtom(bodyPred2, bodyParams2)),
+                   ClauseBody(List(IAtom(bodyPred2, bodyParams2)),
+                              backgroundAtoms2),
                    constraint2), _) = recC.refresh
 
        val otherPreds = localPreds diff List(bodyPred, bodyPred2)
@@ -800,7 +860,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
        val newBodyLit = invPred(bodyParams take globalVarNum, preParams)
        val newHeadLit = invPred(headParams2 take globalVarNum, postParams)
 
-       (Clause(newHeadLit, List(newBodyLit),
+       (Clause(newHeadLit,
+               newBodyLit :: backgroundAtoms1 ::: backgroundAtoms2,
                constraint &&& constraint2 &&& distinctIds(preParams) &&&
                ((headParams take globalVarNum) === (bodyParams2 take globalVarNum)) &&&
                allAxioms(bodyParams take globalVarNum)),
@@ -811,16 +872,18 @@ class ParametricEncoder(system : ParametricEncoder.System,
   
   val sendNonInterTransitions =
     (for ((sendC@Clause(IAtom(headPred, headParams),
-                        List(IAtom(bodyPred, bodyParams)),
+                        ClauseBody(List(IAtom(bodyPred, bodyParams)),
+                                   backgroundAtoms1),
                         constraint),
-           recC@Clause(_, List(IAtom(bodyPred2, _)), _),
+           recC@Clause(_, ClauseBody(List(IAtom(bodyPred2, _)), _), _),
            commChannel) <- sendReceivePairs;
           (localPreds, _) <- globalPredsSeq.iterator;
           if ((localPreds contains bodyPred) &&
               compatiblePredicates(bodyPred2 :: localPreds));
           extraPreds <- addExtraPreds(bodyPred2 :: localPreds)) yield {
        val (Clause(IAtom(headPred2, headParams2),
-                   List(IAtom(bodyPred2, bodyParams2)),
+                   ClauseBody(List(IAtom(bodyPred2, bodyParams2)),
+                              backgroundAtoms2),
                    constraint2), _) = recC.refresh
 
        val otherPreds = localPreds diff List(bodyPred)
@@ -836,7 +899,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
        val newBodyLits = allInvariants(bodyParams take globalVarNum, preParams)
        val newHeadLit = invPred(headParams2 take globalVarNum, postParams)
 
-       (Clause(newHeadLit, newBodyLits,
+       (Clause(newHeadLit,
+               newBodyLits ::: backgroundAtoms1 ::: backgroundAtoms2,
                constraint &&& constraint2 &&& distinctIds(preParams) &&&
                ((headParams take globalVarNum) === (bodyParams2 take globalVarNum)) &&&
                allAxioms(bodyParams take globalVarNum)),
@@ -847,16 +911,18 @@ class ParametricEncoder(system : ParametricEncoder.System,
 
   val receiveNonInterTransitions =
     (for ((sendC@Clause(IAtom(headPred, headParams),
-                        List(IAtom(bodyPred, bodyParams)),
+                        ClauseBody(List(IAtom(bodyPred, bodyParams)),
+                                   backgroundAtoms1),
                         constraint),
-           recC@Clause(_, List(IAtom(bodyPred2, _)), _),
+           recC@Clause(_, ClauseBody(List(IAtom(bodyPred2, _)), _), _),
            commChannel) <- sendReceivePairs;
           (localPreds, _) <- globalPredsSeq.iterator;
           if ((localPreds contains bodyPred2) &&
               compatiblePredicates(bodyPred :: localPreds));
           extraPreds <- addExtraPreds(bodyPred :: localPreds)) yield {
        val (Clause(IAtom(headPred2, headParams2),
-                   List(IAtom(bodyPred2, bodyParams2)),
+                   ClauseBody(List(IAtom(bodyPred2, bodyParams2)),
+                              backgroundAtoms2),
                    constraint2), _) = recC.refresh
 
        val otherPreds = localPreds diff List(bodyPred2)
@@ -872,7 +938,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
        val newBodyLits = allInvariants(bodyParams take globalVarNum, preParams)
        val newHeadLit = invPred(headParams2 take globalVarNum, postParams)
 
-       (Clause(newHeadLit, newBodyLits,
+       (Clause(newHeadLit,
+               newBodyLits ::: backgroundAtoms1 ::: backgroundAtoms2,
                constraint &&& constraint2 &&& distinctIds(preParams) &&&
                ((headParams take globalVarNum) === (bodyParams2 take globalVarNum)) &&&
                allAxioms(bodyParams take globalVarNum)),
@@ -883,10 +950,11 @@ class ParametricEncoder(system : ParametricEncoder.System,
 
   val sendReceiveNonInterTransitions =
     (for ((sendC@Clause(IAtom(headPred, headParams),
-                        List(IAtom(bodyPred, bodyParams)),
+                        ClauseBody(List(IAtom(bodyPred, bodyParams)),
+                                   backgroundAtoms1),
                         constraint),
            recC@Clause(IAtom(_, headParams2),
-                       List(IAtom(bodyPred2, bodyParams2)),
+                       ClauseBody(List(IAtom(bodyPred2, bodyParams2)), _),
                        _),
            commChannel) <- sendReceivePairs;
           if ((headParams take globalVarNum) != (bodyParams take globalVarNum) ||
@@ -895,7 +963,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
           if (compatiblePredicates(bodyPred :: bodyPred2 :: otherPreds));
           extraPreds <- addExtraPreds(bodyPred :: bodyPred2 :: otherPreds)) yield {
        val (Clause(IAtom(headPred2, headParams2),
-                   List(IAtom(bodyPred2, bodyParams2)),
+                   ClauseBody(List(IAtom(bodyPred2, bodyParams2)),
+                              backgroundAtoms2),
                    constraint2), _) = recC.refresh
 
        val otherParams = freshParams(otherPreds).toList
@@ -908,7 +977,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
        val newBodyLits = allInvariants(bodyParams take globalVarNum, preParams)
        val newHeadLit = invPred(headParams2 take globalVarNum, otherParams)
 
-       (Clause(newHeadLit, newBodyLits,
+       (Clause(newHeadLit,
+               newBodyLits ::: backgroundAtoms1 ::: backgroundAtoms2,
                constraint &&& constraint2 &&& distinctIds(preParams) &&&
                ((headParams take globalVarNum) === (bodyParams2 take globalVarNum)) &&&
                allAxioms(bodyParams take globalVarNum)),
@@ -924,7 +994,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
       Iterator single List()
     case pred :: remPreds =>
       for (suffix <- syncClauses(b, remPreds);
-           (c@Clause(_, List(IAtom(`pred`, _)), _), BarrierSync(`b`)) <-
+           (c@Clause(_, ClauseBody(List(IAtom(`pred`, _)), _), _),
+            BarrierSync(`b`)) <-
              processes(processIndex(pred))._1.iterator)
       yield c :: suffix
   }
@@ -964,7 +1035,11 @@ class ParametricEncoder(system : ParametricEncoder.System,
        val newBodyLit = invPred(globalParams, syncPreParams ::: otherParams)
        val newHeadLit = invPred(globalParams, syncPostParams ::: otherParams)
 
-       (Clause(newHeadLit, List(newBodyLit),
+       val backgroundAtoms =
+         for (Clause(_, ClauseBody(_, atoms), _) <- freshClauses; a <- atoms)
+         yield a
+
+       (Clause(newHeadLit, newBodyLit :: backgroundAtoms,
                constraint &&& distinctIds(syncPreParams ::: otherParams)),
         (clauses, b))
      }).toList
@@ -1006,7 +1081,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
   //////////////////////////////////////////////////////////////////////////////
 
   val assertionTransitions =
-    (for (clause@Clause(_, body, constraint) <- assertions.iterator;
+    (for (clause@Clause(head, ClauseBody(body, backgroundAtoms), constraint) <-
+            assertions.iterator;
           groupedBodyPreds =
             (for (IAtom(p, _) <- body) yield p) groupBy processIndex;
           bodyPredNums = for (i <- 0 until processes.size) 
@@ -1025,8 +1101,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
        val globalParamConstraint =
          and(for (IAtom(p, a) <- body) yield (globalParams === (a take globalVarNum)))
 
-       (Clause(HornClauses.FALSE(),
-               allInvariants(globalParams, allLocalParams),
+       (Clause(head,
+               allInvariants(globalParams, allLocalParams) ::: backgroundAtoms,
                globalParamConstraint &&& constraint &&& distinctIds(allLocalParams) &&&
                allAxioms(globalParams)),
         clause)
@@ -1078,6 +1154,10 @@ class ParametricEncoder(system : ParametricEncoder.System,
   println("Barrier clauses:                                       " +
           barrierTransitions.size)
 
+//  println(backgroundAxioms.clauses)
+  println("Background axiom clauses:                              " +
+          backgroundAxioms.clauses.size)
+
   //////////////////////////////////////////////////////////////////////////////
 
   val allClauses = symmetryTransitions ++
@@ -1090,7 +1170,8 @@ class ParametricEncoder(system : ParametricEncoder.System,
                    (sendReceiveNonInterTransitions map (_._1)) ++
                    (barrierTransitions map (_._1)) ++
                    timeElapseTransitions ++
-                   (assertionTransitions map (_._1))
+                   (assertionTransitions map (_._1)) ++
+                   backgroundAxioms.clauses
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -1125,5 +1206,26 @@ class ParametricEncoder(system : ParametricEncoder.System,
           hs2 = for (h <- hs; if (h.isInstanceOf[VerifHintTplElement])) yield h;
           if (!hs2.isEmpty))
      yield (p -> hs2)).toMap
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  import HornPreprocessor.CounterExample
+
+  def pruneBackgroundClauses(cex : CounterExample) : CounterExample = {
+    import Util.{DagEmpty, DagNode}
+
+    def elimLinks(cex : CounterExample) : CounterExample = cex match {
+      case DagNode(p@(atom, Clause(_, body, _)), children, next) => {
+        val newChildren =
+          for ((c, IAtom(p, _)) <- children zip body;
+               if !(backgroundPreds contains p)) yield c
+        DagNode(p, newChildren, elimLinks(next))
+      }
+      case DagEmpty =>
+        DagEmpty
+    }
+
+    elimLinks(cex).elimUnconnectedNodes
+  }
 
 }

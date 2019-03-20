@@ -943,6 +943,7 @@ object ParameterisedExamples extends App {
     import GroebnerMultiplication._
 
     setup
+    TriCeraParameters.get.templateBasedInterpolation = true
 
     /*
 mult(x,y,z)   :-   (x = 0), (z = 0).
@@ -976,8 +977,8 @@ false         :-   mult(x,y,z), (x = 2), (z < y + y).
   def pProc(coeff : Int) = List(
       (p(0)(g, id, coeff) :- true,
        NoSync),
-      (p(1)(g, id, d) :- (p(0)(g, id, c), d === mult(c, id)),
-//      (p(1)(g, id, d) :- (p(0)(g, id, c), mmult(c, id, d)),
+//      (p(1)(g, id, d) :- (p(0)(g, id, c), d === mult(c, id)),
+      (p(1)(g, id, d) :- (p(0)(g, id, c), mmult(c, id, d)),
        NoSync),
       (p(2)(c, id, c) :- p(1)(g, id, c),
        Send(sync)),
@@ -998,6 +999,7 @@ false         :-   mult(x,y,z), (x = 2), (z < y + y).
       backgroundAxioms = axioms)
 
   solve(system(1), true)
+  solve(system(2), true)
   solve(system(0), false)
   }
 }

@@ -275,8 +275,10 @@ class VerificationLoop(system : ParametricEncoder.System) {
         if (TriCeraParameters.get.log)
           println("Not solvable")
 
-        val cex = backTranslator translate rawCEX
-        HornWrapper.verifyCEX(cex, encoder.allClauses)
+        val fullCEX = backTranslator translate rawCEX
+        HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
+
+        val cex = encoder pruneBackgroundClauses fullCEX
 
         // check whether the counterexample is good enough to
         // reconstruct a genuine counterexample to system correctness
@@ -325,6 +327,8 @@ class VerificationLoop(system : ParametricEncoder.System) {
 
           //////////////////////////////////////////////////////////////////////
 
+          import system.ClauseBody
+
           val cexTrace =
             (for ((atom@IAtom(globalPred, _), clause) <- cex.iterator.toSeq.reverse;
                    if (globalPred != HornClauses.FALSE &&
@@ -371,7 +375,7 @@ class VerificationLoop(system : ParametricEncoder.System) {
                           !! (post(i, j) === v)
     
                         val (Clause(IAtom(headP, headArgs),
-                                    List(IAtom(bodyP, bodyArgs)),
+                                    ClauseBody(List(IAtom(bodyP, bodyArgs)), _),
                                     constraint),
                              newConsts) = systemClause.refresh
                         addConstants(newConsts)
@@ -412,9 +416,9 @@ class VerificationLoop(system : ParametricEncoder.System) {
                 }) orElse (
 
                 for ((_, (sendClause@Clause(IAtom(newSendP, _),
-                                            List(IAtom(oldSendP, _)), _),
+                                            ClauseBody(List(IAtom(oldSendP, _)), _), _),
                           receiveClause@Clause(IAtom(newRecP, _),
-                                               List(IAtom(oldRecP, _)), _),
+                                               ClauseBody(List(IAtom(oldRecP, _)), _), _),
                           commChannel)) <-
                       encoder.sendReceiveTransitions find (_._1 == clause)) yield {
 
@@ -481,7 +485,9 @@ class VerificationLoop(system : ParametricEncoder.System) {
                          (v, j) <- args.iterator.zipWithIndex)
                       !! (post(i, j) === v)
 
-                    for (((c, d), clause@Clause(IAtom(headP, _), List(IAtom(bodyP, _)), _)) <-
+                    for (((c, d), clause@Clause(IAtom(headP, _),
+                                                ClauseBody(List(IAtom(bodyP, _)), _),
+                                                _)) <-
                            (preIndex.iterator zip postIndex.iterator) zip
                              barrierClauses.iterator) {
 
@@ -493,7 +499,8 @@ class VerificationLoop(system : ParametricEncoder.System) {
                                     localAtoms.iterator.zipWithIndex)
                              yield (d === j)))
 
-                      val (Clause(IAtom(_, headArgs), List(IAtom(_, bodyArgs)),
+                      val (Clause(IAtom(_, headArgs),
+                                  ClauseBody(List(IAtom(_, bodyArgs)), _),
                                   constraint),
                            newConsts) = clause.refresh
                       addConstants(newConsts)
