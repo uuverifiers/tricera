@@ -29,21 +29,20 @@
 
 package tricera.concurrency
 
-
 import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ADT, ModuloArithmetic}
 import ap.types.MonoSortedPredicate
-import ap.util.Combinatorics
 
 import concurrentC._
 import concurrentC.Absyn._
+import ParametricEncoder.SomeBackgroundAxioms
 
 import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.preprocessor.HornPreprocessor
 
 import scala.collection.mutable.{HashMap => MHashMap, ArrayBuffer, Buffer,
-                                 Stack, LinkedHashSet}
+                                 Stack}
 
 object CCReader {
 
@@ -256,7 +255,12 @@ object CCReader {
 
   private case class CCStackPointer(targetInd : Int, typ : CCType,
                                fieldAddress : List[Int] = Nil) extends CCType {
-    override def toString :String = typ + " pointer (to: " + targetInd + ")"
+    override def toString : String = typ + " pointer (to: " + targetInd + ")"
+  }
+
+  private case class CCHeapPointer(heapTableInd : Int,
+                                   typ : CCType) extends CCType {
+    override def toString : String = typ + " pointer to heap"
   }
 
   private case object CCClock extends CCType {
@@ -394,20 +398,45 @@ class CCReader private (prog : Program,
 
   import HornClauses.Clause
 
-  private val globalVars = new ArrayBuffer[ConstantTerm]
-  private val globalVarTypes = new ArrayBuffer[CCType]
-  private val globalVarsInit = new ArrayBuffer[CCExpr]
+  private sealed class CCVars {
+    val vars = new ArrayBuffer[ConstantTerm]
+    val types = new ArrayBuffer[CCType]
+    def addVar(c : ConstantTerm, t : CCType) {
+      vars += c
+      types += t
+    }
+    def size : Int = vars.size
+    def lastIndexWhere(name : String) = vars lastIndexWhere(_.name == name)
+    def contains (c : ConstantTerm) = vars contains c
+    def iterator = vars.iterator
+    def formalVars = vars.toList
+    def formalTypes = types.toList
+  }
+  private object globalVars extends CCVars {
+    val inits = new ArrayBuffer[CCExpr]
+  }
+  private object localVars extends CCVars {
+    val frameStack = new Stack[Int]
+
+    def trimEnd(n: Int){
+      vars trimEnd n
+      types trimEnd n
+      assert(types.size == vars.size)
+    }
+    def pushFrame = frameStack push size
+    def popFrame: Int = {
+      val newSize = frameStack.pop
+      vars reduceToSize newSize
+      types reduceToSize newSize
+      newSize
+    }
+  }
+
   private var globalPreconditions : IFormula = true
 
-  private def globalVarIndex(name : String) : Option[Int] =
-    (globalVars indexWhere (_.name == name)) match {
-      case -1 => None
-      case i  => Some(i)
-    }
-
   private def lookupVarNoException(name : String) : Int =
-    (localVars lastIndexWhere (_.name == name)) match {
-      case -1 => globalVars lastIndexWhere (_.name == name)
+    localVars lastIndexWhere name match {
+      case -1 => globalVars lastIndexWhere name
       case i  => i + globalVars.size
     }
 
@@ -419,44 +448,35 @@ class CCReader private (prog : Program,
       case i => i
     }
 
-  private val localVars = new ArrayBuffer[ConstantTerm]
-  private val localVarTypes = new ArrayBuffer[CCType]
-  private val localFrameStack = new Stack[Int]
-
   private def addLocalVar(c : ConstantTerm, t : CCType) = {
-    localVars += c
-    localVarTypes += t
+    localVars addVar(c, t)
     variableHints += List()
   }
   private def popLocalVars(n : Int) = {
     localVars trimEnd n
-    localVarTypes trimEnd n
     variableHints trimEnd n
-    assert(variableHints.size == localVars.size + globalVars.size &&
-           localVarTypes.size == localVars.size)
+    assert(variableHints.size == localVars.size + globalVars.size)
   }
 
-  private def pushLocalFrame =
-    localFrameStack push localVars.size
-  private def popLocalFrame = {
-    val newSize = localFrameStack.pop
-    localVars reduceToSize newSize
-    localVarTypes reduceToSize newSize
+  private def pushLocalFrame = localVars pushFrame
+
+  private def popLocalFrame {
+    val newSize = localVars.popFrame
     variableHints reduceToSize (globalVars.size + newSize)
   }
 
   private def allFormalVars : Seq[ITerm] =
-    globalVars.toList ++ localVars.toList
+    globalVars.formalVars ++ localVars.formalVars
   private def allFormalVarTypes : Seq[CCType] =
-    globalVarTypes.toList ++ localVarTypes.toList
+    globalVars.formalTypes ++ localVars.formalTypes
 
   private def allFormalExprs : Seq[CCExpr] =
-    ((for ((v, t) <- globalVars.iterator zip globalVarTypes.iterator)
+    ((for ((v, t) <- globalVars.iterator zip globalVars.types.iterator)
       yield CCTerm(v, t)) ++
-     (for ((v, t) <- localVars.iterator zip localVarTypes.iterator)
+     (for ((v, t) <- localVars.iterator zip localVars.types.iterator)
       yield CCTerm(v, t))).toList
   private def allVarInits : Seq[ITerm] =
-    (globalVarsInit.toList map (_.toTerm)) ++ (localVars.toList map (i(_)))
+    (globalVars.inits.toList map (_.toTerm)) ++ (localVars.formalVars map (i(_)))
 
   private def freeFromGlobal(t : IExpression) : Boolean =
     !ContainsSymbol(t, (s:IExpression) => s match {
@@ -500,6 +520,7 @@ class CCReader private (prog : Program,
     new ArrayBuffer[(ParametricEncoder.Process, ParametricEncoder.Replication)]
 
   private val assertionClauses, timeInvariants = new ArrayBuffer[Clause]
+  private val heapInvariants = new ArrayBuffer[Predicate]
 
   private val clauses =
     new ArrayBuffer[(Clause, ParametricEncoder.Synchronisation)]
@@ -621,8 +642,16 @@ class CCReader private (prog : Program,
     res
   }
 
+  private def newInv = new Predicate("Inv_" + locationCounter, 2) // todo: fix
+
   private val predicateHints =
     new MHashMap[Predicate, Seq[HornPreprocessor.VerifHintElement]]
+
+  private val getNonDet = new ConstantTerm("__nonDet")
+  private def getZeroInit(typ : CCType) : ITerm = typ match {
+    case structType : CCStruct => structType.getZeroInit
+    case _ => 0
+  }
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -635,12 +664,10 @@ class CCReader private (prog : Program,
   val GTU = Sort.Integer newConstant "_GTU"
 
   if (useTime) {
-    globalVars += GT
-    globalVarTypes += CCClock
-    globalVarsInit += CCTerm(GT, CCClock)
-    globalVars += GTU
-    globalVarTypes += CCInt
-    globalVarsInit += CCTerm(GTU, CCInt)
+    globalVars addVar(GT, CCClock)
+    globalVars.inits += CCTerm(GT, CCClock)
+    globalVars addVar(GTU, CCInt)
+    globalVars.inits += CCTerm(GTU, CCInt)
     variableHints += List()
     variableHints += List()
   }
@@ -684,9 +711,9 @@ class CCReader private (prog : Program,
 
     if (useTime)
       // prevent time variables from being initialised twice
-      globalVarsInit ++= (globalVarSymex.getValues drop 2)
+      globalVars.inits ++= (globalVarSymex.getValues drop 2)
     else
-      globalVarsInit ++= globalVarSymex.getValues
+      globalVars.inits ++= globalVarSymex.getValues
 
     globalPreconditions = globalPreconditions &&& globalVarSymex.getGuard
 
@@ -784,8 +811,7 @@ class CCReader private (prog : Program,
                 isVariable = true
                 val c = typ newConstant name
                 if (global) {
-                  globalVars += c
-                  globalVarTypes += typ
+                  globalVars addVar (c,typ)
                   variableHints += List()
                   typ match {
                     case typ : CCArithType =>
@@ -843,8 +869,7 @@ class CCReader private (prog : Program,
             }
 
             if (global) {
-              globalVars += c
-              globalVarTypes += actualType
+              globalVars addVar (c, actualType)
               variableHints += List()
             } else {
               addLocalVar(c, actualType)
@@ -1511,8 +1536,8 @@ class CCReader private (prog : Program,
 
     private def getVarType (name: String) = {
       val ind = lookupVar(name)
-      if (ind < globalVars.size) globalVarTypes(ind)
-      else localVarTypes(ind - globalVarTypes.size)
+      if (ind < globalVars.size) globalVars.types(ind)
+      else localVars.types(ind - globalVars.size)
     }
 
     // goes bottom-up from a given field, and pushes parent types to the stack.
@@ -1974,6 +1999,24 @@ class CCReader private (prog : Program,
                 name + " is not a declared channel")
           }
         }
+        case name@("malloc" | "calloc") => {
+          val typ = exp.listexp_(0) match {
+            case exp : Ebytestype => getType(exp.type_name_)
+            case _ => throw new TranslationException(
+              "memory functions can currently only be called with argument: " +
+              "sizeof(type).")
+          }
+          //addHeapVar(typ)
+          /* name match { // todo init invariants?
+-            case "calloc" =>
+-              assertProperty(inv(id, getZeroInit(typ))) // add a heap push
+-            case "malloc" => // nothing
+-         }*/
+        }
+        case "realloc" =>
+          throw new TranslationException("realloc is not supported.")
+        case "free" =>
+          throw new TranslationException("free is not supported.") // todo
         case name => {
           // then we inline the called function
 
@@ -2080,7 +2123,8 @@ class CCReader private (prog : Program,
           val extraArgs = if (isNoReturn) 0 else 1
           val functionExit = newPred(extraArgs)
 
-          inlineFunction(fundef, functionEntry, functionExit, pointerArgs,isNoReturn)
+          inlineFunction(fundef, functionEntry, functionExit, pointerArgs,
+            isNoReturn)
 
           // reserve an argument for the function result
 
@@ -2889,7 +2933,8 @@ class CCReader private (prog : Program,
                                ParametricEncoder.NoTime,
                              timeInvariants,
                              assertionClauses.toList,
-                             HornPreprocessor.VerificationHints(predHints))
+                             HornPreprocessor.VerificationHints(predHints),
+                             SomeBackgroundAxioms(heapInvariants, List()))
   }
 
 }
