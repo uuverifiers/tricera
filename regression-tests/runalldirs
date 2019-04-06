@@ -8,4 +8,5 @@ set -e
 ./rundir horn-hcc-pointer "" -assert -t:60
 ./rundir horn-hcc-struct "" -assert -t:60
 ./rundir horn-hcc-enum "" -assert -t:60
+./rundir horn-contracts "" -assert -t:60
 #./rundir ParametricEncoder "" 

@@ -489,6 +489,8 @@ class CCReader private (prog : Program,
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
+  private val functionContracts = new MHashMap[String, (Predicate, Predicate)]
+  private val functionClauses = new MHashMap[String, Seq[Clause]]
   private val structDefs    = new MHashMap[String, CCStruct]
   private val enumDefs      = new MHashMap[String, CCType]
 
@@ -510,6 +512,8 @@ class CCReader private (prog : Program,
 //println(c)
     clauses += ((c, sync))
   }
+
+  import ParametricEncoder.merge
 
   private def mergeClauses(from : Int) : Unit = if (from < clauses.size - 1) {
     val concernedClauses = clauses.slice(from, clauses.size)
@@ -542,10 +546,10 @@ class CCReader private (prog : Program,
 
             for ((c, sync) <- cls)
               if (currentSync == ParametricEncoder.NoSync)
-                chainClauses(c mergeWith currentClause, sync,
+                chainClauses(merge(c, currentClause), sync,
                              seenPreds + headPred)
               else if (sync == ParametricEncoder.NoSync)
-                chainClauses(c mergeWith currentClause, currentSync,
+                chainClauses(merge(c, currentClause), currentSync,
                              seenPreds + headPred)
               else
                 throw new TranslationException(
@@ -560,7 +564,7 @@ class CCReader private (prog : Program,
                   throw new TranslationException(
                     "Cannot execute " + currentSync + " and an assertion" +
                     " in one step")
-                val newAssertionClause = c mergeWith currentClause
+                val newAssertionClause = merge(c, currentClause)
                 if (!newAssertionClause.hasUnsatConstraint)
                   assertionClauses += newAssertionClause
               }
@@ -594,13 +598,15 @@ class CCReader private (prog : Program,
 
   private def newPred : Predicate = newPred(0)
 
-  private def newPred(extraArgs : Int) : Predicate = {
+  private def newPred(extraArgs : Int) : Predicate =
+    newPred(for (_ <- 0 until extraArgs) yield Sort.Integer)
+
+  private def newPred(extraArgs : Seq[Sort]) : Predicate = {
     import HornPreprocessor.{VerifHintTplElement, VerifHintTplEqTerm}
 
     val res = MonoSortedPredicate(prefix + locationCounter,
                                   (allFormalVarTypes map (_.toSort)) ++
-                                  (for (_ <- 0 until extraArgs)
-                                   yield Sort.Integer))
+                                  extraArgs)
     locationCounter = locationCounter + 1
 
     val hints = for (s <- variableHints; p <- s) yield p
@@ -670,6 +676,7 @@ class CCReader private (prog : Program,
           val name = decl.function_def_ match {
             case f : NewFunc => getName(f.declarator_)
             case f : NewFuncInt => getName(f.declarator_)
+            case f : NewHintFunc => getName(f.declarator_)
           }
 
           if (functionDefs contains name)
@@ -689,6 +696,92 @@ class CCReader private (prog : Program,
       globalVarsInit ++= globalVarSymex.getValues
 
     globalPreconditions = globalPreconditions &&& globalVarSymex.getGuard
+
+    // then create contracts for functions that will not be inlined ...
+    val contractFuns : Seq[NewHintFunc] =
+      for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_;
+           if decl.isInstanceOf[Afunc];
+           funDef = decl.asInstanceOf[Afunc].function_def_;
+           if funDef.isInstanceOf[NewHintFunc];
+           if useContract(funDef.asInstanceOf[NewHintFunc].listabs_hint_))
+      yield funDef.asInstanceOf[NewHintFunc]
+
+    for (f <- contractFuns) {
+      val name = getName(f.declarator_)
+      pushLocalFrame
+      pushArguments(f)
+      val postArgs = allFormalVarTypes ++ globalVarTypes.toList ++
+                     (getType(f) match {
+                        case CCVoid => List()
+                        case t => List(t)
+                      })
+      val prePred =
+        MonoSortedPredicate(name + "_pre",
+                            allFormalVarTypes map (_.toSort))
+      val postPred =
+        MonoSortedPredicate(name + "_post",
+                            postArgs map (_.toSort))
+      functionContracts.put(name, (prePred, postPred))
+      popLocalFrame
+    }
+
+    // ... and generate clauses for those functions
+    for (f <- contractFuns) {
+      import HornClauses._
+
+      val name = getName(f.declarator_)
+      val typ = getType(f)
+      val (prePred, postPred) = functionContracts(name)
+      setPrefix(name)
+
+      pushLocalFrame
+      val stm = pushArguments(f)
+
+      val prePredArgs = allFormalVars.toList
+
+      // save the initial values of global and local variables
+      for ((c, t) <- (globalVars ++ localVars) zip
+                       (globalVarTypes ++ localVarTypes))
+        addLocalVar(new ConstantTerm (c.name + "_old"), t)
+
+      val entryPred = newPred
+      val exitPred = typ match {
+        case CCVoid => newPred
+        case t      => newPred(List(t.toSort))
+      }
+
+      output(entryPred(prePredArgs ++ prePredArgs : _*) :-
+               prePred(prePredArgs : _*))
+
+      val translator = FunctionTranslator(exitPred)
+      translator.translateWithReturn(stm, entryPred)
+
+      val resVar = typ match {
+        case CCVoid => List()
+        case t      => List(i(t newConstant "__res"))
+      }
+
+      val globalVarTerms : Seq[ITerm] = globalVars.toList
+      val postArgs : Seq[ITerm] = (allFormalVars drop prePredArgs.size) ++
+                                  globalVarTerms ++ resVar
+
+      output(postPred(postArgs : _*) :- exitPred(allFormalVars ++ resVar : _*))
+
+      if (!timeInvariants.isEmpty)
+        throw new TranslationException(
+          "Contracts cannot be used for functions with time invariants")
+      if (clauses exists (_._2 != ParametricEncoder.NoSync))
+        throw new TranslationException(
+          "Contracts cannot be used for functions using communication channels")
+
+      functionClauses.put(name,
+                          clauses.map(_._1).toList ++ assertionClauses.toList)
+
+      clauses.clear
+      assertionClauses.clear
+        
+      popLocalFrame
+    }
 
     // then translate the threads
     atomicMode = false
@@ -927,6 +1020,14 @@ class CCReader private (prog : Program,
     }
   }
 
+  private def useContract(hints : Seq[Abs_hint]) : Boolean =
+            hints exists {
+              case hint : Comment_abs_hint => hint.listabs_hint_clause_ exists {
+                case hint : Predicate_hint => hint.cident_ == "contract"
+              }
+              case _ => false
+            }
+
   private def processHints(hints : Seq[Abs_hint]) : Unit =
           if (!hints.isEmpty) {
             import HornPreprocessor.{VerifHintInitPred,
@@ -950,7 +1051,12 @@ class CCReader private (prog : Program,
                      case c : SomeCost => c.unboundedinteger_.toInt
                      case _ : NoCost => 1
                    };
-                   e <- inAtomicMode(hintSymex evalList pred_hint.exp_))
+                   e <- pred_hint.maybe_exp_args_ match {
+                     case args : SomeExpArgs =>
+                       inAtomicMode(hintSymex evalList args.exp_)
+                     case _ : NoExpArgs =>
+                       List()
+                   })
               yield pred_hint.cident_ match {
                 case "predicates" => {
                   usingInitialPredicates = true
@@ -1252,6 +1358,7 @@ class CCReader private (prog : Program,
     functionDef match {
       case f : NewFunc    => getType(f.listdeclaration_specifier_)
       case _ : NewFuncInt => CCInt
+      case f : NewHintFunc=> getType(f.listdeclaration_specifier_)
     }
 
   private def translateClockValue(expr : CCExpr) : CCExpr = {
@@ -1410,9 +1517,10 @@ class CCReader private (prog : Program,
     private def outputClause : Unit = outputClause(newPred)
 
     def genClause(pred : Predicate) : Clause = {
+      import HornClauses._
       if (initAtom == null)
         throw new TranslationException("too complicated initialiser")
-      Clause(asAtom(pred), List(initAtom), guard)
+      asAtom(pred) :- (initAtom &&& guard)
     }
 
     def outputClause(pred : Predicate,
@@ -1425,7 +1533,8 @@ class CCReader private (prog : Program,
     }
 
     def outputClause(headAtom : IAtom) : Unit = {
-      val c = Clause(headAtom, List(initAtom), guard)
+      import HornClauses._
+      val c = headAtom :- (initAtom &&& guard)
       if (!c.hasUnsatConstraint)
         output(c)
     }
@@ -1940,7 +2049,7 @@ class CCReader private (prog : Program,
         // inline the called function
         val name = printer print exp.exp_
         outputClause
-        callFunctionInlining(name, initPred)
+        handleFunction(name, initPred, 0)
       }
 
       case exp : Efunkpar => (printer print exp.exp_) match {
@@ -1984,11 +2093,7 @@ class CCReader private (prog : Program,
 
           val functionEntry = initPred
 
-          // get rid of the local variables, which are later
-          // replaced with the formal arguments
-          // pointer arguments are saved and passed on
-          val args = (for (e <- exp.listexp_) yield popVal.typ).toList.reverse
-          callFunctionInlining(name, functionEntry, args)
+          handleFunction(name, functionEntry, exp.listexp_.size)
         }
       }
 
@@ -2068,11 +2173,61 @@ class CCReader private (prog : Program,
 //      case exp : Estring.     Exp17 ::= String;
     }
 
+    private def handleFunction(name : String,
+                               functionEntry : Predicate,
+                               argNum : Int) =
+      (functionContracts get name) match {
+        case Some((prePred, postPred)) => {
+          // use the contract of the function
+//          assert(!(pointerArgs exists (_.isInstanceOf[CCStackPointer])),
+//                 "function contracts do not support pointer arguments yet")
+
+          val funDef = functionDefs(name)
+
+          var argTerms : List[ITerm] = List()
+          for (_ <- 0 until argNum)
+            argTerms = popVal.toTerm :: argTerms
+
+          val postGlobalVars : Seq[ITerm] =
+            for ((t, n) <- globalVarTypes.zipWithIndex)
+            yield i(t newConstant ("__gvar" + n))
+
+          val resType = getType(funDef)
+          val resVar = resType newConstant "__res"
+
+          val prePredArgs : Seq[ITerm] =
+            (for (n <- 0 until globalVars.size)
+             yield getValue(n, false).toTerm) ++
+            argTerms
+
+          val postPredArgs : Seq[ITerm] =
+            prePredArgs ++ postGlobalVars ++ List(i(resVar))
+
+          val preAtom  = IAtom(prePred,  prePredArgs)
+          val postAtom = IAtom(postPred, postPredArgs)
+
+          assertProperty(preAtom)
+
+          addGuard(postAtom)
+
+          for (((c, t), n) <- (postGlobalVars.iterator zip
+                                 globalVarTypes.iterator).zipWithIndex)
+            setValue(n, CCTerm(c, t), false)
+
+          pushVal(CCTerm(resVar, resType))
+        }
+        case None => {
+          // get rid of the local variables, which are later
+          // replaced with the formal arguments
+          // pointer arguments are saved and passed on
+          val args = (for (_ <- 0 until argNum) yield popVal.typ).toList.reverse
+          callFunctionInlining(name, functionEntry, args)
+        }
+      }
+
     private def callFunctionInlining(name : String,
                                      functionEntry : Predicate,
-                                     pointerArgs : List[CCType] = Nil) = {
-
-
+                                     pointerArgs : List[CCType] = Nil) =
       (functionDefs get name) match {
         case Some(fundef) => {
           val typ = getType(fundef)
@@ -2084,7 +2239,7 @@ class CCReader private (prog : Program,
 
           // reserve an argument for the function result
 
-          if(typ.isInstanceOf[CCVoid.type])
+          if (typ == CCVoid)
             pushFormalVal(CCInt)
           else
             pushFormalVal(typ)
@@ -2100,7 +2255,6 @@ class CCReader private (prog : Program,
               "Function " + name + " is not declared")
         }
       }
-    }
 
     private def strictBinOp(left : Exp, right : Exp,
                             op : (CCExpr, CCExpr) => CCExpr) : Unit = {
@@ -2274,6 +2428,7 @@ class CCReader private (prog : Program,
     val (declarator, stm) = functionDef match {
       case f : NewFunc    => (f.declarator_, f.compound_stm_)
       case f : NewFuncInt => (f.declarator_, f.compound_stm_)
+      case f : NewHintFunc=> (f.declarator_, f.compound_stm_)
     }
 
     declarator.asInstanceOf[NoPointer].direct_declarator_ match {
@@ -2522,7 +2677,7 @@ class CCReader private (prog : Program,
           collectVarDecls(stmsIt.next.asInstanceOf[DecS].dec_,
                           false, decSymex)
           entryPred = newPred
-          entryClause = (decSymex genClause entryPred) mergeWith entryClause
+          entryClause = merge(decSymex genClause entryPred, entryClause)
         }
 
         output(entryClause)
@@ -2871,10 +3026,28 @@ class CCReader private (prog : Program,
       processes.head._2 == ParametricEncoder.Singleton
 
     val predHints =
-      (for (p <- ParametricEncoder.processPreds(processes).iterator;
-            preds = predicateHints(p);
-            if (!preds.isEmpty))
-       yield (p -> preds.toList)).toMap
+      (for (p <- ParametricEncoder.allPredicates(processes).iterator;
+            maybePreds = predicateHints get p;
+            if maybePreds.isDefined;
+            if (!maybePreds.get.isEmpty))
+       yield (p -> maybePreds.get.toList)).toMap
+
+    val backgroundClauses =
+      for ((_, clauses) <- functionClauses.toSeq.sortBy(_._1);
+           c <- clauses)
+      yield c
+    val backgroundPreds =
+      for (c <- backgroundClauses;
+           p <- c.predicates.toSeq.sortBy(_.name);
+           if p != HornClauses.FALSE)
+      yield p
+
+    val backgroundAxioms =
+      if (backgroundPreds.isEmpty && backgroundClauses.isEmpty)
+        ParametricEncoder.NoBackgroundAxioms
+      else
+        ParametricEncoder.SomeBackgroundAxioms(backgroundPreds,
+                                               backgroundClauses)
 
     ParametricEncoder.System(processes.toList,
                              if (singleThreaded) {
@@ -2889,7 +3062,8 @@ class CCReader private (prog : Program,
                                ParametricEncoder.NoTime,
                              timeInvariants,
                              assertionClauses.toList,
-                             HornPreprocessor.VerificationHints(predHints))
+                             HornPreprocessor.VerificationHints(predHints),
+                             backgroundAxioms)
   }
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2016 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2019 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -63,6 +63,20 @@ object ReaderMain {
       println("Time invariants:")
       for (c <- system.timeInvariants)
         println("  " + c.toPrologString)
+    }
+
+    system.backgroundAxioms match {
+      case ParametricEncoder.SomeBackgroundAxioms(preds, clauses) => {
+        println
+        println("Background predicates:")
+        println("  " + (preds mkString ", "))
+        println
+        println("Background axioms:")
+        for (c <- clauses)
+          println("  " + c.toPrologString)
+      }
+      case _ =>
+        // nothing
     }
 
     if (!system.assertions.isEmpty) {

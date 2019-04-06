@@ -1,0 +1,16 @@
+
+
+/*@ contract @*/
+int f(int x) {
+  if (x > 0) {
+    x--;
+    return f(x) + 1;
+  } else
+    return 0;
+}
+
+int main() {
+  int y;
+  y = f(10);
+  assert(y > 0);
+}
