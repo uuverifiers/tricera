@@ -1,0 +1,17 @@
+
+int g;
+
+/*@ contract @*/
+void f(int x) {
+  if (x > 0) {
+    g += x;
+    --x;
+    f(x);
+  }
+}
+
+int main() {
+  int x;
+  f(x);
+  assert(g >= x);
+}

@@ -30,3 +30,6 @@ Init:
 Final:
    main8(-4, 5)   
 ------------------
+
+contract3.hcc
+SAFE

@@ -754,7 +754,10 @@ class CCReader private (prog : Program,
                prePred(prePredArgs : _*))
 
       val translator = FunctionTranslator(exitPred)
-      translator.translateWithReturn(stm, entryPred)
+      typ match {
+        case CCVoid => translator.translateNoReturn(stm, entryPred)
+        case _      => translator.translateWithReturn(stm, entryPred)
+      }
 
       val resVar = typ match {
         case CCVoid => List()
@@ -2193,7 +2196,10 @@ class CCReader private (prog : Program,
             yield i(t newConstant ("__gvar" + n))
 
           val resType = getType(funDef)
-          val resVar = resType newConstant "__res"
+          val resVar = resType match {
+            case CCVoid => List()
+            case t      => List(i(t newConstant "__res"))
+          }
 
           val prePredArgs : Seq[ITerm] =
             (for (n <- 0 until globalVars.size)
@@ -2201,7 +2207,7 @@ class CCReader private (prog : Program,
             argTerms
 
           val postPredArgs : Seq[ITerm] =
-            prePredArgs ++ postGlobalVars ++ List(i(resVar))
+            prePredArgs ++ postGlobalVars ++ resVar
 
           val preAtom  = IAtom(prePred,  prePredArgs)
           val postAtom = IAtom(postPred, postPredArgs)
@@ -2214,7 +2220,10 @@ class CCReader private (prog : Program,
                                  globalVarTypes.iterator).zipWithIndex)
             setValue(n, CCTerm(c, t), false)
 
-          pushVal(CCTerm(resVar, resType))
+          resVar match {
+            case Seq(t) => pushVal(CCTerm(t, resType))
+            case Seq()  => pushVal(CCTerm(0, CCVoid)) // push a dummy result
+          }
         }
         case None => {
           // get rid of the local variables, which are later
@@ -2503,8 +2512,8 @@ class CCReader private (prog : Program,
       // add a default return edge
       val rp = returnPred.get
       output(Clause(atom(rp, allFormalVars take rp.arity),
-        List(atom(finalPred, allFormalVars)),
-        true))
+                    List(atom(finalPred, allFormalVars)),
+                    true))
       postProcessClauses
     }
 

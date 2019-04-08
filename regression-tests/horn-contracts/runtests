@@ -4,7 +4,8 @@ LAZABS=../../tri
 
 TESTS="contract1.hcc \
        contract2.hcc \
-       contract2b.hcc"
+       contract2b.hcc \
+       contract3.hcc"
 
 for name in $TESTS; do
     echo
