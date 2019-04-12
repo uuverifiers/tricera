@@ -51,14 +51,20 @@ object CCReader {
 //    println(printer print prog)
 
     var useTime = false
+    var modelHeap = false
     var reader : CCReader = null
     while (reader == null)
       try {
-        reader = new CCReader(prog, entryFunction, useTime, arithMode)
+        reader = new CCReader(prog, entryFunction, useTime, modelHeap,
+                              arithMode)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
           useTime = true
+        }
+        case NeedsHeapModelException => {
+          warn("enabling heap model")
+          modelHeap = true
         }
       }
 
@@ -90,6 +96,7 @@ object CCReader {
   class ParseException(msg : String) extends Exception(msg)
   class TranslationException(msg : String) extends Exception(msg)
   object NeedsTimeException extends Exception
+  object NeedsHeapModelException extends Exception
 
   def warn(msg : String) : Unit =
     Console.err.println("Warning: " + msg)
@@ -336,6 +343,7 @@ object CCReader {
 class CCReader private (prog : Program,
                         entryFunction : String,
                         useTime : Boolean,
+                        modelHeap : Boolean,
                         arithmeticMode : CCReader.ArithmeticMode.Value) {
 
   import CCReader._
@@ -722,9 +730,11 @@ class CCReader private (prog : Program,
   // Reserve a variable for heap id
   val heapID = Sort.Integer newConstant "_HeapLoc"
 
-  globalVars addVar(heapID, CCInt)
-  globalVars.inits += CCTerm(heapID, CCInt)
-  variableHints += List()
+  if (modelHeap) {
+    globalVars addVar(heapID, CCInt)
+    globalVars.inits += CCTerm(heapID, CCInt)
+    variableHints += List()
+  }
 
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
@@ -764,11 +774,10 @@ class CCReader private (prog : Program,
           // nothing
       }
 
-    if (useTime)
       // prevent time variables and heap variable from being initialised twice
-      globalVars.inits ++= (globalVarSymex.getValues drop 3)
-    else
-      globalVars.inits ++= (globalVarSymex.getValues drop 1)
+      globalVars.inits ++= (globalVarSymex.getValues drop
+        (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0))
+
 
     globalPreconditions = globalPreconditions &&& globalVarSymex.getGuard
 
@@ -2054,20 +2063,14 @@ class CCReader private (prog : Program,
                               isHeapPointer(exp.exp_1)) => {
         evalHelp(exp.exp_2) //first evalate rhs and push
         maybeOutputClause
+        val rhsVal = topVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
-        val rhsVal = popVal
-
-        val pulledVar = lhsVal.typ match {
-          case pulled : CCPulledVar => pulled
-          case _ => topVal.typ.asInstanceOf[CCPulledVar]
-        }
-
+        val pulledVar = topVal.typ.asInstanceOf[CCPulledVar] // todo check here
         setValue(lookupVar(pulledVar.name),
-          getActualAssignedTerm(lhsVal, rhsVal),
+                 getActualAssignedTerm(lhsVal, rhsVal),
           false) // todo get rid of indirection?
         outputClause // todo
         Heap push(asLValue(exp.exp_1))
-        pushVal(rhsVal)
       }
       case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign]) => {
         evalHelp(exp.exp_2) //first evalate rhs and push
@@ -2331,6 +2334,8 @@ class CCReader private (prog : Program,
           }
         }
         case name@("malloc" | "calloc") => {
+          if (!modelHeap)
+            throw NeedsHeapModelException
           val typ = exp.listexp_(0) match {
             case exp : Ebytestype => getType(exp.type_name_)
             case _ => throw new TranslationException(
@@ -2346,8 +2351,12 @@ class CCReader private (prog : Program,
           })
         }
         case "realloc" =>
+          if (!modelHeap)
+            throw NeedsHeapModelException
           throw new TranslationException("realloc is not supported.")
         case "free" =>
+          if (!modelHeap)
+            throw NeedsHeapModelException
           throw new TranslationException("free is not supported.") // todo
         case name => {
           // then we inline the called function
@@ -3343,7 +3352,7 @@ class CCReader private (prog : Program,
 
     ParametricEncoder.System(processes.toList,
                              if (singleThreaded) {
-                               if (useTime) 2 else 0
+                               if (useTime) 2 else 0 // todo : anything for heap here? why only 2 if useTime?
                              } else {
                                globalVars.size
                              },
