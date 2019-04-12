@@ -1,0 +1,20 @@
+
+int g;
+
+/*@ contract @*/
+int f(int x) {
+  g++;
+  if (x > 0) {
+    x--;
+    return f(x) + 1;
+  } else
+    return 0;
+}
+
+int main() {
+  int y;
+  assume(y >= 10);
+  y = f(y);
+  assert(y >= 10);
+  assert(g >= 0);
+}

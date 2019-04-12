@@ -1,0 +1,15 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="contract1.hcc \
+       contract2.hcc \
+       contract2b.hcc \
+       contract3.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex "$@" $name 2>&1 | grep -v 'at '
+done
+

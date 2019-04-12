@@ -177,13 +177,13 @@ Initially:                                             26        7
 
 ------------------------------ Analysing loops ---------------------------------
 Loop heads:
-   inv_p1_p2/5 (2 clauses, 5 templates)
-   inv_p0_p2/4 (2 clauses, 8 templates)
-   inv_p2_p2/5 (2 clauses, 5 templates)
    inv_p0_p0/3 (10 clauses, 3 templates)
-   mmult/3 (2 clauses, 5 templates)
+   inv_p0_p2/4 (2 clauses, 8 templates)
    inv_p1_p1/5 (3 clauses, 5 templates)
    inv_p0_p1/4 (6 clauses, 6 templates)
+   inv_p2_p2/5 (2 clauses, 5 templates)
+   inv_p1_p2/5 (2 clauses, 5 templates)
+   mmult/3 (2 clauses, 5 templates)
 
 ----------------------------------- CEGAR --------------------------------------
 Theories: Types
@@ -231,17 +231,17 @@ Initially:                                             53        11
 
 ------------------------------ Analysing loops ---------------------------------
 Loop heads:
-   inv_p2_p2_p2/7 (4 clauses, 7 templates)
-   inv_p0_p2_p2/6 (3 clauses, 6 templates)
-   inv_p0_p0_p1/5 (15 clauses, 5 templates)
-   inv_p1_p2_p2/7 (3 clauses, 7 templates)
-   inv_p0_p1_p2/6 (2 clauses, 6 templates)
-   inv_p0_p0_p0/4 (22 clauses, 4 templates)
    inv_p1_p1_p2/7 (4 clauses, 9 templates)
-   inv_p1_p1_p1/7 (5 clauses, 7 templates)
-   mmult/3 (2 clauses, 5 templates)
+   inv_p0_p0_p0/4 (22 clauses, 4 templates)
+   inv_p0_p0_p1/5 (15 clauses, 5 templates)
    inv_p0_p0_p2/5 (3 clauses, 5 templates)
+   inv_p0_p2_p2/6 (3 clauses, 6 templates)
+   inv_p1_p2_p2/7 (3 clauses, 7 templates)
+   inv_p2_p2_p2/7 (4 clauses, 19 templates)
+   inv_p1_p1_p1/7 (5 clauses, 7 templates)
    inv_p0_p1_p1/6 (10 clauses, 6 templates)
+   mmult/3 (2 clauses, 5 templates)
+   inv_p0_p1_p2/6 (2 clauses, 6 templates)
 
 ----------------------------------- CEGAR --------------------------------------
 Theories: Types

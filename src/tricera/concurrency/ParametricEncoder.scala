@@ -57,7 +57,7 @@ object ParametricEncoder {
   type Process = Seq[(HornClauses.Clause, Synchronisation)]
   type ProcessSet = Seq[(Process, Replication)]
 
-  def processPreds(processes : ProcessSet) : Set[IExpression.Predicate] =
+  def allPredicates(processes : ProcessSet) : Set[IExpression.Predicate] =
     (for ((proc, _) <- processes.iterator;
           (c, _) <- proc.iterator;
           p <- c.predicates.iterator)
@@ -464,11 +464,11 @@ object ParametricEncoder {
           (clauseBuffer.toList, repl)
         }).toList
 
-      val allPreds = processPreds(newProcesses) + HornClauses.FALSE
+      val allPreds = allPredicates(newProcesses) + HornClauses.FALSE
 
       val newAssertions =
         assertions filter {
-          clause => clause.predicates subsetOf allPreds }
+          clause => clause.predicates subsetOf (allPreds ++ backgroundPreds) }
 
       System(newProcesses,
              globalVarNum,
@@ -487,8 +487,8 @@ object ParametricEncoder {
      * and q(...) :- body (clause2),
      * generate a clause p(...) :- ..., body, ... by inlining.
      */
-    private def merge(clause1 : HornClauses.Clause,
-                      clause2 : HornClauses.Clause) : HornClauses.Clause = {
+    def merge(clause1 : HornClauses.Clause,
+              clause2 : HornClauses.Clause) : HornClauses.Clause = {
       import clause1._
       import HornClauses.Clause
       import IExpression._

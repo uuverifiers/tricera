@@ -1,0 +1,35 @@
+
+contract1.hcc
+SAFE
+
+contract2.hcc
+SAFE
+
+contract2b.hcc
+UNSAFE
+
+------------------
+Init:
+  main3(-10, 5)   
+------------------
+        |         
+        |         
+        V         
+ main6(-10, 5, 5) 
+------------------
+        |         
+        |         
+        V         
+   main5(-4, 5)   
+------------------
+        |         
+        |         
+        V         
+   main8(-4, 5)   
+------------------
+Final:
+   main8(-4, 5)   
+------------------
+
+contract3.hcc
+SAFE

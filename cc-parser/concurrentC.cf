@@ -22,8 +22,9 @@ separator nonempty External_declaration "";
 
 -- OldFunc.     Function_def ::= [Declaration_specifier] Declarator [Dec] Compound_stm ;
 NewFunc.     Function_def ::= [Declaration_specifier] Declarator Compound_stm ;
+NewHintFunc.     Function_def ::= [Abs_hint] [Declaration_specifier] Declarator Compound_stm ;
 -- OldFuncInt.  Function_def ::= Declarator [Dec] Compound_stm ;
-NewFuncInt.  Function_def ::= Declarator Compound_stm ;
+NewFuncInt.  Function_def ::= [Abs_hint] Declarator Compound_stm ;
 
 SingleThread. Thread_def ::= "thread" CIdent Compound_stm ;
 ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
@@ -53,12 +54,15 @@ Comment_abs_hint. Abs_hint ::= "/*@" [Abs_hint_clause] "@*/";
 
 separator nonempty Abs_hint "";
 
-Predicate_hint. Abs_hint_clause ::= CIdent Maybe_cost "{" Exp "}";
+Predicate_hint. Abs_hint_clause ::= CIdent Maybe_cost Maybe_Exp_Args;
 
 separator Abs_hint_clause "";
 
 SomeCost.    Maybe_cost ::= "[" UnboundedInteger "]";
 NoCost.      Maybe_cost ::= ;
+
+SomeExpArgs.    Maybe_Exp_Args ::= "{" Exp "}";
+NoExpArgs.      Maybe_Exp_Args ::= ;
 
 
 Tvoid.        Type_specifier ::= "void";
