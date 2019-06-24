@@ -165,6 +165,9 @@ object CCReader {
     def getFieldIndex(name: String) =  fields.indexWhere(_._1 == name)
     def getFieldAddress (nestedName: List[String]) : List[Int] =
       nestedName match{
+
+
+
         case hd::Nil => getFieldIndex(hd) :: Nil
         case hd::tl => {
           val ind = getFieldIndex(hd)
@@ -275,6 +278,11 @@ object CCReader {
     def typ = heapAlloc.typ
   }
 
+  private case class CCSelfPointer(name : String) extends CCType {
+    override def toString : String = name + "* (pointer to parent struct)"
+    def shortName = name
+  }
+
   private abstract sealed class CCPointer(typ : CCType) extends CCType {
     def shortName = typ.shortName + "*"
   }
@@ -289,8 +297,8 @@ object CCReader {
                                    typ : CCType) extends CCPointer(typ) {
     override def toString : String = typ.shortName + " pointer to heap"
   }
-  private case object CCNullPointer extends CCPointer(CCVoid) {
-    override def toString : String = "null pointer"
+  private case class CCNullPointer(typ : CCType) extends CCPointer(typ) {
+    override def toString : String = typ + " pointer to null"
   }
 
   private case object CCClock extends CCType {
@@ -358,9 +366,10 @@ class CCReader private (prog : Program,
     import ModuloArithmetic._
 
     private def type2Sort(t : CCType) : Sort = t match {
-      case CCNullPointer         => Sort.Integer
+      case CCNullPointer(_)      => Sort.Integer
       case CCStackPointer(_,_,_) => Sort.Integer
       case CCHeapPointer(_,_)    => Sort.Integer
+      case CCSelfPointer(_)      => Sort.Integer
       case CCPulledVar(_,heap)   => type2Sort(heap.typ)
       case CCStruct(adt, _, _)   => adt.sorts.head
       case CCADTEnum(adt, _, _)  => adt.sorts.head
@@ -554,6 +563,7 @@ class CCReader private (prog : Program,
   private val functionContracts = new MHashMap[String, (Predicate, Predicate)]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
   private val structDefs    = new MHashMap[String, CCStruct]
+  private val heapAllocs    = new MHashMap[CCType, CCHeapAlloc]
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
 
@@ -1019,8 +1029,7 @@ class CCReader private (prog : Program,
             val actualType = declarator match {
               case decl : BeginPointer =>
                 initValue.typ match{
-                  case _ : CCStackPointer | _ : CCHeapPointer => initValue.typ
-                  case _ => CCNullPointer
+                  case _ : CCPointer => initValue.typ
                 }
               case _ => typ
             }
@@ -1275,20 +1284,29 @@ class CCReader private (prog : Program,
         "with Unique or Tag types!")
     }
 
-    val fieldList: List[(String, CCType)] =
-      (for (field <- fields) yield {
-        val fieldType = getType(field)
-        val declarators = field.asInstanceOf[Structen].liststruct_declarator_
-        val fieldNames = for (decl <- declarators) yield {
-          decl match {
-            case decl : Decl => getName(decl.declarator_)
-            case _ => throw new TranslationException(
-              "Bit fields in structs are not supported yet."
-            )
-          }
+    val fieldList : List[(String, CCType)] = (for (field <- fields) yield {
+      val fieldType = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
+        case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
+        t.struct_or_union_spec_.asInstanceOf[TagType].cident_ == structName =>
+          CCSelfPointer(structName) // field is a pointer to struct of the same type
+        case _ => getType(field)
+      }
+      val declarators = field.asInstanceOf[Structen].liststruct_declarator_
+
+      for (decl <- declarators) yield {
+        decl match {
+          case decl: Decl =>
+            val fieldName = getName(decl.declarator_)
+            val realFieldType: CCType = decl.declarator_ match {
+             // case _: BeginPointer => CCNullPointer(fieldType)
+              case _ => fieldType
+            }
+            (fieldName, realFieldType)
+          case _ => throw new TranslationException(
+            "Bit fields in structs are not supported yet.")
         }
-        fieldNames map ((_,fieldType))}
-        ).toList.flatten
+      }
+    }).toList.flatten
 
     val ADTFieldList : List[(String, ap.theories.ADT.OtherSort)] =
       for((fieldName, fieldType) <- fieldList)
@@ -1576,7 +1594,6 @@ class CCReader private (prog : Program,
     private def pushVal(v : CCExpr) = {
       val c = getFreshEvalVar
 // println("push " + v + " -> " + c)
-
       addValue(v)
       // reserve a local variable, in case we need one later
       localVars.addVar(c, v.typ)
@@ -1696,9 +1713,9 @@ class CCReader private (prog : Program,
 
     private def getPointedTerm (ptrType : CCStackPointer) =
       ptrType.fieldAddress match {
-        case Nil => values(ptrType.targetInd)
+        case Nil => getValue(ptrType.targetInd, false)
         case _ =>
-          val structVal = values(ptrType.targetInd)
+          val structVal = getValue(ptrType.targetInd, false)
           val structType = structVal.typ.asInstanceOf[CCStruct]
           CCTerm(
             structType.getFieldTerm(structVal.toTerm, ptrType.fieldAddress),
@@ -1855,6 +1872,14 @@ class CCReader private (prog : Program,
           "a non-pointer!")
       }
 
+    var evaluatingLhs = false
+    def evalLhs(exp : Exp) : CCExpr = {
+      evaluatingLhs = true
+      val res = eval(exp)
+      evaluatingLhs = false
+      res
+    }
+
     def eval(exp : Exp) : CCExpr = {
       val initSize = values.size - Heap.numPulled
       //val initPulled = Heap.numPulled
@@ -2009,16 +2034,16 @@ class CCReader private (prog : Program,
         }
       }
 
-      def pull(ptrName: String): CCPulledVar = {
-        val ptrInd = lookupVar(ptrName)
-        val ptr = getVarType(ptrInd).asInstanceOf[CCHeapPointer]
+      def pull(ptrExpr : CCExpr): CCPulledVar = {
+        //val ptrInd = lookupVar(ptrName)
+        val ptr = ptrExpr.typ.asInstanceOf[CCHeapPointer]
         pulledVars get ptr.heapAlloc match {
           case Some((pulled, pulledCount)) => {
             pulledVars.update(ptr.heapAlloc, (pulled, pulledCount + 1))
             pulled
           }
           case None => {
-            val ptrId = getVar(ptrInd)
+            //val ptrId = getVar(ptrInd)
             val name = "pull_" + ptr.typ.shortName +
               ptr.heapAlloc.allocSite// + "_" + numPulled // todo
 
@@ -2033,7 +2058,7 @@ class CCReader private (prog : Program,
 
             // add pull invariant
             maybeOutputClause
-            addGuard(ptr.heapAlloc.inv(ptrId, c))
+            addGuard(ptr.heapAlloc.inv(ptrExpr.toTerm, c))
             pulledVar
           }
         }
@@ -2063,27 +2088,43 @@ class CCReader private (prog : Program,
                               isHeapPointer(exp.exp_1)) => {
         evalHelp(exp.exp_2) //first evalate rhs and push
         maybeOutputClause
-        val rhsVal = topVal
-        val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
-        val pulledVar = topVal.typ.asInstanceOf[CCPulledVar] // todo check here
-        setValue(lookupVar(pulledVar.name),
-                 getActualAssignedTerm(lhsVal, rhsVal),
-          false) // todo get rid of indirection?
-        outputClause // todo
-        Heap push(asLValue(exp.exp_1))
+        val rhsVal = popVal
+        val lhsVal = evalLhs(exp.exp_1) //then evaluate lhs and get it
+
+        if (topVal.typ.isInstanceOf[CCPulledVar]) {
+          val pulledVar = topVal.typ.asInstanceOf[CCPulledVar] // todo check here
+          setValue(lookupVar(pulledVar.name),
+            getActualAssignedTerm(lhsVal, rhsVal),
+            false) // todo get rid of indirection?
+          outputClause // todo
+          pushVal(rhsVal)
+          Heap push (asLValue(exp.exp_1))
+        } else {
+          val heapPtr = lhsVal.typ.asInstanceOf[CCHeapPointer]
+          if(heapPtr.heapAlloc != rhsVal.typ.asInstanceOf[CCHeapPointer].heapAlloc)
+            throw new TranslationException("Assigning heap pointers with " +
+              "different allocation sites is not supported yet.")
+          setValue(asLValue(exp.exp_1), rhsVal)
+          pushVal(rhsVal)
+        }
       }
       case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign]) => {
         evalHelp(exp.exp_2) //first evalate rhs and push
         maybeOutputClause
-        val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
+        val lhsVal = evalLhs(exp.exp_1) //then evaluate lhs and get it
 
         val lhsName = asLValue(exp.exp_1)
         val lhsInd = lookupVar(lhsName)
         val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
         setValue(lhsInd, actualLhsTerm, isIndirection(exp.exp_1))
 
-        if (topVal.typ.isInstanceOf[CCHeapPointer])
-          setVarType(lhsInd, topVal.typ) //todo: probably wrong,
+        // todo: Below code is problematic with struct fields, as it updates the
+        // base struct's type instead of the field's. Should we create a new
+        // struct type in this case and update the already existing definition?
+        // Or we should have a way to deal with struct fields which are heap pointers
+        // without storing the actual type in the struct field.
+       /* if (topVal.typ.isInstanceOf[CCHeapPointer])
+          setVarType(lhsInd, topVal.typ)*/
       }
       case exp : Eassign => {
         evalHelp(exp.exp_1)
@@ -2277,13 +2318,13 @@ class CCReader private (prog : Program,
             v.typ match { // todo: type checking?
               case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
               case ptr : CCHeapPointer =>
-                pushVal(getValue(Heap.pull(asLValue(exp)).name)) //todo: heap pull
+                pushVal(getValue(Heap.pull(v).name)) //todo: heap pull
                 // todo: ...
-              case CCNullPointer => throw new TranslationException(
-                "trying to dereference null pointer")
+              case ptr : CCNullPointer => throw new TranslationException(
+                "trying to dereference " + ptr)
               case _ => pushVal(v)
                 throw new TranslationException("Cannot dereference " +
-                  "non-poınter: " + exp)
+                  "non-poınter: " + v.typ + " " + v.toTerm)
             }
           case _ : Plus       => // nothing
           case _ : Negative   => pushVal(popVal mapTerm (-(_)))
@@ -2342,7 +2383,13 @@ class CCReader private (prog : Program,
               "memory functions can currently only be called with argument: " +
               "sizeof(type).")
           }
-          val ptr = CCHeapPointer(newHeapAlloc(typ), typ)
+          val heapAlloc = heapAllocs.get(typ) match{
+            case None => val newAlloc = newHeapAlloc(typ)
+              heapAllocs += ((typ, newAlloc))
+              newAlloc
+            case Some(existingAlloc) => existingAlloc
+          }
+          val ptr = CCHeapPointer(heapAlloc, typ)
           val idTerm = newHeapID
           pushVal(CCTerm(idTerm, ptr))
           Heap.pushAssert(ptr, idTerm, name match {
@@ -2390,7 +2437,22 @@ class CCReader private (prog : Program,
               throw new TranslationException(fieldName + " is not a member of "
                 + structType + "!")
             val ind = structType.getFieldIndex(fieldName)
-            val fieldType = structType.getFieldType(ind)
+            val fieldType = structType.getFieldType(ind) match {
+              case selfPtr : CCSelfPointer if !evaluatingLhs =>
+                structDefs get selfPtr.name match {
+                  case Some(str) =>
+                    val heapAlloc = heapAllocs.get(str) match {
+                      case None => throw new TranslationException(
+                        "Trying to dereference null pointer!")
+                      case Some(existingAlloc) => existingAlloc
+                    }
+                    CCHeapPointer(heapAlloc, str)
+                  case None => throw new TranslationException("Detected pointer " +
+                  "field to parent struct (" + selfPtr.name + "), but this " +
+                  "struct does not exist in the list of defined structs.")
+                  }
+              case typ => typ
+            }
             val sel = structType.getADTSelector(ind)
             pushVal(CCTerm(sel(subexpr.toTerm), fieldType))
           }
@@ -2405,10 +2467,25 @@ class CCReader private (prog : Program,
         val fieldName = exp.cident_
         val term = subexpr.typ match {
           case ptrType : CCStackPointer => getPointedTerm(ptrType)
-          case heapPtr : CCHeapPointer => {
-            val pulledVar = Heap pull asLValue(exp.exp_)
+          case _ : CCHeapPointer => { //todo: error here if field is null
+            val pulledVar = Heap pull subexpr
             getValue(pulledVar.name)
           }
+          case selfPtr : CCSelfPointer =>
+            val heapPtr = structDefs get selfPtr.name match {
+              case Some(str) =>
+                val heapAlloc = heapAllocs.get(str) match {
+                  case None => throw new TranslationException(
+                    "Trying to dereference null pointer!")
+                  case Some(existingAlloc) => existingAlloc
+                }
+                CCHeapPointer(heapAlloc, str)
+              case None => throw new TranslationException("Detected pointer " +
+                "field to parent struct (" + selfPtr.name + "), but this " +
+                "struct does not exist in the list of defined structs.")
+            }
+            val pulledVar = Heap pull CCTerm(subexpr.toTerm, heapPtr)
+            getValue(pulledVar.name)
           case _ => throw new TranslationException(
             "Trying to access field '->" + fieldName + "' of non pointer.")
         }
@@ -2426,7 +2503,21 @@ class CCReader private (prog : Program,
               throw new TranslationException(fieldName + " is not a member of "
                 + structType + "!")
             val ind = structType.getFieldIndex(fieldName)
-            val fieldType = structType.getFieldType(ind)
+            val fieldType = structType.getFieldType(ind) match {
+              case selfPtr : CCSelfPointer if !evaluatingLhs =>
+                structDefs get selfPtr.name match {
+                case Some(str) =>
+                  val heapAlloc = heapAllocs.get(str) match {
+                    case None => throw new TranslationException(
+                      "Trying to dereference null pointer!")
+                    case Some(existingAlloc) => existingAlloc
+                  }
+                  CCHeapPointer(heapAlloc, str)                case None => throw new TranslationException("Detected pointer " +
+                  "field to parent struct (" + selfPtr.name + "), but this " +
+                  "struct does not exist in the list of defined structs.")
+              }
+              case typ => typ
+            }
             val sel = structType.getADTSelector(ind)
             pushVal(CCTerm(sel(term.toTerm), fieldType))
           }
