@@ -278,9 +278,9 @@ object CCReader {
     def typ = heapAlloc.typ
   }
 
-  private case class CCSelfPointer(name : String) extends CCType {
-    override def toString : String = name + "* (pointer to parent struct)"
-    def shortName = name
+  private case class CCDeclarationOnlyPointer(name : String) extends CCType {
+    override def toString : String = name + "*"
+    def shortName = name + "_ptr"
   }
 
   private abstract sealed class CCPointer(typ : CCType) extends CCType {
@@ -369,7 +369,7 @@ class CCReader private (prog : Program,
       case CCNullPointer(_)      => Sort.Integer
       case CCStackPointer(_,_,_) => Sort.Integer
       case CCHeapPointer(_,_)    => Sort.Integer
-      case CCSelfPointer(_)      => Sort.Integer
+      case CCDeclarationOnlyPointer(_) => Sort.Integer
       case CCPulledVar(_,heap)   => type2Sort(heap.typ)
       case CCStruct(adt, _, _)   => adt.sorts.head
       case CCADTEnum(adt, _, _)  => adt.sorts.head
@@ -563,6 +563,7 @@ class CCReader private (prog : Program,
   private val functionContracts = new MHashMap[String, (Predicate, Predicate)]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
   private val structDefs    = new MHashMap[String, CCStruct]
+  private val structDecs    = new ArrayBuffer[String]
   private val heapAllocs    = new MHashMap[CCType, CCHeapAlloc]
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
@@ -783,6 +784,9 @@ class CCReader private (prog : Program,
         case _ =>
           // nothing
       }
+    if(structDecs nonEmpty) throw new TranslationException(
+      "Some globally declared structs were never defined: " +
+        structDecs.mkString(", "))
 
       // prevent time variables and heap variable from being initialised twice
       globalVars.inits ++= (globalVarSymex.getValues drop
@@ -1110,7 +1114,16 @@ class CCReader private (prog : Program,
             TranslationException("Storage and SpecProp not implemented yet")
       }
       typ match {
-        case structDec : Tstruct => buildStructType(structDec)
+        case structSpec : Tstruct =>
+          val structName = getStructName(structSpec)
+          if (structSpec.struct_or_union_spec_.isInstanceOf[TagType]) {
+            if (!structIsDeclared(structName))
+              structDecs += structName
+          }
+          else {
+            buildStructType(structSpec)
+            if(structDecs contains structName) structDecs -= structName
+          }
         case enumDec : Tenum => buildEnumType(enumDec)
         case _ => throw new
             TranslationException("NoDeclarator only for structs or enums!")
@@ -1253,20 +1266,25 @@ class CCReader private (prog : Program,
   private def getAnonEnumName: String =
     getAnonName(".ES")
 
-  private def getStructType(spec: Tstruct) : Option[CCStruct] = {
-    val structName = spec.struct_or_union_spec_ match {
+  private def getStructType(spec: Tstruct) : Option[CCStruct] =
+    structDefs get getStructName(spec)
+
+  private def getStructName(spec: Tstruct) : String =
+    spec.struct_or_union_spec_ match {
       case _: Unique => ""
       case tagged: Tag => tagged.cident_
       case tagged: TagType => tagged.cident_
     }
-    structDefs get structName
-  }
+
+  private def structIsDeclared(structName: String) =
+    (structDefs contains structName) || (structDecs contains structName)
 
   private def buildStructType(spec: Tstruct) : CCStruct = {
     spec.struct_or_union_spec_ match {
       case _ : Unique => buildStructType(spec, getAnonStructName)
       case tagged : Tag => buildStructType(spec, tagged.cident_)
-      case _ => throw new TranslationException("struct can only be built " +
+      case declaration : TagType =>
+        throw new TranslationException("struct can only be built " +
         "with Unique or Tag types!")
     }
   }
@@ -1287,8 +1305,10 @@ class CCReader private (prog : Program,
     val fieldList : List[(String, CCType)] = (for (field <- fields) yield {
       val fieldType = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
         case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
-        t.struct_or_union_spec_.asInstanceOf[TagType].cident_ == structName =>
-          CCSelfPointer(structName) // field is a pointer to struct of the same type
+          (getStructName(t) == structName ||
+            (structDecs contains getStructName(t))) =>
+          CCDeclarationOnlyPointer(getStructName(t))
+          //todo: some error handling here?
         case _ => getType(field)
       }
       val declarators = field.asInstanceOf[Structen].liststruct_declarator_
@@ -2438,8 +2458,8 @@ class CCReader private (prog : Program,
                 + structType + "!")
             val ind = structType.getFieldIndex(fieldName)
             val fieldType = structType.getFieldType(ind) match {
-              case selfPtr : CCSelfPointer if !evaluatingLhs =>
-                structDefs get selfPtr.name match {
+              case declPtr : CCDeclarationOnlyPointer if !evaluatingLhs =>
+                structDefs get declPtr.name match {
                   case Some(str) =>
                     val heapAlloc = heapAllocs.get(str) match {
                       case None => throw new TranslationException(
@@ -2448,7 +2468,7 @@ class CCReader private (prog : Program,
                     }
                     CCHeapPointer(heapAlloc, str)
                   case None => throw new TranslationException("Detected pointer " +
-                  "field to parent struct (" + selfPtr.name + "), but this " +
+                  "field to some struct (" + declPtr.name + "), but this " +
                   "struct does not exist in the list of defined structs.")
                   }
               case typ => typ
@@ -2471,8 +2491,8 @@ class CCReader private (prog : Program,
             val pulledVar = Heap pull subexpr
             getValue(pulledVar.name)
           }
-          case selfPtr : CCSelfPointer =>
-            val heapPtr = structDefs get selfPtr.name match {
+          case declPtr : CCDeclarationOnlyPointer =>
+            val heapPtr = structDefs get declPtr.name match {
               case Some(str) =>
                 val heapAlloc = heapAllocs.get(str) match {
                   case None => throw new TranslationException(
@@ -2481,7 +2501,7 @@ class CCReader private (prog : Program,
                 }
                 CCHeapPointer(heapAlloc, str)
               case None => throw new TranslationException("Detected pointer " +
-                "field to parent struct (" + selfPtr.name + "), but this " +
+                "field to parent struct (" + declPtr.name + "), but this " +
                 "struct does not exist in the list of defined structs.")
             }
             val pulledVar = Heap pull CCTerm(subexpr.toTerm, heapPtr)
@@ -2504,16 +2524,17 @@ class CCReader private (prog : Program,
                 + structType + "!")
             val ind = structType.getFieldIndex(fieldName)
             val fieldType = structType.getFieldType(ind) match {
-              case selfPtr : CCSelfPointer if !evaluatingLhs =>
-                structDefs get selfPtr.name match {
+              case declPtr : CCDeclarationOnlyPointer if !evaluatingLhs =>
+                structDefs get declPtr.name match {
                 case Some(str) =>
                   val heapAlloc = heapAllocs.get(str) match {
                     case None => throw new TranslationException(
                       "Trying to dereference null pointer!")
                     case Some(existingAlloc) => existingAlloc
                   }
-                  CCHeapPointer(heapAlloc, str)                case None => throw new TranslationException("Detected pointer " +
-                  "field to parent struct (" + selfPtr.name + "), but this " +
+                  CCHeapPointer(heapAlloc, str)
+                case None => throw new TranslationException("Detected pointer " +
+                  "field to parent struct (" + declPtr.name + "), but this " +
                   "struct does not exist in the list of defined structs.")
               }
               case typ => typ
