@@ -1,0 +1,12 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="list-001.c list-001-fail.c list-002.c list-002-fail.c mutually-referential-structs.c mutually-referential-structs-fail.c simple-struct.c simple-struct-2.c simple-struct-fail.c swap.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex "$@" $name 2>&1 | grep -v 'at '
+done
+

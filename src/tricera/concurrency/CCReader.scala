@@ -1306,9 +1306,9 @@ class CCReader private (prog : Program,
       val fieldType = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
         case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
           (getStructName(t) == structName ||
-            (structDecs contains getStructName(t))) =>
+            structIsDeclared(getStructName(t))) =>
           CCDeclarationOnlyPointer(getStructName(t))
-          //todo: some error handling here?
+        //todo: some error handling here?
         case _ => getType(field)
       }
       val declarators = field.asInstanceOf[Structen].liststruct_declarator_
@@ -2065,7 +2065,7 @@ class CCReader private (prog : Program,
           case None => {
             //val ptrId = getVar(ptrInd)
             val name = "pull_" + ptr.typ.shortName +
-              ptr.heapAlloc.allocSite// + "_" + numPulled // todo
+              ptr.heapAlloc.allocSite + "_" + numPulled // todo
 
             val pulledVar = CCPulledVar(name, ptr.heapAlloc) //new PulledVar(ind, pulledVars.size)
             pulledVars += (ptr.heapAlloc -> (pulledVar, 1))
@@ -2440,7 +2440,10 @@ class CCReader private (prog : Program,
       }
 
       case exp : Eselect => {
+        val evaluatingLhs_pre = evaluatingLhs
+        evaluatingLhs = false
         val subexpr = eval(exp.exp_)
+        evaluatingLhs = evaluatingLhs_pre
         val fieldName = exp.cident_
         subexpr.typ match {
 
@@ -2483,7 +2486,10 @@ class CCReader private (prog : Program,
       }
 
       case exp : Epoint => {
+        val evaluatingLhs_pre = evaluatingLhs
+        evaluatingLhs = false
         val subexpr = eval(exp.exp_)
+        evaluatingLhs = evaluatingLhs_pre
         val fieldName = exp.cident_
         val term = subexpr.typ match {
           case ptrType : CCStackPointer => getPointedTerm(ptrType)
