@@ -6,10 +6,11 @@ void swap(int *x, int *y){
 
 void main() {
     int *a = calloc(sizeof(int));
-    int *b = calloc(sizeof(int));
     *a = 3;
+    int *b = calloc(sizeof(int));
     *b = 42;
     swap(a, b);
-    assert(*a == 42 && *b == 3);
+    int tmp = *a;
+    assert(tmp == 0 || tmp == 3 || tmp == 42);
 }
 

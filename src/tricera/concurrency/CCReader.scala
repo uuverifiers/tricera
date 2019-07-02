@@ -704,7 +704,8 @@ class CCReader private (prog : Program,
   }
 
   private def newInv(typ : CCType) =
-    new Predicate("Inv_" + typ.shortName, 2) // todo: fix
+    new MonoSortedPredicate("Inv_" + typ.shortName,
+      List(Sort.Integer, typ.toSort))
   private def newHeapAlloc(typ : CCType) : CCHeapAlloc = {
     val inv = newInv(typ)
     heapInvariants += inv // todo: here the actual inveriants must be added (after data flow analysis)
@@ -2010,8 +2011,33 @@ class CCReader private (prog : Program,
 
       def numPulled = pulledVars.size
 
-       def pushAssert(ptr: CCHeapPointer, ptrId: ITerm, setVal: ITerm) {
+      def pushAssert(ptr: CCHeapPointer, ptrId: ITerm, setVal: ITerm) {
         assertProperty(ptr.heapAlloc.inv(ptrId, setVal))
+      }
+
+      def push(ptr: CCHeapPointer, ptrId: ITerm, setVal: ITerm) {
+        val pulledVar = pulledVars get ptr.heapAlloc match {
+          case None => throw new TranslationException("Trying to push an " +
+            "unpulled heap variable using pointer: " + ptrId.toString)
+          case Some((v, _)) => v
+        }
+        pushAssert(ptr, ptrId, setVal)
+        removePulledVar(ptr.heapAlloc) //todo: remove var here?
+      }
+
+      private def removePulledVar(heapAlloc: CCHeapAlloc) {
+        val (pulledVar, pulledCount) = pulledVars get heapAlloc match {
+          case Some(v) => v
+          case None => throw new TranslationException("Cannot find heap " +
+            "pulled var!")
+        }
+
+        if (pulledCount > 1)
+          pulledVars.update(heapAlloc, (pulledVar, pulledCount - 1))
+        else {
+          removeVal(values.lastIndexWhere(v => v.typ == pulledVar))
+          pulledVars.remove(heapAlloc)
+        }
       }
 
       def pull(ptrExpr : CCExpr): CCPulledVar = {
@@ -2087,14 +2113,17 @@ class CCReader private (prog : Program,
         val rhsVal = popVal
         val lhsVal = evalLhs(exp.exp_1) //then evaluate lhs and get it
 
-        val heapPtr = lhsVal.typ match {
-          case ptr : CCHeapPointer => ptr
-          case declPtr : CCDeclarationOnlyPointer => getHeapPointer (declPtr)
+        val (heapPtr, actualLhsVal) = lhsVal.typ match {
+          case ptr: CCHeapPointer => (ptr, lhsVal)
+          case declPtr: CCDeclarationOnlyPointer => (getHeapPointer(declPtr), lhsVal)
+          case _ => val rootLhs =  getValue(asLValue(exp.exp_1))
+            (rootLhs.typ.asInstanceOf[CCHeapPointer], rootLhs)
         }
 
         val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
-        if(updatingPointedValue) {
-          Heap pushAssert(heapPtr, lhsVal.toTerm, rhsVal.toTerm)
+        if (updatingPointedValue) {
+          Heap push(heapPtr, actualLhsVal.toTerm,
+                          getActualAssignedTerm(lhsVal, rhsVal).toTerm)
         } else {
           if (heapPtr.heapAlloc != rhsVal.typ.asInstanceOf[CCHeapPointer].heapAlloc)
             throw new TranslationException("Assigning heap pointers with " +
