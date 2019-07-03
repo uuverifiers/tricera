@@ -1569,11 +1569,16 @@ class CCReader private (prog : Program,
   private class Symex private (oriInitPred : Predicate,
                                values : Buffer[CCExpr]) {
     private var guard : IFormula = true
+    private var pullGuard : IFormula = true
 
     def addGuard(f : IFormula) : Unit = {
       guard = guard &&& f
       touchedGlobalState =
         touchedGlobalState || !freeFromGlobal(f)
+    }
+
+    def addPullGuard(f : IFormula) : Unit = {
+      pullGuard = pullGuard &&& f
     }
 
     def getGuard = guard
@@ -1585,21 +1590,22 @@ class CCReader private (prog : Program,
         atom(oriInitPred, allFormalVars)
     private def initPred = initAtom.pred
 
-    private val savedStates = new Stack[(IAtom, Seq[CCExpr], IFormula, Boolean)]
+    private val savedStates = new Stack[(IAtom, Seq[CCExpr], IFormula, IFormula, Boolean)]
     def saveState =
-      savedStates push ((initAtom, values.toList, guard, touchedGlobalState))
+      savedStates push ((initAtom, values.toList, guard, pullGuard, touchedGlobalState))
     def restoreState = {
-      val (oldAtom, oldValues, oldGuard, oldTouched) = savedStates.pop
+      val (oldAtom, oldValues, oldGuard, oldPullGuard, oldTouched) = savedStates.pop
       initAtom = oldAtom
       values.clear
       oldValues copyToBuffer values
       localVars.pop(localVars.size - values.size + globalVars.size)
       guard = oldGuard
+      pullGuard = oldPullGuard
       touchedGlobalState = oldTouched
     }
 
     def atomValuesUnchanged = {
-      val (oldAtom, oldValues, _, _) = savedStates.top
+      val (oldAtom, oldValues, _, _, _) = savedStates.top
       initAtom == oldAtom &&
       ((values.iterator zip oldValues.iterator) forall {
          case (x, y) => x == y
@@ -1674,7 +1680,7 @@ class CCReader private (prog : Program,
       import HornClauses._
       if (initAtom == null)
         throw new TranslationException("too complicated initialiser")
-      asAtom(pred) :- (initAtom &&& guard)
+      asAtom(pred) :- (initAtom &&& guard &&& pullGuard)
     }
 
     def outputClause(pred : Predicate,
@@ -1688,7 +1694,7 @@ class CCReader private (prog : Program,
 
     def outputClause(headAtom : IAtom) : Unit = {
       import HornClauses._
-      val c = headAtom :- (initAtom &&& guard)
+      val c = headAtom :- (initAtom &&& guard &&& pullGuard)
       if (!c.hasUnsatConstraint)
         output(c)
     }
@@ -1696,6 +1702,7 @@ class CCReader private (prog : Program,
     def resetFields(pred : Predicate) : Unit = {
       initAtom = atom(pred, allFormalVars)
       guard = true
+      pullGuard = true
       touchedGlobalState = false
       assignedToStruct = false
       for ((e, i) <- allFormalExprs.iterator.zipWithIndex)
@@ -1714,7 +1721,7 @@ class CCReader private (prog : Program,
 
     def assertProperty(property : IFormula) : Unit = {
       import HornClauses._
-      assertionClauses += (property :- (initAtom, guard))
+      assertionClauses += (property :- (initAtom, guard &&& pullGuard))
     }
 
     def addValue(t : CCExpr) = {
@@ -1964,11 +1971,15 @@ class CCReader private (prog : Program,
         case fieldFun : IFunApp => // an ADT
           assignedToStruct = true
           val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
-          val structType = {getVarType(rootTerm.name) match {
-            case pulled : CCPulledVar => pulled.typ
-            case ptr : CCStackPointer => getPointedTerm(ptr).typ
-            case typ => typ
-          }}.asInstanceOf[CCStruct]
+
+          val structType = rootTerm match {
+            case t : SortedConstantTerm => structDefs(t.sort.name)
+            case _ => {getVarType(rootTerm.name) match {
+                case pulled : CCPulledVar => pulled.typ
+                case ptr : CCStackPointer => getPointedTerm(ptr).typ
+                case typ => typ
+              }}.asInstanceOf[CCStruct]
+          }
           val fieldAddress = structType.getFieldAddress(fieldNames)
           CCTerm(structType.setFieldTerm(rootTerm, rhs.toTerm, fieldAddress),
                  structType)
@@ -2016,16 +2027,12 @@ class CCReader private (prog : Program,
       }
 
       def push(ptr: CCHeapPointer, ptrId: ITerm, setVal: ITerm) {
-        val pulledVar = pulledVars get ptr.heapAlloc match {
-          case None => throw new TranslationException("Trying to push an " +
-            "unpulled heap variable using pointer: " + ptrId.toString)
-          case Some((v, _)) => v
-        }
         pushAssert(ptr, ptrId, setVal)
-        removePulledVar(ptr.heapAlloc) //todo: remove var here?
+        if (pulledVars contains ptr.heapAlloc)
+          removePulledVar(ptr.heapAlloc) //todo: check if not pulled first?
       }
 
-      private def removePulledVar(heapAlloc: CCHeapAlloc) {
+      def removePulledVar(heapAlloc: CCHeapAlloc) {
         val (pulledVar, pulledCount) = pulledVars get heapAlloc match {
           case Some(v) => v
           case None => throw new TranslationException("Cannot find heap " +
@@ -2061,11 +2068,11 @@ class CCReader private (prog : Program,
             val c = pulledVar newConstant name
             localVars.addVar(c, pulledVar)
             addValue(CCTerm(c, pulledVar))
-            addGuard(pulledVar rangePred c)
+            addPullGuard(pulledVar rangePred c)
 
             // add pull invariant
             maybeOutputClause
-            addGuard(ptr.heapAlloc.inv(ptrExpr.toTerm, c))
+            addPullGuard(ptr.heapAlloc.inv(ptrExpr.toTerm, c))
             pulledVar
           }
        /* }
@@ -2454,7 +2461,9 @@ class CCReader private (prog : Program,
             val structType = typ match {
               case t : CCStruct => t
               case t : CCPulledVar => t.typ match {
-                case t : CCStruct => t
+                case tStruct : CCStruct =>
+                  if(!evaluatingLhs) Heap removePulledVar t.heapAlloc
+                  tStruct
                 case _ => throw new TranslationException("Trying to access " +
                   "field " + fieldName + "' of non struct heap variable.")
               }
@@ -2501,7 +2510,9 @@ class CCReader private (prog : Program,
             val structType = typ match {
               case t : CCStruct => t
               case t : CCPulledVar => t.typ match {
-                case t : CCStruct => t
+                case tStruct : CCStruct =>
+                  if(!evaluatingLhs) Heap removePulledVar t.heapAlloc
+                  tStruct
                 case _ => throw new TranslationException("Trying to access " +
                   "field '" + fieldName + "' of non struct heap variable.")
               }
