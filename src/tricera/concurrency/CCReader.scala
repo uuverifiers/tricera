@@ -2074,7 +2074,7 @@ class CCReader private (prog : Program,
     object Heap {
       val nullAlloc = nullHeapAlloc
 
-      val pulledVars = new MHashMap[CCHeapAlloc, (CCPulledVar, Int)]
+      val pulledVars = new MHashMap[CCHeapAlloc, (CCPulledVar, CCTerm)]
 
       def numPulled = pulledVars.size
 
@@ -2088,25 +2088,9 @@ class CCReader private (prog : Program,
           removePulledVar(heapAlloc)*/ //todo: check if not pulled first?
       }
 
-      def removePulledVar(heapAlloc: CCHeapAlloc) {
-        val (pulledVar, pulledCount) = pulledVars get heapAlloc match {
-          case Some(v) => v
-          case None => throw new TranslationException("Cannot find heap " +
-            "pulled var!")
-        }
-
-        if (pulledCount > 1)
-          pulledVars.update(heapAlloc, (pulledVar, pulledCount - 1))
-        else {
-          removeVal(values.lastIndexWhere(v => v.typ == pulledVar))
-          pulledVars.remove(heapAlloc)
-        }
-      }
-
       def removeAllPulledVars {
         pulledVars.foreach {
           case ((heapAlloc, (pulledVar, _))) =>
-            //removeVal(values.lastIndexWhere(v => v.typ == pulledVar))
             pulledVars.remove(heapAlloc)
         }
       }
@@ -2114,33 +2098,33 @@ class CCReader private (prog : Program,
       def pull(ptrExpr : CCExpr): CCPulledVar = {
         //val ptrInd = lookupVar(ptrName)
         val ptr = ptrExpr.typ.asInstanceOf[CCHeapPointer]
-        /*pulledVars get ptr.heapAlloc match {
-          case Some((pulled, pulledCount)) => { //todo: only use this case in atomicMode?
-            pulledVars.update(ptr.heapAlloc, (pulled, pulledCount + 1))
-            pulled
+        pulledVars get ptr.heapAlloc match {
+          case Some((pulledVar, pulledTerm)) => { //todo: only use this case in atomicMode?
+            pushVal(pulledTerm)
+            pulledVar
           }
-          case None => {*/
+          case None => {
             //val ptrId = getVar(ptrInd)
             val name = "pull_" + ptr.typ.shortName +
               ptr.heapAlloc.allocSite + "_" + numPulled // todo
 
             val pulledVar = CCPulledVar(name, ptr.heapAlloc, ptrExpr.toTerm) //new PulledVar(ind, pulledVars.size)
-            if(!(pulledVars contains ptr.heapAlloc))
-              pulledVars += (ptr.heapAlloc -> (pulledVar, 1))
-
-            // add value todo
             val c = pulledVar newConstant name
+            val pulledTerm = CCTerm(c, pulledVar)
+            pulledVars += (ptr.heapAlloc -> (pulledVar, pulledTerm))
+            // add value todo
+
             //localVars.addVar(c, pulledVar)
-            pushVal(CCTerm(c, pulledVar))
+            pushVal(pulledTerm)
             addPullGuard(pulledVar rangePred c)
 
             // add pull invariant
-            maybeOutputClause
+            //maybeOutputClause
             addPullGuard(ptr.heapAlloc.inv(ptrExpr.toTerm, c))
             pulledVar
           }
-      //  }
-      //}
+        }
+      }
     }
 
     private def evalHelp(exp : Exp) : Unit = exp match {

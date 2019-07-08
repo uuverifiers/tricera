@@ -10,7 +10,6 @@ void main() {
     int *b = calloc(sizeof(int));
     *b = 42;
     swap(a, b);
-    int z = *a;
-    assert(*a == 0 || z == 3 || z == 42);
+    assert(*a == 0 || *a == 3 || *a == 42);
 }
 
