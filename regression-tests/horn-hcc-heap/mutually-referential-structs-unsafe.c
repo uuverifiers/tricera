@@ -3,7 +3,6 @@ struct child;
 
 struct child {
   struct parent *p;
-  int data;
 };
 
 struct parent {
@@ -16,10 +15,7 @@ void main()
   list->child1 = calloc(sizeof(struct child));
   list->child1->p = list;
   list->child2 = calloc(sizeof(struct child));
-  list->child2->p = list;
+  //list->child2->p = list;
   
-  struct parent *cp1 = list->child1->p;
-  struct parent *cp2 = list->child2->p;
-  assert(cp1 == list || cp1 == 0);
-  assert(cp1 == cp2);
+  assert(list->child1->p == list->child2->p);
 }

@@ -5,5 +5,6 @@ struct simple{
 void main(){
   struct simple *p = calloc(sizeof(struct simple));
   p->x = 42;
-  assert(p->x == 42 || p->x ==0);
+  int v = p->x;
+  assert(v == 42 || v ==0);
 }

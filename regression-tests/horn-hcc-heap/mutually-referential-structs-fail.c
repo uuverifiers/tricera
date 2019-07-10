@@ -18,6 +18,9 @@ void main()
   list->child2 = calloc(sizeof(struct child));
   list->child2->p = list;
   
+  struct parent *cp1 = list->child1->p; //commenting out this line 
+                                        //removes the assertion error
+  struct parent *cp2 = list->child2->p;
   assert(list->child1->p == list); //should succeed after refinements 
-  assert(list->child1->p == list->child2->p);
+  assert(cp1 == cp2);
 }

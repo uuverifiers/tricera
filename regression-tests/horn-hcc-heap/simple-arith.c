@@ -4,7 +4,7 @@ void main() {
     *x = 42;
     *x = 3;
     int y = *x + *x;
-    assert(y == 0 || y == 3 || y == 6 /*|| y == 42 /*|| y == 45*/ || y == 84);
+    assert(y == 0 || y == 3 || y == 6 || y == 42 || y == 45 || y == 84);
     /* possible values for y without refinements
       0  +  0 = 0
       0  +  3 = 3

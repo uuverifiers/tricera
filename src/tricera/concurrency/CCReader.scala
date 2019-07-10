@@ -726,7 +726,7 @@ class CCReader private (prog : Program,
   }
 
   private def newInv(typ : CCType) =
-    new MonoSortedPredicate("Inv_" + typ.shortName,
+    MonoSortedPredicate("Inv_" + typ.shortName,
       List(Sort.Integer, typ.toSort))
   private def newHeapAlloc(typ : CCType) : CCHeapAlloc = {
     val inv = newInv(typ)
@@ -766,7 +766,7 @@ class CCReader private (prog : Program,
 
   if (modelHeap) {
     globalVars addVar(heapID, CCInt)
-    globalVars.inits += CCTerm(heapID, CCInt)
+    globalVars.inits += CCTerm(1, CCInt)
     variableHints += List()
   }
 
@@ -1063,7 +1063,7 @@ class CCReader private (prog : Program,
                     case _ => throw new TranslationException("Not possible to " +
                       "reach, added to suppress warning.")
                   }
-                } else CCHeapPointer(values.Heap.nullAlloc,typ)
+                } else CCHeapPointer(Heap.nullAlloc,typ)
                 (newTyp newConstant getName(declarator), newTyp)
               }
               else (c, typ)
@@ -1597,7 +1597,6 @@ class CCReader private (prog : Program,
   private def atom(pred : Predicate, args : Seq[ITerm]) =
     IAtom(pred, args take pred.arity)
 
-  private val nullHeapAlloc = new CCHeapAlloc(0, CCVoid, new Predicate("null",0))
   private class Symex private (oriInitPred : Predicate,
                                values : Buffer[CCExpr]) {
     private var guard : IFormula = true
@@ -1614,6 +1613,16 @@ class CCReader private (prog : Program,
     }
 
     def getGuard = guard
+
+    private def heapPush (heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) =
+      assertProperty(heapAlloc.inv(ptrId, setVal))
+
+    private def heapPull (ptrExpr : CCExpr) = {
+      val (pulledVar, pulledTerm) = Heap.pull(ptrExpr)
+      addPullGuard(pulledVar rangePred pulledTerm.t)
+      addPullGuard(pulledVar.heapAlloc.inv(ptrExpr.toTerm, pulledTerm.t))
+      pulledTerm
+    }
 
     private var initAtom =
       if (oriInitPred == null)
@@ -1737,7 +1746,7 @@ class CCReader private (prog : Program,
       pullGuard = true
       touchedGlobalState = false
       assignedToStruct = false
-      Heap.removeAllPulledVars
+     // Heap.pulledVars.clear
       for ((e, i) <- allFormalExprs.iterator.zipWithIndex)
         values(i) = e
     }
@@ -1993,21 +2002,27 @@ class CCReader private (prog : Program,
       res
     }
 
+    private def findLast[A](la: List[A])(f: A => Boolean): Option[A] =
+      la.foldLeft(Option.empty[A]) { (acc, cur) =>
+        if (f(cur)) Some(cur)
+        else acc
+      }
+
     private def getActualLhsVal(lhs: CCExpr) : CCExpr = {
       lhs.toTerm match {
         case fieldFun : IFunApp => // an ADT
           val (_, rootTerm) = getFieldInfo(fieldFun)
           lookupVarNoException(rootTerm.name) match {
             case -1  =>
-              Heap.pulledVars.find {
-                case ((_, (pulled, _))) => pulled.name == rootTerm.name
+              val pulledVar = Heap.pulledVars.lastIndexWhere{
+                case ((pulledVar, _)) => pulledVar.name == rootTerm.name
               } match {
-                case None => throw new TranslationException(lhs +
+                case -1  => throw new TranslationException(lhs +
                   "is not a pulled nor regular value")
-                case Some (tuple) => val pulledVar = tuple._2._1
-                  CCTerm(pulledVar.ptrId,
-                    CCHeapPointer(pulledVar.heapAlloc,pulledVar.typ))
+                case ind => Heap.pulledVars(ind)._1
               }
+              CCTerm(pulledVar.ptrId,
+                CCHeapPointer(pulledVar.heapAlloc,pulledVar.typ))
             case ind => getValue(ind, false)
           }
         case _ => lhs // a non ADT
@@ -2071,62 +2086,6 @@ class CCReader private (prog : Program,
       }
     }
 
-    object Heap {
-      val nullAlloc = nullHeapAlloc
-
-      val pulledVars = new MHashMap[CCHeapAlloc, (CCPulledVar, CCTerm)]
-
-      def numPulled = pulledVars.size
-
-      def pushAssert(heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) {
-        assertProperty(heapAlloc.inv(ptrId, setVal))
-      }
-
-      def push(heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) {
-        pushAssert(heapAlloc, ptrId, setVal)
-        /*if (pulledVars contains heapAlloc)
-          removePulledVar(heapAlloc)*/ //todo: check if not pulled first?
-      }
-
-      def removeAllPulledVars {
-        pulledVars.foreach {
-          case ((heapAlloc, (pulledVar, _))) =>
-            pulledVars.remove(heapAlloc)
-        }
-      }
-
-      def pull(ptrExpr : CCExpr): CCPulledVar = {
-        //val ptrInd = lookupVar(ptrName)
-        val ptr = ptrExpr.typ.asInstanceOf[CCHeapPointer]
-        pulledVars get ptr.heapAlloc match {
-          case Some((pulledVar, pulledTerm)) => { //todo: only use this case in atomicMode?
-            pushVal(pulledTerm)
-            pulledVar
-          }
-          case None => {
-            //val ptrId = getVar(ptrInd)
-            val name = "pull_" + ptr.typ.shortName +
-              ptr.heapAlloc.allocSite + "_" + numPulled // todo
-
-            val pulledVar = CCPulledVar(name, ptr.heapAlloc, ptrExpr.toTerm) //new PulledVar(ind, pulledVars.size)
-            val c = pulledVar newConstant name
-            val pulledTerm = CCTerm(c, pulledVar)
-            pulledVars += (ptr.heapAlloc -> (pulledVar, pulledTerm))
-            // add value todo
-
-            //localVars.addVar(c, pulledVar)
-            pushVal(pulledTerm)
-            addPullGuard(pulledVar rangePred c)
-
-            // add pull invariant
-            //maybeOutputClause
-            addPullGuard(ptr.heapAlloc.inv(ptrExpr.toTerm, c))
-            pulledVar
-          }
-        }
-      }
-    }
-
     private def evalHelp(exp : Exp) : Unit = exp match {
       case exp : Ecomma => {
         evalHelp(exp.exp_1)
@@ -2170,7 +2129,7 @@ class CCReader private (prog : Program,
 
         val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
         if (updatingPointedValue) {
-          Heap push(heapAlloc,actualLhsVal.typ match {
+          heapPush(heapAlloc,actualLhsVal.typ match {
             case pulled : CCPulledVar => pulled.ptrId
             case _ => actualLhsVal.toTerm
           }, getActualAssignedTerm(lhsVal, rhsVal).toTerm)
@@ -2401,7 +2360,7 @@ class CCReader private (prog : Program,
               case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
               case ptr : CCHeapPointer =>
                 if(evaluatingLhs) pushVal(v)
-                else Heap.pull(v).name
+                else pushVal(heapPull(v))
               case _ => throw new TranslationException("Cannot dereference " +
                   "non-pointer: " + v.typ + " " + v.toTerm)
             }
@@ -2471,7 +2430,7 @@ class CCReader private (prog : Program,
           val ptr = CCHeapPointer(heapAlloc, typ)
           val idTerm = newHeapID
           pushVal(CCTerm(idTerm, ptr))
-          Heap.pushAssert(ptr.heapAlloc, idTerm, name match {
+          heapPush(ptr.heapAlloc, idTerm, name match {
             case "calloc" => getZeroInit(typ)
             case "malloc" => getNonDet // todo
           })
@@ -2546,13 +2505,11 @@ class CCReader private (prog : Program,
         val term = subexpr.typ match {
           case ptrType : CCStackPointer => getPointedTerm(ptrType)
           case _ : CCHeapPointer => { //todo: error here if field is null
-            val pulledVar = Heap pull subexpr
-            popVal
+            heapPull(subexpr)
           }
           case declPtr : CCDeclarationOnlyPointer =>
             val heapPtr = getHeapPointer (declPtr)
-            val pulledVar = Heap pull CCTerm(subexpr.toTerm, heapPtr)
-            popVal
+            heapPull(CCTerm(subexpr.toTerm, heapPtr))
           case _ => throw new TranslationException(
             "Trying to access field '->" + fieldName + "' of non pointer.")
         }
@@ -2792,27 +2749,33 @@ class CCReader private (prog : Program,
             "do not know how to convert " + t + " to " + newType)
       }
 
-    private def unifyTypes(a : CCExpr, b : CCExpr) : (CCExpr, CCExpr) =
-      (a.typ, b.typ) match {
+    private def getActualType(typ : CCType) = typ match {
+      case pulled : CCPulledVar => pulled.heapAlloc.typ
+      case _ => typ
+    }
+
+    private def unifyTypes(a : CCExpr, b : CCExpr) : (CCExpr, CCExpr) = {
+      (getActualType(a.typ), getActualType(b.typ)) match {
 
         case (at, bt) if (at == bt) =>
           (a, b)
 
-        case (at : CCArithType, bt : CCArithType) =>
+        case (at: CCArithType, bt: CCArithType) =>
           if ((at.UNSIGNED_RANGE > bt.UNSIGNED_RANGE) ||
-              (at.UNSIGNED_RANGE == bt.UNSIGNED_RANGE && at.isUnsigned))
+            (at.UNSIGNED_RANGE == bt.UNSIGNED_RANGE && at.isUnsigned))
             (a, convertType(b, at))
           else
             (convertType(a, bt), b)
 
-        case (at : CCArithType, CCDuration) =>
+        case (at: CCArithType, CCDuration) =>
           (convertType(a, CCDuration), b)
-        case (CCDuration, bt : CCArithType) =>
+        case (CCDuration, bt: CCArithType) =>
           (a, convertType(b, CCDuration))
 
         case _ =>
           throw new TranslationException("incompatible types")
       }
+    }
 
     ////////////////////////////////////////////////////////////////////////////
 
@@ -3517,6 +3480,52 @@ class CCReader private (prog : Program,
                              assertionClauses.toList,
                              HornPreprocessor.VerificationHints(predHints),
                              backgroundAxioms)
+  }
+
+  private object Heap {
+    val nullAlloc = new CCHeapAlloc(0, CCVoid, new Predicate("null",0))
+
+    val pulledVars = new ArrayBuffer[(CCPulledVar, CCTerm)]
+
+    def numPulled = pulledVars.size
+
+    /*def push(heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) {
+      pushAssert(heapAlloc, ptrId, setVal)
+      /*if (pulledVars contains heapAlloc)
+        removePulledVar(heapAlloc)*/ //todo: check if not pulled first?
+    }*/
+
+    def pull(ptrExpr : CCExpr): (CCPulledVar, CCTerm) = {
+      //val ptrInd = lookupVar(ptrName)
+      val ptr = ptrExpr.typ.asInstanceOf[CCHeapPointer]
+      /*pulledVars get ptr.heapAlloc match {
+        case Some((pulledVar, pulledTerm)) => { //todo: only use this case in atomicMode?
+          pushVal(pulledTerm)
+          pulledVar
+        }
+        case None => {*/
+      //val ptrId = getVar(ptrInd)
+      val name = "pull_" + ptr.typ.shortName +
+        /*ptr.heapAlloc.allocSite +*/ "_" + numPulled // todo
+
+      val pulledVar = CCPulledVar(name, ptr.heapAlloc, ptrExpr.toTerm) //new PulledVar(ind, pulledVars.size)
+      val c = pulledVar newConstant name
+      val pulledTerm = CCTerm(c, pulledVar)
+      pulledVars += ((pulledVar, pulledTerm))
+      // add value todo
+
+      //localVars.addVar(c, pulledVar)
+      (pulledVar, pulledTerm)
+      /*pushVal(pulledTerm)
+      addPullGuard(pulledVar rangePred c)
+
+      // add pull invariant
+      //maybeOutputClause
+      addPullGuard(ptr.heapAlloc.inv(ptrExpr.toTerm, c))
+      pulledVar*/
+      /*}
+    }*/
+    }
   }
 
 }

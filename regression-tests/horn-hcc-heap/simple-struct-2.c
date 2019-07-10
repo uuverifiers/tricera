@@ -10,6 +10,7 @@ void main(){
 
   p->y.z = 42;
 
-  assert(p->y.z == 0 || p->y.z==42);
+  int v = p->y.z;
+  assert(v == 0 || v == 42);
 
 }
