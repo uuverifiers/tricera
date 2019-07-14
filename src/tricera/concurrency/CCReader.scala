@@ -988,22 +988,23 @@ class CCReader private (prog : Program,
               case initDecl : HintDecl => initDecl.declarator_
             }
             val name = getName(declarator)
-            val directDecl = declarator match {
-              case decl : NoPointer => decl.direct_declarator_
-              case _ : BeginPointer => throw new TranslationException(
-                "Pointer declarations without initializers are not allowed."
-              )
+            val (directDecl, isPointer) = declarator match {
+              case decl : NoPointer => (decl.direct_declarator_, false)
+              case decl : BeginPointer => (decl.direct_declarator_, true)
             }
             directDecl match {
               case _ : NewFuncDec /* | _ : OldFuncDef */ | _ : OldFuncDec =>
-                functionDecls.put(name, (directDecl, typ))
+                functionDecls.put(name, (directDecl, typ)) //todo: ptr type?
               case _ => {
                 isVariable = true
-                val c = typ newConstant name
+                val actualType =
+                  if(isPointer) CCHeapPointer(Heap.nullAlloc,typ)
+                  else typ
+                val c = actualType newConstant name
                 if (global) {
-                  globalVars addVar (c,typ)
+                  globalVars addVar (c,actualType)
                   variableHints += List()
-                  typ match {
+                  actualType match {
                     case typ : CCArithType =>
                       // global variables are initialised with 0
                       values addValue CCTerm(0, typ)
@@ -1016,9 +1017,9 @@ class CCReader private (prog : Program,
                     }
                   }
                 } else {
-                  localVars.addVar(c, typ)
-                  values addValue CCTerm(c, typ)
-                  values addGuard (typ rangePred c)
+                  localVars.addVar(c, actualType)
+                  values addValue CCTerm(c, actualType)
+                  values addGuard (actualType rangePred c)
                 }
               }
             }
@@ -2417,6 +2418,7 @@ class CCReader private (prog : Program,
             throw NeedsHeapModelException
           val typ = exp.listexp_(0) match {
             case exp : Ebytestype => getType(exp.type_name_)
+            //case exp : Ebytesexpr => eval(exp.exp_).typ
             case _ => throw new TranslationException(
               "memory functions can currently only be called with argument: " +
               "sizeof(type).")
@@ -2846,7 +2848,11 @@ class CCReader private (prog : Program,
       case f : NewHintFunc=> (f.declarator_, f.compound_stm_)
     }
 
-    declarator.asInstanceOf[NoPointer].direct_declarator_ match {
+    val decl = declarator match {
+      case noPtr : NoPointer => noPtr.direct_declarator_
+      case ptr   : BeginPointer => ptr.direct_declarator_
+    }
+    decl match {
       case dec : NewFuncDec =>
         val decList = dec.parameter_type_.asInstanceOf[AllSpec]
           .listparameter_declaration_
@@ -3508,7 +3514,16 @@ class CCReader private (prog : Program,
       val name = "pull_" + ptr.typ.shortName +
         /*ptr.heapAlloc.allocSite +*/ "_" + numPulled // todo
 
-      val pulledVar = CCPulledVar(name, ptr.heapAlloc, ptrExpr.toTerm) //new PulledVar(ind, pulledVars.size)
+      val heapAlloc : CCHeapAlloc = ptr.heapAlloc.typ match {
+        case CCVoid => heapAllocs.get(ptr.typ) match {
+            case None => throw new TranslationException(
+              "No allocation found for " + ptrExpr)
+            case Some(existingAlloc) => existingAlloc
+          }
+        case _ => ptr.heapAlloc
+      }
+
+      val pulledVar = CCPulledVar(name, heapAlloc, ptrExpr.toTerm) //new PulledVar(ind, pulledVars.size)
       val c = pulledVar newConstant name
       val pulledTerm = CCTerm(c, pulledVar)
       pulledVars += ((pulledVar, pulledTerm))
