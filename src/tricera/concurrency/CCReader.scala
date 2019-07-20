@@ -1056,13 +1056,13 @@ class CCReader private (prog : Program,
             // todo: fix below part
             val (actualC, actualType) =
               if (declarator.isInstanceOf[BeginPointer]) {
-                val newTyp = if (initValue.typ.isInstanceOf[CCPointer] ||
+                val newTyp = if (initValue.typ.isInstanceOf[CCHeapPointer] ||
                   initValue.typ.isInstanceOf[CCDeclarationOnlyPointer]) {
                   initValue.typ match {
                     case t: CCHeapPointer => t
                     case t: CCDeclarationOnlyPointer => getHeapPointer(t)
-                    case _ => throw new TranslationException("Not possible to " +
-                      "reach, added to suppress warning.")
+                    case _ => throw new TranslationException(
+                      "Not possible to reach, added to suppress warnings.")
                   }
                 } else CCHeapPointer(Heap.nullAlloc,typ)
                 (newTyp newConstant getName(declarator), newTyp)
@@ -1352,7 +1352,10 @@ class CCReader private (prog : Program,
           case decl: Decl =>
             val fieldName = getName(decl.declarator_)
             val realFieldType: CCType = decl.declarator_ match {
-              case _ => fieldType // todo: ?
+              case ptr : BeginPointer
+                if !fieldType.isInstanceOf[CCDeclarationOnlyPointer] =>
+                CCHeapPointer(Heap.nullAlloc, fieldType)
+              case _ => fieldType // todo: does this work for multiple lvl ptrs?
             }
             (fieldName, realFieldType)
           case _ => throw new TranslationException(
@@ -1536,12 +1539,17 @@ class CCReader private (prog : Program,
     typ
   }
 
-  private def getType(functionDef : Function_def) : CCType =
-    functionDef match {
-      case f : NewFunc    => getType(f.listdeclaration_specifier_)
-      case _ : NewFuncInt => CCInt
-      case f : NewHintFunc=> getType(f.listdeclaration_specifier_)
+  private def getType(functionDef : Function_def) : CCType = {
+    val (typ, isPtr) = functionDef match {
+      case f: NewFunc =>
+        (getType(f.listdeclaration_specifier_), f.declarator_.isInstanceOf[BeginPointer])
+      case _: NewFuncInt => (CCInt, false)
+      case f: NewHintFunc =>
+        (getType(f.listdeclaration_specifier_), f.declarator_.isInstanceOf[BeginPointer])
     }
+    if(isPtr) CCHeapPointer(Heap.nullAlloc,typ)
+    else typ
+  }
 
   private def translateClockValue(expr : CCExpr) : CCExpr = {
     if (!useTime)
@@ -2138,15 +2146,20 @@ class CCReader private (prog : Program,
           val rhsHeapAlloc = rhsVal.typ match{
             case hp : CCHeapPointer => hp.heapAlloc
             case dp : CCDeclarationOnlyPointer => getHeapPointer(dp).heapAlloc
-            case _ => throw new TranslationException("Not possible to reach, " +
-              "added to suppress warnings.")
+            case _ => Heap.nullAlloc
           }
-          if (heapAlloc != rhsHeapAlloc && heapAlloc != Heap.nullAlloc)
+          if (heapAlloc != rhsHeapAlloc && heapAlloc != Heap.nullAlloc
+              && rhsHeapAlloc != Heap.nullAlloc)
             throw new TranslationException("Assigning heap pointers with " +
               "different allocation sites is not supported yet.")
           val lhsName = asLValue(exp.exp_1)
-          setValue(lhsName, rhsVal)
-          setVarType(lookupVar(lhsName), rhsVal.typ)
+          val actualRhsVal = rhsVal.typ match {
+            case CCInt =>
+              CCTerm(rhsVal.toTerm, CCHeapPointer(Heap.nullAlloc, CCInt))
+            case _ => rhsVal
+          }
+          setValue(lhsName, actualRhsVal)
+          setVarType(lookupVar(lhsName), actualRhsVal.typ)
         }
         pushVal(rhsVal)
       }
@@ -2359,7 +2372,7 @@ class CCReader private (prog : Program,
             val v = popVal
             v.typ match { // todo: type checking?
               case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
-              case ptr : CCHeapPointer =>
+              case _ : CCHeapPointer | _ : CCDeclarationOnlyPointer =>
                 if(evaluatingLhs) pushVal(v)
                 else pushVal(heapPull(v))
               case _ => throw new TranslationException("Cannot dereference " +
@@ -3503,7 +3516,12 @@ class CCReader private (prog : Program,
 
     def pull(ptrExpr : CCExpr): (CCPulledVar, CCTerm) = {
       //val ptrInd = lookupVar(ptrName)
-      val ptr = ptrExpr.typ.asInstanceOf[CCHeapPointer]
+      val ptr : CCHeapPointer = ptrExpr.typ match {
+        case typ : CCHeapPointer => typ
+        case typ : CCDeclarationOnlyPointer => getHeapPointer(typ)
+        case _ => throw new TranslationException(
+          "Can only pull from heap pointers! (" + ptrExpr + ")")
+      }
       /*pulledVars get ptr.heapAlloc match {
         case Some((pulledVar, pulledTerm)) => { //todo: only use this case in atomicMode?
           pushVal(pulledTerm)
