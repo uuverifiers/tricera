@@ -1055,9 +1055,10 @@ class CCReader private (prog : Program,
             }
             // todo: fix below part
             val (actualC, actualType) =
-              if (declarator.isInstanceOf[BeginPointer]) {
+              if (declarator.isInstanceOf[BeginPointer] &&
+                  !initValue.typ.isInstanceOf[CCStackPointer]) {
                 val newTyp = if (initValue.typ.isInstanceOf[CCHeapPointer] ||
-                  initValue.typ.isInstanceOf[CCDeclarationOnlyPointer]) {
+                  initValue.typ.isInstanceOf[CCDeclarationOnlyPointer]){
                   initValue.typ match {
                     case t: CCHeapPointer => t
                     case t: CCDeclarationOnlyPointer => getHeapPointer(t)
@@ -1067,7 +1068,7 @@ class CCReader private (prog : Program,
                 } else CCHeapPointer(Heap.nullAlloc,typ)
                 (newTyp newConstant getName(declarator), newTyp)
               }
-              else (c, typ)
+              else (c, initValue.typ)
 
             if (global) {
               globalVars addVar (actualC, actualType)
@@ -1339,8 +1340,8 @@ class CCReader private (prog : Program,
     val fieldList : List[(String, CCType)] = (for (field <- fields) yield {
       val fieldType = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
         case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
-          (getStructName(t) == structName ||
-            structIsDeclared(getStructName(t))) =>
+          (getStructName(t) == structName || structIsDeclared(getStructName(t))) &&
+          field.asInstanceOf[Structen].liststruct_declarator_(0).asInstanceOf[Decl].declarator_.isInstanceOf[BeginPointer]=>
           CCDeclarationOnlyPointer(getStructName(t))
         //todo: some error handling here?
         case _ => getType(field)
