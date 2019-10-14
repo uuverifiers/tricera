@@ -1054,7 +1054,7 @@ class CCReader private (prog : Program,
               }
             }
             // todo: fix below part
-            val (actualC, actualType) =
+            val (actualC, actualType) = {
               if (declarator.isInstanceOf[BeginPointer] &&
                   !initValue.typ.isInstanceOf[CCStackPointer]) {
                 val newTyp = if (initValue.typ.isInstanceOf[CCHeapPointer] ||
@@ -1068,7 +1068,9 @@ class CCReader private (prog : Program,
                 } else CCHeapPointer(Heap.nullAlloc,typ)
                 (newTyp newConstant getName(declarator), newTyp)
               }
+              else if (typ.isInstanceOf[CCClock.type]) (c, typ)
               else (c, initValue.typ)
+            }
 
             if (global) {
               globalVars addVar (actualC, actualType)
