@@ -36,3 +36,6 @@ SAFE
 
 takeuchi.hcc
 SAFE
+
+assert.hcc
+SAFE

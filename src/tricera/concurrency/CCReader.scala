@@ -1989,8 +1989,7 @@ class CCReader private (prog : Program,
 
     def atomicEval(exps : Seq[Exp]) : CCExpr = {
       val currentClauseNum = clauses.size
-      val initSize = values.size//  - Heap.numPulled
-      //val initPulled = Heap.numPulled
+      val initSize = values.size
 
       inAtomicMode {
         pushVal(CCFormula(true, CCVoid))
@@ -2000,15 +1999,12 @@ class CCReader private (prog : Program,
         }
       }
 
-      val res = popVal // todo: might be a mistake here
-
       if (currentClauseNum != clauses.size) {
         outputClause
         mergeClauses(currentClauseNum)
       }
-      //Heap.popPulls(Heap.numPulled - initPulled)
-      //val res = popVal // todo: moved up
-      assert(initSize == values.size) //- Heap.numPulled)
+      val res = popVal
+      assert(initSize == values.size)
       res
     }
 

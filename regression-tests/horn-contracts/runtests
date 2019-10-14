@@ -6,7 +6,8 @@ TESTS="contract1.hcc \
        contract2.hcc \
        contract2b.hcc \
        contract3.hcc \
-       takeuchi.hcc"
+       takeuchi.hcc  \
+       assert.hcc "
 
 for name in $TESTS; do
     echo
