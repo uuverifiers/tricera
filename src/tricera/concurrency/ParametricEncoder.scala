@@ -31,15 +31,15 @@ package tricera.concurrency
 
 import ap.parser._
 import ap.types.MonoSortedPredicate
-import ap.terfor.ConstantTerm
-import ap.util.{Seqs, Combinatorics}
+import ap.util.{Combinatorics, Seqs}
+import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement}
 import lazabs.horn.bottomup.{HornClauses, Util}
 import lazabs.horn.preprocessor.HornPreprocessor
-
+import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.bottomup.HornPredAbs.predArgumentSorts
+import lazabs.horn.abstractions.{EmptyVerificationHints, VerificationHints}
 
-import scala.collection.mutable.{LinkedHashSet, HashSet => MHashSet,
-                                 ArrayBuffer, HashMap => MHashMap}
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet, HashMap => MHashMap, HashSet => MHashSet}
 
 object ParametricEncoder {
 
@@ -125,11 +125,6 @@ object ParametricEncoder {
               extends BackgroundAxioms
 
   //////////////////////////////////////////////////////////////////////////////
-
-  import HornPreprocessor.{VerificationHints, VerifHintElement,
-                           VerifHintTplElement, VerifHintTplPred,
-                           VerifHintTplEqTerm, EmptyVerificationHints,
-                           InitPredicateVerificationHints}
 
   case class System(processes            : ParametricEncoder.ProcessSet,
                     globalVarNum         : Int,
@@ -553,10 +548,6 @@ class ParametricEncoder(system : ParametricEncoder.System,
                         invariants : Seq[Seq[Int]]) {
 
   import ParametricEncoder._
-  import HornPreprocessor.{VerificationHints, VerifHintElement,
-                           VerifHintTplElement, VerifHintTplPred,
-                           VerifHintTplEqTerm, EmptyVerificationHints,
-                           VerifHintInitPred}
   import HornClauses.Clause
   import IExpression._
   import Combinatorics._

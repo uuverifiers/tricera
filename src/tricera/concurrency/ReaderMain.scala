@@ -45,7 +45,7 @@ object ReaderMain {
           println("  Replicated thread:")
       }
       for ((c, sync) <- p) {
-        val prefix = "    " + c.toPrologString
+        val prefix = "    " + c.toPrologString()
         print(prefix + (" " * ((50 - prefix.size) max 2)))
         sync match {
           case ParametricEncoder.Send(chan) =>
@@ -54,6 +54,7 @@ object ReaderMain {
             println("chan_receive(" + chan + ")")
           case ParametricEncoder.NoSync =>
             println
+          case _ =>
         }
       }
     }
@@ -62,7 +63,7 @@ object ReaderMain {
       println
       println("Time invariants:")
       for (c <- system.timeInvariants)
-        println("  " + c.toPrologString)
+        println("  " + c.toPrologString())
     }
 
     system.backgroundAxioms match {
@@ -73,7 +74,7 @@ object ReaderMain {
         println
         println("Background axioms:")
         for (c <- clauses)
-          println("  " + c.toPrologString)
+          println("  " + c.toPrologString())
       }
       case _ =>
         // nothing
@@ -83,7 +84,7 @@ object ReaderMain {
       println
       println("Assertions:")
       for (c <- system.assertions)
-        println("  " + c.toPrologString)
+        println("  " + c.toPrologString())
     }
 
     if (!system.hints.predicateHints.isEmpty) {

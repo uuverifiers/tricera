@@ -48,6 +48,6 @@ lazy val root = (project in file(".")).
     }}).value,	
 
     resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
-    libraryDependencies += "uuverifiers" %% "eldarica" % "2.0-SNAPSHOT"
+    libraryDependencies += "uuverifiers" %% "eldarica" % "2.1.0"
 )
 //

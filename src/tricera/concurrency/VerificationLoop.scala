@@ -33,16 +33,14 @@ import ap.parser._
 import ap.util.Seqs
 import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
+import lazabs.GlobalParameters
 import tricera.{ParallelComputation, TriCeraParameters}
-import lazabs.horn.bottomup.{HornClauses, HornPredAbs, DagInterpolator, Util,
-                             HornWrapper}
-import lazabs.horn.abstractions.{AbsLattice, StaticAbstractionBuilder,
-                                 LoopDetector}
+import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrapper, Util}
+import lazabs.horn.abstractions.{AbsLattice, AbstractionRecord, LoopDetector, StaticAbstractionBuilder}
 import lazabs.horn.bottomup.TemplateInterpolator
-import lazabs.horn.preprocessor.{HornPreprocessor, DefaultPreprocessor}
+import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
 
-import scala.collection.mutable.{LinkedHashSet, HashSet => MHashSet,
-                                 ArrayBuffer}
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet, HashSet => MHashSet}
 
 object VerificationLoop {
 
@@ -158,8 +156,6 @@ class VerificationLoop(system : ParametricEncoder.System) {
 
   import VerificationLoop._
   import ParametricEncoder._
-  import HornPreprocessor.{VerifHintTplElement, VerifHintTplPred,
-                           VerifHintTplEqTerm}
   import HornClauses.{Clause, FALSE}
   import Util._
 
@@ -227,14 +223,14 @@ class VerificationLoop(system : ParametricEncoder.System) {
 
     val predAbsResult = ParallelComputation(params) {
       val interpolator = if (TriCeraParameters.get.templateBasedInterpolation)
-                               Console.withErr(Console.out) {
-        val builder =
-          new StaticAbstractionBuilder(
-            simpClauses,
-            TriCeraParameters.get.templateBasedInterpolationType)
-        val autoAbstractionMap =
-          builder.abstractions mapValues (TemplateInterpolator.AbstractionRecord(_))
-        
+                                Console.withErr(Console.out) {
+          val builder =
+            new StaticAbstractionBuilder(
+              simpClauses,
+              TriCeraParameters.get.templateBasedInterpolationType)
+          val autoAbstractionMap =
+            builder.abstractionRecords
+
         val abstractionMap =
           if (encoder.globalPredicateTemplates.isEmpty) {
             autoAbstractionMap
@@ -248,8 +244,7 @@ class VerificationLoop(system : ParametricEncoder.System) {
 
             println(hintsAbstractionMap.keys.toSeq sortBy (_.name) mkString ", ")
 
-            TemplateInterpolator.AbstractionRecord.mergeMaps(
-              autoAbstractionMap, hintsAbstractionMap)
+            AbstractionRecord.mergeMaps(autoAbstractionMap, hintsAbstractionMap)
           }
 
         TemplateInterpolator.interpolatingPredicateGenCEXAbsGen(

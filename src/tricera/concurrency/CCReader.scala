@@ -36,8 +36,11 @@ import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrentC._
 import concurrentC.Absyn._
 import ParametricEncoder.SomeBackgroundAxioms
+import lazabs.horn.abstractions.VerificationHints
+import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.preprocessor.HornPreprocessor
+import lazabs.horn.heap.Heap
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
 
@@ -563,7 +566,7 @@ class CCReader private (prog : Program,
   }
 
   private val variableHints =
-    new ArrayBuffer[Seq[HornPreprocessor.VerifHintElement]]
+    new ArrayBuffer[Seq[VerifHintElement]]
   private var usingInitialPredicates = false
 
   //////////////////////////////////////////////////////////////////////////////
@@ -700,8 +703,6 @@ class CCReader private (prog : Program,
     newPred(for (_ <- 0 until extraArgs) yield Sort.Integer)
 
   private def newPred(extraArgs : Seq[Sort]) : Predicate = {
-    import HornPreprocessor.{VerifHintTplElement, VerifHintTplEqTerm}
-
     val res = MonoSortedPredicate(prefix + locationCounter,
                                   (allFormalVarTypes map (_.toSort)) ++
                                   extraArgs)
@@ -735,7 +736,7 @@ class CCReader private (prog : Program,
   }
 
   private val predicateHints =
-    new MHashMap[Predicate, Seq[HornPreprocessor.VerifHintElement]]
+    new MHashMap[Predicate, Seq[VerifHintElement]]
 
   private val getNonDet = new ConstantTerm("_nonDet")
   private def getZeroInit(typ : CCType) : ITerm = typ match {
@@ -1178,9 +1179,6 @@ class CCReader private (prog : Program,
 
   private def processHints(hints : Seq[Abs_hint]) : Unit =
           if (!hints.isEmpty) {
-            import HornPreprocessor.{VerifHintInitPred,
-                                     VerifHintTplPred, VerifHintTplEqTerm}
-
             val hintSymex = Symex(null)
             hintSymex.saveState
 
@@ -1679,8 +1677,6 @@ class CCReader private (prog : Program,
       localVars.addVar(c, v.typ)
 
       if (usingInitialPredicates) {
-        import HornPreprocessor.VerifHintInitPred
-        
         // if the pushed value refers to other variables,
         // add initial predicates that relate the values of
         // temporary variables with the original variables
@@ -3496,7 +3492,7 @@ class CCReader private (prog : Program,
                                ParametricEncoder.NoTime,
                              timeInvariants,
                              assertionClauses.toList,
-                             HornPreprocessor.VerificationHints(predHints),
+                             VerificationHints(predHints),
                              backgroundAxioms)
   }
 
