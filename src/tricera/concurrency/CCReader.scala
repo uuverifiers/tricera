@@ -160,6 +160,11 @@ object CCReader {
     val isUnsigned : Boolean = true
   }
 
+  private case object CCHeap extends CCType {
+    override def toString : String = "heap"
+    def shortName = "heap"
+  }
+
   private case class CCStruct(adt: ADT, name: String, fields: List[(String, CCType)])
     extends CCType{
     override def toString : String =
@@ -762,14 +767,46 @@ class CCReader private (prog : Program,
     variableHints += List()
     variableHints += List()
   }
+
+  val NullObjName = "NullObj"
+
+  import lazabs.horn.heap.{Heap => HeapObj}
+  val ObjSort = HeapObj.ADTSort(0)
+  val NodeSort = HeapObj.ADTSort(1)
+
+  val heap = new Heap("heap", "addr", ObjSort,
+    List("HeapObject", "structNode"), List(
+      ("WrappedInt", HeapObj.CtorSignature(List(("getInt",
+        HeapObj.OtherSort(Sort.Integer))), ObjSort)),
+      ("WrappedNode", HeapObj.CtorSignature(List(("getNode", NodeSort)), ObjSort)),
+      ("structNode", HeapObj.CtorSignature(
+        List(("data", HeapObj.OtherSort(Sort.Integer)), ("next", HeapObj.AddressSort)), NodeSort)),
+      ("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+    defObjCtor)
+
+  def defObjCtor(objectADT : ADT) : ITerm = {
+    import IExpression.toFunApplier
+    objectADT.constructors.last()
+  }
+
+  val heapTerm = heap.HeapSort.newConstant("@h")
+  globalVars addVar(heapTerm, CCInt)
+  globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap)
+  variableHints += List()
+
+  val Seq(wrappedInt, wrappedNode, structNode, defObj) =
+    heap.ObjectADT.constructors
+  val Seq(Seq(getInt), Seq(getNode), Seq(nodeData, nodeNext), _*) =
+    heap.ObjectADT.selectors
+
   // Reserve a variable for heap id
   val heapID = Sort.Integer newConstant "_HeapLoc"
 
-  if (modelHeap) {
+  /*if (modelHeap) {
     globalVars addVar(heapID, CCInt)
     globalVars.inits += CCTerm(1, CCInt)
     variableHints += List()
-  }
+  }*/
 
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
@@ -1628,10 +1665,12 @@ class CCReader private (prog : Program,
       assertProperty(heapAlloc.inv(ptrId, setVal))
 
     private def heapPull (ptrExpr : CCExpr) = {
-      val (pulledVar, pulledTerm) = Heap.pull(ptrExpr)
+      CCTerm(getInt(heap.read(heapTerm, ptrExpr.toTerm)), CCInt)
+
+      /*val (pulledVar, pulledTerm) = Heap.pull(ptrExpr)
       addPullGuard(pulledVar rangePred pulledTerm.t)
       addPullGuard(pulledVar.heapAlloc.inv(ptrExpr.toTerm, pulledTerm.t))
-      pulledTerm
+      pulledTerm*/
     }
 
     private var initAtom =
@@ -2133,10 +2172,12 @@ class CCReader private (prog : Program,
 
         val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
         if (updatingPointedValue) {
-          heapPush(heapAlloc,actualLhsVal.typ match {
+          /*heapPush(heapAlloc,actualLhsVal.typ match {
             case pulled : CCPulledVar => pulled.ptrId
             case _ => actualLhsVal.toTerm
-          }, getActualAssignedTerm(lhsVal, rhsVal).toTerm)
+          }, getActualAssignedTerm(lhsVal, rhsVal).toTerm)*/
+          val newHeap = heap.write(heapTerm, lhsVal.toTerm, wrappedInt(getActualAssignedTerm(lhsVal, rhsVal).toTerm))
+          setValue(heapTerm.name, CCTerm(newHeap, CCHeap))
         } else {
           val rhsHeapAlloc = rhsVal.typ match{
             case hp : CCHeapPointer => hp.heapAlloc
@@ -2422,8 +2463,8 @@ class CCReader private (prog : Program,
           }
         }
         case name@("malloc" | "calloc") => {
-          if (!modelHeap)
-            throw NeedsHeapModelException
+          /*if (!modelHeap)
+            throw NeedsHeapModelException*/
           val typ = exp.listexp_(0) match {
             case exp : Ebytestype => getType(exp.type_name_)
             //case exp : Ebytesexpr => eval(exp.exp_).typ
@@ -2431,7 +2472,7 @@ class CCReader private (prog : Program,
               "memory functions can currently only be called with argument: " +
               "sizeof(type).")
           }
-          val heapAlloc = heapAllocs.get(typ) match{
+          /*val heapAlloc = heapAllocs.get(typ) match{
             case None => val newAlloc = newHeapAlloc(typ)
               heapAllocs += ((typ, newAlloc))
               newAlloc
@@ -2443,7 +2484,11 @@ class CCReader private (prog : Program,
           heapPush(ptr.heapAlloc, idTerm, name match {
             case "calloc" => getZeroInit(typ)
             case "malloc" => getNonDet // todo
-          })
+          })*/
+
+          val newAlloc = heap.alloc(heapTerm, wrappedInt(getNonDet))
+          setValue(heapTerm.name, CCTerm(heap.newHeap(newAlloc), CCHeap))
+          pushVal(CCTerm(heap.newAddr(newAlloc), CCInt))
         }
         case "realloc" =>
           if (!modelHeap)
