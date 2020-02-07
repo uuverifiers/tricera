@@ -41,11 +41,11 @@ import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintIn
 import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.preprocessor.HornPreprocessor
 import lazabs.horn.heap.Heap
+import IExpression.{toFunApplier,ConstantTerm,Predicate,Sort}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
 
 object CCReader {
-
   def apply(input : java.io.Reader, entryFunction : String,
             arithMode : ArithmeticMode.Value = ArithmeticMode.Mathematical)
            : ParametricEncoder.System = {
@@ -70,7 +70,6 @@ object CCReader {
           modelHeap = true
         }
       }
-
     reader.system
   }
 
@@ -109,8 +108,6 @@ object CCReader {
   }
 
   //////////////////////////////////////////////////////////////////////////////
-
-  import IExpression._
 
   private abstract sealed class CCType {
     def shortName : String
@@ -160,22 +157,20 @@ object CCReader {
     val isUnsigned : Boolean = true
   }
 
-  private case object CCHeap extends CCType {
-    override def toString : String = "heap"
+  private case class CCHeap(heap : Heap) extends CCType {
+    override def toString : String = heap.toString
     def shortName = "heap"
   }
 
-  private case class CCStruct(adt: ADT, name: String, fields: List[(String, CCType)])
+  private case class CCStruct(ctor: MonoSortedIFunction,
+                              sels: IndexedSeq[(MonoSortedIFunction, CCType)])
     extends CCType{
     override def toString : String =
-      "struct " + name + ": (" +fields.mkString + ")"
-    def shortName = name
-    def getFieldIndex(name: String) =  fields.indexWhere(_._1 == name)
+      "struct " + ctor.name + ": (" +sels.mkString + ")"
+    def shortName = ctor.name
+    def getFieldIndex(name: String) =  sels.indexWhere(_._1.name == name)
     def getFieldAddress (nestedName: List[String]) : List[Int] =
       nestedName match{
-
-
-
         case hd::Nil => getFieldIndex(hd) :: Nil
         case hd::tl => {
           val ind = getFieldIndex(hd)
@@ -184,7 +179,7 @@ object CCReader {
         }
         case Nil => Nil // not possible to reach
       }
-    def getFieldType(ind: Int) = fields(ind)._2
+    def getFieldType(ind: Int) : CCType = sels(ind)._2
     def getFieldType(fieldAddress: List[Int]) : CCType =
       fieldAddress match{
         case hd::Nil => getFieldType(hd)
@@ -207,7 +202,7 @@ object CCReader {
       }
     }
     def setFieldTerm(rootTerm: ITerm, setVal: ITerm,
-                     fieldAddress: List[Int]) : ITerm =
+                     fieldAddress: List[Int]) : ITerm = {
       fieldAddress match {
         case hd :: tl => {
           val childTerm = getFieldType(hd) match {
@@ -216,26 +211,28 @@ object CCReader {
             case _ => setVal
           }
           val const =
-            for (n <- fields.indices) yield {
+            for (n <- sels.indices) yield {
               if (n == hd) childTerm
               else getADTSelector(n)(rootTerm)
             }
-          adt.constructors.head(const: _*).asInstanceOf[ITerm]
+          ctor(const: _*).asInstanceOf[ITerm]
         }
         case Nil => throw new TranslationException("setFieldTerm called with" +
           " empty List!")
       }
+    }
 
-    def getADTSelector(ind: Int) = adt.selectors(0)(ind)
+    def getADTSelector(ind: Int) : MonoSortedIFunction = sels(ind)._1
 
     def getZeroInit: ITerm = {
-      val const: List[ITerm] =
-        for (field <- fields) yield
-          field._2 match {
+      import IExpression._
+      val const: IndexedSeq[ITerm] =
+        for ((_, fieldType) <- sels) yield
+          fieldType match {
             case structField: CCStruct => structField.getZeroInit
             case _ => Int2ITerm(0)
           }
-      adt.constructors.head(const: _*)
+      ctor(const: _*)
     }
     // Initializes a struct using a stack and returns the initialized term.
     // The stack's top value must be the first term of the struct.
@@ -243,17 +240,14 @@ object CCReader {
     // If there are not enough values to initialize all the fields, then the
     // remaining fields are initialized to 0.
     def getInitialized(values: Stack[ITerm]): ITerm = {
-      val const: List[ITerm] =
-        for (field <- fields) yield
+      import IExpression._
+      val const: IndexedSeq[ITerm] =
+        for (field <- sels) yield
           field._2 match {
             case structField: CCStruct => structField.getInitialized(values)
-            case _ => {
-              if (values.isEmpty)
-                Int2ITerm(0)
-              else values.pop()
-            }
+            case _ => if (values.isEmpty) Int2ITerm(0) else values.pop()
           }
-      adt.constructors.head(const: _*)
+      ctor(const: _*)
     }
   }
 
@@ -279,14 +273,6 @@ object CCReader {
     def shortName = name
   }
 
-  private case class CCPulledVar(name      : String,
-                                 heapAlloc : CCHeapAlloc,
-                                 ptrId     : ITerm) extends CCType{
-    override def toString : String = heapAlloc.typ.toString
-    def shortName = heapAlloc.typ.shortName
-    def typ = heapAlloc.typ
-  }
-
   private case class CCDeclarationOnlyPointer(name : String) extends CCType {
     override def toString : String = name + "*"
     def shortName = name + "_ptr"
@@ -295,14 +281,19 @@ object CCReader {
   private abstract sealed class CCPointer(typ : CCType) extends CCType {
     def shortName = typ.shortName + "*"
   }
-  private case class CCStackPointer(targetInd : Int, typ : CCType,
-                               fieldAddress : List[Int] = Nil)
+  private case class CCStackPointer(targetInd    : Int, typ : CCType,
+                                    fieldAddress : List[Int] = Nil)
     extends CCPointer(typ) {
     override def toString : String = typ.shortName +
       " pointer (to: " + targetInd + ")"
 
   }
-  private case class CCHeapPointer(heapAlloc : CCHeapAlloc,
+
+  // todo: how to support heap pointers to adt fields? should we?
+  // e.g.: what does &(p->x) return when p is a heap pointer?
+  //       needs to be a Heap.Address along with a way to reach the field
+  //       maybe another class for this? CCHeapADTFieldPointer...
+  private case class CCHeapPointer(heap : Heap,
                                    typ : CCType) extends CCPointer(typ) {
     override def toString : String = typ.shortName + " pointer to heap"
   }
@@ -316,27 +307,20 @@ object CCReader {
     def shortName = "duration"
   }
   //////////////////////////////////////////////////////////////////////////////
-  private class CCHeapAlloc(_allocSite : Int, _typ : CCType, _inv : Predicate){
-    val allocSite = _allocSite
-    val typ = _typ
-    val inv = _inv
-    def pullVarName = typ.shortName + allocSite
-  }
-  //////////////////////////////////////////////////////////////////////////////
 
   private abstract sealed class CCExpr(val typ : CCType) {
     def toTerm : ITerm
     def toFormula : IFormula
-    def occurringConstants : Seq[ConstantTerm]
+    def occurringConstants : Seq[IExpression.ConstantTerm]
   }
   private case class CCTerm(t : ITerm, _typ : CCType)
                extends CCExpr(_typ) {
     def toTerm : ITerm = t
     def toFormula : IFormula = t match {
       case IIntLit(value) => !value.isZero
-      case t =>              !eqZero(t)
+      case t =>              !IExpression.eqZero(t)
     }
-    def occurringConstants : Seq[ConstantTerm] =
+    def occurringConstants : Seq[IExpression.ConstantTerm] =
       SymbolCollector constantsSorted t
   }
   private case class CCFormula(f : IFormula, _typ : CCType)
@@ -344,10 +328,10 @@ object CCReader {
     def toTerm : ITerm = f match {
       case IBoolLit(true) =>  1
       case IBoolLit(false) => 0
-      case f =>               ite(f, 1, 0)
+      case f =>               IExpression.ite(f, 1, 0)
     }
     def toFormula : IFormula = f
-    def occurringConstants : Seq[ConstantTerm] =
+    def occurringConstants : Seq[IExpression.ConstantTerm] =
       SymbolCollector constantsSorted f
   }
 }
@@ -366,17 +350,15 @@ class CCReader private (prog : Program,
 
   //////////////////////////////////////////////////////////////////////////////
 
-  import IExpression._
-
   private implicit def toRichType(typ : CCType) = new Object {
     import ModuloArithmetic._
 
     private def type2Sort(t : CCType) : Sort = t match {
+      case CCHeap(heap)          => heap.HeapSort
       case CCStackPointer(_,_,_) => Sort.Integer
-      case CCHeapPointer(_,_)    => Sort.Integer
-      case CCDeclarationOnlyPointer(_) => Sort.Integer
-      case CCPulledVar(_,heap,_) => type2Sort(heap.typ)
-      case CCStruct(adt, _, _)   => adt.sorts.head
+      case CCHeapPointer(heap, _)=> heap.AddressSort
+      //case CCDeclarationOnlyPointer(_) => Sort.Integer // todo:heap
+      case CCStruct(ctor, _)     => ctor.resSort // todo: heap
       case CCADTEnum(adt, _, _)  => adt.sorts.head
       case CCIntEnum(_, _)       => type2Sort(CCInt)
       case CCDuration            => Sort.Nat
@@ -421,10 +403,11 @@ class CCReader private (prog : Program,
     def toSort: Sort = type2Sort(typ)
 
     def rangePred(t : ITerm) : IFormula =
-      // is this actually necessary?
-      toSort membershipConstraint t
+      // todo: is this actually necessary?
+      true
+      //toSort membershipConstraint t
 
-    def newConstant(name : String) =
+    def newConstant(name : String) : ConstantTerm =
       toSort newConstant name
 
     def cast(t : ITerm) : ITerm = toSort match {
@@ -472,7 +455,7 @@ class CCReader private (prog : Program,
     def formalTypes = {
       val res = for (typ <- types) yield {
         typ match {
-          case typ: CCDeclarationOnlyPointer => getHeapPointer(typ)
+          case typ: CCDeclarationOnlyPointer => getHeapPointer(typ) // todo:heap
           case typ => typ
         }
       }
@@ -531,17 +514,12 @@ class CCReader private (prog : Program,
       case i => i
     }
 
-  private def getHeapPointer (declPtr : CCDeclarationOnlyPointer) : CCHeapPointer = {
-    structDefs get declPtr.name match {
-      case Some(str) =>
-        val heapAlloc = heapAllocs.get(str) match {
-          case None => throw new TranslationException(
-            "Trying to dereference null pointer!")
-          case Some(existingAlloc) => existingAlloc
-        }
-        CCHeapPointer(heapAlloc, str)
+  // todo:heap
+  private def getHeapPointer (ptr : CCDeclarationOnlyPointer) : CCHeapPointer = {
+    structDefs get ptr.name match {
+      case Some(struct) => CCHeapPointer(heap, struct)
       case None => throw new TranslationException("Detected pointer " +
-        "field to some struct (" + declPtr.name + "), but this " +
+        "field to some struct (" + ptr.name + "), but this " +
         "struct does not exist in the list of defined structs.")
     }
   }
@@ -557,7 +535,8 @@ class CCReader private (prog : Program,
      (for ((v, t) <- localVars.iterator zip localVars.types.iterator)
       yield CCTerm(v, t))).toList
   private def allVarInits : Seq[ITerm] =
-    (globalVars.inits.toList map (_.toTerm)) ++ (localVars.formalVars map (i(_)))
+    (globalVars.inits.toList map (_.toTerm)) ++
+      (localVars.formalVars map (IExpression.i(_)))
 
   private def freeFromGlobal(t : IExpression) : Boolean =
     !ContainsSymbol(t, (s:IExpression) => s match {
@@ -592,13 +571,11 @@ class CCReader private (prog : Program,
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (Predicate, Predicate)]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
-  private val structDefs    = new MHashMap[String, CCStruct]
+  private var structInfos   = new MHashMap[String, IndexedSeq[(String, CCType)]]
+  private var structDefs    = new MHashMap[String, CCStruct]
   private val structDecs    = new ArrayBuffer[String]
-  private val heapAllocs    = new MHashMap[CCType, CCHeapAlloc]
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
-
-  private val heapInvariants= new ArrayBuffer[Predicate] // todo: maybe unnecessary
   //////////////////////////////////////////////////////////////////////////////
 
   private val processes =
@@ -612,7 +589,6 @@ class CCReader private (prog : Program,
   private def output(c : Clause,
                      sync : ParametricEncoder.Synchronisation =
                        ParametricEncoder.NoSync) : Unit = {
-//println(c)
     clauses += ((c, sync))
   }
 
@@ -623,11 +599,7 @@ class CCReader private (prog : Program,
     val (entryClauses, transitionClauses) =
       if (concernedClauses.head._1.body.isEmpty) {
         concernedClauses partition (_._1.body.isEmpty)
-      } else if (heapInvariants contains concernedClauses.head._1.body(0).pred){
-        mergeClauses(from + 1) // todo: remove now that pulls are guards?
-        return
-      }
-      else {
+      } else {
         val entryPred = concernedClauses.head._1.body.head.pred
         concernedClauses partition (_._1.body.head.pred == entryPred)
       }
@@ -722,7 +694,7 @@ class CCReader private (prog : Program,
            yield n).toSet
         hints ++ (for (n <- (0 until res.arity).iterator;
                        if (!(coveredVars contains n)))
-                  yield VerifHintTplEqTerm(v(n), 10000))
+                  yield VerifHintTplEqTerm(IExpression.v(n), 10000))
       } else {
         hints
       }
@@ -731,23 +703,8 @@ class CCReader private (prog : Program,
     res
   }
 
-  private def newInv(typ : CCType) =
-    MonoSortedPredicate("Inv_" + typ.shortName,
-      List(Sort.Integer, typ.toSort))
-  private def newHeapAlloc(typ : CCType) : CCHeapAlloc = {
-    val inv = newInv(typ)
-    heapInvariants += inv // todo: here the actual inveriants must be added (after data flow analysis)
-    new CCHeapAlloc(locationCounter, typ, inv) // todo: fix
-  }
-
   private val predicateHints =
     new MHashMap[Predicate, Seq[VerifHintElement]]
-
-  private val getNonDet = new ConstantTerm("_nonDet")
-  private def getZeroInit(typ : CCType) : ITerm = typ match {
-    case structType : CCStruct => structType.getZeroInit
-    case _ => 0
-  }
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -768,51 +725,111 @@ class CCReader private (prog : Program,
     variableHints += List()
   }
 
+  private def collectStructDefsFromComp (comp : Compound_stm): Unit = {
+    comp match {
+      case        _: ScompOne =>
+      case compound: ScompTwo =>
+        val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
+        while (stmsIt.hasNext) stmsIt.next match {
+          case dec: DecS => collectStructDefs(dec.dec_)
+          case _ =>
+        }
+    }
+  }
+  for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
+    decl match {
+      case decl: Global => collectStructDefs(decl.dec_)
+      case fun: Afunc =>
+        val comp = fun.function_def_ match {
+            case f: NewFunc => f.compound_stm_
+            case f: NewHintFunc => f.compound_stm_
+            case f: NewFuncInt => f.compound_stm_
+          }
+        collectStructDefsFromComp(comp)
+      case thread : Athread =>
+        val comp = thread.thread_def_ match {
+          case t : SingleThread => t.compound_stm_
+          case t : ParaThread => t.compound_stm_
+        }
+        collectStructDefsFromComp(comp)
+    }
+
+  if(structDecs nonEmpty) throw new TranslationException(
+    "Some globally declared structs were never defined: " +
+      structDecs.mkString(", "))
+
   val NullObjName = "NullObj"
 
   import lazabs.horn.heap.{Heap => HeapObj}
-  val ObjSort = HeapObj.ADTSort(0)
-  val NodeSort = HeapObj.ADTSort(1)
-
-  val heap = new Heap("heap", "addr", ObjSort,
-    List("HeapObject", "structNode"), List(
-      ("WrappedInt", HeapObj.CtorSignature(List(("getInt",
-        HeapObj.OtherSort(Sort.Integer))), ObjSort)),
-      ("WrappedNode", HeapObj.CtorSignature(List(("getNode", NodeSort)), ObjSort)),
-      ("structNode", HeapObj.CtorSignature(
-        List(("data", HeapObj.OtherSort(Sort.Integer)), ("next", HeapObj.AddressSort)), NodeSort)),
-      ("defObj", HeapObj.CtorSignature(List(), ObjSort))),
-    defObjCtor)
 
   def defObjCtor(objectADT : ADT) : ITerm = {
-    import IExpression.toFunApplier
     objectADT.constructors.last()
   }
 
+  val ObjSort = HeapObj.ADTSort(0)
+
+  val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
+    (for (((structName, fields), id) <-
+            structInfos.zipWithIndex) yield
+      {
+        val ADTFieldList : IndexedSeq[(String, HeapObj.OtherSort)] =
+          for((fieldName, fieldType) <- fields)
+            yield (fieldName, HeapObj.OtherSort(fieldType.toSort))
+        (structName, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(id+1)))
+      }).toList
+
+  val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
+    List(("WrappedInt", HeapObj.CtorSignature(List(("getInt",
+      HeapObj.OtherSort(Sort.Integer))), ObjSort))) ++
+      (for ((name, signature) <- structCtorSignatures) yield {
+      ("Wrapped" + name,
+        HeapObj.CtorSignature(List(("get" + name, signature.result)), ObjSort))
+    })
+
+  val heap = new Heap("heap", "addr", ObjSort,
+    List("HeapObject") ++ structCtorSignatures.unzip._1,
+    wrapperSignatures ++ structCtorSignatures ++
+      List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+    defObjCtor)
+
+  val defObj = heap.ObjectADT.constructors.last
+  val structCount = structInfos.size
+  val objectWrappers = heap.ObjectADT.constructors.take(structCount+1)
+  val objectGetters =
+    for (sels <- heap.ObjectADT.selectors.take(structCount+1)
+         /*if sels.nonEmpty*/) yield sels.head //todo: is nonEmpty needed?
+  val structCtors = heap.ObjectADT.constructors.slice(1+structCount,
+    1+2*structCount)
+  val structSels = heap.ObjectADT.selectors.slice(1+structCount,
+    1+2*structCount)
+
+  val objectSorts : IndexedSeq[Sort] = objectGetters.map(f => f.resSort)
+  val sortGetterMap : Map[Sort, MonoSortedIFunction] =
+    objectSorts.zip(objectGetters).toMap
+  val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
+    objectSorts.zip(objectWrappers).toMap
+
+  for ((ctor, sels) <- structCtors zip structSels) {
+    val selInfo = structInfos(ctor.name)
+    val selsWithType = for (i <- selInfo.indices) yield {
+      assert(sels(i).name == selInfo(i)._1)
+      (sels(i), selInfo(i)._2)
+    }
+    structDefs += ((ctor.name, CCStruct(ctor, selsWithType)))
+  }
+
   val heapTerm = heap.HeapSort.newConstant("@h")
-  globalVars addVar(heapTerm, CCInt)
-  globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap)
-  variableHints += List()
-
-  val Seq(wrappedInt, wrappedNode, structNode, defObj) =
-    heap.ObjectADT.constructors
-  val Seq(Seq(getInt), Seq(getNode), Seq(nodeData, nodeNext), _*) =
-    heap.ObjectADT.selectors
-
-  // Reserve a variable for heap id
-  val heapID = Sort.Integer newConstant "_HeapLoc"
-
-  /*if (modelHeap) {
-    globalVars addVar(heapID, CCInt)
-    globalVars.inits += CCTerm(1, CCInt)
+  if (modelHeap) {
+    globalVars addVar(heapTerm, CCHeap(heap))
+    globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap))
     variableHints += List()
-  }*/
+  }
 
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
     // generous than actual C semantics, where declarations
     // have to be in the right order
-
+    import IExpression._
     atomicMode = true
     val globalVarSymex = Symex(null)
 
@@ -849,9 +866,9 @@ class CCReader private (prog : Program,
       "Some globally declared structs were never defined: " +
         structDecs.mkString(", "))
 
-      // prevent time variables and heap variable from being initialised twice
-      globalVars.inits ++= (globalVarSymex.getValues drop
-        (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0))
+    // prevent time variables and heap variable from being initialised twice
+    globalVars.inits ++= (globalVarSymex.getValues drop
+      (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0))
 
 
     globalPreconditions = globalPreconditions &&& globalVarSymex.getGuard
@@ -1012,10 +1029,76 @@ class CCReader private (prog : Program,
   }
 
   //////////////////////////////////////////////////////////////////////////////
+  private def collectStructDefs(dec : Dec) : Unit = {
+    dec match {
+      case decl : Declarators => {
+        val ind = if (isTypeDef(decl.listdeclaration_specifier_)) 1 else 0
+        val typ = decl.listdeclaration_specifier_(ind) match {
+          case spec: Type => spec.type_specifier_
+          case _ => throw new
+              TranslationException("Storage and SpecProp not implemented yet")
+        }
+        typ match {
+          case structDec : Tstruct =>
+            structDec.struct_or_union_spec_ match {
+              case _: Unique =>
+                for (initDecl <- decl.listinit_declarator_) {
+                  val declarator = initDecl match {
+                    case initDecl: OnlyDecl     => initDecl.declarator_
+                    case initDecl: HintDecl     => initDecl.declarator_
+                    case initDecl: InitDecl     => initDecl.declarator_
+                    case initDecl: HintInitDecl => initDecl.declarator_
+                  }
+                  collectStructInfo(structDec, //not actually unique
+                    getName(declarator)) //use typedef name
+                }
+              case _ => collectStructInfo(structDec) // use X in "struct X"
+            }
+          case _ =>
+        }
+      }
+      case nodecl : NoDeclarator => {
+        val typ = nodecl.listdeclaration_specifier_(0) match {
+          case spec: Type => spec.type_specifier_
+          case _ => throw new
+              TranslationException("Storage and SpecProp not implemented yet")
+        }
+        typ match {
+          case structSpec : Tstruct =>
+            val structName = getStructName(structSpec)
+            if (structSpec.struct_or_union_spec_.isInstanceOf[TagType]) {
+              if (!structIsDeclared(structName))
+                structDecs += structName
+            }
+            else {
+              collectStructInfo(structSpec)
+              if(structDecs contains structName) structDecs -= structName
+            }
+          case _ =>
+        }
+      }
+    }
+  }
+
+  private def isUniqueStruct(listDec : ListDeclaration_specifier) : Boolean = {
+    if (listDec.nonEmpty) {
+      listDec.head.isInstanceOf[Type] &&
+        listDec.head.asInstanceOf[Type].type_specifier_.isInstanceOf[Tstruct] &&
+        listDec.head.asInstanceOf[Type].type_specifier_.asInstanceOf[Tstruct].
+          struct_or_union_spec_.isInstanceOf[Unique]
+    } else false
+    /*if(decList.nonEmpty){
+      val decl = decList.head.asInstanceOf[InitDecl].declarator_
+      decl.isInstanceOf[NoPointer] && decl.asInstanceOf[NoPointer].direct_declarator_.asInstanceOf[Name].cident_
+    }
+    else false*/
+  }
+
   private def collectVarDecls(dec : Dec,
                               global : Boolean,
                               values : Symex) : Unit = dec match {
     case decl : Declarators if !isTypeDef(decl.listdeclaration_specifier_) => {
+      // todo: fix getType for unique structs using maybe isUniqueStruct?
       val typ = getType(decl.listdeclaration_specifier_)
       for (initDecl <- decl.listinit_declarator_) {
         var isVariable = false
@@ -1036,7 +1119,7 @@ class CCReader private (prog : Program,
               case _ => {
                 isVariable = true
                 val actualType =
-                  if(isPointer) CCHeapPointer(Heap.nullAlloc,typ)
+                  if(isPointer) CCHeapPointer(heap, typ)
                   else typ
                 val c = actualType newConstant name
                 if (global) {
@@ -1078,7 +1161,7 @@ class CCReader private (prog : Program,
                 if (init.exp_.isInstanceOf[Enondet])
                   (CCTerm(c, typ), typ rangePred c)
                 else
-                  (values eval init.exp_, i(true))
+                  (values eval init.exp_, IExpression.i(true))
               case _ : InitListOne | _: InitListTwo => {
                 val initStack = getInitsStack(initializer, values)
                 typ match {
@@ -1103,7 +1186,7 @@ class CCReader private (prog : Program,
                     case _ => throw new TranslationException(
                       "Not possible to reach, added to suppress warnings.")
                   }
-                } else CCHeapPointer(Heap.nullAlloc,typ)
+                } else CCHeapPointer(heap, typ)
                 (newTyp newConstant getName(declarator), newTyp)
               }
               else if (typ.isInstanceOf[CCClock.type]) (c, typ)
@@ -1161,10 +1244,10 @@ class CCReader private (prog : Program,
                   case initDecl: OnlyDecl => initDecl.declarator_
                   case initDecl: HintDecl => initDecl.declarator_
                 }
-                buildStructType(structDec, //not actually unique
-                  getName(declarator)) //use typedef name
+                /*collectStructInfo(structDec, //not actually unique
+                  getName(declarator)) //use typedef name*/
               }
-            case _ => buildStructType(structDec) // use X in "struct X"
+            case _ => //collectStructInfo(structDec) // use X in "struct X"
           }
         case enumDec : Tenum =>
           enumDec.enum_specifier_ match {
@@ -1196,8 +1279,8 @@ class CCReader private (prog : Program,
               structDecs += structName
           }
           else {
-            buildStructType(structSpec)
-            if(structDecs contains structName) structDecs -= structName
+            /*collectStructInfo(structSpec)
+            if(structDecs contains structName) structDecs -= structName*/
           }
         case enumDec : Tenum => buildEnumType(enumDec)
         case _ => throw new
@@ -1222,7 +1305,7 @@ class CCReader private (prog : Program,
             val subst =
               (for ((c, n) <-
                       (globalVars.iterator ++ localVars.iterator).zipWithIndex)
-               yield (c -> v(n))).toMap
+               yield (c -> IExpression.v(n))).toMap
 
             val hintEls =
               for (hint <- hints;
@@ -1338,9 +1421,6 @@ class CCReader private (prog : Program,
   private def getAnonEnumName: String =
     getAnonName(".ES")
 
-  private def getStructType(spec: Tstruct) : Option[CCStruct] =
-    structDefs get getStructName(spec)
-
   private def getStructName(spec: Tstruct) : String =
     spec.struct_or_union_spec_ match {
       case _: Unique => ""
@@ -1349,21 +1429,19 @@ class CCReader private (prog : Program,
     }
 
   private def structIsDeclared(structName: String) =
-    (structDefs contains structName) || (structDecs contains structName)
+    (structInfos contains structName) || (structDecs contains structName)
 
-  private def buildStructType(spec: Tstruct) : CCStruct = {
+  private def collectStructInfo(spec: Tstruct) : Unit = {
     spec.struct_or_union_spec_ match {
-      case _ : Unique => buildStructType(spec, getAnonStructName)
-      case tagged : Tag => buildStructType(spec, tagged.cident_)
-      case declaration : TagType =>
-        throw new TranslationException("struct can only be built " +
-        "with Unique or Tag types!")
+      case _ : Unique => collectStructInfo(spec, getAnonStructName)
+      case tagged : Tag => collectStructInfo(spec, tagged.cident_)
+      case _ => // todo: do nothing for TagType
     }
   }
 
-  private def buildStructType (spec: Tstruct,
-                               structName: String): CCStruct = {
-    if (structDefs contains structName)
+  private def collectStructInfo (spec: Tstruct,
+                                 structName: String): Unit = {
+    if (structInfos contains structName) //todo:what about shadowing?
       throw new TranslationException(
         "struct " + structName + " is already defined")
 
@@ -1374,13 +1452,17 @@ class CCReader private (prog : Program,
         "with Unique or Tag types!")
     }
 
-    val fieldList : List[(String, CCType)] = (for (field <- fields) yield {
+    val fieldList : IndexedSeq[(String, CCType)] = (for (field <- fields) yield {
       val fieldType = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
         case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
           (getStructName(t) == structName || structIsDeclared(getStructName(t))) &&
           field.asInstanceOf[Structen].liststruct_declarator_(0).asInstanceOf[Decl].declarator_.isInstanceOf[BeginPointer]=>
           CCDeclarationOnlyPointer(getStructName(t))
         //todo: some error handling here?
+        case t : Tstruct if structInfos contains getStructName(t) =>
+          getType(field)
+        case t : Tstruct => throw new TranslationException("structs with other struct " +
+          "fields are not supported yet.")
         case _ => getType(field)
       }
       val declarators = field.asInstanceOf[Structen].liststruct_declarator_
@@ -1390,9 +1472,9 @@ class CCReader private (prog : Program,
           case decl: Decl =>
             val fieldName = getName(decl.declarator_)
             val realFieldType: CCType = decl.declarator_ match {
-              case ptr : BeginPointer
+              case _ : BeginPointer
                 if !fieldType.isInstanceOf[CCDeclarationOnlyPointer] =>
-                CCHeapPointer(Heap.nullAlloc, fieldType)
+                CCHeapPointer(heap, fieldType) //todo:heap
               case _ => fieldType // todo: does this work for multiple lvl ptrs?
             }
             (fieldName, realFieldType)
@@ -1400,19 +1482,20 @@ class CCReader private (prog : Program,
             "Bit fields in structs are not supported yet.")
         }
       }
-    }).toList.flatten
+    }).toList.flatten.toIndexedSeq
 
-    val ADTFieldList : List[(String, ap.theories.ADT.OtherSort)] =
+    /*val ADTFieldList : List[(String, ap.theories.ADT.OtherSort)] =
       for((fieldName, fieldType) <- fieldList)
-        yield (fieldName, ADT.OtherSort(fieldType.toSort))
+        yield (fieldName, ADT.OtherSort(fieldType.toSort))*/
 
-    val structADT =
+    structInfos += ((structName, fieldList))
+    /*val structADT = //todo:heap remove
       new ADT(List(structName),
         List((structName, ADT.CtorSignature(ADTFieldList, ADT.ADTSort(0)))))
 
     val newStruct = CCStruct(structADT, structName, fieldList)
     structDefs += (structName -> newStruct)
-    newStruct
+    newStruct*/
   }
   private def getInitsStack(init: Initializer, s: Symex): Stack[ITerm] = {
     val initStack = new Stack[ITerm]
@@ -1552,8 +1635,10 @@ class CCReader private (prog : Program,
             case _ : Tlong if (typ == CCULong) =>
               typ = CCULongLong
             case structOrUnion : Tstruct =>
-              typ = getStructType(structOrUnion) match {
-                case None => buildStructType(structOrUnion)
+              val structName = getStructName(structOrUnion)
+              typ = structDefs get structName match {
+                case None => throw new TranslationException(
+                  "struct " + structName + " not found!")
                 case Some(structType) => structType
               }
             case enum : Tenum =>
@@ -1585,11 +1670,12 @@ class CCReader private (prog : Program,
       case f: NewHintFunc =>
         (getType(f.listdeclaration_specifier_), f.declarator_.isInstanceOf[BeginPointer])
     }
-    if(isPtr) CCHeapPointer(Heap.nullAlloc,typ)
+    if(isPtr) CCHeapPointer(heap, typ)
     else typ
   }
 
   private def translateClockValue(expr : CCExpr) : CCExpr = {
+    import IExpression._
     if (!useTime)
       throw NeedsTimeException
     expr.toTerm match {
@@ -1606,6 +1692,7 @@ class CCReader private (prog : Program,
   }
 
   private def translateDurationValue(expr : CCExpr) : CCExpr = {
+    import IExpression._
     if (!useTime)
       throw NeedsTimeException
     expr.toTerm match {
@@ -1661,17 +1748,55 @@ class CCReader private (prog : Program,
 
     def getGuard = guard
 
-    private def heapPush (heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) =
-      assertProperty(heapAlloc.inv(ptrId, setVal))
+    //private def heapPush (heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) =
+    //  assertProperty(heapAlloc.inv(ptrId, setVal))
 
-    private def heapPull (ptrExpr : CCExpr) = {
-      CCTerm(getInt(heap.read(heapTerm, ptrExpr.toTerm)), CCInt)
-
-      /*val (pulledVar, pulledTerm) = Heap.pull(ptrExpr)
-      addPullGuard(pulledVar rangePred pulledTerm.t)
-      addPullGuard(pulledVar.heapAlloc.inv(ptrExpr.toTerm, pulledTerm.t))
-      pulledTerm*/
+    //todo:Heap get rid of this or change name
+    def heapPull(ptrExpr : CCExpr): CCTerm = {
+      //val ptrInd = lookupVar(ptrName)
+      val (objectGetter, typ : CCType) = ptrExpr.typ match {
+        case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
+        case typ : CCDeclarationOnlyPointer => //getHeapPointer(typ)
+          sortGetterMap.find(tuple => tuple._1.name == typ.name) match {
+            case None => throw new TranslationException("Cannot find sort for" +
+              "pointer!")
+            case Some(tuple) => (tuple._2, structDefs(typ.name))
+          }
+        case _ => throw new TranslationException(
+          "Can only pull from heap pointers! (" + ptrExpr + ")")
+      }
+      CCTerm(objectGetter(heap.read(heapTerm, ptrExpr.toTerm)), typ)
     }
+    private def heapAlloc(value : CCTerm) : CCTerm = {
+      val objectWrapper = sortWrapperMap(value.typ.toSort)
+      val newAlloc = heap.alloc(heapTerm, objectWrapper(value.t))
+      setValue(heapTerm.name, CCTerm(heap.newHeap(newAlloc), CCHeap(heap)))
+      CCTerm(heap.newAddr(newAlloc), CCInt) // todo: not CCInt
+    }
+    private def heapWrite(address : ITerm, value : CCExpr) : Unit = {
+      val objectWrapper = sortWrapperMap(value.typ.toSort)
+      val newHeap = heap.write(heapTerm, address, objectWrapper(value.toTerm))
+      setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
+    }
+    private def heapWriteADT(lhs : IFunApp, rhs : CCExpr) = {
+      assume(isHeapObjectGetter(lhs.args.head)) // todo: remove after impl.
+      val newHeap = heap.writeADT(lhs, rhs.toTerm)
+      setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
+    }
+    private def isHeapObjectGetter(t : ITerm) : Boolean = {
+      t match {
+        case f : IFunApp => objectGetters contains f.fun
+        case _ => false
+      }
+    }
+
+    //private def heapPull (ptrExpr : CCExpr) = {
+      //CCTerm(getInt(heap.read(heapTerm, ptrExpr.toTerm)), CCInt)
+      //val (pulledVar, pulledTerm) = Heap.pull(ptrExpr)
+      //addPullGuard(pulledVar rangePred pulledTerm.t)
+      //addPullGuard(pulledVar.heapAlloc.inv(ptrExpr.toTerm, pulledTerm.t))
+      //pulledTerm
+    //}
 
     private var initAtom =
       if (oriInitPred == null)
@@ -1838,11 +1963,6 @@ class CCReader private (prog : Program,
             structType.getFieldTerm(structVal.toTerm, ptrType.fieldAddress),
             structType.getFieldType(ptrType.fieldAddress))
       }
-
-    def newHeapID = {
-      setValue(heapID.name, CCTerm(heapID, CCInt).mapTerm(_ + 1))
-      heapID
-    }
 
     private def setValue(name : String, t : CCExpr,
                          isIndirection : Boolean = false) : Unit =
@@ -2045,33 +2165,6 @@ class CCReader private (prog : Program,
       res
     }
 
-    private def findLast[A](la: List[A])(f: A => Boolean): Option[A] =
-      la.foldLeft(Option.empty[A]) { (acc, cur) =>
-        if (f(cur)) Some(cur)
-        else acc
-      }
-
-    private def getActualLhsVal(lhs: CCExpr) : CCExpr = {
-      lhs.toTerm match {
-        case fieldFun : IFunApp => // an ADT
-          val (_, rootTerm) = getFieldInfo(fieldFun)
-          lookupVarNoException(rootTerm.name) match {
-            case -1  =>
-              val pulledVar = Heap.pulledVars.lastIndexWhere{
-                case ((pulledVar, _)) => pulledVar.name == rootTerm.name
-              } match {
-                case -1  => throw new TranslationException(lhs +
-                  "is not a pulled nor regular value")
-                case ind => Heap.pulledVars(ind)._1
-              }
-              CCTerm(pulledVar.ptrId,
-                CCHeapPointer(pulledVar.heapAlloc,pulledVar.typ))
-            case ind => getValue(ind, false)
-          }
-        case _ => lhs // a non ADT
-      }
-    }
-
     // This function returns the actual term after an assignment is done.
     // E.g. for non ADT lhs, this is the same as the rhs,
     //      for ADT lhs, this is the lhs updated with the value of rhs.
@@ -2087,7 +2180,6 @@ class CCReader private (prog : Program,
           val structType = rootTerm match {
             case t : SortedConstantTerm => structDefs(t.sort.name)
             case _ => {getVarType(rootTerm.name) match {
-                case pulled : CCPulledVar => pulled.typ
                 case ptr : CCStackPointer => getPointedTerm(ptr).typ
                 case typ => typ
               }}.asInstanceOf[CCStruct]
@@ -2120,7 +2212,6 @@ class CCReader private (prog : Program,
           "from given struct term " + nested)
       }
     }
-    private def isField(t : ITerm) = t.isInstanceOf[IFunApp] // todo
     private def getStructTerm(nested : ITerm) : ConstantTerm = { // todo
       nested match {
         case nestedMore : IFunApp => getStructTerm(nestedMore.args.head)
@@ -2155,7 +2246,7 @@ class CCReader private (prog : Program,
         val rhsVal = popVal
         val lhsVal = evalLhs(exp.exp_1) //then evaluate lhs and get it
 
-        val (heapAlloc : CCHeapAlloc, actualLhsVal) = lhsVal.typ match {
+        /*val (heapAlloc : CCHeapAlloc, actualLhsVal) = lhsVal.typ match {
           case ptr: CCHeapPointer => (ptr.heapAlloc, lhsVal)
           case _ : CCDeclarationOnlyPointer =>
             val v =  getActualLhsVal(lhsVal)
@@ -2164,11 +2255,12 @@ class CCReader private (prog : Program,
               case dp : CCDeclarationOnlyPointer =>
                 (getHeapPointer(dp).heapAlloc, v)
               case pulled : CCPulledVar => (pulled.heapAlloc, v)
-              case _ => throw new TranslationException("lhs is not a heap pointer.")
+              case _ => throw new TranslationException(lhsVal +
+                " is not a heap pointer.\n" + v)
             }
           case _ => val rootLhs =  getValue(asLValue(exp.exp_1))
             (rootLhs.typ.asInstanceOf[CCHeapPointer].heapAlloc, rootLhs)
-        }
+        }*/
 
         val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
         if (updatingPointedValue) {
@@ -2176,10 +2268,14 @@ class CCReader private (prog : Program,
             case pulled : CCPulledVar => pulled.ptrId
             case _ => actualLhsVal.toTerm
           }, getActualAssignedTerm(lhsVal, rhsVal).toTerm)*/
-          val newHeap = heap.write(heapTerm, lhsVal.toTerm, wrappedInt(getActualAssignedTerm(lhsVal, rhsVal).toTerm))
-          setValue(heapTerm.name, CCTerm(newHeap, CCHeap))
+          lhsVal.toTerm match {
+            case f : IFunApp =>
+              heapWriteADT(f, rhsVal)
+            case t => heapWrite(t, getActualAssignedTerm(lhsVal, rhsVal))
+          }
+
         } else {
-          val rhsHeapAlloc = rhsVal.typ match{
+          /*val rhsHeapAlloc = rhsVal.typ match{
             case hp : CCHeapPointer => hp.heapAlloc
             case dp : CCDeclarationOnlyPointer => getHeapPointer(dp).heapAlloc
             case _ => Heap.nullAlloc
@@ -2187,11 +2283,10 @@ class CCReader private (prog : Program,
           if (heapAlloc != rhsHeapAlloc && heapAlloc != Heap.nullAlloc
               && rhsHeapAlloc != Heap.nullAlloc)
             throw new TranslationException("Assigning heap pointers with " +
-              "different allocation sites is not supported yet.")
+              "different allocation sites is not supported yet.")*/
           val lhsName = asLValue(exp.exp_1)
           val actualRhsVal = rhsVal.typ match {
-            case CCInt =>
-              CCTerm(rhsVal.toTerm, CCHeapPointer(Heap.nullAlloc, CCInt))
+            case CCInt => CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
             case _ => rhsVal
           }
           setValue(lhsName, actualRhsVal)
@@ -2394,16 +2489,13 @@ class CCReader private (prog : Program,
               case fieldFun: IFunApp => // an ADT
                 val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
                 val rootInd = lookupVar(rootTerm.name)
-                val structType = getValue(rootInd, false).typ match {
-                  case pulled : CCPulledVar => pulled.typ.asInstanceOf[CCStruct]
-                  case typ => typ.asInstanceOf[CCStruct]
-                }
+                val structType = getValue(rootInd, false).asInstanceOf[CCStruct]
                 (rootInd, structType.getFieldAddress(fieldNames))
               case _ => (values.indexWhere(v => v == topVal), Nil)
             }
             assert(ind > -1 && ind < values.size-1) // todo
             val ptr = CCStackPointer(ind, popVal.typ, fieldAddress)
-            pushVal(CCTerm(Int2ITerm(ind), ptr)) //we don't care about the value
+            pushVal(CCTerm(IExpression.Int2ITerm(ind), ptr)) //we don't care about the value
           case _ : Indirection =>
             val v = popVal
             v.typ match { // todo: type checking?
@@ -2463,8 +2555,8 @@ class CCReader private (prog : Program,
           }
         }
         case name@("malloc" | "calloc") => {
-          /*if (!modelHeap)
-            throw NeedsHeapModelException*/
+          if (!modelHeap)
+            throw NeedsHeapModelException
           val typ = exp.listexp_(0) match {
             case exp : Ebytestype => getType(exp.type_name_)
             //case exp : Ebytesexpr => eval(exp.exp_).typ
@@ -2472,23 +2564,19 @@ class CCReader private (prog : Program,
               "memory functions can currently only be called with argument: " +
               "sizeof(type).")
           }
-          /*val heapAlloc = heapAllocs.get(typ) match{
-            case None => val newAlloc = newHeapAlloc(typ)
-              heapAllocs += ((typ, newAlloc))
-              newAlloc
-            case Some(existingAlloc) => existingAlloc
-          }
-          val ptr = CCHeapPointer(heapAlloc, typ)
-          val idTerm = newHeapID
-          pushVal(CCTerm(idTerm, ptr))
-          heapPush(ptr.heapAlloc, idTerm, name match {
-            case "calloc" => getZeroInit(typ)
-            case "malloc" => getNonDet // todo
-          })*/
 
-          val newAlloc = heap.alloc(heapTerm, wrappedInt(getNonDet))
-          setValue(heapTerm.name, CCTerm(heap.newHeap(newAlloc), CCHeap))
-          pushVal(CCTerm(heap.newAddr(newAlloc), CCInt))
+          def getNonDet(typ : CCType) =
+            new SortedConstantTerm("_nonDet", typ.toSort)
+          def getZeroInit(typ : CCType) : ITerm = typ match {
+            case structType : CCStruct => structType.getZeroInit
+            case _ => 0
+          }
+
+          pushVal(heapAlloc(CCTerm(
+            name match {
+              case "calloc" => getZeroInit(typ)
+              case "malloc" => getNonDet(typ)
+            }, typ)))
         }
         case "realloc" =>
           if (!modelHeap)
@@ -2520,19 +2608,7 @@ class CCReader private (prog : Program,
         val fieldName = exp.cident_
         subexpr.typ match {
 
-          case typ@(_ : CCStruct | _ : CCPulledVar) => { // todo a better way
-            val structType = typ match {
-              case t : CCStruct => t
-              case t : CCPulledVar => t.typ match {
-                case tStruct : CCStruct =>
-                  /*if(!evaluatingLhs && !atomicMode) Heap removePulledVar t.heapAlloc*/
-                  tStruct
-                case _ => throw new TranslationException("Trying to access " +
-                  "field " + fieldName + "' of non struct heap variable.")
-              }
-              case _ => throw new TranslationException(
-                "Not possible to reach, added case to suppress warning.")
-            }
+          case structType : CCStruct => { // todo a better way
             if(!structType.contains(fieldName))
               throw new TranslationException(fieldName + " is not a member of "
                 + structType + "!")
@@ -2563,25 +2639,14 @@ class CCReader private (prog : Program,
             heapPull(subexpr)
           }
           case declPtr : CCDeclarationOnlyPointer =>
-            val heapPtr = getHeapPointer (declPtr)
-            heapPull(CCTerm(subexpr.toTerm, heapPtr))
+            heapPull(subexpr)
+            //val heapPtr = getHeapPointer (declPtr)
+            //Heap.pull(CCTerm(subexpr.toTerm, heapPtr))
           case _ => throw new TranslationException(
             "Trying to access field '->" + fieldName + "' of non pointer.")
         }
         term.typ match {
-          case typ@(_ : CCStruct | _ : CCPulledVar) => { // todo a better way
-            val structType = typ match {
-              case t : CCStruct => t
-              case t : CCPulledVar => t.typ match {
-                case tStruct : CCStruct =>
-                  /*if(!evaluatingLhs  && !atomicMode) Heap removePulledVar t.heapAlloc*/
-                  tStruct
-                case _ => throw new TranslationException("Trying to access " +
-                  "field '" + fieldName + "' of non struct heap variable.")
-              }
-              case _ => throw new TranslationException(
-                "Not possible to reach, added case to suppress warning.")
-            }
+          case structType : CCStruct => {
             if(!structType.contains(fieldName))
               throw new TranslationException(fieldName + " is not a member of "
                 + structType + "!")
@@ -2647,12 +2712,12 @@ class CCReader private (prog : Program,
 
           val postGlobalVars : Seq[ITerm] =
             for ((t, n) <- globalVars.types.zipWithIndex)
-            yield i(t newConstant ("__gvar" + n))
+            yield IExpression.i(t newConstant ("__gvar" + n))
 
           val resType = getType(funDef)
           val resVar = resType match {
             case CCVoid => List()
-            case t      => List(i(t newConstant "__res"))
+            case t      => List(IExpression.i(t newConstant "__res"))
           }
 
           val prePredArgs : Seq[ITerm] =
@@ -2757,7 +2822,8 @@ class CCReader private (prog : Program,
     }
 
     private def strictBinPred(left : Exp, right : Exp,
-                              op : (ITerm, ITerm) => IFormula) : Unit =
+                              op : (ITerm, ITerm) => IFormula) : Unit = {
+      import IExpression._
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => (lhs.typ, rhs.typ) match {
                     case (CCClock, _ : CCArithType) =>
@@ -2784,6 +2850,7 @@ class CCReader private (prog : Program,
                     case _ =>
                       CCFormula(op(lhs.toTerm, rhs.toTerm), CCInt)
                   })
+    }
 
     ////////////////////////////////////////////////////////////////////////////
 
@@ -2797,6 +2864,7 @@ class CCReader private (prog : Program,
         case (oldType : CCArithType, CCDuration) => {
           if (!useTime)
             throw NeedsTimeException
+          import IExpression._
           CCTerm(GTU * t.toTerm, CCDuration)
         }
         case _ =>
@@ -2804,14 +2872,8 @@ class CCReader private (prog : Program,
             "do not know how to convert " + t + " to " + newType)
       }
 
-    private def getActualType(typ : CCType) = typ match {
-      case pulled : CCPulledVar => pulled.heapAlloc.typ
-      case _ => typ
-    }
-
     private def unifyTypes(a : CCExpr, b : CCExpr) : (CCExpr, CCExpr) = {
-      (getActualType(a.typ), getActualType(b.typ)) match {
-
+      (a.typ, b.typ) match {
         case (at, bt) if (at == bt) =>
           (a, b)
 
@@ -2871,7 +2933,7 @@ class CCReader private (prog : Program,
 //      case constant : Ecfloat.       Constant ::= CFloat;
 //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
-        pushVal(CCTerm(i(IdealInt(constant.unboundedinteger_)), CCInt))
+        pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt))
     }
   }
 
@@ -3368,6 +3430,7 @@ class CCReader private (prog : Program,
       }
 
       case stm : SselThree => {  // switch
+        import IExpression._
         val selectorSymex = Symex(entry)
         val selector = (selectorSymex eval stm.exp_).toTerm
 
@@ -3517,11 +3580,10 @@ class CCReader private (prog : Program,
       yield p
 
     val backgroundAxioms =
-      if (backgroundPreds.isEmpty && backgroundClauses.isEmpty &&
-        heapInvariants.isEmpty)
+      if (backgroundPreds.isEmpty && backgroundClauses.isEmpty)
         ParametricEncoder.NoBackgroundAxioms
       else
-        ParametricEncoder.SomeBackgroundAxioms(backgroundPreds ++ heapInvariants,
+        ParametricEncoder.SomeBackgroundAxioms(backgroundPreds,
                                                backgroundClauses)
 
     ParametricEncoder.System(processes.toList,
@@ -3540,65 +3602,4 @@ class CCReader private (prog : Program,
                              VerificationHints(predHints),
                              backgroundAxioms)
   }
-
-  private object Heap {
-    val nullAlloc = new CCHeapAlloc(0, CCVoid, new Predicate("null",0))
-
-    val pulledVars = new ArrayBuffer[(CCPulledVar, CCTerm)]
-
-    def numPulled = pulledVars.size
-
-    /*def push(heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) {
-      pushAssert(heapAlloc, ptrId, setVal)
-      /*if (pulledVars contains heapAlloc)
-        removePulledVar(heapAlloc)*/ //todo: check if not pulled first?
-    }*/
-
-    def pull(ptrExpr : CCExpr): (CCPulledVar, CCTerm) = {
-      //val ptrInd = lookupVar(ptrName)
-      val ptr : CCHeapPointer = ptrExpr.typ match {
-        case typ : CCHeapPointer => typ
-        case typ : CCDeclarationOnlyPointer => getHeapPointer(typ)
-        case _ => throw new TranslationException(
-          "Can only pull from heap pointers! (" + ptrExpr + ")")
-      }
-      /*pulledVars get ptr.heapAlloc match {
-        case Some((pulledVar, pulledTerm)) => { //todo: only use this case in atomicMode?
-          pushVal(pulledTerm)
-          pulledVar
-        }
-        case None => {*/
-      //val ptrId = getVar(ptrInd)
-      val name = "pull_" + ptr.typ.shortName +
-        /*ptr.heapAlloc.allocSite +*/ "_" + numPulled // todo
-
-      val heapAlloc : CCHeapAlloc = ptr.heapAlloc.typ match {
-        case CCVoid => heapAllocs.get(ptr.typ) match {
-            case None => throw new TranslationException(
-              "No allocation found for " + ptrExpr)
-            case Some(existingAlloc) => existingAlloc
-          }
-        case _ => ptr.heapAlloc
-      }
-
-      val pulledVar = CCPulledVar(name, heapAlloc, ptrExpr.toTerm) //new PulledVar(ind, pulledVars.size)
-      val c = pulledVar newConstant name
-      val pulledTerm = CCTerm(c, pulledVar)
-      pulledVars += ((pulledVar, pulledTerm))
-      // add value todo
-
-      //localVars.addVar(c, pulledVar)
-      (pulledVar, pulledTerm)
-      /*pushVal(pulledTerm)
-      addPullGuard(pulledVar rangePred c)
-
-      // add pull invariant
-      //maybeOutputClause
-      addPullGuard(ptr.heapAlloc.inv(ptrExpr.toTerm, c))
-      pulledVar*/
-      /*}
-    }*/
-    }
-  }
-
 }
