@@ -41,7 +41,7 @@ import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintIn
 import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.preprocessor.HornPreprocessor
 import lazabs.horn.heap.Heap
-import IExpression.{toFunApplier,ConstantTerm,Predicate,Sort}
+import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
 
@@ -162,8 +162,22 @@ object CCReader {
     def shortName = "heap"
   }
 
-  private case class CCStruct(ctor: MonoSortedIFunction,
-                              sels: IndexedSeq[(MonoSortedIFunction, CCType)])
+  /**
+   * typ is either an index into structInfos (if ADT type), or a CCType
+   * ptrDepth 0 => not a pointer, 1 => *, 2 => **, ...*/
+  private case class FieldInfo(name : String,
+                               typ : Either[Integer, CCType],
+                               ptrDepth : Integer)
+  private case class StructInfo(name : String, fieldInfos : Seq[FieldInfo])
+
+  private case class CCStructField(structName : String,
+                                   structs    : MHashMap[String, CCStruct])
+    extends CCType{
+    override def toString : String = "field with type: " + structName
+    def shortName = "field:" + structName
+  }
+  private case class CCStruct(ctor : MonoSortedIFunction,
+                              sels : IndexedSeq[(MonoSortedIFunction, CCType)])
     extends CCType{
     override def toString : String =
       "struct " + ctor.name + ": (" +sels.mkString + ")"
@@ -179,7 +193,10 @@ object CCReader {
         }
         case Nil => Nil // not possible to reach
       }
-    def getFieldType(ind: Int) : CCType = sels(ind)._2
+    def getFieldType(ind: Int) : CCType = sels(ind)._2 match {
+      case CCStructField(name, structs) => structs(name)
+      case typ => typ
+    }
     def getFieldType(fieldAddress: List[Int]) : CCType =
       fieldAddress match{
         case hd::Nil => getFieldType(hd)
@@ -193,7 +210,12 @@ object CCReader {
       val hd :: tl = fieldAddress
       val sel = getADTSelector(hd)
       getFieldType(hd) match {
-        case nested: CCStruct =>
+        case nested : CCStructField =>
+          tl match {
+            case Nil => sel(t)
+            case _ => nested.structs(nested.structName).getFieldTerm (sel(t), tl)
+          }
+        case nested : CCStruct => // todo: simplify
           tl match {
             case Nil => sel(t)
             case _ => nested.getFieldTerm (sel(t), tl)
@@ -206,8 +228,13 @@ object CCReader {
       fieldAddress match {
         case hd :: tl => {
           val childTerm = getFieldType(hd) match {
-            case nx: CCStruct if tl!= Nil =>
-                nx.setFieldTerm(getADTSelector(hd)(rootTerm), setVal, tl)
+            case nx : CCStruct if tl != Nil =>
+              nx.setFieldTerm(getADTSelector(hd)(rootTerm), setVal, tl)
+            case nx : CCStructField if tl != Nil =>
+              nx.structs(nx.structName).setFieldTerm(
+                getADTSelector(hd)(rootTerm), setVal, tl)
+            //case nx: CCStruct if tl!= Nil =>
+            //    nx.setFieldTerm(getADTSelector(hd)(rootTerm), setVal, tl)
             case _ => setVal
           }
           val const =
@@ -229,7 +256,8 @@ object CCReader {
       val const: IndexedSeq[ITerm] =
         for ((_, fieldType) <- sels) yield
           fieldType match {
-            case structField: CCStruct => structField.getZeroInit
+            case CCStructField(name,structs) => structs(name).getZeroInit
+            case s : CCStruct => s.getZeroInit
             case _ => Int2ITerm(0)
           }
       ctor(const: _*)
@@ -244,7 +272,9 @@ object CCReader {
       val const: IndexedSeq[ITerm] =
         for (field <- sels) yield
           field._2 match {
-            case structField: CCStruct => structField.getInitialized(values)
+            case CCStructField(name,structs) =>
+              structs(name).getInitialized(values)
+            case s : CCStruct => s.getInitialized(values)
             case _ => if (values.isEmpty) Int2ITerm(0) else values.pop()
           }
       ctor(const: _*)
@@ -271,11 +301,6 @@ object CCReader {
     override def toString : String =
       "enum-int " + name + ": (" + enumerators.mkString + ")"
     def shortName = name
-  }
-
-  private case class CCDeclarationOnlyPointer(name : String) extends CCType {
-    override def toString : String = name + "*"
-    def shortName = name + "_ptr"
   }
 
   private abstract sealed class CCPointer(typ : CCType) extends CCType {
@@ -357,8 +382,8 @@ class CCReader private (prog : Program,
       case CCHeap(heap)          => heap.HeapSort
       case CCStackPointer(_,_,_) => Sort.Integer
       case CCHeapPointer(heap, _)=> heap.AddressSort
-      //case CCDeclarationOnlyPointer(_) => Sort.Integer // todo:heap
       case CCStruct(ctor, _)     => ctor.resSort // todo: heap
+      case CCStructField(n, s)   => s(n).ctor.resSort
       case CCADTEnum(adt, _, _)  => adt.sorts.head
       case CCIntEnum(_, _)       => type2Sort(CCInt)
       case CCDuration            => Sort.Nat
@@ -452,16 +477,9 @@ class CCReader private (prog : Program,
     def contains (c : ConstantTerm) = vars contains c
     def iterator = vars.iterator
     def formalVars = vars.toList
-    def formalTypes = {
-      val res = for (typ <- types) yield {
-        typ match {
-          case typ: CCDeclarationOnlyPointer => getHeapPointer(typ) // todo:heap
-          case typ => typ
-        }
-      }
-      res.toList
-    }
+    def formalTypes = types.toList
   }
+
   private object globalVars extends CCVars {
     val inits = new ArrayBuffer[CCExpr]
   }
@@ -514,16 +532,6 @@ class CCReader private (prog : Program,
       case i => i
     }
 
-  // todo:heap
-  private def getHeapPointer (ptr : CCDeclarationOnlyPointer) : CCHeapPointer = {
-    structDefs get ptr.name match {
-      case Some(struct) => CCHeapPointer(heap, struct)
-      case None => throw new TranslationException("Detected pointer " +
-        "field to some struct (" + ptr.name + "), but this " +
-        "struct does not exist in the list of defined structs.")
-    }
-  }
-
   private def allFormalVars : Seq[ITerm] =
     globalVars.formalVars ++ localVars.formalVars
   private def allFormalVarTypes : Seq[CCType] =
@@ -571,9 +579,9 @@ class CCReader private (prog : Program,
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (Predicate, Predicate)]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
-  private var structInfos   = new MHashMap[String, IndexedSeq[(String, CCType)]]
-  private var structDefs    = new MHashMap[String, CCStruct]
-  private val structDecs    = new ArrayBuffer[String]
+  private val uniqueStructs = new MHashMap[Unique, String]
+  private val structInfos   = new ArrayBuffer[StructInfo]
+  private val structDefs    = new MHashMap[String, CCStruct]
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
   //////////////////////////////////////////////////////////////////////////////
@@ -754,9 +762,9 @@ class CCReader private (prog : Program,
         collectStructDefsFromComp(comp)
     }
 
-  if(structDecs nonEmpty) throw new TranslationException(
-    "Some globally declared structs were never defined: " +
-      structDecs.mkString(", "))
+  if(structInfos.exists(s => s.fieldInfos isEmpty))
+    throw new TranslationException(
+      "Some structs were declared but never defined!")
 
   val NullObjName = "NullObj"
 
@@ -769,14 +777,21 @@ class CCReader private (prog : Program,
   val ObjSort = HeapObj.ADTSort(0)
 
   val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
-    (for (((structName, fields), id) <-
-            structInfos.zipWithIndex) yield
-      {
-        val ADTFieldList : IndexedSeq[(String, HeapObj.OtherSort)] =
-          for((fieldName, fieldType) <- fields)
-            yield (fieldName, HeapObj.OtherSort(fieldType.toSort))
-        (structName, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(id+1)))
-      }).toList
+    (for (i <- structInfos.indices) yield {
+      if(structInfos(i).fieldInfos isEmpty) throw new TranslationException(
+        "Struct " + structInfos(i).name + " was declared, but never defined!")
+      val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
+        for(FieldInfo(fieldName, fieldType, ptrDepth) <-
+              structInfos(i).fieldInfos) yield
+          (fieldName,
+            if (ptrDepth > 0) Heap.AddressSort
+            else { fieldType match {
+              case Left(ind) => HeapObj.ADTSort(ind + 1) //todo: handle address type too!!
+              case Right(typ) => HeapObj.OtherSort(typ.toSort)
+            }
+          })
+      (structInfos(i).name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
+    }).toList
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
     List(("WrappedInt", HeapObj.CtorSignature(List(("getInt",
@@ -809,13 +824,30 @@ class CCReader private (prog : Program,
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectWrappers).toMap
 
-  for ((ctor, sels) <- structCtors zip structSels) {
-    val selInfo = structInfos(ctor.name)
-    val selsWithType = for (i <- selInfo.indices) yield {
-      assert(sels(i).name == selInfo(i)._1)
-      (sels(i), selInfo(i)._2)
-    }
-    structDefs += ((ctor.name, CCStruct(ctor, selsWithType)))
+  /*val structFieldList : Seq[(String, CCType)] =
+  for(FieldInfo(fieldName, fieldType, ptrDepth) <-
+        structInfos(i).fieldInfos) yield
+    (fieldName, {
+      val actualType = fieldType match { // here ptr does not matter
+        case Left(ind) =>
+        case Right(typ) => typ
+      }
+      if (ptrDepth > 0) CCHeapPointer(heap, actualType) else actualType
+    })
+structDefs += ((structInfos(i).name, structFieldList)) */
+
+  for (((ctor, sels), i) <- structCtors zip structSels zipWithIndex) {
+    val fieldInfos = structInfos(i).fieldInfos
+    val fieldsWithType = for (j <- fieldInfos.indices) yield {
+      assert(sels(j).name == fieldInfos(j).name)
+      (sels(j),{
+        val actualType = fieldInfos(j).typ match {
+        case Left(ind) => CCStructField(structInfos(ind).name, structDefs)
+        case Right(typ) => typ
+      }
+      if(fieldInfos(j).ptrDepth > 0) CCHeapPointer(heap, actualType)
+      else actualType})}
+    structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
 
   val heapTerm = heap.HeapSort.newConstant("@h")
@@ -862,9 +894,6 @@ class CCReader private (prog : Program,
         case _ =>
           // nothing
       }
-    if(structDecs nonEmpty) throw new TranslationException(
-      "Some globally declared structs were never defined: " +
-        structDecs.mkString(", "))
 
     // prevent time variables and heap variable from being initialised twice
     globalVars.inits ++= (globalVarSymex.getValues drop
@@ -1066,14 +1095,9 @@ class CCReader private (prog : Program,
         typ match {
           case structSpec : Tstruct =>
             val structName = getStructName(structSpec)
-            if (structSpec.struct_or_union_spec_.isInstanceOf[TagType]) {
-              if (!structIsDeclared(structName))
-                structDecs += structName
-            }
-            else {
-              collectStructInfo(structSpec)
-              if(structDecs contains structName) structDecs -= structName
-            }
+            if (structSpec.struct_or_union_spec_.isInstanceOf[TagType])
+              structInfos += StructInfo(structName, List())
+            else collectStructInfo(structSpec)
           case _ =>
         }
       }
@@ -1178,15 +1202,10 @@ class CCReader private (prog : Program,
             val (actualC, actualType) = {
               if (declarator.isInstanceOf[BeginPointer] &&
                   !initValue.typ.isInstanceOf[CCStackPointer]) {
-                val newTyp = if (initValue.typ.isInstanceOf[CCHeapPointer] ||
-                  initValue.typ.isInstanceOf[CCDeclarationOnlyPointer]){
-                  initValue.typ match {
-                    case t: CCHeapPointer => t
-                    case t: CCDeclarationOnlyPointer => getHeapPointer(t)
-                    case _ => throw new TranslationException(
-                      "Not possible to reach, added to suppress warnings.")
-                  }
-                } else CCHeapPointer(heap, typ)
+                val newTyp =
+                  if (initValue.typ.isInstanceOf[CCHeapPointer])
+                    initValue.typ
+                  else CCHeapPointer(heap, typ)
                 (newTyp newConstant getName(declarator), newTyp)
               }
               else if (typ.isInstanceOf[CCClock.type]) (c, typ)
@@ -1272,16 +1291,7 @@ class CCReader private (prog : Program,
             TranslationException("Storage and SpecProp not implemented yet")
       }
       typ match {
-        case structSpec : Tstruct =>
-          val structName = getStructName(structSpec)
-          if (structSpec.struct_or_union_spec_.isInstanceOf[TagType]) {
-            if (!structIsDeclared(structName))
-              structDecs += structName
-          }
-          else {
-            /*collectStructInfo(structSpec)
-            if(structDecs contains structName) structDecs -= structName*/
-          }
+        case _ : Tstruct => // do nothing, structs were previously collected
         case enumDec : Tenum => buildEnumType(enumDec)
         case _ => throw new
             TranslationException("NoDeclarator only for structs or enums!")
@@ -1423,13 +1433,14 @@ class CCReader private (prog : Program,
 
   private def getStructName(spec: Tstruct) : String =
     spec.struct_or_union_spec_ match {
-      case _: Unique => ""
+      case u : Unique => uniqueStructs.get(u) match {
+        case Some(name) => name
+        case None => throw new TranslationException("Unique struct was not" +
+          " found!")
+      }
       case tagged: Tag => tagged.cident_
       case tagged: TagType => tagged.cident_
     }
-
-  private def structIsDeclared(structName: String) =
-    (structInfos contains structName) || (structDecs contains structName)
 
   private def collectStructInfo(spec: Tstruct) : Unit = {
     spec.struct_or_union_spec_ match {
@@ -1447,23 +1458,39 @@ class CCReader private (prog : Program,
 
     val fields = spec.struct_or_union_spec_ match {
       case dec: Tag => dec.liststruct_dec_
-      case dec: Unique => dec.liststruct_dec_
+      case dec: Unique =>
+        uniqueStructs += ((dec, structName))
+        dec.liststruct_dec_
       case _ => throw new TranslationException("struct can only be built" +
         "with Unique or Tag types!")
     }
 
-    val fieldList : IndexedSeq[(String, CCType)] = (for (field <- fields) yield {
-      val fieldType = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
-        case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
+    val fieldList : IndexedSeq[FieldInfo] = (for (field <- fields) yield {
+      val fieldType : Either[Integer, CCType] = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
+        case t : Tstruct =>
+          val typeName = t.struct_or_union_spec_ match {
+            case _ : Unique =>
+              val name = getAnonStructName
+              collectStructInfo(t, name) // need to collect the struct info now
+              //uniqueStructs += ((t, name))
+              name
+            case _ => getStructName(t)
+          }
+          structInfos.indexWhere(s => s.name == typeName) match {
+            case -1 =>
+              structInfos += StructInfo(typeName, List())
+              Left(structInfos.size - 1)
+            case i => Left(i)
+          }
+          // todo: get pointer depth
+        /*case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
           (getStructName(t) == structName || structIsDeclared(getStructName(t))) &&
-          field.asInstanceOf[Structen].liststruct_declarator_(0).asInstanceOf[Decl].declarator_.isInstanceOf[BeginPointer]=>
+          field.asInstanceOf[Structen].liststruct_declarator_(0).asInstanceOf[Decl].declarator_.isInstanceOf[BeginPointer] =>
           CCDeclarationOnlyPointer(getStructName(t))
         //todo: some error handling here?
         case t : Tstruct if structInfos contains getStructName(t) =>
-          getType(field)
-        case t : Tstruct => throw new TranslationException("structs with other struct " +
-          "fields are not supported yet.")
-        case _ => getType(field)
+          getType(field)*/
+        case _ => Right(getType(field))
       }
       val declarators = field.asInstanceOf[Structen].liststruct_declarator_
 
@@ -1471,13 +1498,18 @@ class CCReader private (prog : Program,
         decl match {
           case decl: Decl =>
             val fieldName = getName(decl.declarator_)
-            val realFieldType: CCType = decl.declarator_ match {
+            val ptrDepth = decl.declarator_ match {
+              case _ : BeginPointer => 1 //todo:heap find out actual depth
+              case _ => 0
+            }
+            /*val realFieldType: CCType = decl.declarator_ match {
               case _ : BeginPointer
                 if !fieldType.isInstanceOf[CCDeclarationOnlyPointer] =>
                 CCHeapPointer(heap, fieldType) //todo:heap
               case _ => fieldType // todo: does this work for multiple lvl ptrs?
-            }
-            (fieldName, realFieldType)
+            }*/
+            FieldInfo(fieldName, fieldType, ptrDepth) // todo: deal with pointer fields
+            //(fieldName, realFieldType)
           case _ => throw new TranslationException(
             "Bit fields in structs are not supported yet.")
         }
@@ -1488,14 +1520,15 @@ class CCReader private (prog : Program,
       for((fieldName, fieldType) <- fieldList)
         yield (fieldName, ADT.OtherSort(fieldType.toSort))*/
 
-    structInfos += ((structName, fieldList))
-    /*val structADT = //todo:heap remove
-      new ADT(List(structName),
-        List((structName, ADT.CtorSignature(ADTFieldList, ADT.ADTSort(0)))))
-
-    val newStruct = CCStruct(structADT, structName, fieldList)
-    structDefs += (structName -> newStruct)
-    newStruct*/
+    structInfos.indexWhere(s => s.name == structName) match {
+      case -1 => structInfos += StructInfo(structName, fieldList)
+      case i  =>
+        if (structInfos(i).fieldInfos.nonEmpty) throw new TranslationException(
+          "Struct name " + structName + " is used in more than one location, " +
+            "this is currently not supported. As a workaround, please make " +
+            "sure that all structs have unique names (even shadowed ones).")
+        structInfos(i) = StructInfo(structName, fieldList)
+    }
   }
   private def getInitsStack(init: Initializer, s: Symex): Stack[ITerm] = {
     val initStack = new Stack[ITerm]
@@ -1756,12 +1789,6 @@ class CCReader private (prog : Program,
       //val ptrInd = lookupVar(ptrName)
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
-        case typ : CCDeclarationOnlyPointer => //getHeapPointer(typ)
-          sortGetterMap.find(tuple => tuple._1.name == typ.name) match {
-            case None => throw new TranslationException("Cannot find sort for" +
-              "pointer!")
-            case Some(tuple) => (tuple._2, structDefs(typ.name))
-          }
         case _ => throw new TranslationException(
           "Can only pull from heap pointers! (" + ptrExpr + ")")
       }
@@ -1779,7 +1806,6 @@ class CCReader private (prog : Program,
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
     }
     private def heapWriteADT(lhs : IFunApp, rhs : CCExpr) = {
-      assume(isHeapObjectGetter(lhs.args.head)) // todo: remove after impl.
       val newHeap = heap.writeADT(lhs, rhs.toTerm)
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
     }
@@ -2489,7 +2515,7 @@ class CCReader private (prog : Program,
               case fieldFun: IFunApp => // an ADT
                 val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
                 val rootInd = lookupVar(rootTerm.name)
-                val structType = getValue(rootInd, false).asInstanceOf[CCStruct]
+                val structType = getValue(rootInd, false).typ.asInstanceOf[CCStruct]
                 (rootInd, structType.getFieldAddress(fieldNames))
               case _ => (values.indexWhere(v => v == topVal), Nil)
             }
@@ -2500,7 +2526,7 @@ class CCReader private (prog : Program,
             val v = popVal
             v.typ match { // todo: type checking?
               case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
-              case _ : CCHeapPointer | _ : CCDeclarationOnlyPointer =>
+              case   _ : CCHeapPointer =>
                 if(evaluatingLhs) pushVal(v)
                 else pushVal(heapPull(v))
               case _ => throw new TranslationException("Cannot dereference " +
@@ -2607,7 +2633,6 @@ class CCReader private (prog : Program,
         evaluatingLhs = evaluatingLhs_pre
         val fieldName = exp.cident_
         subexpr.typ match {
-
           case structType : CCStruct => { // todo a better way
             if(!structType.contains(fieldName))
               throw new TranslationException(fieldName + " is not a member of "
@@ -2635,34 +2660,24 @@ class CCReader private (prog : Program,
         val fieldName = exp.cident_
         val term = subexpr.typ match {
           case ptrType : CCStackPointer => getPointedTerm(ptrType)
-          case _ : CCHeapPointer => { //todo: error here if field is null
+          case _ : CCHeapPointer =>  //todo: error here if field is null
             heapPull(subexpr)
-          }
-          case declPtr : CCDeclarationOnlyPointer =>
-            heapPull(subexpr)
-            //val heapPtr = getHeapPointer (declPtr)
-            //Heap.pull(CCTerm(subexpr.toTerm, heapPtr))
           case _ => throw new TranslationException(
             "Trying to access field '->" + fieldName + "' of non pointer.")
         }
-        term.typ match {
-          case structType : CCStruct => {
-            if(!structType.contains(fieldName))
-              throw new TranslationException(fieldName + " is not a member of "
-                + structType + "!")
-            val ind = structType.getFieldIndex(fieldName)
-            val fieldType = structType.getFieldType(ind) /*match {
-              case declPtr : CCDeclarationOnlyPointer if !evaluatingLhs =>
-                getHeapPointer (declPtr)
-              case typ => typ
-            }*/
-            val sel = structType.getADTSelector(ind)
-            pushVal(CCTerm(sel(term.toTerm), fieldType))
-          }
-          case typ =>
-            throw new TranslationException("Epoint is currently " +
-              "only implemented for structs, not " + typ)
+        val structType = term.typ match {
+          case typ : CCStruct => typ
+          case CCStructField(name, structs) => structs(name)
+          case typ => throw new TranslationException("Epoint is currently " +
+            "only implemented for structs, not " + typ)
         }
+        if(!structType.contains(fieldName))
+          throw new TranslationException(fieldName + " is not a member of "
+            + structType + "!")
+        val ind = structType.getFieldIndex(fieldName)
+        val fieldType = structType.getFieldType(ind)
+        val sel = structType.getADTSelector(ind)
+        pushVal(CCTerm(sel(term.toTerm), fieldType))
       }
 
       case _ : Epostinc | _ : Epostdec=>
