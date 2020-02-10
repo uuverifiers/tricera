@@ -258,6 +258,7 @@ object CCReader {
           fieldType match {
             case CCStructField(name,structs) => structs(name).getZeroInit
             case s : CCStruct => s.getZeroInit
+            case CCHeapPointer(h, _) => h.nullAddr()
             case _ => Int2ITerm(0)
           }
       ctor(const: _*)
@@ -275,21 +276,12 @@ object CCReader {
             case CCStructField(name,structs) =>
               structs(name).getInitialized(values)
             case s : CCStruct => s.getInitialized(values)
+            case CCHeapPointer(h, _) =>
+              if (values.isEmpty) h.nullAddr() else values.pop()
             case _ => if (values.isEmpty) Int2ITerm(0) else values.pop()
           }
       ctor(const: _*)
     }
-  }
-
-  /**
-   * Type for enums that are encoded as an ADT
-   */
-  private case class CCADTEnum(adt: ADT, name: String,
-                               enumerators: Seq[String])
-    extends CCType{
-    override def toString : String =
-      "enum-adt " + name + ": (" + enumerators.mkString + ")"
-    def shortName = name
   }
 
   /**
@@ -384,7 +376,6 @@ class CCReader private (prog : Program,
       case CCHeapPointer(heap, _)=> heap.AddressSort
       case CCStruct(ctor, _)     => ctor.resSort // todo: heap
       case CCStructField(n, s)   => s(n).ctor.resSort
-      case CCADTEnum(adt, _, _)  => adt.sorts.head
       case CCIntEnum(_, _)       => type2Sort(CCInt)
       case CCDuration            => Sort.Nat
       case CCClock               => Sort.Integer
@@ -427,13 +418,9 @@ class CCReader private (prog : Program,
 
     def toSort: Sort = type2Sort(typ)
 
-    def rangePred(t : ITerm) : IFormula =
-      // todo: is this actually necessary?
-      true
-      //toSort membershipConstraint t
+    def rangePred(t : ITerm) : IFormula = toSort membershipConstraint t
 
-    def newConstant(name : String) : ConstantTerm =
-      toSort newConstant name
+    def newConstant(name : String) : ConstantTerm = toSort newConstant name
 
     def cast(t : ITerm) : ITerm = toSort match {
       case s : ModSort => cast2Sort(s, t)
@@ -760,6 +747,7 @@ class CCReader private (prog : Program,
           case t : ParaThread => t.compound_stm_
         }
         collectStructDefsFromComp(comp)
+      case _ =>
     }
 
   if(structInfos.exists(s => s.fieldInfos isEmpty))
@@ -1061,29 +1049,40 @@ structDefs += ((structInfos(i).name, structFieldList)) */
   private def collectStructDefs(dec : Dec) : Unit = {
     dec match {
       case decl : Declarators => {
-        val ind = if (isTypeDef(decl.listdeclaration_specifier_)) 1 else 0
-        val typ = decl.listdeclaration_specifier_(ind) match {
-          case spec: Type => spec.type_specifier_
-          case _ => throw new
-              TranslationException("Storage and SpecProp not implemented yet")
+        val typ = decl.listdeclaration_specifier_.find(d => d.isInstanceOf[Type]) match {
+          case Some(t) => t.asInstanceOf[Type].type_specifier_
+          case None => throw new
+              TranslationException("Could not determine type for " + decl)
         }
         typ match {
           case structDec : Tstruct =>
             structDec.struct_or_union_spec_ match {
               case _: Unique =>
-                for (initDecl <- decl.listinit_declarator_) {
-                  val declarator = initDecl match {
-                    case initDecl: OnlyDecl     => initDecl.declarator_
-                    case initDecl: HintDecl     => initDecl.declarator_
-                    case initDecl: InitDecl     => initDecl.declarator_
-                    case initDecl: HintInitDecl => initDecl.declarator_
-                  }
-                  collectStructInfo(structDec, //not actually unique
-                    getName(declarator)) //use typedef name
+                val declarator = decl.listinit_declarator_.head match {
+                  case initDecl: OnlyDecl     => initDecl.declarator_
+                  case initDecl: HintDecl     => initDecl.declarator_
+                  case initDecl: InitDecl     => initDecl.declarator_
+                  case initDecl: HintInitDecl => initDecl.declarator_
                 }
+                if (isTypeDef(decl.listdeclaration_specifier_))
+                  collectStructInfo(structDec, getName(declarator))
+                else collectStructInfo(structDec)
               case _ => collectStructInfo(structDec) // use X in "struct X"
             }
-          case _ =>
+          case enumDec : Tenum =>
+            enumDec.enum_specifier_ match {
+              case dec : EnumDec =>
+                for (initDecl <- decl.listinit_declarator_) {
+                  val declarator = initDecl match {
+                    case initDecl: OnlyDecl => initDecl.declarator_
+                    case initDecl: HintDecl => initDecl.declarator_
+                  }
+                  buildEnumType(dec.listenumerator_,
+                    getName(declarator)) //use typedef name
+                }
+              case _ => buildEnumType(enumDec) // use X in "enum X"
+            }
+          case _ => // do nothing
         }
       }
       case nodecl : NoDeclarator => {
@@ -1098,6 +1097,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             if (structSpec.struct_or_union_spec_.isInstanceOf[TagType])
               structInfos += StructInfo(structName, List())
             else collectStructInfo(structSpec)
+          case enumDec : Tenum => buildEnumType(enumDec)
           case _ =>
         }
       }
@@ -1247,56 +1247,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }
       }
     }
-    case decl : Declarators => { // a typedef
-      val typ = decl.listdeclaration_specifier_(1) match {
-        case spec: Type => spec.type_specifier_
-        case _ => throw new
-            TranslationException("Storage and SpecProp not implemented yet")
-      }
-
-      typ match {
-        case structDec : Tstruct =>
-          structDec.struct_or_union_spec_ match {
-            case _: Unique =>
-              for (initDecl <- decl.listinit_declarator_) {
-                val declarator = initDecl match {
-                  case initDecl: OnlyDecl => initDecl.declarator_
-                  case initDecl: HintDecl => initDecl.declarator_
-                }
-                /*collectStructInfo(structDec, //not actually unique
-                  getName(declarator)) //use typedef name*/
-              }
-            case _ => //collectStructInfo(structDec) // use X in "struct X"
-          }
-        case enumDec : Tenum =>
-          enumDec.enum_specifier_ match {
-            case dec : EnumDec =>
-              for (initDecl <- decl.listinit_declarator_) {
-                val declarator = initDecl match {
-                  case initDecl: OnlyDecl => initDecl.declarator_
-                  case initDecl: HintDecl => initDecl.declarator_
-                }
-                buildEnumType(dec.listenumerator_,
-                              getName(declarator)) //use typedef name
-              }
-            case _ => buildEnumType(enumDec) // use X in "enum X"
-          }
-        case _ => // nothing required, handled by replacing lexer
-      }
-    }
-    case nodecl : NoDeclarator => {
-      val typ = nodecl.listdeclaration_specifier_(0) match {
-        case spec: Type => spec.type_specifier_
-        case _ => throw new
-            TranslationException("Storage and SpecProp not implemented yet")
-      }
-      typ match {
-        case _ : Tstruct => // do nothing, structs were previously collected
-        case enumDec : Tenum => buildEnumType(enumDec)
-        case _ => throw new
-            TranslationException("NoDeclarator only for structs or enums!")
-      }
-    }
+    case _ => // Decl and NoDecl handled in first pass
   }
 
   private def useContract(hints : Seq[Abs_hint]) : Boolean =
@@ -1554,10 +1505,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private def getEnumType(spec: Tenum) : CCType =
     spec.enum_specifier_ match {
-      case dec : EnumDec =>
-        buildEnumType(dec.listenumerator_, getAnonEnumName)
-      case named : EnumName =>
-        buildEnumType(named.listenumerator_, named.cident_)
       case vared : EnumVar =>
         (enumDefs get vared.cident_) match {
           case Some(t) => t
@@ -1565,20 +1512,22 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             throw new TranslationException(
               "enum " + vared.cident_ + " is not defined")
         }
+      case _ => throw new TranslationException(
+        "enum " + spec.enum_specifier_ + " is not defined")
     }
 
-  private def buildEnumType(spec: Tenum) : CCType = {
+  private def buildEnumType(spec: Tenum) : Unit = {
     spec.enum_specifier_ match {
       case dec : EnumDec =>
         buildEnumType(dec.listenumerator_, getAnonEnumName)
       case named : EnumName =>
         buildEnumType(named.listenumerator_, named.cident_)
-      case _ => throw new TranslationException("enum not completely specified")
+      case _ =>
     }
   }
 
   private def buildEnumType (specs: Seq[Enumerator],
-                             enumName: String): CCType = {
+                             enumName: String) : Unit = {
     if (enumDefs contains enumName)
       throw new TranslationException(
         "enum " + enumName + " is already defined")
@@ -1589,30 +1538,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           "enumerator " + name + " already defined")
       enumeratorDefs.put(name, t)
     }
-
-/*    if (specs forall (_.isInstanceOf[Plain])) {
-      // encode the enum as an ADT
-
-      import ADT._
-      val enumSig = CtorSignature(List(), ADTSort(0))
-
-      val enumerators = for (s <- specs) yield s match {
-        case s : Plain => s.cident_
-      }
-      val ctors = for (s <- enumerators) yield (s, enumSig)
-
-      val adt = new ADT (List("enum" + enumName), ctors)
-      val newEnum = CCADTEnum(adt, enumName, enumerators)
-      enumDefs.put(enumName, newEnum)
-
-      for ((n, f) <- enumerators.iterator zip adt.constructors.iterator)
-        addEnumerator(n, CCTerm(f(), newEnum))
-
-      newEnum
-
-    } else */ {
+    {
       // map the enumerators to integers directly
-
       var nextInd = IdealInt.ZERO
       val enumerators = for (s <- specs) yield s match {
         case s : Plain => {
@@ -1637,9 +1564,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       for ((n, v) <- enumerators)
         addEnumerator(n, CCTerm(v, newEnum))
-
-      newEnum
-
     }
   }
 
@@ -1795,14 +1719,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       CCTerm(objectGetter(heap.read(heapTerm, ptrExpr.toTerm)), typ)
     }
     private def heapAlloc(value : CCTerm) : CCTerm = {
-      val objectWrapper = sortWrapperMap(value.typ.toSort)
-      val newAlloc = heap.alloc(heapTerm, objectWrapper(value.t))
+      val objTerm = value.typ.toSort match {
+        case heap.AddressSort => value.toTerm
+        case otherSort => sortWrapperMap(otherSort)(value.toTerm)
+      }
+      val newAlloc = heap.alloc(heapTerm, objTerm)
       setValue(heapTerm.name, CCTerm(heap.newHeap(newAlloc), CCHeap(heap)))
-      CCTerm(heap.newAddr(newAlloc), CCInt) // todo: not CCInt
+      CCTerm(heap.newAddr(newAlloc), CCHeapPointer(heap, value.typ))
     }
     private def heapWrite(address : ITerm, value : CCExpr) : Unit = {
-      val objectWrapper = sortWrapperMap(value.typ.toSort)
-      val newHeap = heap.write(heapTerm, address, objectWrapper(value.toTerm))
+      val objTerm = value.typ.toSort match {
+        case heap.AddressSort => value.toTerm
+        case otherSort => sortWrapperMap(otherSort)(value.toTerm)
+      }
+      val newHeap = heap.write(heapTerm, address, objTerm)
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
     }
     private def heapWriteADT(lhs : IFunApp, rhs : CCExpr) = {
@@ -2105,8 +2035,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     (printer print exp))
     }
 
-    private def isHeapPointer(exp : Exp) =
-      getVarType(asLValue(exp)).isInstanceOf[CCHeapPointer]
+    private def isHeapPointer(exp : Exp) = {
+      val varType = getVarType(asLValue(exp))
+      varType match {
+        case CCHeapPointer(_,_) => true
+        case CCStackPointer(_, typ, _) => typ.isInstanceOf[CCHeapPointer]
+        case _ => false
+      }
+    }
 
     private def isStruct(exp : Exp) : Boolean =
       exp match {
@@ -2271,22 +2207,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = evalLhs(exp.exp_1) //then evaluate lhs and get it
-
-        /*val (heapAlloc : CCHeapAlloc, actualLhsVal) = lhsVal.typ match {
-          case ptr: CCHeapPointer => (ptr.heapAlloc, lhsVal)
-          case _ : CCDeclarationOnlyPointer =>
-            val v =  getActualLhsVal(lhsVal)
-            v.typ match{
-              case hp : CCHeapPointer => (hp.heapAlloc, v)
-              case dp : CCDeclarationOnlyPointer =>
-                (getHeapPointer(dp).heapAlloc, v)
-              case pulled : CCPulledVar => (pulled.heapAlloc, v)
-              case _ => throw new TranslationException(lhsVal +
-                " is not a heap pointer.\n" + v)
-            }
-          case _ => val rootLhs =  getValue(asLValue(exp.exp_1))
-            (rootLhs.typ.asInstanceOf[CCHeapPointer].heapAlloc, rootLhs)
-        }*/
 
         val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
         if (updatingPointedValue) {

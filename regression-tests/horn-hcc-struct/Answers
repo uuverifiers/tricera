@@ -13,7 +13,7 @@ assign-exp-eval-order.hcc
 SAFE
 
 assign-illegal.hcc
-(error "Cannot assign struct S1: ((x,int)) to struct S2: ((x,int))!")
+(error "Cannot assign struct S1: ((x/1p,int)) to struct S2: ((x/1p,int))!")
 
 init.hcc
 Warning: entry function "main" not found
