@@ -37,12 +37,12 @@ Init:
                                                   |                                                  
                                                   |                                                  
                                                   V                                                  
-       main3(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
+       main3(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(1), nthAddr(0))))), nthAddr(1))       
 -----------------------------------------------------------------------------------------------------
                                                   |                                                  
                                                   |                                                  
                                                   V                                                  
-       main4(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
+       main4(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(0))))), nthAddr(1))       
 -----------------------------------------------------------------------------------------------------
                                                   |                                                  
                                                   |                                                  
@@ -149,3 +149,11 @@ Final:
 typecastSafe-001.c
 Warning: enabling heap model
 SAFE
+
+illegal-access-001.c
+Warning: enabling heap model
+(error "Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)")
+
+illegal-access-002.c
+Warning: enabling heap model
+(error "Pointer arithmetic is not allowed, and the only possible assignment value for pointers is 0 (NULL)")

@@ -783,8 +783,9 @@ class CCReader private (prog : Program,
     }).toList
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
-    List(("WrappedInt", HeapObj.CtorSignature(List(("getInt",
-      HeapObj.OtherSort(Sort.Integer))), ObjSort))) ++
+    List(
+      ("WrappedInt", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
+      ("WrappedAddr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtorArgsSort)), ObjSort))) ++
       (for ((name, signature) <- structCtorSignatures) yield {
       ("Wrapped" + name,
         HeapObj.CtorSignature(List(("get" + name, signature.result)), ObjSort))
@@ -796,16 +797,17 @@ class CCReader private (prog : Program,
       List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
     defObjCtor)
 
+  private val structCtorsOffset = 2 // WrappedInt + WrappedAddr
   val defObj = heap.ObjectADT.constructors.last
   val structCount = structInfos.size
-  val objectWrappers = heap.ObjectADT.constructors.take(structCount+1)
+  val objectWrappers = heap.ObjectADT.constructors.take(structCount+structCtorsOffset)
   val objectGetters =
-    for (sels <- heap.ObjectADT.selectors.take(structCount+1)
+    for (sels <- heap.ObjectADT.selectors.take(structCount+structCtorsOffset)
          /*if sels.nonEmpty*/) yield sels.head //todo: is nonEmpty needed?
-  val structCtors = heap.ObjectADT.constructors.slice(1+structCount,
-    1+2*structCount)
-  val structSels = heap.ObjectADT.selectors.slice(1+structCount,
-    1+2*structCount)
+  val structCtors = heap.ObjectADT.constructors.slice(structCtorsOffset+structCount,
+    structCtorsOffset+2*structCount)
+  val structSels = heap.ObjectADT.selectors.slice(structCtorsOffset+structCount,
+    structCtorsOffset+2*structCount)
 
   val objectSorts : IndexedSeq[Sort] = objectGetters.map(f => f.resSort)
   val sortGetterMap : Map[Sort, MonoSortedIFunction] =
@@ -813,7 +815,7 @@ class CCReader private (prog : Program,
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectWrappers).toMap
   val sortCtorIdMap : Map[Sort, Int] =
-    objectSorts.zip(0 until structCount+1).toMap
+    objectSorts.zip(0 until structCount+structCtorsOffset).toMap
 
   /*val structFieldList : Seq[(String, CCType)] =
   for(FieldInfo(fieldName, fieldType, ptrDepth) <-
@@ -1192,6 +1194,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             val (actualC, actualType) = {
               if (declarator.isInstanceOf[BeginPointer] &&
                   !initValue.typ.isInstanceOf[CCStackPointer]) {
+                if(initValue.typ.isInstanceOf[CCArithType] &&
+                   initValue.toTerm.asInstanceOf[IIntLit].value.intValue != 0)
+                  throw new TranslationException("Pointer arithmetic is not " +
+                    "allowed, and the only possible initialization value for " +
+                    "pointers is 0 (NULL)")
                 val newTyp = CCHeapPointer(heap, typ)
                 (newTyp newConstant getName(declarator), newTyp)
               }
@@ -1378,12 +1385,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private def getType(fields : Struct_dec) : CCType = {
     val specs =
-      for (qual <- fields.asInstanceOf[Structen].listspec_qual_.iterator;
+      (for (qual <- fields.asInstanceOf[Structen].listspec_qual_.iterator;
            if (qual.isInstanceOf[TypeSpec]))
-        yield qual.asInstanceOf[TypeSpec].type_specifier_
+        yield qual.asInstanceOf[TypeSpec].type_specifier_).toList
     specs.find(s => s.isInstanceOf[Tenum]) match {
       case Some(enum) => buildEnumType(enum.asInstanceOf[Tenum])
-      case None => getType(specs)
+      case None =>
+        getType(specs.toIterator)
     }
   }
 
@@ -2224,7 +2232,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               "different allocation sites is not supported yet.")*/
           val lhsName = asLValue(exp.exp_1)
           val actualRhsVal = rhsVal.typ match {
-            case CCInt => CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
+            case CCInt =>
+              if (rhsVal.toTerm.asInstanceOf[IIntLit].value.intValue != 0)
+                throw new TranslationException("Pointer arithmetic is not " +
+                    "allowed, and the only possible assignment value for " +
+                    "pointers is 0 (NULL)")
+              CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
             case _ => rhsVal
           }
           setValue(lhsName, actualRhsVal)
