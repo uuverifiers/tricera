@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2011-2020 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -496,7 +496,8 @@ object ParametricEncoder {
           body partition (_.pred == thatHeadPred)
 
         if ((thisBodyArgs forall (_.isInstanceOf[IConstant])) &&
-            (thisBodyArgs.toSet.size == thisBodyArgs.size)) {
+            (thisBodyArgs.toSet.size == thisBodyArgs.size) &&
+            HornClauses.allTermsSimple(thatHeadArgs)) {
           // can directly inline
 
           val replacement =
@@ -519,9 +520,11 @@ object ParametricEncoder {
                     yield replace(a).asInstanceOf[IAtom]) ::: thatBody,
                  replace(constraint) &&& thatConstraint)
         } else {
-          val (Clause(newHead, List(IAtom(_, newBodyArgs)), newConstraint), _) =
+          val (Clause(newHead, newBody, newConstraint), _) =
             refresh
-          Clause(newHead, thisBodyRem ::: thatBody,
+          val (List(IAtom(_, newBodyArgs)), newBodyRem) =
+            newBody partition (_.pred == thatHeadPred)
+          Clause(newHead, newBodyRem ::: thatBody,
                  newConstraint &&& thatConstraint &&&
                  (newBodyArgs === thatHeadArgs))
         }
