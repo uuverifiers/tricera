@@ -14,6 +14,11 @@ Init:
                                    |                                   
                                    |                                   
                                    V                                   
+  main3(newHeap(alloc(emptyHeap, Wrappednode(node(0)))), nthAddr(1))   
+-----------------------------------------------------------------------
+                                   |                                   
+                                   |                                   
+                                   V                                   
  main4(newHeap(alloc(emptyHeap, Wrappednode(node(0)))), nthAddr(1), 0) 
 -----------------------------------------------------------------------
 Final:
@@ -28,6 +33,16 @@ UNSAFE
 -----------------------------------------------------------------------------------------------------
 Init:
                                           main2(emptyHeap)                                           
+-----------------------------------------------------------------------------------------------------
+                                                  |                                                  
+                                                  |                                                  
+                                                  V                                                  
+       main3(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
+-----------------------------------------------------------------------------------------------------
+                                                  |                                                  
+                                                  |                                                  
+                                                  V                                                  
+       main4(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
 -----------------------------------------------------------------------------------------------------
                                                   |                                                  
                                                   |                                                  
@@ -50,18 +65,33 @@ mutually-referential-structs-unsafe.c
 Warning: enabling heap model
 UNSAFE
 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
-                                                                                       main2(emptyHeap)                                                                                        
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                               |                                                                                               
-                                                                                               |                                                                                               
-                                                                                               V                                                                                               
- main7(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, Wrappedparent(parent(nthAddr(2), nthAddr(3))))), Wrappedchild(child(nthAddr(1))))), Wrappedchild(child(nthAddr(0))))), nthAddr(1)) 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                             main2(emptyHeap)                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                     |                                                                                                     
+                                                                                                     |                                                                                                     
+                                                                                                     V                                                                                                     
+                         main5(newHeap(alloc(newHeap(alloc(emptyHeap, Wrappedparent(parent(nthAddr(0), nthAddr(0))))), Wrappedchild(child(nthAddr(0))))), nthAddr(1), nthAddr(2))                          
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                     |                                                                                                     
+                                                                                                     |                                                                                                     
+                                                                                                     V                                                                                                     
+                               main4(newHeap(alloc(newHeap(alloc(emptyHeap, Wrappedparent(parent(nthAddr(2), nthAddr(0))))), Wrappedchild(child(nthAddr(0))))), nthAddr(1))                                
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                     |                                                                                                     
+                                                                                                     |                                                                                                     
+                                                                                                     V                                                                                                     
+ main8(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, Wrappedparent(parent(nthAddr(2), nthAddr(0))))), Wrappedchild(child(nthAddr(1))))), Wrappedchild(child(nthAddr(0))))), nthAddr(1), nthAddr(3)) 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                     |                                                                                                     
+                                                                                                     |                                                                                                     
+                                                                                                     V                                                                                                     
+       main7(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, Wrappedparent(parent(nthAddr(2), nthAddr(3))))), Wrappedchild(child(nthAddr(1))))), Wrappedchild(child(nthAddr(0))))), nthAddr(1))       
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, Wrappedparent(parent(nthAddr(2), nthAddr(3))))), Wrappedchild(child(nthAddr(1))))), Wrappedchild(child(nthAddr(0))))), nthAddr(1)) 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+       main7(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, Wrappedparent(parent(nthAddr(2), nthAddr(3))))), Wrappedchild(child(nthAddr(1))))), Wrappedchild(child(nthAddr(0))))), nthAddr(1))       
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 simple-struct.c
 Warning: enabling heap model
@@ -96,5 +126,26 @@ Warning: enabling heap model
 SAFE
 
 simple-arith.c
+Warning: enabling heap model
+SAFE
+
+typecastUnsafe-001.c
+Warning: enabling heap model
+UNSAFE
+
+-------------------------------------------------------------------------
+Init:
+                            main2(emptyHeap)                             
+-------------------------------------------------------------------------
+                                    |                                    
+                                    |                                    
+                                    V                                    
+ main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(1)) 
+-------------------------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(1)) 
+-------------------------------------------------------------------------
+
+typecastSafe-001.c
 Warning: enabling heap model
 SAFE

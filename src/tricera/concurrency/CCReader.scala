@@ -812,6 +812,8 @@ class CCReader private (prog : Program,
     objectSorts.zip(objectGetters).toMap
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectWrappers).toMap
+  val sortCtorIdMap : Map[Sort, Int] =
+    objectSorts.zip(0 until structCount+1).toMap
 
   /*val structFieldList : Seq[(String, CCType)] =
   for(FieldInfo(fieldName, fieldType, ptrDepth) <-
@@ -1190,10 +1192,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             val (actualC, actualType) = {
               if (declarator.isInstanceOf[BeginPointer] &&
                   !initValue.typ.isInstanceOf[CCStackPointer]) {
-                val newTyp =
-                  if (initValue.typ.isInstanceOf[CCHeapPointer])
-                    initValue.typ
-                  else CCHeapPointer(heap, typ)
+                val newTyp = CCHeapPointer(heap, typ)
                 (newTyp newConstant getName(declarator), newTyp)
               }
               else if (typ.isInstanceOf[CCClock.type]) (c, typ)
@@ -1712,7 +1711,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
   private class Symex private (oriInitPred : Predicate,
                                values : Buffer[CCExpr]) {
     private var guard : IFormula = true
-    private var pullGuard : IFormula = true
 
     def addGuard(f : IFormula) : Unit = {
       guard = guard &&& f
@@ -1720,60 +1718,36 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         touchedGlobalState || !freeFromGlobal(f)
     }
 
-    def addPullGuard(f : IFormula) : Unit = {
-      pullGuard = pullGuard &&& f
-    }
-
     def getGuard = guard
 
-    //private def heapPush (heapAlloc : CCHeapAlloc, ptrId: ITerm, setVal: ITerm) =
-    //  assertProperty(heapAlloc.inv(ptrId, setVal))
-
     //todo:Heap get rid of this or change name
-    def heapPull(ptrExpr : CCExpr): CCTerm = {
-      //val ptrInd = lookupVar(ptrName)
+    def heapRead(ptrExpr : CCExpr) : CCTerm = {
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
         case _ => throw new TranslationException(
           "Can only pull from heap pointers! (" + ptrExpr + ")")
       }
-      CCTerm(objectGetter(heap.read(heapTerm, ptrExpr.toTerm)), typ)
+      val readObj = heap.read(heapTerm, ptrExpr.toTerm)
+      assertProperty(heap.ObjectADT.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
+      CCTerm(objectGetter(readObj), typ)
     }
     private def heapAlloc(value : CCTerm) : CCTerm = {
-      val objTerm = value.typ.toSort match {
-        case heap.AddressSort => value.toTerm
-        case otherSort => sortWrapperMap(otherSort)(value.toTerm)
-      }
+      val objTerm = sortWrapperMap(value.typ.toSort)(value.toTerm)
       val newAlloc = heap.alloc(heapTerm, objTerm)
       setValue(heapTerm.name, CCTerm(heap.newHeap(newAlloc), CCHeap(heap)))
       CCTerm(heap.newAddr(newAlloc), CCHeapPointer(heap, value.typ))
     }
     private def heapWrite(address : ITerm, value : CCExpr) : Unit = {
-      val objTerm = value.typ.toSort match {
-        case heap.AddressSort => value.toTerm
-        case otherSort => sortWrapperMap(otherSort)(value.toTerm)
-      }
+      val objTerm = sortWrapperMap(value.typ.toSort)(value.toTerm)
+      val readObj = heap.read(heapTerm, address)
+      assertProperty(heap.ObjectADT.hasCtor(readObj, sortCtorIdMap(value.typ.toSort)))
       val newHeap = heap.write(heapTerm, address, objTerm)
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
     }
     private def heapWriteADT(lhs : IFunApp, rhs : CCExpr) = {
-      val newHeap = heap.writeADT(lhs, rhs.toTerm)
+      val newHeap = heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
     }
-    private def isHeapObjectGetter(t : ITerm) : Boolean = {
-      t match {
-        case f : IFunApp => objectGetters contains f.fun
-        case _ => false
-      }
-    }
-
-    //private def heapPull (ptrExpr : CCExpr) = {
-      //CCTerm(getInt(heap.read(heapTerm, ptrExpr.toTerm)), CCInt)
-      //val (pulledVar, pulledTerm) = Heap.pull(ptrExpr)
-      //addPullGuard(pulledVar rangePred pulledTerm.t)
-      //addPullGuard(pulledVar.heapAlloc.inv(ptrExpr.toTerm, pulledTerm.t))
-      //pulledTerm
-    //}
 
     private var initAtom =
       if (oriInitPred == null)
@@ -1784,7 +1758,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     private val savedStates = new Stack[(IAtom, Seq[CCExpr], IFormula, /*IFormula,*/ Boolean)]
     def saveState =
-      savedStates push ((initAtom, values.toList, guard, /*pullGuard,*/ touchedGlobalState))
+      savedStates push ((initAtom, values.toList, guard, touchedGlobalState))
     def restoreState = {
       val (oldAtom, oldValues, oldGuard, /*oldPullGuard,*/ oldTouched) = savedStates.pop
       initAtom = oldAtom
@@ -1792,7 +1766,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       oldValues copyToBuffer values
       localVars.pop(localVars.size - values.size + globalVars.size)
       guard = oldGuard
-      //pullGuard = oldPullGuard
       touchedGlobalState = oldTouched
     }
 
@@ -1870,7 +1843,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       import HornClauses._
       if (initAtom == null)
         throw new TranslationException("too complicated initialiser")
-      asAtom(pred) :- (initAtom &&& guard &&& pullGuard)
+      asAtom(pred) :- (initAtom &&& guard)
     }
 
     def outputClause(pred : Predicate,
@@ -1884,7 +1857,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     def outputClause(headAtom : IAtom) : Unit = {
       import HornClauses._
-      val c = headAtom :- (initAtom &&& guard &&& pullGuard)
+      val c = headAtom :- (initAtom &&& guard)
       if (!c.hasUnsatConstraint)
         output(c)
     }
@@ -1892,10 +1865,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     def resetFields(pred : Predicate) : Unit = {
       initAtom = atom(pred, allFormalVars)
       guard = true
-      pullGuard = true
       touchedGlobalState = false
       assignedToStruct = false
-     // Heap.pulledVars.clear
       for ((e, i) <- allFormalExprs.iterator.zipWithIndex)
         values(i) = e
     }
@@ -1912,7 +1883,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     def assertProperty(property : IFormula) : Unit = {
       import HornClauses._
-      assertionClauses += (property :- (initAtom, guard &&& pullGuard))
+      assertionClauses += (property :- (initAtom &&& guard))
     }
 
     def addValue(t : CCExpr) = {
@@ -2469,7 +2440,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
               case   _ : CCHeapPointer =>
                 if(evaluatingLhs) pushVal(v)
-                else pushVal(heapPull(v))
+                else pushVal(heapRead(v))
               case _ => throw new TranslationException("Cannot dereference " +
                   "non-pointer: " + v.typ + " " + v.toTerm)
             }
@@ -2606,7 +2577,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val term = subexpr.typ match {
           case ptrType : CCStackPointer => getPointedTerm(ptrType)
           case _ : CCHeapPointer =>  //todo: error here if field is null
-            heapPull(subexpr)
+            heapRead(subexpr)
           case _ => throw new TranslationException(
             "Trying to access field '->" + fieldName + "' of non pointer.")
         }
@@ -2827,6 +2798,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           import IExpression._
           CCTerm(GTU * t.toTerm, CCDuration)
         }
+        // newType is actually heap pointer
+        case (oldType : CCHeapPointer, newType : CCStackPointer) =>
+          newType.typ cast t
         case _ =>
           throw new TranslationException(
             "do not know how to convert " + t + " to " + newType)
