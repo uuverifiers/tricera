@@ -97,6 +97,7 @@ object CCReader {
 
   class ParseException(msg : String) extends Exception(msg)
   class TranslationException(msg : String) extends Exception(msg)
+  object UndefinedEnumException extends Exception
   object NeedsTimeException extends Exception
   object NeedsHeapModelException extends Exception
 
@@ -772,9 +773,9 @@ class CCReader private (prog : Program,
         for(FieldInfo(fieldName, fieldType, ptrDepth) <-
               structInfos(i).fieldInfos) yield
           (fieldName,
-            if (ptrDepth > 0) Heap.AddressSort
+            if (ptrDepth > 0) Heap.AddressCtorArgsSort
             else { fieldType match {
-              case Left(ind) => HeapObj.ADTSort(ind + 1) //todo: handle address type too!!
+              case Left(ind) => HeapObj.ADTSort(ind + 1)
               case Right(typ) => HeapObj.OtherSort(typ.toSort)
             }
           })
@@ -1069,19 +1070,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 else collectStructInfo(structDec)
               case _ => collectStructInfo(structDec) // use X in "struct X"
             }
-          case enumDec : Tenum =>
-            enumDec.enum_specifier_ match {
-              case dec : EnumDec =>
-                for (initDecl <- decl.listinit_declarator_) {
-                  val declarator = initDecl match {
-                    case initDecl: OnlyDecl => initDecl.declarator_
-                    case initDecl: HintDecl => initDecl.declarator_
-                  }
-                  buildEnumType(dec.listenumerator_,
-                    getName(declarator)) //use typedef name
-                }
-              case _ => buildEnumType(enumDec) // use X in "enum X"
-            }
           case _ => // do nothing
         }
       }
@@ -1247,7 +1235,32 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }
       }
     }
-    case _ => // Decl and NoDecl handled in first pass
+    case decl : Declarators => { // a typedef
+      val typ = decl.listdeclaration_specifier_(1) match {
+        case spec: Type => spec.type_specifier_
+        case _ => throw new
+            TranslationException("Storage and SpecProp not implemented yet")
+      }
+
+      typ match {
+        case enumDec : Tenum =>
+          enumDec.enum_specifier_ match {
+            case dec : EnumDec =>
+              for (initDecl <- decl.listinit_declarator_) {
+                val declarator = initDecl match {
+                  case initDecl: OnlyDecl => initDecl.declarator_
+                  case initDecl: HintDecl => initDecl.declarator_
+                }
+                buildEnumType(dec.listenumerator_,
+                  getName(declarator)) //use typedef name
+              }
+            case _ => buildEnumType(enumDec) // use X in "enum X"
+          }
+        case _ => // nothing required, handled by replacing lexer
+          // structs were handled in first pass
+      }
+    }
+    case _ =>
   }
 
   private def useContract(hints : Seq[Abs_hint]) : Boolean =
@@ -1365,9 +1378,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
   }
 
   private def getType(fields : Struct_dec) : CCType = {
-    getType(for (qual <- fields.asInstanceOf[Structen].listspec_qual_.iterator;
-                 if (qual.isInstanceOf[TypeSpec]))
-      yield qual.asInstanceOf[TypeSpec].type_specifier_)
+    val specs =
+      for (qual <- fields.asInstanceOf[Structen].listspec_qual_.iterator;
+           if (qual.isInstanceOf[TypeSpec]))
+        yield qual.asInstanceOf[TypeSpec].type_specifier_
+    specs.find(s => s.isInstanceOf[Tenum]) match {
+      case Some(enum) => buildEnumType(enum.asInstanceOf[Tenum])
+      case None => getType(specs)
+    }
   }
 
   private var anonCount = 0
@@ -1505,6 +1523,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private def getEnumType(spec: Tenum) : CCType =
     spec.enum_specifier_ match {
+      case dec : EnumDec =>
+        buildEnumType(dec.listenumerator_, getAnonEnumName)
+      case named : EnumName =>
+        buildEnumType(named.listenumerator_, named.cident_)
       case vared : EnumVar =>
         (enumDefs get vared.cident_) match {
           case Some(t) => t
@@ -1512,22 +1534,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             throw new TranslationException(
               "enum " + vared.cident_ + " is not defined")
         }
-      case _ => throw new TranslationException(
-        "enum " + spec.enum_specifier_ + " is not defined")
     }
 
-  private def buildEnumType(spec: Tenum) : Unit = {
+    private def buildEnumType(spec: Tenum) : CCType = {
     spec.enum_specifier_ match {
       case dec : EnumDec =>
         buildEnumType(dec.listenumerator_, getAnonEnumName)
       case named : EnumName =>
         buildEnumType(named.listenumerator_, named.cident_)
-      case _ =>
+      case _ => CCInt
     }
   }
 
   private def buildEnumType (specs: Seq[Enumerator],
-                             enumName: String) : Unit = {
+                             enumName: String) : CCType = {
     if (enumDefs contains enumName)
       throw new TranslationException(
         "enum " + enumName + " is already defined")
@@ -1558,12 +1578,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           (s.cident_, ind)
         }
       }
-      
+
       val newEnum = CCIntEnum(enumName, enumerators)
       enumDefs.put(enumName, newEnum)
 
       for ((n, v) <- enumerators)
         addEnumerator(n, CCTerm(v, newEnum))
+      newEnum
     }
   }
 
@@ -2511,10 +2532,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               "sizeof(type).")
           }
 
-          def getNonDet(typ : CCType) =
-            new SortedConstantTerm("_nonDet", typ.toSort)
+          def getNonDet(typ : CCType) : ITerm =
+            typ match {
+              case CCHeapPointer(_,_) => heap.nullAddr()
+              case _ => new SortedConstantTerm("_nonDet", typ.toSort)
+            }
           def getZeroInit(typ : CCType) : ITerm = typ match {
             case structType : CCStruct => structType.getZeroInit
+            case CCHeapPointer(_,_) => heap.nullAddr()
             case _ => 0
           }
 
