@@ -2789,6 +2789,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         // newType is actually heap pointer
         case (oldType : CCHeapPointer, newType : CCStackPointer) =>
           newType.typ cast t
+        case (_ , CCVoid) =>  t // todo: do not do anything for casts to void?
         case _ =>
           throw new TranslationException(
             "do not know how to convert " + t + " to " + newType)
