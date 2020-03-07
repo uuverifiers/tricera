@@ -1745,14 +1745,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       setValue(heapTerm.name, CCTerm(heap.newHeap(newAlloc), CCHeap(heap)))
       CCTerm(heap.newAddr(newAlloc), CCHeapPointer(heap, value.typ))
     }
-    private def heapWrite(address : ITerm, value : CCExpr) : Unit = {
-      val objTerm = sortWrapperMap(value.typ.toSort)(value.toTerm)
-      val readObj = heap.read(heapTerm, address)
-      assertProperty(heap.ObjectADT.hasCtor(readObj, sortCtorIdMap(value.typ.toSort)))
-      val newHeap = heap.write(heapTerm, address, objTerm)
-      setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
-    }
-    private def heapWriteADT(lhs : IFunApp, rhs : CCExpr) = {
+
+    /**
+     * updates an Object on the heap, which can also be an ADT
+     * @param lhs this must be a read from the location to be updated.
+     *            e.g. getInt(read(h,a)) or an ADT selector x(getS(read(h,a)))
+     * @param rhs the term to be written to the location pointed by lhs
+     */
+    private def heapWrite(lhs : IFunApp, rhs : CCExpr) = {
       val newHeap = heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
     }
@@ -2011,6 +2011,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Eselect => asLValue(exp.exp_)
       case exp : Epoint => asLValue(exp.exp_)
       case exp : Epreop => asLValue(exp.exp_)
+      case exp : Eassign => asLValue(exp.exp_1)
       case exp =>
         throw new TranslationException(
                     "Can only handle assignments to variables, not " +
@@ -2134,7 +2135,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       if (rhs.typ.isInstanceOf[CCStruct] && (rhs.typ != lhs.typ))
         throw new TranslationException("Cannot assign " + rhs.typ +
           " to " + lhs.typ + "!")
-      lhs.toTerm match {
+
+        lhs.toTerm match {
         case fieldFun : IFunApp => // an ADT
           assignedToStruct = true
           val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
@@ -2206,30 +2208,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         evalHelp(exp.exp_2) //first evalate rhs and push
         maybeOutputClause
         val rhsVal = popVal
-        val lhsVal = evalLhs(exp.exp_1) //then evaluate lhs and get it
+        val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
 
         val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
         if (updatingPointedValue) {
-          /*heapPush(heapAlloc,actualLhsVal.typ match {
-            case pulled : CCPulledVar => pulled.ptrId
-            case _ => actualLhsVal.toTerm
-          }, getActualAssignedTerm(lhsVal, rhsVal).toTerm)*/
-          lhsVal.toTerm match {
-            case f : IFunApp =>
-              heapWriteADT(f, rhsVal)
-            case t => heapWrite(t, getActualAssignedTerm(lhsVal, rhsVal))
-          }
-
+          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
         } else {
-          /*val rhsHeapAlloc = rhsVal.typ match{
-            case hp : CCHeapPointer => hp.heapAlloc
-            case dp : CCDeclarationOnlyPointer => getHeapPointer(dp).heapAlloc
-            case _ => Heap.nullAlloc
-          }
-          if (heapAlloc != rhsHeapAlloc && heapAlloc != Heap.nullAlloc
-              && rhsHeapAlloc != Heap.nullAlloc)
-            throw new TranslationException("Assigning heap pointers with " +
-              "different allocation sites is not supported yet.")*/
           val lhsName = asLValue(exp.exp_1)
           val actualRhsVal = rhsVal.typ match {
             case CCInt =>
@@ -2254,18 +2238,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val lhsInd = lookupVar(lhsName)
         val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
         setValue(lhsInd, actualLhsTerm, isIndirection(exp.exp_1))
-
-        // todo: Below code is problematic with struct fields, as it updates the
-        // base struct's type instead of the field's. Should we create a new
-        // struct type in this case and update the already existing definition?
-        // Or we should have a way to deal with struct fields which are heap pointers
-        // without storing the actual type in the struct field.
-       /* if (topVal.typ.isInstanceOf[CCHeapPointer])
-          setVarType(lhsInd, topVal.typ)*/
       }
       case exp : Eassign => {
         evalHelp(exp.exp_1)
-        val lhsVal = topVal // todo
+        val lhsVal = topVal
         maybeOutputClause
         evalHelp(exp.exp_2)
         maybeOutputClause
@@ -2304,9 +2280,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }), lhsE.typ)
         pushVal(newVal)
 
-        setValue(lookupVar(asLValue(exp.exp_1)),
-                 getActualAssignedTerm(lhsVal, newVal),
-                 isIndirection(exp.exp_1)) // todo get rid of indirections?
+        if(isHeapPointer(exp)) {
+          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal)
+        } else {
+          setValue(lookupVar(asLValue(exp.exp_1)),
+            getActualAssignedTerm(lhsVal, newVal),
+            isIndirection(exp.exp_1)) // todo get rid of indirections?
+        }
       }
       case exp : Econdition => {
         val cond = eval(exp.exp_1).toFormula
@@ -2428,10 +2408,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val lhsVal = topVal // todo : check if necessary, maybe just use topVal?
         maybeOutputClause
         pushVal(popVal mapTerm (_ + op))
-        setValue(lookupVar(asLValue(preExp)),
-                 getActualAssignedTerm(lhsVal, topVal),
-                 isIndirection(preExp)) // todo get rid of indirections?
-
+        if(isHeapPointer(preExp)) {
+          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal)
+        } else {
+          setValue(lookupVar(asLValue(preExp)),
+            getActualAssignedTerm(lhsVal, topVal),
+            isIndirection(preExp)) // todo get rid of indirection?
+        }
       case exp : Epreop => {
         evalHelp(exp.exp_)
         exp.unary_operator_ match {
@@ -2617,9 +2600,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         evalHelp(postExp)
         val evalExp = topVal
         maybeOutputClause
-        setValue(lookupVar(asLValue(postExp)),
-                 getActualAssignedTerm(evalExp, topVal.mapTerm(_ + op)),
-                 isIndirection(postExp)) // todo get rid of indirection?
+        if(isHeapPointer(postExp)) {
+          heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], topVal.mapTerm(_ + op))
+        } else {
+          setValue(lookupVar(asLValue(postExp)),
+            getActualAssignedTerm(evalExp, topVal.mapTerm(_ + op)),
+            isIndirection(postExp)) // todo get rid of indirection?
+        }
 
       case exp : Evar => {
         val name = exp.cident_

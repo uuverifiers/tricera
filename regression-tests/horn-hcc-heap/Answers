@@ -157,3 +157,44 @@ Warning: enabling heap model
 illegal-access-002.c
 Warning: enabling heap model
 (error "Pointer arithmetic is not allowed, and the only possible assignment value for pointers is 0 (NULL)")
+
+postop.c
+Warning: enabling heap model
+SAFE
+
+postop-struct.c
+Warning: enabling heap model
+SAFE
+
+preop.c
+Warning: enabling heap model
+SAFE
+
+preop-struct.c
+Warning: enabling heap model
+SAFE
+
+opassign.c
+Warning: enabling heap model
+SAFE
+
+opassign-struct.c
+Warning: enabling heap model
+SAFE
+
+unsafe-access-001.c
+Warning: enabling heap model
+UNSAFE
+
+-------------------------------------------------------------------------
+Init:
+                            main2(emptyHeap)                             
+-------------------------------------------------------------------------
+                                    |                                    
+                                    |                                    
+                                    V                                    
+ main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(0)) 
+-------------------------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(0)) 
+-------------------------------------------------------------------------
