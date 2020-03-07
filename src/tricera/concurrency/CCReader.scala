@@ -2036,20 +2036,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     (printer print exp))
     }
 
-    private def isHeapPointer(exp : Exp) = {
-      val varType = getVarType(asLValue(exp))
-      varType match {
-        case CCHeapPointer(_,_) => true
-        case CCStackPointer(_, typ, _) => typ.isInstanceOf[CCHeapPointer]
-        case _ => false
-      }
-    }
-
-    private def isStruct(exp : Exp) : Boolean =
-      exp match {
-        case _ : Eselect | _ : Epoint => true
-        case _ => false
-      }
+    private def isHeapPointer(exp : Exp) =
+      getVarType(asLValue(exp)).isInstanceOf[CCHeapPointer]
 
     private def isIndirection(exp : Exp) : Boolean =
       exp match {
@@ -2225,7 +2213,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             case _ => rhsVal
           }
           setValue(lhsName, actualRhsVal)
-          setVarType(lookupVar(lhsName), actualRhsVal.typ)
+          setVarType(lookupVar(lhsName), actualRhsVal.typ) // todo: this looks wrong...
         }
         pushVal(rhsVal)
       }

@@ -198,3 +198,7 @@ Init:
 Final:
  main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(0)) 
 -------------------------------------------------------------------------
+
+stackptr-to-heapptr.c
+Warning: enabling heap model
+SAFE
