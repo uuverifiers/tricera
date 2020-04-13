@@ -32,6 +32,7 @@ package tricera.concurrency
 import ap.parser._
 import ap.types.MonoSortedPredicate
 import ap.util.{Combinatorics, Seqs}
+import lazabs.ast.ASTree
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement}
 import lazabs.horn.bottomup.{HornClauses, Util}
 import lazabs.horn.preprocessor.HornPreprocessor
@@ -401,6 +402,25 @@ object ParametricEncoder {
                                           .sortBy(t => (-t._1.arity, t._2))
                                           .map(_._1)).toBuffer
 
+
+          val predIncomingMap = new MHashMap[Predicate, ArrayBuffer[(Clause, Synchronisation)]]
+          val predOutgoingMap = new MHashMap[Predicate, ArrayBuffer[(Clause, Synchronisation)]]
+
+          // todo: merge with above loop?
+          for (pred <- preds.iterator) {
+            predIncomingMap += ((pred, new ArrayBuffer[(Clause, Synchronisation)]))
+            predOutgoingMap += ((pred, new ArrayBuffer[(Clause, Synchronisation)]))
+            for (clause <- clauseBuffer) {
+              clause match {
+                case c@(Clause(IAtom(`pred`, _), _, _), _) =>
+                  predIncomingMap(pred) += c
+                case c@(Clause(_, ClauseBody(List(IAtom(`pred`, _)), _), _), _) =>
+                  predOutgoingMap(pred) += c
+                case _ =>
+              }
+            }
+          }
+
           var changed = true
           while (changed) {
             changed = false
@@ -408,14 +428,8 @@ object ParametricEncoder {
             val predsIt = predsBuffer.iterator
             while (!changed && predsIt.hasNext) {
               val pred = predsIt.next
-              val incoming =
-                for (p@(Clause(IAtom(`pred`, _), _, _), _) <- clauseBuffer)
-                yield p
-
-              val outgoing =
-                for (p@(Clause(_, ClauseBody(List(IAtom(`pred`, _)), _), _), _)
-                       <- clauseBuffer)
-                yield p
+              val incoming = predIncomingMap(pred)
+              val outgoing = predOutgoingMap(pred)
 
               if (// avoid blow-up
                   (incoming.size * outgoing.size <=
@@ -447,16 +461,24 @@ object ParametricEncoder {
 
                 if (newClauses != null) {
                   predsBuffer -= pred
-                  clauseBuffer --= incoming
-                  clauseBuffer --= outgoing
-                  clauseBuffer ++= newClauses
                   changed = true
+
+                  for (c@(Clause(IAtom(p1, _), ClauseBody(List(IAtom(p2, _)), _), _), _) <- incoming ++ outgoing) {
+                    predIncomingMap(p1) -= c
+                    predOutgoingMap(p2) -= c
+                  }
+
+                  for (c@(Clause(IAtom(p1, _), ClauseBody(List(IAtom(p2, _)), _), _), _) <- newClauses) {
+                    predIncomingMap(p1) += c
+                    predOutgoingMap(p2) += c
+                  }
+
                 }
               }
             }
           }
-
-          (clauseBuffer.toList, repl)
+          ((for ((_, clauses) <- predIncomingMap) yield
+            clauses).flatten.toList, repl)
         }).toList
 
       val allPreds = allPredicates(newProcesses) + HornClauses.FALSE
