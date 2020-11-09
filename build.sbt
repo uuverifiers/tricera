@@ -27,27 +27,32 @@ lazy val ccParser = (project in file("cc-parser")).
     packageBin in Compile := baseDirectory.value / "cc-parser.jar"
   ).disablePlugins(AssemblyPlugin)
 
+// horn-concurrency dependency
+//lazy val hornConcurrency = RootProject(uri("git://github.com/zafer-esen/horn-concurrency-test.git"))
+
 // Actual project
 
 lazy val root = (project in file(".")).
-    aggregate(ccParser).
-    dependsOn(ccParser).
-    settings(commonSettings: _*).
-//
-    settings(
-      scalaSource in Compile := baseDirectory.value / "src",
-//
-      mainClass in Compile := Some("tricera.Main"),
-//
-    scalacOptions in Compile ++=
-      List("-feature",
-           "-language:implicitConversions,postfixOps,reflectiveCalls"),
-    scalacOptions += (scalaVersion map { sv => sv match {
-      case "2.11.12" => "-optimise"
-      case "2.12.8" => "-opt:_"
-    }}).value,	
+  aggregate(ccParser).
+  dependsOn(ccParser).
+ // dependsOn(hornConcurrency).
+  settings(commonSettings: _*).
 
-      resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
-    libraryDependencies += "uuverifiers" %% "eldarica" % "2.1.0"
-)
 //
+settings(
+  scalaSource in Compile := baseDirectory.value / "src",
+  //
+  mainClass in Compile := Some("tricera.Main"),
+  //
+  scalacOptions in Compile ++=
+    List("-feature",
+         "-language:implicitConversions,postfixOps,reflectiveCalls"),
+  scalacOptions += (scalaVersion map { sv => sv match {
+                                        case "2.11.12" => "-optimise"
+                                        case "2.12.8" => "-opt:_"
+                                      }}).value,
+  resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.4-heap",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "1.0"
+)
+  //

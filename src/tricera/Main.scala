@@ -102,7 +102,7 @@ object Main {
       //case "-r" :: rest => drawRTree = true; arguments(rest)
       case "-f" :: rest => absInFile = true; arguments(rest)
       case "-p" :: rest => prettyPrint = true; arguments(rest)
-      case "-pIntermediate" :: rest => printIntermediateClauseSets = true; arguments(rest)
+      case "-dumpClauses" :: rest => printIntermediateClauseSets = true; arguments(rest)
       case "-sp" :: rest => smtPrettyPrint = true; arguments(rest)
       //      case "-pnts" :: rest => ntsPrint = true; arguments(rest)
       case "-horn" :: rest => horn = true; arguments(rest)
@@ -305,9 +305,14 @@ object Main {
       return
     }
 
+    if(smtPrettyPrint) {
+      tricera.concurrency.ReaderMain.printSMTClauses(smallSystem)
+      return
+    }
+
     val result = try {
       Console.withOut(outStream) {
-        new tricera.concurrency.VerificationLoop(smallSystem).result
+        new hornconcurrency.VerificationLoop(smallSystem).result
       }
     } catch {
       case TimeoutException => {
@@ -327,7 +332,7 @@ object Main {
         println("UNSAFE")
         if (plainCEX) {
           println
-          tricera.concurrency.VerificationLoop.prettyPrint(cex)
+          hornconcurrency.VerificationLoop.prettyPrint(cex)
         }
       }
     }

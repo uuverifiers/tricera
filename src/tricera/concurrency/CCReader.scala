@@ -31,16 +31,19 @@ package tricera.concurrency
 
 import ap.basetypes.IdealInt
 import ap.parser._
-import ap.theories.{ADT, ModuloArithmetic}
+import ap.theories.{ADT/*, Heap*/, ModuloArithmetic}
+import lazabs.horn.Heap
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrentC._
 import concurrentC.Absyn._
+import hornconcurrency.ParametricEncoder
 import ParametricEncoder.SomeBackgroundAxioms
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.preprocessor.HornPreprocessor
-import lazabs.horn.heap.Heap
+import lazabs.types.HeapAddressType
+//import lazabs.horn.heap.Heap
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
@@ -371,55 +374,76 @@ class CCReader private (prog : Program,
   private implicit def toRichType(typ : CCType) = new Object {
     import ModuloArithmetic._
 
-    private def type2Sort(t : CCType) : Sort = t match {
-      case CCHeap(heap)          => heap.HeapSort
-      case CCStackPointer(_,_,_) => Sort.Integer
-      case CCHeapPointer(heap, _)=> heap.AddressSort
-      case CCStruct(ctor, _)     => ctor.resSort // todo: heap
-      case CCStructField(n, s)   => s(n).ctor.resSort
-      case CCIntEnum(_, _)       => type2Sort(CCInt)
-      case CCDuration            => Sort.Nat
-      case CCClock               => Sort.Integer
-      case typ: CCArithType => arithmeticMode match {
-        case ArithmeticMode.Mathematical => typ match {
-          case typ: CCArithType if typ.isUnsigned => Sort.Nat
-          case _ => Sort.Integer
-        }
-        case ArithmeticMode.ILP32 => typ match {
-          case CCInt => SignedBVSort(32)
-          case CCUInt => UnsignedBVSort(32)
-          case CCLong => SignedBVSort(32)
-          case CCULong => UnsignedBVSort(32)
-          case CCLongLong => SignedBVSort(64)
-          case CCULongLong => UnsignedBVSort(64)
-          case _ => Sort.Integer
-        }
-        case ArithmeticMode.LP64 => typ match {
-          case CCInt => SignedBVSort(32)
-          case CCUInt => UnsignedBVSort(32)
-          case CCLong => SignedBVSort(64)
-          case CCULong => UnsignedBVSort(64)
-          case CCLongLong => SignedBVSort(64)
-          case CCULongLong => UnsignedBVSort(64)
-          case _ => Sort.Integer
-        }
-        case ArithmeticMode.LLP64 => typ match {
-          case CCInt => SignedBVSort(32)
-          case CCUInt => UnsignedBVSort(32)
-          case CCLong => SignedBVSort(32)
-          case CCULong => UnsignedBVSort(32)
-          case CCLongLong => SignedBVSort(64)
-          case CCULongLong => UnsignedBVSort(64)
-          case _ => Sort.Integer
-        }
+    def toSort : Sort = arithmeticMode match {
+      case ArithmeticMode.Mathematical => typ match {
+        case typ: CCArithType if typ.isUnsigned => Sort.Nat
+        case CCDuration => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
+        case _ => Sort.Integer
       }
-      case CCVoid => throw new TranslationException(
-        "No sort for CCVoid!")
+      case ArithmeticMode.ILP32 => typ match {
+        case CCInt => SignedBVSort(32)
+        case CCUInt => UnsignedBVSort(32)
+        case CCLong => SignedBVSort(32)
+        case CCULong => UnsignedBVSort(32)
+        case CCLongLong => SignedBVSort(64)
+        case CCULongLong => UnsignedBVSort(64)
+        case CCDuration => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
+        case _ => Sort.Integer
+      }
+      case ArithmeticMode.LP64 => typ match {
+        case CCInt => SignedBVSort(32)
+        case CCUInt => UnsignedBVSort(32)
+        case CCLong => SignedBVSort(64)
+        case CCULong => UnsignedBVSort(64)
+        case CCLongLong => SignedBVSort(64)
+        case CCULongLong => UnsignedBVSort(64)
+        case CCDuration => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
+        case _ => Sort.Integer
+      }
+      case ArithmeticMode.LLP64 => typ match {
+        case CCInt => SignedBVSort(32)
+        case CCUInt => UnsignedBVSort(32)
+        case CCLong => SignedBVSort(32)
+        case CCULong => UnsignedBVSort(32)
+        case CCLongLong => SignedBVSort(64)
+        case CCULongLong => UnsignedBVSort(64)
+        case CCDuration => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
+        case _ => Sort.Integer
+      }
     }
 
-    def toSort: Sort = type2Sort(typ)
-
-    def rangePred(t : ITerm) : IFormula = toSort membershipConstraint t
+    def rangePred(t : ITerm) : IFormula =
+      toSort match {
+        case Sort.Nat =>
+          t >= 0
+        case ModSort(lower, upper) =>
+          t >= lower & t <= upper
+        case _ => true // includes Integer, HeapAddress, ADTs
+      }
 
     def newConstant(name : String) : ConstantTerm = toSort newConstant name
 
@@ -553,8 +577,8 @@ class CCReader private (prog : Program,
 
   private var tempVarCounter = 0
 
-  private def getFreshEvalVar : ConstantTerm = {
-    val res = new ConstantTerm("__eval" + tempVarCounter)
+  private def getFreshEvalVar (s : Sort) : ConstantTerm = {
+    val res = new SortedConstantTerm("__eval" + tempVarCounter, s)
     tempVarCounter = tempVarCounter + 1
     res
   }
@@ -757,9 +781,10 @@ class CCReader private (prog : Program,
 
   val NullObjName = "NullObj"
 
-  import lazabs.horn.heap.{Heap => HeapObj}
+  //import ap.theories.{Heap => HeapObj}
+  import lazabs.horn.{Heap => HeapObj}
 
-  def defObjCtor(objectADT : ADT) : ITerm = {
+  def defObjCtor(objectADT : ADT, allocResADT : ADT) : ITerm = {
     objectADT.constructors.last()
   }
 
@@ -773,7 +798,7 @@ class CCReader private (prog : Program,
         for(FieldInfo(fieldName, fieldType, ptrDepth) <-
               structInfos(i).fieldInfos) yield
           (fieldName,
-            if (ptrDepth > 0) Heap.AddressCtorArgsSort
+            if (ptrDepth > 0) Heap.AddressCtor
             else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
               case Right(typ) => HeapObj.OtherSort(typ.toSort)
@@ -784,14 +809,14 @@ class CCReader private (prog : Program,
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
     List(
-      ("WrappedInt", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
-      ("WrappedAddr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtorArgsSort)), ObjSort))) ++
+      ("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
+      ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort))) ++
       (for ((name, signature) <- structCtorSignatures) yield {
-      ("Wrapped" + name,
+      ("O_" + name,
         HeapObj.CtorSignature(List(("get" + name, signature.result)), ObjSort))
     })
 
-  val heap = new Heap("heap", "addr", ObjSort,
+  val heap = new Heap("Heap", "Addr", ObjSort,
     List("HeapObject") ++ structCtorSignatures.unzip._1,
     wrapperSignatures ++ structCtorSignatures ++
       List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
@@ -1792,7 +1817,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       if ((!atomicMode && touchedGlobalState) || assignedToStruct) outputClause
 
     private def pushVal(v : CCExpr) = {
-      val c = getFreshEvalVar
+      val c = getFreshEvalVar(v.typ.toSort)
 // println("push " + v + " -> " + c)
       addValue(v)
       // reserve a local variable, in case we need one later
@@ -1826,7 +1851,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     private def pushFormalVal(t : CCType) = {
-      val c = getFreshEvalVar
+      val c = getFreshEvalVar(t.toSort)
       localVars.addVar(c, t)
       addValue(CCTerm(c, t))
       addGuard(t rangePred c)
@@ -2036,6 +2061,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     (printer print exp))
     }
 
+    private def isHeapPointer(t : CCExpr) =
+      t.typ.isInstanceOf[CCHeapPointer] ||
+        t.toTerm.isInstanceOf[IFunApp] &&
+          getFieldInfo(t.toTerm.asInstanceOf[IFunApp])._2.sort.isInstanceOf[Heap.HeapSort]
+
     private def isHeapPointer(exp : Exp) =
       getVarType(asLValue(exp)).isInstanceOf[CCHeapPointer]
 
@@ -2145,12 +2175,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     // Returns the root term and a list of names pointing to the given field.
     private def getFieldInfo(nested : IFunApp) :
-    (List[String], ConstantTerm) = {
+    (List[String], SortedConstantTerm) = {
       val fieldNames = List()
       getFieldInfo(nested, fieldNames)
     }
     private def getFieldInfo(nested : IFunApp, fieldNames : List[String])
-    : (List[String], ConstantTerm) = {
+    : (List[String], SortedConstantTerm) = {
       nested.args.size match {
         case n if n > 1 => (fieldNames, getStructTerm(nested))
         case n if n == 1 =>
@@ -2158,16 +2188,16 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             case nestedMore : IFunApp =>
               getFieldInfo(nestedMore, nested.fun.name :: fieldNames)
             case lastLevel : IConstant =>
-              (nested.fun.name :: fieldNames, lastLevel.c)
+              (nested.fun.name :: fieldNames, lastLevel.c.asInstanceOf[SortedConstantTerm])
           }
         case _ => throw new TranslationException("Cannot get field names " +
           "from given struct term " + nested)
       }
     }
-    private def getStructTerm(nested : ITerm) : ConstantTerm = { // todo
+    private def getStructTerm(nested : ITerm) : SortedConstantTerm = { // todo
       nested match {
         case nestedMore : IFunApp => getStructTerm(nestedMore.args.head)
-        case lastLevel : IConstant => lastLevel.c
+        case lastLevel : IConstant => lastLevel.c.asInstanceOf[SortedConstantTerm]
         case _ => throw new TranslationException(nested + " is not a struct.")
       }
     }
@@ -2191,41 +2221,40 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         maybeOutputClause
         setValue(asLValue(exp.exp_1), translateDurationValue(topVal))
       }
-      case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign] &&
-                              isHeapPointer(exp.exp_1)) => {
+      case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => {
         evalHelp(exp.exp_2) //first evalate rhs and push
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
-
-        val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
-        if (updatingPointedValue) {
-          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
-        } else {
-          val lhsName = asLValue(exp.exp_1)
-          val actualRhsVal = rhsVal.typ match {
-            case CCInt =>
-              if (rhsVal.toTerm.asInstanceOf[IIntLit].value.intValue != 0)
-                throw new TranslationException("Pointer arithmetic is not " +
+        if(isHeapPointer(lhsVal)) { //lhs in form of sel(...(read(h,p)))
+          val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
+          if (updatingPointedValue) {
+            val actualLhsVal = // deals with the edge case: (*head) = p
+              if (!lhsVal.toTerm.isInstanceOf[IFunApp])
+                heapRead(lhsVal)
+              else lhsVal
+            heapWrite(actualLhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
+          } else {
+            val lhsName = asLValue(exp.exp_1)
+            val actualRhsVal = rhsVal.typ match {
+              case CCInt =>
+                if (rhsVal.toTerm.asInstanceOf[IIntLit].value.intValue != 0)
+                  throw new TranslationException("Pointer arithmetic is not " +
                     "allowed, and the only possible assignment value for " +
                     "pointers is 0 (NULL)")
-              CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
-            case _ => rhsVal
+                CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
+              case _ => rhsVal
+            }
+            setValue(lhsName, actualRhsVal)
+            setVarType(lookupVar(lhsName), actualRhsVal.typ) // todo: this looks wrong...
           }
-          setValue(lhsName, actualRhsVal)
-          setVarType(lookupVar(lhsName), actualRhsVal.typ) // todo: this looks wrong...
+        } else {
+          val lhsName = asLValue(exp.exp_1)
+          val lhsInd = lookupVar(lhsName)
+          val actualLhsTerm = getActualAssignedTerm(lhsVal, rhsVal)
+          setValue(lhsInd, actualLhsTerm, isIndirection(exp.exp_1))
         }
         pushVal(rhsVal)
-      }
-      case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign]) => {
-        evalHelp(exp.exp_2) //first evalate rhs and push
-        maybeOutputClause
-        val lhsVal = evalLhs(exp.exp_1) //then evaluate lhs and get it
-
-        val lhsName = asLValue(exp.exp_1)
-        val lhsInd = lookupVar(lhsName)
-        val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
-        setValue(lhsInd, actualLhsTerm, isIndirection(exp.exp_1))
       }
       case exp : Eassign => {
         evalHelp(exp.exp_1)
@@ -2440,16 +2469,19 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       case exp : Efunk => {
         // inline the called function
-        val name = printer print exp.exp_
-        outputClause
-        handleFunction(name, initPred, 0)
+        printer print exp.exp_ match {
+          case "__VERIFIER_error" => {
+            assertProperty(false)
+            pushVal(CCFormula(true, CCInt))
+          }
+          case name => {
+            outputClause
+            handleFunction(name, initPred, 0)
+          }
+        }
       }
 
       case exp : Efunkpar => (printer print exp.exp_) match {
-        case "__VERIFIER_error" if (exp.listexp_.isEmpty) => {
-          assertProperty(false)
-          pushVal(CCFormula(true, CCInt))
-        }
         case "assert" | "static_assert" | "__VERIFIER_assert"
                           if (exp.listexp_.size == 1) => {
           assertProperty(atomicEval(exp.listexp_.head).toFormula)
@@ -2679,7 +2711,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         case Some(fundef) => {
           val typ = getType(fundef)
           val isNoReturn = (typ.isInstanceOf[CCVoid.type])
-          val extraArgs = if (isNoReturn) 0 else 1
+          val extraArgs = if (isNoReturn) Nil else List(typ.toSort)
           val functionExit = newPred(extraArgs)
 
           inlineFunction(fundef, functionEntry, functionExit, pointerArgs,
@@ -2695,13 +2727,30 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }
         case None => (functionDecls get name) match {
           case Some((fundecl, typ)) => {
-            warn("no definition of function \"" + name + "\" available")
+            if (!(name contains "__VERIFIER_nondet" ))
+              warn("no definition of function \"" + name + "\" available")
             pushFormalVal(typ)
           }
           case None =>
             throw new TranslationException(
               "Function " + name + " is not declared")
         }
+      }
+
+    private def checkPointerIntComparison(t1 : CCExpr, t2 : CCExpr) :
+      (CCExpr, CCExpr) =
+      (t1.typ, t2.typ) match {
+        case (_: CCHeapPointer, CCInt) =>
+          if (t2.toTerm != IIntLit(IdealInt(0)))
+            throw new TranslationException("Pointers can only compared with `null` or `0`.")
+          else
+            (t1, CCTerm(heap.nullAddr(), t1.typ)) // 0 to nullAddr()
+        case (CCInt, _: CCHeapPointer) =>
+          if (t1.toTerm != IIntLit(IdealInt(0)))
+            throw new TranslationException("Pointers can only compared with `null` or `0`.")
+          else
+            (CCTerm(heap.nullAddr(), t2.typ), t2) // 0 to nullAddr()
+        case _ => (t1, t2)
       }
 
     private def strictBinOp(left : Exp, right : Exp,
@@ -2711,7 +2760,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val lhs = popVal
       evalHelp(right)
       val rhs = popVal
-      pushVal(op(lhs, rhs))
+      val (actualLhs, actualRhs) =  checkPointerIntComparison(lhs, rhs)
+      pushVal(op(actualLhs, actualRhs))
     }
 
     ////////////////////////////////////////////////////////////////////////////

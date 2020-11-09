@@ -7,51 +7,51 @@ list-001-fail.c
 Warning: enabling heap model
 UNSAFE
 
------------------------------------------------------------------------
+------------------------------------------------------------------
 Init:
-                           main2(emptyHeap)                            
------------------------------------------------------------------------
-                                   |                                   
-                                   |                                   
-                                   V                                   
-  main3(newHeap(alloc(emptyHeap, Wrappednode(node(0)))), nthAddr(1))   
------------------------------------------------------------------------
-                                   |                                   
-                                   |                                   
-                                   V                                   
- main4(newHeap(alloc(emptyHeap, Wrappednode(node(0)))), nthAddr(1), 0) 
------------------------------------------------------------------------
+                         main2(emptyHeap)                         
+------------------------------------------------------------------
+                                |                                 
+                                |                                 
+                                V                                 
+  main3(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1))   
+------------------------------------------------------------------
+                                |                                 
+                                |                                 
+                                V                                 
+ main4(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
+------------------------------------------------------------------
 Final:
- main4(newHeap(alloc(emptyHeap, Wrappednode(node(0)))), nthAddr(1), 0) 
------------------------------------------------------------------------
+ main4(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
+------------------------------------------------------------------
 
 list-002-fail.c
 Warning: enabling heap model
 Warning: no definition of function "nondet_bool" available
 UNSAFE
 
------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
 Init:
-                                          main2(emptyHeap)                                           
------------------------------------------------------------------------------------------------------
-                                                  |                                                  
-                                                  |                                                  
-                                                  V                                                  
-       main3(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(1), nthAddr(0))))), nthAddr(1))       
------------------------------------------------------------------------------------------------------
-                                                  |                                                  
-                                                  |                                                  
-                                                  V                                                  
-       main4(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(0))))), nthAddr(1))       
------------------------------------------------------------------------------------------------------
-                                                  |                                                  
-                                                  |                                                  
-                                                  V                                                  
- main7(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
------------------------------------------------------------------------------------------------------
+                                        main2(emptyHeap)                                        
+------------------------------------------------------------------------------------------------
+                                               |                                                
+                                               |                                                
+                                               V                                                
+       main3(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
+------------------------------------------------------------------------------------------------
+                                               |                                                
+                                               |                                                
+                                               V                                                
+       main4(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
+------------------------------------------------------------------------------------------------
+                                               |                                                
+                                               |                                                
+                                               V                                                
+ main7(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------------------------------------
 Final:
- main7(newHeap(alloc(emptyHeap, Wrappednode(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
------------------------------------------------------------------------------------------------------
+ main7(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------------------------------------
 
 mutually-referential-structs.c
 Warning: enabling heap model
@@ -133,18 +133,18 @@ typecastUnsafe-001.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------
+--------------------------------------------------------------------
 Init:
-                            main2(emptyHeap)                             
--------------------------------------------------------------------------
-                                    |                                    
-                                    |                                    
-                                    V                                    
- main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(1)) 
--------------------------------------------------------------------------
+                          main2(emptyHeap)                          
+--------------------------------------------------------------------
+                                 |                                  
+                                 |                                  
+                                 V                                  
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------
 Final:
- main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(1)) 
--------------------------------------------------------------------------
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------
 
 typecastSafe-001.c
 Warning: enabling heap model
@@ -186,18 +186,18 @@ unsafe-access-001.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------
+--------------------------------------------------------------------
 Init:
-                            main2(emptyHeap)                             
--------------------------------------------------------------------------
-                                    |                                    
-                                    |                                    
-                                    V                                    
- main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(0)) 
--------------------------------------------------------------------------
+                          main2(emptyHeap)                          
+--------------------------------------------------------------------
+                                 |                                  
+                                 |                                  
+                                 V                                  
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(0)) 
+--------------------------------------------------------------------
 Final:
- main4(newHeap(alloc(emptyHeap, WrappedInt(0))), nthAddr(1), nthAddr(0)) 
--------------------------------------------------------------------------
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(0)) 
+--------------------------------------------------------------------
 
 stackptr-to-heapptr.c
 Warning: enabling heap model

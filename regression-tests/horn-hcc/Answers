@@ -45,15 +45,15 @@ Init:
                    V      
               B2(6, 0, 3) 
 --------------------------
-      |      
-      |      
-      V      
- A3(6, 0, 3) 
---------------------------
                    |      
                    |      
                    V      
                B0(6, 1)   
+--------------------------
+      |      
+      |      
+      V      
+ A3(6, 1, 3) 
 --------------------------
 Final:
  A3(6, 1, 3)   B0(6, 1)   
@@ -97,11 +97,6 @@ Init:
        V        
  A6(2, 0, 0, 2) 
 --------------------------------
-                       |        
-                       |        
-                       V        
-                  B2(3, 0, 3)   
---------------------------------
        |        
        |        
        V        
@@ -111,6 +106,11 @@ Init:
        |        
        V        
  A6(3, 0, 1, 3) 
+--------------------------------
+                       |        
+                       |        
+                       V        
+                  B2(3, 0, 3)   
 --------------------------------
        |        
        |        
@@ -155,20 +155,20 @@ UNSAFE
 
 ---------------------------------------
 Init:
- Proc1(0, 0)  Proc1(0, 2)  Proc1(0, 1) 
+ Proc1(0, 1)  Proc1(0, 0)  Proc1(0, 2) 
 ---------------------------------------
       |      
       |      
       V      
- Proc2(0, 0) 
+ Proc2(1, 1) 
 ---------------------------------------
                    |      
                    |      
                    V      
-              Proc2(2, 2) 
+              Proc2(0, 0) 
 ---------------------------------------
 Final:
- Proc2(2, 0)  Proc2(2, 2)  Proc1(2, 1) 
+ Proc2(0, 1)  Proc2(0, 0)  Proc1(0, 2) 
 ---------------------------------------
 
 test-para2.hcc
@@ -267,7 +267,6 @@ Final:
 --------------------
 
 diamond_true-unreach-call1.c
-Warning: no definition of function "__VERIFIER_nondet_uint" available
 SAFE
 
 unsigned1.hcc
@@ -284,7 +283,6 @@ Warning: entry function "main" not found
 SAFE
 
 down_true-unreach-call.i.c
-Warning: no definition of function "__VERIFIER_nondet_int" available
 SAFE
 
 test4.hcc

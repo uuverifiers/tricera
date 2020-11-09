@@ -33,6 +33,7 @@ import ap.parser._
 import ap.theories.nia.GroebnerMultiplication
 import lazabs.horn.bottomup.{HornClauses, HornPredAbs, DagInterpolator, Util}
 import tricera.TriCeraParameters
+import hornconcurrency.{ParametricEncoder, VerificationLoop}
 
 object ParameterisedExamples extends App {
 

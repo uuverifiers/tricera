@@ -30,8 +30,11 @@
 package tricera.concurrency
 
 import ap.parser.PrincessLineariser
-
-import lazabs.horn.bottomup.HornClauses
+import lazabs.horn.bottomup.{HornClauses, HornTranslator, HornWrapper}
+import lazabs.horn.bottomup.HornClauses.Clause
+import lazabs.viewer.HornSMTPrinter
+import hornconcurrency.{ParametricEncoder, VerificationLoop}
+import hornconcurrency.ParametricEncoder.{Process, ProcessSet, Replication}
 
 object ReaderMain {
 
@@ -45,7 +48,7 @@ object ReaderMain {
           println("  Replicated thread:")
       }
       for ((c, sync) <- p) {
-        val prefix = "    " + c.toPrologString()
+        val prefix = "    " + c.toPrologString
         print(prefix + (" " * ((50 - prefix.size) max 2)))
         sync match {
           case ParametricEncoder.Send(chan) =>
@@ -63,7 +66,7 @@ object ReaderMain {
       println
       println("Time invariants:")
       for (c <- system.timeInvariants)
-        println("  " + c.toPrologString())
+        println("  " + c.toPrologString)
     }
 
     system.backgroundAxioms match {
@@ -74,7 +77,7 @@ object ReaderMain {
         println
         println("Background axioms:")
         for (c <- clauses)
-          println("  " + c.toPrologString())
+          println("  " + c.toPrologString)
       }
       case _ =>
         // nothing
@@ -84,7 +87,7 @@ object ReaderMain {
       println
       println("Assertions:")
       for (c <- system.assertions)
-        println("  " + c.toPrologString())
+        println("  " + c.toPrologString)
     }
 
     if (!system.hints.predicateHints.isEmpty) {
@@ -99,6 +102,18 @@ object ReaderMain {
         }
       }
     }
+  }
+
+  def printSMTClauses(system : ParametricEncoder.System) : Unit = {
+    val processes = system.processes.unzip._1
+    val clauses = processes.flatten.unzip._1
+    val timeInvariantClauses = system.timeInvariants
+    val assertions = system.assertions
+    val bgAxiomClauses = system.backgroundAxioms.clauses
+
+    val translator = new HornTranslator
+    println(HornSMTPrinter(translator.horn2Eldarica(clauses ++
+      timeInvariantClauses ++ assertions ++ bgAxiomClauses)))
   }
 
   def main(args: Array[String]) : Unit = {
