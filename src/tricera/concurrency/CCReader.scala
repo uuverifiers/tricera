@@ -2226,8 +2226,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
+        val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar] &&
+          (!isIndirection(exp.exp_1) || isHeapPointer(exp.exp_1))
         if(isHeapPointer(lhsVal)) { //lhs in form of sel(...(read(h,p)))
-          val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar]
           if (updatingPointedValue) {
             val actualLhsVal = // deals with the edge case: (*head) = p
               if (!lhsVal.toTerm.isInstanceOf[IFunApp])
@@ -2236,17 +2237,17 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             heapWrite(actualLhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
           } else {
             val lhsName = asLValue(exp.exp_1)
-            val actualRhsVal = rhsVal.typ match {
-              case CCInt =>
-                if (rhsVal.toTerm.asInstanceOf[IIntLit].value.intValue != 0)
+            val actualRhsVal = rhsVal.toTerm match {
+              case lit : IIntLit =>
+                if (lit.value.intValue != 0) {
                   throw new TranslationException("Pointer arithmetic is not " +
-                    "allowed, and the only possible assignment value for " +
+                    "allowed, and the only assignable integer value for " +
                     "pointers is 0 (NULL)")
-                CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
+                } else CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
               case _ => rhsVal
             }
             setValue(lhsName, actualRhsVal)
-            setVarType(lookupVar(lhsName), actualRhsVal.typ) // todo: this looks wrong...
+            //setVarType(lookupVar(lhsName), actualRhsVal.typ) // todo: this looks wrong...
           }
         } else {
           val lhsName = asLValue(exp.exp_1)

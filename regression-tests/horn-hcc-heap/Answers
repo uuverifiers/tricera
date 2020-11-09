@@ -156,7 +156,7 @@ Warning: enabling heap model
 
 illegal-access-002.c
 Warning: enabling heap model
-(error "Pointer arithmetic is not allowed, and the only possible assignment value for pointers is 0 (NULL)")
+(error "Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)")
 
 postop.c
 Warning: enabling heap model
