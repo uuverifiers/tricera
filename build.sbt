@@ -52,7 +52,7 @@ settings(
                                         case "2.12.8" => "-opt:_"
                                       }}).value,
   resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.4-heap",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.5-heap",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "1.0"
 )
   //

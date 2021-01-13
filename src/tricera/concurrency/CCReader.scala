@@ -31,8 +31,7 @@ package tricera.concurrency
 
 import ap.basetypes.IdealInt
 import ap.parser._
-import ap.theories.{ADT/*, Heap*/, ModuloArithmetic}
-import lazabs.horn.Heap
+import ap.theories.{ADT, Heap, ModuloArithmetic}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrentC._
 import concurrentC.Absyn._
@@ -102,6 +101,8 @@ object CCReader {
   class TranslationException(msg : String) extends Exception(msg)
   object UndefinedEnumException extends Exception
   object NeedsTimeException extends Exception
+
+  val heapTermName = "@h"
   object NeedsHeapModelException extends Exception
 
   def warn(msg : String) : Unit =
@@ -339,6 +340,8 @@ object CCReader {
     def toTerm : ITerm = t
     def toFormula : IFormula = t match {
       case IIntLit(value) => !value.isZero
+      case t if _typ.isInstanceOf[CCHeapPointer] => !IExpression.Eq(t,
+        _typ.asInstanceOf[CCHeapPointer].heap.nullAddr())
       case t =>              !IExpression.eqZero(t)
     }
     def occurringConstants : Seq[IExpression.ConstantTerm] =
@@ -539,8 +542,11 @@ class CCReader private (prog : Program,
   private def lookupVar(name : String) : Int =
     lookupVarNoException(name) match {
       case -1 =>
-        throw new TranslationException(
-          "Symbol " + name + " is not declared")
+        name match {
+          case `heapTermName` if !modelHeap => throw NeedsHeapModelException
+          case _ => throw new TranslationException(
+            "Symbol " + name + " is not declared")
+        }
       case i => i
     }
 
@@ -745,6 +751,53 @@ class CCReader private (prog : Program,
     variableHints += List()
   }
 
+  import ap.theories.{Heap => HeapObj}
+
+  def defObjCtor(objectADT : ADT, allocResADT : ADT) : ITerm = {
+    objectADT.constructors.last()
+  }
+
+  val ObjSort = HeapObj.ADTSort(0)
+
+  val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
+    (for (i <- structInfos.indices) yield {
+      if(structInfos(i).fieldInfos isEmpty) throw new TranslationException(
+        "Struct " + structInfos(i).name + " was declared, but never defined!")
+      val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
+        for(FieldInfo(fieldName, fieldType, ptrDepth) <-
+              structInfos(i).fieldInfos) yield
+          (fieldName,
+            if (ptrDepth > 0) Heap.AddressCtor
+            else { fieldType match {
+              case Left(ind) => HeapObj.ADTSort(ind + 1)
+              case Right(typ) => HeapObj.OtherSort(typ.toSort)
+            }
+            })
+      (structInfos(i).name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
+    }).toList
+
+  val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
+    List(
+      ("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
+      ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort))) ++
+      (for ((name, signature) <- structCtorSignatures) yield {
+        ("O_" + name,
+          HeapObj.CtorSignature(List(("get" + name, signature.result)), ObjSort))
+      })
+
+  val heap = new Heap("Heap", "Addr", ObjSort,
+    List("HeapObject") ++ structCtorSignatures.unzip._1,
+    wrapperSignatures ++ structCtorSignatures ++
+      List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+    defObjCtor)
+
+  val heapTerm = heap.HeapSort.newConstant(heapTermName)
+  if (modelHeap) {
+    globalVars addVar(heapTerm, CCHeap(heap))
+    globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap))
+    variableHints += List()
+  }
+
   private def collectStructDefsFromComp (comp : Compound_stm): Unit = {
     comp match {
       case        _: ScompOne =>
@@ -778,49 +831,6 @@ class CCReader private (prog : Program,
   if(structInfos.exists(s => s.fieldInfos isEmpty))
     throw new TranslationException(
       "Some structs were declared but never defined!")
-
-  val NullObjName = "NullObj"
-
-  //import ap.theories.{Heap => HeapObj}
-  import lazabs.horn.{Heap => HeapObj}
-
-  def defObjCtor(objectADT : ADT, allocResADT : ADT) : ITerm = {
-    objectADT.constructors.last()
-  }
-
-  val ObjSort = HeapObj.ADTSort(0)
-
-  val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
-    (for (i <- structInfos.indices) yield {
-      if(structInfos(i).fieldInfos isEmpty) throw new TranslationException(
-        "Struct " + structInfos(i).name + " was declared, but never defined!")
-      val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
-        for(FieldInfo(fieldName, fieldType, ptrDepth) <-
-              structInfos(i).fieldInfos) yield
-          (fieldName,
-            if (ptrDepth > 0) Heap.AddressCtor
-            else { fieldType match {
-              case Left(ind) => HeapObj.ADTSort(ind + 1)
-              case Right(typ) => HeapObj.OtherSort(typ.toSort)
-            }
-          })
-      (structInfos(i).name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
-    }).toList
-
-  val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
-    List(
-      ("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
-      ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort))) ++
-      (for ((name, signature) <- structCtorSignatures) yield {
-      ("O_" + name,
-        HeapObj.CtorSignature(List(("get" + name, signature.result)), ObjSort))
-    })
-
-  val heap = new Heap("Heap", "Addr", ObjSort,
-    List("HeapObject") ++ structCtorSignatures.unzip._1,
-    wrapperSignatures ++ structCtorSignatures ++
-      List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
-    defObjCtor)
 
   private val structCtorsOffset = 2 // WrappedInt + WrappedAddr
   val defObj = heap.ObjectADT.constructors.last
@@ -866,13 +876,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       if(fieldInfos(j).ptrDepth > 0) CCHeapPointer(heap, actualType)
       else actualType})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
-  }
-
-  val heapTerm = heap.HeapSort.newConstant("@h")
-  if (modelHeap) {
-    globalVars addVar(heapTerm, CCHeap(heap))
-    globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap))
-    variableHints += List()
   }
 
   private def translateProgram : Unit = {
@@ -1680,7 +1683,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case f: NewHintFunc =>
         (getType(f.listdeclaration_specifier_), f.declarator_.isInstanceOf[BeginPointer])
     }
-    if(isPtr) CCHeapPointer(heap, typ)
+    if(isPtr) CCHeapPointer(heap, typ) // todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 
@@ -2936,7 +2939,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case f : NewFuncInt => (f.declarator_, f.compound_stm_)
       case f : NewHintFunc=> (f.declarator_, f.compound_stm_)
     }
-
     val decl = declarator match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
@@ -2953,7 +2955,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               val name = getName(argDec.declarator_)
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
-                case ptr: BeginPointer => pointerArgs(ind)
+                case _: BeginPointer if pointerArgs.nonEmpty => pointerArgs(ind)
+                case _: BeginPointer => CCHeapPointer(heap, typ) // todo: fix: might be wrong &/ not work for more than depth 1
                 case _ => typ
               }
               localVars.addVar((actualType newConstant name), actualType)
@@ -2962,7 +2965,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             case argDec : TypeHintAndParam => {
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
-                case ptr: BeginPointer => pointerArgs(ind)
+                case _: BeginPointer if pointerArgs.nonEmpty => pointerArgs(ind)
+                case _: BeginPointer => CCHeapPointer(heap, typ) // todo: fix: might be wrong &/ not work for more than depth 1
                 case _ => typ
               }
               localVars.addVar(actualType newConstant getName(argDec.declarator_),

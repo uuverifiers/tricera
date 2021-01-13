@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2015-2019 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2021 Philipp Ruemmer,
+ *                    2021 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -37,6 +38,10 @@ import hornconcurrency.{ParametricEncoder, VerificationLoop}
 import hornconcurrency.ParametricEncoder.{Process, ProcessSet, Replication}
 
 object ReaderMain {
+
+  var currentId = 0
+  val dotFileName =  "DotOutput"
+  var mergeNodeId = 0
 
   def printClauses(system : ParametricEncoder.System) = {
     println("System transitions:")
@@ -102,6 +107,92 @@ object ReaderMain {
         }
       }
     }
+
+    def show: Unit = {
+      import scala.collection.mutable.{HashMap => MHashMap}
+      import ap.parser.IAtom
+      import PrincessLineariser.asString
+
+      val fname = dotFileName + currentId + ".dot"
+      val dotOutput = new java.io.FileWriter(fname)
+      dotOutput.write( "digraph lazabs {\n")
+      dotOutput.write("{\n\"\" [shape=diamond]\n}\n")
+
+      val predAtomMapping = new MHashMap[ap.terfor.preds.Predicate, IAtom]
+      // creates a mapping from preds to their unmodified atoms, e.g. I(a,b)
+      // instead of I(a+1, ...). these appear in the body.
+      val systemClauses : List[Clause] =
+        (for (p <- system.processes.head._1) yield p._1).toList
+      val bgClauses : List[Clause] = (system.backgroundAxioms match {
+        case ParametricEncoder.SomeBackgroundAxioms(_, clauses) => clauses
+        case _ => Nil
+      }).toList
+
+      val allClauses = systemClauses ++ bgClauses ++ system.assertions
+
+      for (c <- allClauses; a <- c.body)
+        predAtomMapping += ((a.pred, a))
+
+      def graphUpdate (a : ITerm, b : ITerm) = asString(a) + " := " + asString(b)
+      def graphConnect (a : String, b : String) =
+        "\"" + a + "\"" + " -> " + "\"" + b + "\""
+      def graphLabel (s : String) = " [label=" + "\"" + s + "\"]\n"
+      def graphLabelConstraint (c : Clause, extraConstraint : String = "") = {
+        val constraint =
+          if (c.constraint != IBoolLit(true)) asString(c.constraint) else ""
+        constraint +
+          (if (constraint.nonEmpty && extraConstraint.nonEmpty) ", " else "") +
+          extraConstraint
+      }
+
+      def graphClause (actualHead : IAtom, c : Clause, extraEdgeLabel : String) {
+        if (c.body.isEmpty) {
+          dotOutput.write(
+            graphConnect("", asString(actualHead)) +
+              graphLabelConstraint(c, extraEdgeLabel) + "\n")
+        } else if (c.body.size > 1) {
+          // create a dot sized merge node for the edges to merge into
+          val mergeNode = "dotMergeNode" + mergeNodeId
+          dotOutput.write(mergeNode + " [label=\"&\", shape=box];\n")
+          mergeNodeId += 1
+          for (bodyAtom <- c.body)
+            dotOutput.write(
+              graphConnect(asString(bodyAtom), mergeNode) + "\n")
+          dotOutput.write(
+            graphConnect(mergeNode, asString(actualHead)) +
+              graphLabelConstraint(c, extraEdgeLabel) + "\n")
+        } else {
+          for (bodyAtom <- c.body) {
+            dotOutput.write(
+              graphConnect(asString(bodyAtom), asString(actualHead)) +
+                graphLabelConstraint(c, extraEdgeLabel) + "\n")
+          }
+        }
+      }
+
+      for (c <- allClauses) {
+        predAtomMapping get c.head.pred match {
+          case Some(a) =>
+            val extraEdgeLabel: String = if (a == c.head) "" // head is unchanged
+            else { // head args are updated, move updates to edges
+              (for ((arg1, arg2) <- c.head.args zip a.args if arg1 != arg2) yield
+                graphUpdate(arg2, arg1)).mkString("\n")
+            }
+            graphClause(a, c, extraEdgeLabel)
+          case None => graphClause(c.head, c, "")
+        }
+      }
+      dotOutput.write( "\n}")
+      dotOutput.close
+
+      val runTime = Runtime.getRuntime
+      var proc = runTime.exec( "dot -Tpng " + "DotOutput" + currentId + ".dot" + " -o graph" + currentId + ".png" )
+      proc.waitFor
+      proc = runTime.exec( "eog graph" + currentId + ".png")
+      proc.waitFor
+      currentId = currentId + 1
+    }
+    if(tricera.TriCeraParameters.get.prettyPrintDot) show
   }
 
   def printSMTClauses(system : ParametricEncoder.System) : Unit = {

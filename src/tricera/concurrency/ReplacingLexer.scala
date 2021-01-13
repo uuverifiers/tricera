@@ -48,6 +48,7 @@ object TypedefReplacingLexer {
   val Semicolon_num = sym._SYMB_2;
   val LBrace_num    = sym._SYMB_7;
   val RBrace_num    = sym._SYMB_8;
+  val Pointer_num   = sym._SYMB_12;
   val CIdent_num    = sym.CIdent;
 
 }
