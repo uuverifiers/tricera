@@ -30,12 +30,11 @@
 
 package tricera.concurrency
 
-import ap.parser.PrincessLineariser
-import lazabs.horn.bottomup.{HornClauses, HornTranslator, HornWrapper}
+import ap.parser.{IBoolLit, ITerm, PrincessLineariser}
+import lazabs.horn.bottomup.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
 import hornconcurrency.{ParametricEncoder, VerificationLoop}
-import hornconcurrency.ParametricEncoder.{Process, ProcessSet, Replication}
 
 object ReaderMain {
 
@@ -140,16 +139,16 @@ object ReaderMain {
       def graphLabelConstraint (c : Clause, extraConstraint : String = "") = {
         val constraint =
           if (c.constraint != IBoolLit(true)) asString(c.constraint) else ""
-        constraint +
+        " [label=" + "\"" + constraint +
           (if (constraint.nonEmpty && extraConstraint.nonEmpty) ", " else "") +
-          extraConstraint
+          extraConstraint + "\"]\n"
       }
 
       def graphClause (actualHead : IAtom, c : Clause, extraEdgeLabel : String) {
         if (c.body.isEmpty) {
           dotOutput.write(
             graphConnect("", asString(actualHead)) +
-              graphLabelConstraint(c, extraEdgeLabel) + "\n")
+              graphLabelConstraint(c, extraEdgeLabel))
         } else if (c.body.size > 1) {
           // create a dot sized merge node for the edges to merge into
           val mergeNode = "dotMergeNode" + mergeNodeId
@@ -160,12 +159,12 @@ object ReaderMain {
               graphConnect(asString(bodyAtom), mergeNode) + "\n")
           dotOutput.write(
             graphConnect(mergeNode, asString(actualHead)) +
-              graphLabelConstraint(c, extraEdgeLabel) + "\n")
+              graphLabelConstraint(c, extraEdgeLabel))
         } else {
           for (bodyAtom <- c.body) {
             dotOutput.write(
               graphConnect(asString(bodyAtom), asString(actualHead)) +
-                graphLabelConstraint(c, extraEdgeLabel) + "\n")
+                graphLabelConstraint(c, extraEdgeLabel))
           }
         }
       }
