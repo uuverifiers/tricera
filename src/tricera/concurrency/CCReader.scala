@@ -2069,7 +2069,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         t.toTerm.isInstanceOf[IFunApp] &&
           (getFieldInfo(t.toTerm.asInstanceOf[IFunApp])._2 match {
         case Left(c) => c.sort.isInstanceOf[Heap.HeapSort]
-        case Right(_) => false // todo: might be wrong, check res type of IFunApp?
+        case Right(f) => objectGetters contains f.fun
       })
 
     private def isHeapPointer(exp : Exp) =
@@ -2166,18 +2166,21 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           assignedToStruct = true
           val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
 
-          val (structType, structTerm) = rootTerm match {
-            case Left(t) => (structDefs(t.sort.name), t)
+          rootTerm match {
+            case Left(t) =>
+              val structType = structDefs(t.sort.name)
+              val fieldAddress = structType.getFieldAddress(fieldNames)
+              CCTerm(structType.setFieldTerm(t, rhs.toTerm, fieldAddress), structType)
             case Right(f) =>
-              (structDefs(f.fun.asInstanceOf[MonoSortedIFunction].resSort.name), f)
+              val structType =
+                structDefs(f.fun.asInstanceOf[MonoSortedIFunction].resSort.name)
+              val fieldAddress = structType.getFieldAddress(fieldNames)
+              CCTerm(structType.setFieldTerm(f, rhs.toTerm, fieldAddress), structType)
             /*case _ => {getVarType(rootTerm.name) match {
                 case ptr : CCStackPointer => getPointedTerm(ptr).typ
                 case typ => typ
               }}.asInstanceOf[CCStruct]*/
           }
-          val fieldAddress = structType.getFieldAddress(fieldNames)
-          CCTerm(structType.setFieldTerm(structTerm.asInstanceOf[ITerm],
-                 rhs.toTerm, fieldAddress), structType)
         case _ => rhs // a non ADT
       }
     }
