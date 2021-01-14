@@ -226,7 +226,7 @@ object Main {
         "Horn engine:\n" +
         " -horn\t\tEnable this engine\n" +
         " -p\t\tPretty Print Horn clauses\n" +
-        " -pDot\t\tPretty Print Horn clauses, output in dot format and display using eog\n" +
+        " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
         " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
         " -sol\t\tShow solution in Prolog format\n" +
         " -ssol\t\tShow solution in SMT-LIB format\n" +

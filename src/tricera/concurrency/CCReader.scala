@@ -751,6 +751,40 @@ class CCReader private (prog : Program,
     variableHints += List()
   }
 
+  private def collectStructDefsFromComp (comp : Compound_stm): Unit = {
+    comp match {
+      case        _: ScompOne =>
+      case compound: ScompTwo =>
+        val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
+        while (stmsIt.hasNext) stmsIt.next match {
+          case dec: DecS => collectStructDefs(dec.dec_)
+          case _ =>
+        }
+    }
+  }
+  for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
+    decl match {
+      case decl: Global => collectStructDefs(decl.dec_)
+      case fun: Afunc =>
+        val comp = fun.function_def_ match {
+            case f: NewFunc => f.compound_stm_
+            case f: NewHintFunc => f.compound_stm_
+            case f: NewFuncInt => f.compound_stm_
+          }
+        collectStructDefsFromComp(comp)
+      case thread : Athread =>
+        val comp = thread.thread_def_ match {
+          case t : SingleThread => t.compound_stm_
+          case t : ParaThread => t.compound_stm_
+        }
+        collectStructDefsFromComp(comp)
+      case _ =>
+    }
+
+  if(structInfos.exists(s => s.fieldInfos isEmpty))
+    throw new TranslationException(
+      "Some structs were declared but never defined!")
+
   import ap.theories.{Heap => HeapObj}
 
   def defObjCtor(objectADT : ADT, allocResADT : ADT) : ITerm = {
@@ -798,47 +832,13 @@ class CCReader private (prog : Program,
     variableHints += List()
   }
 
-  private def collectStructDefsFromComp (comp : Compound_stm): Unit = {
-    comp match {
-      case        _: ScompOne =>
-      case compound: ScompTwo =>
-        val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
-        while (stmsIt.hasNext) stmsIt.next match {
-          case dec: DecS => collectStructDefs(dec.dec_)
-          case _ =>
-        }
-    }
-  }
-  for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
-    decl match {
-      case decl: Global => collectStructDefs(decl.dec_)
-      case fun: Afunc =>
-        val comp = fun.function_def_ match {
-            case f: NewFunc => f.compound_stm_
-            case f: NewHintFunc => f.compound_stm_
-            case f: NewFuncInt => f.compound_stm_
-          }
-        collectStructDefsFromComp(comp)
-      case thread : Athread =>
-        val comp = thread.thread_def_ match {
-          case t : SingleThread => t.compound_stm_
-          case t : ParaThread => t.compound_stm_
-        }
-        collectStructDefsFromComp(comp)
-      case _ =>
-    }
-
-  if(structInfos.exists(s => s.fieldInfos isEmpty))
-    throw new TranslationException(
-      "Some structs were declared but never defined!")
-
   private val structCtorsOffset = 2 // WrappedInt + WrappedAddr
   val defObj = heap.ObjectADT.constructors.last
   val structCount = structInfos.size
   val objectWrappers = heap.ObjectADT.constructors.take(structCount+structCtorsOffset)
   val objectGetters =
     for (sels <- heap.ObjectADT.selectors.take(structCount+structCtorsOffset)
-         /*if sels.nonEmpty*/) yield sels.head //todo: is nonEmpty needed?
+         if sels.nonEmpty) yield sels.head
   val structCtors = heap.ObjectADT.constructors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
   val structSels = heap.ObjectADT.selectors.slice(structCtorsOffset+structCount,
@@ -2067,7 +2067,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private def isHeapPointer(t : CCExpr) =
       t.typ.isInstanceOf[CCHeapPointer] ||
         t.toTerm.isInstanceOf[IFunApp] &&
-          getFieldInfo(t.toTerm.asInstanceOf[IFunApp])._2.sort.isInstanceOf[Heap.HeapSort]
+          (getFieldInfo(t.toTerm.asInstanceOf[IFunApp])._2 match {
+        case Left(c) => c.sort.isInstanceOf[Heap.HeapSort]
+        case Right(_) => false // todo: might be wrong, check res type of IFunApp?
+      })
 
     private def isHeapPointer(exp : Exp) =
       getVarType(asLValue(exp)).isInstanceOf[CCHeapPointer]
@@ -2094,6 +2097,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       }
 
     var evaluatingLhs = false
+    var handlingFunContractArgs = false
     def evalLhs(exp : Exp) : CCExpr = {
       evaluatingLhs = true
       val res = eval(exp)
@@ -2162,36 +2166,41 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           assignedToStruct = true
           val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
 
-          val structType = rootTerm match {
-            case t : SortedConstantTerm => structDefs(t.sort.name)
-            case _ => {getVarType(rootTerm.name) match {
+          val (structType, structTerm) = rootTerm match {
+            case Left(t) => (structDefs(t.sort.name), t)
+            case Right(f) =>
+              (structDefs(f.fun.asInstanceOf[MonoSortedIFunction].resSort.name), f)
+            /*case _ => {getVarType(rootTerm.name) match {
                 case ptr : CCStackPointer => getPointedTerm(ptr).typ
                 case typ => typ
-              }}.asInstanceOf[CCStruct]
+              }}.asInstanceOf[CCStruct]*/
           }
           val fieldAddress = structType.getFieldAddress(fieldNames)
-          CCTerm(structType.setFieldTerm(rootTerm, rhs.toTerm, fieldAddress),
-                 structType)
+          CCTerm(structType.setFieldTerm(structTerm.asInstanceOf[ITerm],
+                 rhs.toTerm, fieldAddress), structType)
         case _ => rhs // a non ADT
       }
     }
 
     // Returns the root term and a list of names pointing to the given field.
     private def getFieldInfo(nested : IFunApp) :
-    (List[String], SortedConstantTerm) = {
+    (List[String], Either[SortedConstantTerm, IFunApp]) = {
       val fieldNames = List()
       getFieldInfo(nested, fieldNames)
     }
     private def getFieldInfo(nested : IFunApp, fieldNames : List[String])
-    : (List[String], SortedConstantTerm) = {
+    : (List[String], Either[SortedConstantTerm, IFunApp]) = {
       nested.args.size match {
-        case n if n > 1 => (fieldNames, getStructTerm(nested))
+        case n if n > 1 => (fieldNames, Left(getStructTerm(nested)))
         case n if n == 1 =>
           nested.args.head match{
-            case nestedMore : IFunApp =>
+            case nestedMore : IFunApp if !(objectGetters contains nestedMore.fun) =>
               getFieldInfo(nestedMore, nested.fun.name :: fieldNames)
+            case objectGetter : IFunApp =>
+              (nested.fun.name :: fieldNames, Right(objectGetter))
             case lastLevel : IConstant =>
-              (nested.fun.name :: fieldNames, lastLevel.c.asInstanceOf[SortedConstantTerm])
+              (nested.fun.name :: fieldNames,
+                Left(lastLevel.c.asInstanceOf[SortedConstantTerm]))
           }
         case _ => throw new TranslationException("Cannot get field names " +
           "from given struct term " + nested)
@@ -2440,17 +2449,41 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         evalHelp(exp.exp_)
         exp.unary_operator_ match {
           case _ : Address    =>
-            val (ind, fieldAddress) = topVal.toTerm match {
+            topVal.toTerm match {
               case fieldFun: IFunApp => // an ADT
                 val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
-                val rootInd = lookupVar(rootTerm.name)
-                val structType = getValue(rootInd, false).typ.asInstanceOf[CCStruct]
-                (rootInd, structType.getFieldAddress(fieldNames))
-              case _ => (values.indexWhere(v => v == topVal), Nil)
+                rootTerm match {
+                  case Left(c) =>
+                    val rootInd: Int = lookupVar(c.name)
+                    val structType = getValue(rootInd, false).typ.asInstanceOf[CCStruct]
+                    assert(rootInd > -1 && rootInd < values.size - 1) // todo
+                    val ptr = CCStackPointer(rootInd, popVal.typ, structType.getFieldAddress(fieldNames))
+                    pushVal(CCTerm(IExpression.Int2ITerm(rootInd), ptr)) //we don't care about the value
+                  case Right(_) =>
+                    // newAddr(alloc(h, WrappedAddr(getPtrField(getStruct(read(h, p))))))
+                    // here topVal = getPtrField(getStruct(read(h, p))), we construct the rest
+                    // this is to allocate memory for expressions like:
+                    // &((*p)->tail)
+                    // alternatively one could rewrite this using a temporary variable
+                    // and create a stack pointer to it (but this needs to be done during preprocessing,
+                    //otherwise when we evaluate this we would be pushing two terms instead of one)
+                    val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
+                    maybeOutputClause
+                    pushVal(newTerm)
+                }
+              case _ =>
+                val t = if (handlingFunContractArgs) {
+                  val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
+                  maybeOutputClause
+                  newTerm
+                } else {
+                  val ind = values.indexWhere(v => v == topVal)
+                  assert(ind > -1 && ind < values.size - 1) // todo
+                  val ptr = CCStackPointer(ind, popVal.typ, Nil)
+                  CCTerm(IExpression.Int2ITerm(ind), ptr)
+                }
+                pushVal(t) //we don't care about the value
             }
-            assert(ind > -1 && ind < values.size-1) // todo
-            val ptr = CCStackPointer(ind, popVal.typ, fieldAddress)
-            pushVal(CCTerm(IExpression.Int2ITerm(ind), ptr)) //we don't care about the value
           case _ : Indirection =>
             val v = popVal
             v.typ match { // todo: type checking?
@@ -2552,9 +2585,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           // then we inline the called function
 
           // evaluate the arguments
+          // todo: if we are to handle a function contract, arguments are handled
+          // as heap pointers. if the function is to be inlined, then arguments
+          // are handled as stack pointers. here we set a flag to notify this
+          handlingFunContractArgs = functionContracts.contains(name)
           for (e <- exp.listexp_)
             evalHelp(e)
           outputClause
+          handlingFunContractArgs = false
 
           val functionEntry = initPred
 
@@ -2635,15 +2673,15 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Evar => {
         val name = exp.cident_
         pushVal(lookupVarNoException(name) match {
-                  case -1 =>
-                    (enumeratorDefs get name) match {
-                      case Some(e) => e
-                      case None => throw new TranslationException(
-                                     "Symbol " + name + " is not declared")
-                    }
-                  case ind =>
-                    getValue(ind, false)
-                })
+          case -1 =>
+            (enumeratorDefs get name) match {
+              case Some(e) => e
+              case None => throw new TranslationException(
+                "Symbol " + name + " is not declared")
+            }
+          case ind =>
+            getValue(ind, false)
+        })
       }
 
       case exp : Econst => evalHelp(exp.constant_)
@@ -2932,6 +2970,19 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     localVars.popFrame
   }
 
+  private def createHeapPointer(decl : BeginPointer, typ : CCType) :
+  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+
+  private def createHeapPointerHelper(decl : Pointer, typ : CCType) :
+  CCHeapPointer = decl match {
+      case pp : PointPoint =>
+        CCHeapPointer(heap, createHeapPointerHelper(pp.pointer_, typ))
+      case p : Point =>
+        CCHeapPointer(heap, typ)
+      case _ => throw new TranslationException("Type qualified pointers are " +
+        "currently not supported: " + decl)
+    }
+
   private def pushArguments(functionDef : Function_def,
                             pointerArgs : List[CCType] = Nil) : Compound_stm = {
     val (declarator, stm) = functionDef match {
@@ -2956,7 +3007,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
                 case _: BeginPointer if pointerArgs.nonEmpty => pointerArgs(ind)
-                case _: BeginPointer => CCHeapPointer(heap, typ) // todo: fix: might be wrong &/ not work for more than depth 1
+                case p : BeginPointer => createHeapPointer(p, typ)
                 case _ => typ
               }
               localVars.addVar((actualType newConstant name), actualType)
@@ -2966,7 +3017,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
                 case _: BeginPointer if pointerArgs.nonEmpty => pointerArgs(ind)
-                case _: BeginPointer => CCHeapPointer(heap, typ) // todo: fix: might be wrong &/ not work for more than depth 1
+                case p : BeginPointer => createHeapPointer(p, typ)
                 case _ => typ
               }
               localVars.addVar(actualType newConstant getName(argDec.declarator_),

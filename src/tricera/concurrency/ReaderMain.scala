@@ -30,7 +30,7 @@
 
 package tricera.concurrency
 
-import ap.parser.{IBoolLit, ITerm, PrincessLineariser}
+import ap.parser.{IBoolLit, IFunApp, ITerm, PrincessLineariser}
 import lazabs.horn.bottomup.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
@@ -41,6 +41,8 @@ object ReaderMain {
   var currentId = 0
   val dotFileName =  "DotOutput"
   var mergeNodeId = 0
+  var falseNodeId = 0
+  val oneNodeForEachFalse = true // separates "FALSE" nodes when outputting dot
 
   def printClauses(system : ParametricEncoder.System) = {
     println("System transitions:")
@@ -117,6 +119,7 @@ object ReaderMain {
       dotOutput.write( "digraph lazabs {\n")
       dotOutput.write("{\n\"\" [shape=diamond]\n}\n")
 
+      val falseNodeNames = new MHashMap[String, String]
       val predAtomMapping = new MHashMap[ap.terfor.preds.Predicate, IAtom]
       // creates a mapping from preds to their unmodified atoms, e.g. I(a,b)
       // instead of I(a+1, ...). these appear in the body.
@@ -129,19 +132,62 @@ object ReaderMain {
 
       val allClauses = systemClauses ++ bgClauses ++ system.assertions
 
-      for (c <- allClauses; a <- c.body)
-        predAtomMapping += ((a.pred, a))
+      def containsEvalArg (atom : IAtom) : Boolean = {
+        atom.args.exists(arg => asString(arg).startsWith("__eval")) ||
+        atom.args.exists(arg => arg.isInstanceOf[IFunApp])
+      }
+
+      for (c <- allClauses; a <- c.body) {
+        predAtomMapping get a.pred match {
+          case Some(atom) =>
+            if (containsEvalArg(atom) & !containsEvalArg(a))
+              predAtomMapping.update(a.pred,a)
+          case _ =>
+            predAtomMapping += ((a.pred, a))
+        }
+      }
+      for (c <- allClauses) {
+        val a = c.head
+        predAtomMapping get a.pred match {
+          case Some(atom) =>
+            if (containsEvalArg(atom) & !containsEvalArg(a))
+              predAtomMapping.update(a.pred,a)
+          case _ =>
+            predAtomMapping += ((a.pred, a))
+        }
+      }
 
       def graphUpdate (a : ITerm, b : ITerm) = asString(a) + " := " + asString(b)
-      def graphConnect (a : String, b : String) =
-        "\"" + a + "\"" + " -> " + "\"" + b + "\""
-      def graphLabel (s : String) = " [label=" + "\"" + s + "\"]\n"
+      def graphConnect (a : String, b : String) = {
+        val actualB = b.toLowerCase match {
+          case "false" if oneNodeForEachFalse =>
+            (falseNodeNames get a) match {
+              case Some(n) => n
+              case None =>
+                val n = "falseNode" + falseNodeId
+                falseNodeId += 1
+                falseNodeNames += ((a, n))
+                n
+            }
+          case _ => b
+        }
+        "\"" + a + "\"" + " -> " + "\"" + actualB + "\""
+      }
+
       def graphLabelConstraint (c : Clause, extraConstraint : String = "") = {
+        def reformatConstraints (s : String) = {
+          val equalTermPattern = "(&* *(.+) :?= \\2 *&*)".r
+          val s2 = equalTermPattern.replaceAllIn(s, "\n")
+          val andToNewLinePattern = "(.+ = .+ *)&".r
+          val s3 = andToNewLinePattern.replaceAllIn(s2, "$1\n")
+          val flattenNewLinesPattern = "\n+".r
+          flattenNewLinesPattern.replaceAllIn(s3, "\n")
+        }
         val constraint =
           if (c.constraint != IBoolLit(true)) asString(c.constraint) else ""
-        " [label=" + "\"" + constraint +
-          (if (constraint.nonEmpty && extraConstraint.nonEmpty) ", " else "") +
-          extraConstraint + "\"]\n"
+        reformatConstraints(" [label=" + "\"" + constraint +
+          (if (constraint.nonEmpty && extraConstraint.nonEmpty) "\n" else "") +
+          reformatConstraints(extraConstraint) + "\"]\n")
       }
 
       def graphClause (actualHead : IAtom, c : Clause, extraEdgeLabel : String) {
@@ -181,7 +227,12 @@ object ReaderMain {
           case None => graphClause(c.head, c, "")
         }
       }
+
+      falseNodeNames.foreach(t =>
+        dotOutput.write(t._2 + " [label=\"FALSE\", shape=box, color=red];\n"))
+
       dotOutput.write( "\n}")
+
       dotOutput.close
 
       val runTime = Runtime.getRuntime
