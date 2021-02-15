@@ -30,8 +30,9 @@
 
 package tricera
 
-import tricera.concurrency.CCReader
-import java.io.{FileInputStream, InputStream, FileNotFoundException}
+import tricera.concurrency.{CCReader, TriCeraPreprocessor}
+import java.io.FileInputStream
+
 import lazabs.prover._
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
 import lazabs.GlobalParameters
@@ -49,6 +50,10 @@ class TriCeraParameters extends GlobalParameters {
     CCReader.ArithmeticMode.Mathematical
 
   var prettyPrintDot : Boolean = false
+
+  var printPP : Boolean = false
+  var dumpPP  : Boolean = false
+  var noPP    : Boolean = false
 
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
@@ -86,7 +91,7 @@ object Main {
   def main(args: Array[String]): Unit = doMain(args, false)
 
   val greeting =
-    "TriCera v0.1.\n(C) Copyright 2012-2019 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer"
+    "TriCera v0.2.\n(C) Copyright 2012-2021 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer"
 
   def doMain(args: Array[String],
              stoppingCond: => Boolean): Unit = try {
@@ -105,6 +110,9 @@ object Main {
       case "-f" :: rest => absInFile = true; arguments(rest)
       case "-p" :: rest => prettyPrint = true; arguments(rest)
       case "-pDot" :: rest => prettyPrint = true; prettyPrintDot = true; arguments(rest)
+      case "-printPP" :: rest => printPP = true; arguments(rest)
+      case "-dumpPP" :: rest => dumpPP = true; arguments(rest)
+      case "-noPP" :: rest => noPP = true; arguments(rest)
       case "-dumpClauses" :: rest => printIntermediateClauseSets = true; arguments(rest)
       case "-sp" :: rest => smtPrettyPrint = true; arguments(rest)
       //      case "-pnts" :: rest => ntsPrint = true; arguments(rest)
@@ -227,6 +235,9 @@ object Main {
         " -horn\t\tEnable this engine\n" +
         " -p\t\tPretty Print Horn clauses\n" +
         " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
+        " -printPP\t\tPrint the output of C preprocessor on screen\n" +
+        " -dumpPP\t\tDump the output of C preprocessor to file (input file name + .tri) \n" +
+        " -noPP\t\tTurn off C preprocessor (typedefs are not allowed in this mode) \n" +
         " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
         " -sol\t\tShow solution in Prolog format\n" +
         " -ssol\t\tShow solution in SMT-LIB format\n" +
@@ -290,10 +301,44 @@ object Main {
       println(
         "---------------------------- Reading C/C++ file --------------------------------")
     }
+    import java.io.File
+    val ppFileName : String = if (noPP) {
+      if(printPP || dumpPP)
+        CCReader.warn("Cannot print or dump preprocessor output due to -noPP")
+      fileName // no preprocessing
+    } else {
+      val preprocessedFile = File.createTempFile("tri-", ".tmp")
+      preprocessedFile.deleteOnExit()
 
+      val v = TriCeraPreprocessor.run()
+      val cmdLineArgs: Array[String] = Array("",
+        fileName, "--", "-xc",
+        "-Wno-everything") // todo: add switch for clang warnings?
+      // todo: wrapper around the following
+      val res = v._Z7runTooliPPKcS0_(cmdLineArgs.length, cmdLineArgs,
+        preprocessedFile.getAbsolutePath)
+      if (printPP) {
+        val src = scala.io.Source.fromFile(preprocessedFile)
+        println(src.mkString)
+        src.close
+      }
+      if (dumpPP) {
+        import java.io.{File, FileInputStream, FileOutputStream}
+        val dest = new File(fileName + ".tri")
+        new FileOutputStream(dest) getChannel() transferFrom(
+          new FileInputStream(preprocessedFile) getChannel, 0, Long.MaxValue)
+      }
+      if (res.usesArrays)
+        throw new MainException("C arrays are not supported (yet)")
+      else if (res.isUnsupported)
+        throw new MainException("Input file has unsupported C features " +
+          "(e.g. varargs)") // todo: more detail
+      preprocessedFile.getAbsolutePath
+    }
+    // todo: pass string to TriCera instead of writing to and passing file?
     val system =
       CCReader(new java.io.BufferedReader(
-        new java.io.FileReader(new java.io.File(fileName))),
+        new java.io.FileReader(new java.io.File(ppFileName))),
         funcName,
         arithMode)
 

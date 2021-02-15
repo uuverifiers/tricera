@@ -81,8 +81,8 @@ object CCReader {
   private def parseWithEntry[T](input : java.io.Reader,
                                 entry : (parser) => T) : T = {
     val l = new Yylex(new ap.parser.Parser2InputAbsy.CRRemover2 (input))
-    val l2 = new TypedefReplacingLexer(l)
-    val p = new parser(l2)
+    //val l2 = new TypedefReplacingLexer(l) // todo: run if -noPP?
+    val p = new parser(l)
     
     try { entry(p) } catch {
       case e : Exception =>

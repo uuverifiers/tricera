@@ -6,7 +6,7 @@ typedef struct {
 } S;
 
 void main(){
-  S *p = calloc(sizeof(S)); 
+  S *p = malloc(sizeof(S)); 
 
   p->y.z = 42;
 

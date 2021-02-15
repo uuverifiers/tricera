@@ -18,6 +18,22 @@ done;
 
 LAZABS_HOME=`dirname "${SOURCE}"`;
 
+if [ -f ${LAZABS_HOME}/dist/libtricera-preprocessor.so ]; then
+   	# binary distribution
+  export LD_LIBRARY_PATH="${LAZABS_HOME}/dist";
+
+else if [ -f ${LAZABS_HOME}/preprocessor/build/libtricera-preprocessor.so ]; then
+
+    # binary distribution from sbt
+  export LD_LIBRARY_PATH="${LAZABS_HOME}/preprocessor/build";
+
+else
+
+    echo "Could not find libtricera-preprocessor.so" >&2
+    exit 1
+
+fi; fi
+
 export JAVA_OPTS="-Xmx2024m -Xss20000k";
 
 if [ -f ${LAZABS_HOME}/dist/tricera.jar ]; then

@@ -1,6 +1,5 @@
 
 
-/*@ contract @*/
 int tak(int x, int y, int z) {
     if (y < x)
        return 

@@ -1,6 +1,6 @@
-typedef enum {false, true} _Bool;
+typedef enum {false, true} _bool;
 
-_Bool nondet_bool(void);
+_bool nondet_bool(void);
 
 struct node
 {

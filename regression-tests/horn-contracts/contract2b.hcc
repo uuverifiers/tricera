@@ -1,7 +1,6 @@
 
 int g = -10;
 
-/*@ contract @*/
 int f(int x) {
   g++;
   if (x > 0) {

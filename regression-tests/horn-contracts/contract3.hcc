@@ -1,7 +1,6 @@
 
 int g;
 
-/*@ contract @*/
 void f(int x) {
   if (x > 0) {
     g += x;
