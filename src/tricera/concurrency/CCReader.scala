@@ -81,7 +81,6 @@ object CCReader {
   private def parseWithEntry[T](input : java.io.Reader,
                                 entry : (parser) => T) : T = {
     val l = new Yylex(new ap.parser.Parser2InputAbsy.CRRemover2 (input))
-    //val l2 = new TypedefReplacingLexer(l) // todo: run if -noPP?
     val p = new parser(l)
     
     try { entry(p) } catch {
@@ -1081,8 +1080,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
   //////////////////////////////////////////////////////////////////////////////
   private def collectStructDefs(dec : Dec) : Unit = {
     dec match {
-      case decl : Declarators => {
-        val typ = decl.listdeclaration_specifier_.find(d => d.isInstanceOf[Type]) match {
+      case decl : Declarators => { // todo: check for multiple type specs
+        val typ = decl.listdeclaration_specifier_.find(_.isInstanceOf[Type]) match {
           case Some(t) => t.asInstanceOf[Type].type_specifier_
           case None => throw new
               TranslationException("Could not determine type for " + decl)
@@ -1213,7 +1212,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     (CCTerm(structType.getInitialized(initStack), typ),
                       typ rangePred c)
                   }
-                  case _ => throw new TranslationException("Union or array list " +
+                  case s =>
+                    println(s)
+                    throw new TranslationException("Union or array list " +
                     "initialization is not yet supported.")
                 }
               }
@@ -1276,8 +1277,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             TranslationException("Storage and SpecProp not implemented yet")
       }
 
-      typ match {
-        case enumDec : Tenum =>
+      val types =
+        for (specifier <- decl.listdeclaration_specifier_
+                     if specifier.isInstanceOf[Type])
+          yield specifier.asInstanceOf[Type].type_specifier_
+
+      types.find(_.isInstanceOf[Tenum]) match {
+        case Some(d) =>
+          val enumDec = d.asInstanceOf[Tenum]
           enumDec.enum_specifier_ match {
             case dec : EnumDec =>
               for (initDecl <- decl.listinit_declarator_) {
@@ -1290,7 +1297,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               }
             case _ => buildEnumType(enumDec) // use X in "enum X"
           }
-        case _ => // nothing required, handled by replacing lexer
+        case _ => // nothing required, handled by preprocessor
           // structs were handled in first pass
       }
     }
@@ -1470,8 +1477,19 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     val fieldList : IndexedSeq[FieldInfo] = (for (field <- fields) yield {
-      val fieldType : Either[Integer, CCType] = field.asInstanceOf[Structen].listspec_qual_(0).asInstanceOf[TypeSpec].type_specifier_ match {
-        case t : Tstruct =>
+
+      // ignoring all qual specs such as volatile, const etc.
+      val specs : List[Type_specifier] =
+        (for (f <- field.asInstanceOf[Structen].listspec_qual_
+             if f.isInstanceOf[TypeSpec])
+          yield f.asInstanceOf[TypeSpec].type_specifier_).toList
+
+      // if specs has a struct or union field we cannot simply get the type,
+      // as the field itself might be defining a struct or union
+      val fieldType : Either[Integer, CCType] =
+      specs.find(s => s.isInstanceOf[Tstruct]) match {
+        case Some(ts) =>
+          val t = ts.asInstanceOf[Tstruct]
           val typeName = t.struct_or_union_spec_ match {
             case _ : Unique =>
               val name = getAnonStructName
@@ -1486,7 +1504,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               Left(structInfos.size - 1)
             case i => Left(i)
           }
-          // todo: get pointer depth
+        // todo: get pointer depth
         /*case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
           (getStructName(t) == structName || structIsDeclared(getStructName(t))) &&
           field.asInstanceOf[Structen].liststruct_declarator_(0).asInstanceOf[Decl].declarator_.isInstanceOf[BeginPointer] =>
@@ -1498,25 +1516,25 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       }
       val declarators = field.asInstanceOf[Structen].liststruct_declarator_
 
-      for (decl <- declarators) yield {
-        decl match {
-          case decl: Decl =>
-            val fieldName = getName(decl.declarator_)
-            val ptrDepth = decl.declarator_ match {
-              case _ : BeginPointer => 1 //todo:heap find out actual depth
-              case _ => 0
-            }
-            /*val realFieldType: CCType = decl.declarator_ match {
-              case _ : BeginPointer
-                if !fieldType.isInstanceOf[CCDeclarationOnlyPointer] =>
-                CCHeapPointer(heap, fieldType) //todo:heap
-              case _ => fieldType // todo: does this work for multiple lvl ptrs?
-            }*/
-            FieldInfo(fieldName, fieldType, ptrDepth) // todo: deal with pointer fields
-            //(fieldName, realFieldType)
-          case _ => throw new TranslationException(
-            "Bit fields in structs are not supported yet.")
+      for (decl <- declarators if !decl.isInstanceOf[Field]) yield {
+        val declarator = decl match {
+          case d : Decl => d.declarator_
+          case d : DecField => d.declarator_ // ignore bit field, only collect decl
         }
+
+        val fieldName = getName(declarator)
+        val ptrDepth = declarator match {
+          case _ : BeginPointer => 1 //todo:heap find out actual depth
+          case _ => 0
+        }
+        /*val realFieldType: CCType = decl.declarator_ match {
+          case _ : BeginPointer
+            if !fieldType.isInstanceOf[CCDeclarationOnlyPointer] =>
+            CCHeapPointer(heap, fieldType) //todo:heap
+          case _ => fieldType // todo: does this work for multiple lvl ptrs?
+        }*/
+        FieldInfo(fieldName, fieldType, ptrDepth) // todo: deal with pointer fields
+        //(fieldName, realFieldType)
       }
     }).toList.flatten.toIndexedSeq
 
@@ -1596,25 +1614,40 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     {
       // map the enumerators to integers directly
       var nextInd = IdealInt.ZERO
-      val enumerators = for (s <- specs) yield s match {
+      var enumerators = new MHashMap[String, IdealInt]
+      val symex = Symex(null) // a temporary Symex to collect enum declarations
+      // to deal with fields referring to same-enum fields, e.g. enum{a, b = a+1}
+      localVars pushFrame // we also need to add them as vars
+
+      for (s <- specs) s match {
         case s : Plain => {
           val ind = nextInd
           nextInd = nextInd + 1
-          (s.cident_, ind)
+          val t = new SortedConstantTerm(s.cident_, Sort.Integer)
+          localVars.addVar(t, CCInt)
+          symex.addValue(CCTerm(IIntLit(ind), CCInt))
+          enumerators += ((s.cident_, ind))
         }
         case s : EnumInit => {
-          val ind = translateConstantExpr(s.constant_expression_).toTerm match {
+          val ind = translateConstantExpr(s.constant_expression_, symex).toTerm match {
             case IIntLit(v) => v
+            case ITimes(IdealInt(-1), IIntLit(v)) => -v
+            case IPlus(IIntLit(v1), IIntLit(v2)) => v1 + v2
             case _ =>
               throw new TranslationException("cannot handle enumerator " +
                                              (printer print s))
           }
           nextInd = ind + 1
-          (s.cident_, ind)
+          val t = new SortedConstantTerm(s.cident_, Sort.Integer)
+          localVars.addVar(t, CCInt)
+          symex.addValue(CCTerm(IIntLit(ind), CCInt))
+          enumerators += ((s.cident_, ind))
         }
       }
 
-      val newEnum = CCIntEnum(enumName, enumerators)
+      localVars popFrame
+
+      val newEnum = CCIntEnum(enumName, enumerators.toSeq)
       enumDefs.put(enumName, newEnum)
 
       for ((n, v) <- enumerators)
@@ -1721,8 +1754,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private def translateConstantExpr(expr : Constant_expression) : CCExpr = {
-    val symex = Symex(null)
+  private def translateConstantExpr(expr : Constant_expression,
+                                    symex : Symex = Symex(null)) : CCExpr = {
     symex.saveState
     val res = symex eval expr.asInstanceOf[Especial].exp_
     if (!symex.atomValuesUnchanged)
@@ -1757,14 +1790,15 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     def getGuard = guard
 
     //todo:Heap get rid of this or change name
-    def heapRead(ptrExpr : CCExpr) : CCTerm = {
+    def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = true) : CCTerm = {
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
         case _ => throw new TranslationException(
           "Can only pull from heap pointers! (" + ptrExpr + ")")
       }
       val readObj = heap.read(heapTerm, ptrExpr.toTerm)
-      assertProperty(heap.ObjectADT.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
+      if (assertMemSafety)
+        assertProperty(heap.ObjectADT.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
       CCTerm(objectGetter(readObj), typ)
     }
     private def heapAlloc(value : CCTerm) : CCTerm = {
@@ -2583,7 +2617,22 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         case "free" =>
           if (!modelHeap)
             throw NeedsHeapModelException
-          throw new TranslationException("free is not supported.") // todo
+          val t = atomicEval(exp.listexp_.head)
+          t.typ match {
+            case p : CCHeapPointer =>
+              val termToFree : IFunApp =
+                heapRead(t, assertMemSafety = false).toTerm match {
+                case IFunApp(f, Seq(arg)) if (objectGetters contains f) &
+                                             arg.isInstanceOf[IFunApp] =>
+                  arg.asInstanceOf[IFunApp]
+                case _ => throw new TranslationException("Could not resolve" +
+                  " the term to free: " + t)
+              }
+              heapWrite(termToFree, CCTerm(p.heap._defObj, p))
+              pushVal(CCTerm(0, CCVoid)) // free returns no value, pushing dummy
+            case _ => throw new TranslationException("Unsupported operation: " +
+              "trying to free " + t + ".")
+          }
         case name => {
           // then we inline the called function
 

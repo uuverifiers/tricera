@@ -202,3 +202,59 @@ Final:
 stackptr-to-heapptr.c
 Warning: enabling heap model
 SAFE
+
+free-1-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+------------------------------------------------------
+Init:
+                   main2(emptyHeap)                   
+------------------------------------------------------
+                          |                           
+                          |                           
+                          V                           
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+
+free-2-nondet-unsafe.c
+Warning: enabling heap model
+Warning: no definition of function "nondet" available
+UNSAFE
+
+------------------------------------------------------
+Init:
+                   main2(emptyHeap)                   
+------------------------------------------------------
+                          |                           
+                          |                           
+                          V                           
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+
+free-3-safe.c
+Warning: enabling heap model
+SAFE
+
+free-4-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+------------------------------------------------------------------
+Init:
+                         main2(emptyHeap)                         
+------------------------------------------------------------------
+                                |                                 
+                                |                                 
+                                V                                 
+ main5(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------
+Final:
+ main5(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------
