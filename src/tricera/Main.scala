@@ -404,7 +404,7 @@ object Main {
     case _: java.lang.StackOverflowError =>
       printError("stack overflow")
     case t: Exception =>
-      //t.printStackTrace
+      t.printStackTrace
       printError(t.getMessage)
   }
 

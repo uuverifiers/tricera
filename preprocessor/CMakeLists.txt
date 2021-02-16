@@ -42,6 +42,7 @@ set(tricera-preprocessor_SOURCES
   lib/TypedefRemover.cpp
   lib/UnusedDeclCommenter.cpp
   lib/TypeCanoniser.cpp
+  lib/ForLoopStmtExtractor.cpp
   lib/Utilites.cpp
 )
 

@@ -11,6 +11,7 @@
 #include "TypedefRemover.hpp"
 #include "UnusedDeclCommenter.hpp"
 #include "TypeCanoniser.hpp"
+#include "ForLoopStmtExtractor.hpp"
 
 using namespace clang;
 using namespace ast_matchers;
@@ -41,6 +42,8 @@ void MainConsumer::HandleTranslationUnit(clang::ASTContext& Ctx) {
     UnusedDeclCommenter declCommenter(rewriter, Ctx, usedFunsAndTypes);
    // and canonise all used types
   TypeCanoniser typeCanoniser(rewriter, Ctx, usedFunsAndTypes);
+  // extract declStmts from inside for loop declarations
+  ForLoopStmtExtractor forLoopStmtExtractor(rewriter, Ctx, usedFunsAndTypes);
   
    // finally add contract annotations to recursive functions
   preprocessOutput.numRecursiveFuns = 0;
