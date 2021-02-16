@@ -145,15 +145,16 @@ void TypedefMatcher::run(const MatchFinder::MatchResult &Result) {
     wrapWithCComment(SourceRange(TypeDefBeginLoc, RecordDeclBeginLoc),
                      rewriter);
 
-    if(!declName.empty()) {
-      // comment out / remove the typedef names right after the record
-      // end the comment right before the semicolon
-      wrapWithCComment(SourceRange(RecordDeclEndLoc, TypeDefEndLoc.getLocWithOffset(-1)), 
-                       rewriter, false);
-    } else { // copies x in "typedef struct {} x" to right after "struct"
-      rewriter.InsertTextAfterToken(RecordDeclBeginLoc, 
+    // comment out / remove the typedef names right after the record
+    // end the comment right before the semicolon
+    wrapWithCComment(SourceRange(
+      RecordDeclEndLoc, TypeDefEndLoc.getLocWithOffset(-1)),
+                     rewriter, false);
+    
+    // copies x in "typedef struct {} x" to right after "struct" if missing
+    if(declName.empty())
+      rewriter.InsertTextAfterToken(RecordDeclBeginLoc,
         (" " + TheTypedefDecl->getNameAsString()));
-    }
   } else { // if typedef does not contain a record declaration
     // comment it out (or alternatively remove it)
     //llvm::outs()<<"commenting out decl\n";
