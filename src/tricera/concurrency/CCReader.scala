@@ -2935,12 +2935,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         //case (oldType : CCHeapPointer, newType : CCStackPointer) =>
         //  newType.typ cast t
         case (_ , CCVoid) =>  t // todo: do not do anything for casts to void?
-        case (CCInt, newType : CCHeapPointer) =>
-          if (t.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
-            newType cast t
-          else throw new TranslationException(
-            "pointer arithmetic is not allowed, cannot convert " + t + " to " +
-            newType)
+        case (oldType : CCArithType, newType : CCHeapPointer) =>
+          t.toTerm match {
+            case lit: IIntLit if lit.value.intValue == 0 => newType cast t
+            case _ => throw new TranslationException(
+              "pointer arithmetic is not allowed, cannot convert " + t + " to " +
+                newType)
+          }
         case (oldType : CCHeapPointer, newType : CCHeapPointer) =>
           newType cast t
         case _ =>

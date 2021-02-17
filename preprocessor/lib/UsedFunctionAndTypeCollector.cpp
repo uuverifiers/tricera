@@ -23,7 +23,7 @@ using namespace llvm;
 static const std::vector<std::string> ignoredFuns = {
     "__assert_fail", "__assert_perror_fail", "__assert", "reach_error", 
     "__VERIFIER_error", "static_assert", "assert", "assume", "malloc",
-    "__VERIFIER_assume", "calloc", "realloc", "free", "abort"};
+    "__VERIFIER_assume", "calloc", "realloc", "free", "abort", "memcpy"};
 
 // todo: add another handler to only collect types
 void handleFunDecl(const clang::FunctionDecl* funDecl,

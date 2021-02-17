@@ -37,8 +37,11 @@ UnusedDeclCommenterASTConsumer::UnusedDeclCommenterASTConsumer(clang::Rewriter &
     // comment out var decls using records,
     varDecl(
       unless(parmVarDecl()), // unless they are fun args
-      hasDescendant(qualType(hasCanonicalType(
-        qualType(recordType()).bind("varBaseType"))))
+      anyOf(
+        hasDescendant(qualType(hasCanonicalType(
+          qualType(anyOf(recordType(), enumType())).bind("varBaseType")))),
+        hasType(qualType(arrayType()).bind("varBaseType"))
+      )
     ).bind("varDecl")
     // more?
   );

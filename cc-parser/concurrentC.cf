@@ -19,8 +19,9 @@ Global. External_declaration ::= Dec ;
 Chan.   External_declaration ::= Chan_def ;
 Ignored.External_declaration ::= IgnoredDecl;
 
-ExternKeyword. IgnoredDecl ::= "__extension__" ; -- these can be left in source
-  -- after preprocessing, simply ignore them.
+-- following can be left in source after preprocessing, simply ignore them.
+ExternKeyword. IgnoredDecl ::= "__extension__" ;
+StraySemi.     IgnoredDecl ::= ";" ;
 
 separator nonempty External_declaration "";
 
