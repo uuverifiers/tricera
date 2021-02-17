@@ -2932,8 +2932,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           CCTerm(GTU * t.toTerm, CCDuration)
         }
         // newType is actually heap pointer
-        case (oldType : CCHeapPointer, newType : CCStackPointer) =>
-          newType.typ cast t
+        //case (oldType : CCHeapPointer, newType : CCStackPointer) =>
+        //  newType.typ cast t
         case (_ , CCVoid) =>  t // todo: do not do anything for casts to void?
         case (CCInt, newType : CCHeapPointer) =>
           if (t.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
@@ -2941,6 +2941,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           else throw new TranslationException(
             "pointer arithmetic is not allowed, cannot convert " + t + " to " +
             newType)
+        case (oldType : CCHeapPointer, newType : CCHeapPointer) =>
+          newType cast t
         case _ =>
           throw new TranslationException(
             "do not know how to convert " + t + " to " + newType)

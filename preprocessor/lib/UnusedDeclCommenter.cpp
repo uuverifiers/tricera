@@ -31,7 +31,7 @@ UnusedDeclCommenterASTConsumer::UnusedDeclCommenterASTConsumer(clang::Rewriter &
   DeclarationMatcher usedDeclMatcher = 
   anyOf(
     // comment out unused function decls
-    functionDecl().bind("functionDecl"), 
+    functionDecl(unless(isImplicit())).bind("functionDecl"), 
     // comment out unused record decls
     recordDecl().bind("recordDecl"), 
     // comment out var decls using records,
