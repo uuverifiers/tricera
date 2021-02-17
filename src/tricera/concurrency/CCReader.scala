@@ -531,6 +531,7 @@ class CCReader private (prog : Program,
   }
 
   private var globalPreconditions : IFormula = true
+  private val globalExitPred : Predicate = MonoSortedPredicate("exit", Nil)
 
   private def lookupVarNoException(name : String) : Int =
     localVars lastIndexWhere name match {
@@ -1046,8 +1047,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case Some(funDef) => {
         setPrefix(entryFunction)
 
-        localVars pushFrame
         val exitPred = newPred(1)
+        localVars pushFrame
         val stm = pushArguments(funDef)
 
         val translator = FunctionTranslator(exitPred)
@@ -1401,9 +1402,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       def getPtrType (ptr : Pointer, _typ : CCType) : CCType = {
         ptr match {
-          case ptr: Point => CCStackPointer(-1, _typ) // todo
-          case ptr: PointPoint =>
-            getPtrType(ptr.pointer_, CCStackPointer(-1, _typ))
+          case _   : Point => CCHeapPointer(heap, _typ)
+          case ptr : PointPoint =>
+            getPtrType(ptr.pointer_, CCHeapPointer(heap, _typ))
           case _ => throw new TranslationException(
             "Advanced pointer declarations are not yet supported: " + name
           )
@@ -2544,7 +2545,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Efunk => {
         // inline the called function
         printer print exp.exp_ match {
-          case "__VERIFIER_error" => {
+          case "__VERIFIER_error" | "reach_error" => {
             assertProperty(false)
             pushVal(CCFormula(true, CCInt))
           }
@@ -2934,6 +2935,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         case (oldType : CCHeapPointer, newType : CCStackPointer) =>
           newType.typ cast t
         case (_ , CCVoid) =>  t // todo: do not do anything for casts to void?
+        case (CCInt, newType : CCHeapPointer) =>
+          if (t.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
+            newType cast t
+          else throw new TranslationException(
+            "pointer arithmetic is not allowed, cannot convert " + t + " to " +
+            newType)
         case _ =>
           throw new TranslationException(
             "do not know how to convert " + t + " to " + newType)
@@ -3595,6 +3602,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             throw new TranslationException(
               "\"return\" can only be used within functions")
         }
+      }
+      case _ : SjumpAbort | _ : SjumpExit => { // abort() or exit(int status)
+        output(Clause(atom(globalExitPred, Nil),
+                      List(atom(entry, allFormalVars)),
+                      true))
       }
     }
 

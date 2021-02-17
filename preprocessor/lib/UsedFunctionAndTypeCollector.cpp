@@ -18,10 +18,23 @@ using namespace clang;
 using namespace ast_matchers;
 using namespace llvm;
 
+// any functions in this list will not be marked as used, and in turn will be
+// commented out later by the preprocessor (if UnusedDeclCommenter is used)
+static const std::vector<std::string> ignoredFuns = {
+    "__assert_fail", "__assert_perror_fail", "__assert", "reach_error", 
+    "__VERIFIER_error", "static_assert", "assert", "assume", "malloc",
+    "__VERIFIER_assume", "calloc", "realloc", "free", "abort"};
+
 // todo: add another handler to only collect types
 void handleFunDecl(const clang::FunctionDecl* funDecl,
                    clang::ast_matchers::MatchFinder::MatchCallback* handler,
                    clang::ASTContext *Ctx) {
+
+  //std::string funName = funDecl->getNameAsString();
+  //if (std::find(ignoredFuns.begin(), ignoredFuns.end(), funName) != 
+  //  ignoredFuns.end())
+  //  return;
+  
   StatementMatcher CallSiteOrDeclRefMatcher = anyOf(
   callExpr(
     hasAncestor(functionDecl(hasName(funDecl->getName())).bind("enclosing")),
@@ -130,14 +143,18 @@ void FindFunctionMatcher::run(const MatchFinder::MatchResult &Result) {
     bool functionIsRecursive = declaresSameEntity(CalleeDecl, EnclosingDecl);
     
     bool functionSeenBefore = false;
-    for(int i = 0; i < seenFunctions.size(); ++i){
-      if(declaresSameEntity(seenFunctions[i]->getDecl(), CalleeDecl)){
-        functionSeenBefore = true;
-        if(!seenFunctions[i]->isRecursive() && functionIsRecursive)
-          seenFunctions[i]->setRecursive();
-        break;
+    if (std::find(ignoredFuns.begin(), ignoredFuns.end(), 
+        CalleeDecl->getNameAsString()) != ignoredFuns.end())
+      functionSeenBefore = true;
+    else
+      for(int i = 0; i < seenFunctions.size(); ++i){
+        if(declaresSameEntity(seenFunctions[i]->getDecl(), CalleeDecl)){
+          functionSeenBefore = true;
+          if(!seenFunctions[i]->isRecursive() && functionIsRecursive)
+            seenFunctions[i]->setRecursive();
+          break;
+        }
       }
-    } 
     //if(functionIsRecursive)
     //    llvm::outs() << "  " << CalleeDecl->getNameAsString() << " is recursive!\n";
 

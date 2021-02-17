@@ -33,8 +33,8 @@ NewFuncInt.  Function_def ::= [Abs_hint] Declarator Compound_stm ;
 SingleThread. Thread_def ::= "thread" CIdent Compound_stm ;
 ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
 
-NoDeclarator.  Dec ::= [Declaration_specifier] ";";
-Declarators.   Dec ::= [Declaration_specifier] [Init_declarator] ";" ;
+NoDeclarator.  Dec ::= [Declaration_specifier] [Extra_specifier] ";";
+Declarators.   Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
 
 separator nonempty Dec "";
 
@@ -43,8 +43,18 @@ AChan. Chan_def ::= "chan" [CIdent] ";" ;
 Type.     Declaration_specifier ::= Type_specifier ;
 Storage.  Declaration_specifier ::= Storage_class_specifier ;
 SpecProp. Declaration_specifier ::= Type_qualifier;
+SpecFunc. Declaration_specifier ::= Function_specifier ;
+
+-- todo: following is probably non-standard, just quickly added so that whe can parse
+-- preprocessed prgorams containing gcc attributes
+AttrSpec.  Extra_specifier       ::= "__attribute__" "(" "(" [Attribute] ")" ")";
+AsmSpec.   Extra_specifier       ::= "__asm__" "(" String ")" ;
+Attr.      Attribute             ::= CIdent ; 
+AttrParam. Attribute             ::= CIdent "(" Exp ")" ;
 
 separator nonempty Declaration_specifier "";
+separator Extra_specifier "";
+separator nonempty Attribute ",";
 
 OnlyDecl.     Init_declarator ::= Declarator ;
 InitDecl.     Init_declarator ::= Declarator "=" Initializer;
@@ -69,12 +79,14 @@ NoExpArgs.      Maybe_Exp_Args ::= ;
 
 
 Tvoid.        Type_specifier ::= "void";
+Tbool.        Type_specifier ::= "_Bool";
+-- Tcomplex.     Type_specifier ::= "_Complex";
 Tchar.        Type_specifier ::= "char";
 Tshort.       Type_specifier ::= "short";
 Tint.         Type_specifier ::= "int";
 Tlong.        Type_specifier ::= "long";
--- Tfloat.       Type_specifier ::= "float";
--- Tdouble.      Type_specifier ::= "double";
+Tfloat.       Type_specifier ::= "float";
+Tdouble.      Type_specifier ::= "double";
 Tsigned.      Type_specifier ::= "signed";
 Tunsigned.    Type_specifier ::= "unsigned";
 Tstruct.      Type_specifier ::= Struct_or_union_spec;
@@ -90,9 +102,15 @@ LocalProgram.   Storage_class_specifier ::= "static" ;
 LocalBlock.     Storage_class_specifier ::= "auto" ;
 LocalReg.       Storage_class_specifier ::= "register" ;
 
+InlineFunSpec1.  Function_specifier ::= "inline" ;
+InlineFunSpec2.  Function_specifier ::= "__inline" ;
+NoRetFunSpec.   Function_specifier ::= "_Noreturn" ;
 
-Const  . Type_qualifier ::= "const" ;
-NoOptim.  Type_qualifier ::= "volatile";
+Const.      Type_qualifier ::= "const" ;
+NoOptim.    Type_qualifier ::= "volatile";
+Restrict1.  Type_qualifier ::= "__restrict__";
+Restrict2.  Type_qualifier ::= "__restrict";
+Extension.  Type_qualifier ::= "__extension__";
 
 separator nonempty Type_qualifier "";
 
@@ -228,6 +246,8 @@ SjumpTwo.   Jump_stm ::= "continue" ";" ;
 SjumpThree. Jump_stm ::= "break" ";" ;
 SjumpFour.  Jump_stm ::= "return" ";" ;
 SjumpFive.  Jump_stm ::= "return" Exp ";" ;
+SjumpAbort. Jump_stm ::= "abort" "(" ")" ";" ;
+SjumpExit.  Jump_stm ::= "exit" "(" Exp ")" ";" ;
 
 SatomicOne. Atomic_stm ::= "atomic" Stm;
 SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
@@ -235,8 +255,7 @@ SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
 
 separator nonempty Stm "";
 
-
-token CIdent (letter | '_') (letter | digit | '_')*;
+token CIdent (letter | '_' | '$') (letter | digit | '_' | '$')*;
 
 token UnboundedInteger ["123456789"] digit *;
 
