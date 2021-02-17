@@ -34,9 +34,26 @@ TypeCanoniserASTConsumer::TypeCanoniserASTConsumer(clang::Rewriter &r,
       hasCanonicalType(hasDescendant(enumType().bind("enumType"))),
       anything()
     )))).bind("typedefUsingTypeLoc");
-  
-  //finder.addMatcher(traverse(TK_IgnoreUnlessSpelledInSource, typedefUsingDeclMatcher), &handler);
-  finder.addMatcher(traverse(TK_IgnoreUnlessSpelledInSource, typedefUsingTypeLocMatcher), &handler);
+
+  finder.addMatcher(traverse(TK_IgnoreUnlessSpelledInSource, 
+    typedefUsingTypeLocMatcher), &handler);
+}
+
+void TypeCanoniserASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
+  finder.matchAST(Ctx);
+    
+  StatementMatcher multiDeclStmtMatcher = declStmt(
+    unless(hasSingleDecl(decl())), 
+    containsDeclaration(0, 
+      declaratorDecl(hasType(
+        typedefType().bind("typedefType"))
+      ).bind("declaratorDecl")
+    )
+  ).bind("declStmt");
+
+  finder.addMatcher(traverse(TK_IgnoreUnlessSpelledInSource, 
+    multiDeclStmtMatcher), &handler);
+  finder.matchAST(Ctx);
 }
 
 void TypeCanoniserMatcher::run(const MatchFinder::MatchResult &Result) {
@@ -45,6 +62,10 @@ void TypeCanoniserMatcher::run(const MatchFinder::MatchResult &Result) {
 
   const TypeLoc* typedefUsingTypeLoc =
     Result.Nodes.getNodeAs<clang::TypeLoc>("typedefUsingTypeLoc"); 
+  const DeclStmt* declStmt =
+    Result.Nodes.getNodeAs<clang::DeclStmt>("declStmt"); 
+  const TypedefType * TheTypedefType =
+    Result.Nodes.getNodeAs<clang::TypedefType>("typedefType"); 
 
   if (typedefUsingTypeLoc) {       
 
@@ -64,10 +85,8 @@ void TypeCanoniserMatcher::run(const MatchFinder::MatchResult &Result) {
       // T a, b; --> this generate two matches for two declarations: 
       // once for both a and b. If we have replaced T once already,
       // we need to record it so we do not replace it again for b
+      // however, if canon. T contained pointers, they should be prepended to b
       if (editedLocations.insert(B).second) {  //second = T if inserted       
-        const TypedefType * TheTypedefType =
-          Result.Nodes.getNodeAs<clang::TypedefType>("typedefType"); 
-
         auto canonicalType = // this does not get rid of some qualifiers
           QualType(TheTypedefType->getCanonicalTypeUnqualified());
 
@@ -93,23 +112,27 @@ void TypeCanoniserMatcher::run(const MatchFinder::MatchResult &Result) {
         std::string completeTypeSpec = (tagName + 
                                         typeVisitor.getUnqualifiedTypeName());
 
-        rewriter.ReplaceText(
-            SourceRange(B, E), completeTypeSpec);
-            //( (!isRecordWithKindName ? (kindName + " ") : "") +
-            //QualType(canonicalType).getUnqualifiedType().getAsString()));
+        rewriter.ReplaceText(SourceRange(B, E), completeTypeSpec);
       }
-      // Source code locations (type spec)
-      /*FullSourceLoc B = Ctx->getFullLoc(TheCStyleCastExpr->getLParenLoc());
-      FullSourceLoc E = Ctx->getFullLoc(TheCStyleCastExpr->getRParenLoc());
-
-      rewriter.ReplaceText(
-          SourceRange(B, E),
-          ("(" +
-          (!isRecordWithKindName ? (kindName + " ") : "") +
-          QualType(canonicalType).getUnqualifiedType().getAsString() + 
-            " /* " + TheCStyleCastExpr->getType().getAsString() + 
-            " * / )"));*/
-  } else {
+  } 
+  else if (declStmt) {
+    // this matcher cannot match unless decl is DeclaratorDecl
+    auto it = declStmt->decl_begin();
+    const DeclaratorDecl* firstDecl = dynamic_cast<DeclaratorDecl*>(*it);
+    // sanity check, first declaration should have already been canonised
+    assert(!editedLocations.insert(firstDecl->getTypeSpecStartLoc()).second);
+    ++it;
+    for (; it != declStmt->decl_end(); ++it) {
+      const DeclaratorDecl* decl = dynamic_cast<DeclaratorDecl*>(*it);
+      //decl->dumpColor();
+      auto canonicalType = 
+        QualType(TheTypedefType->getCanonicalTypeUnqualified());
+      TypeCanoniserVisitor typeVisitor(*Ctx);
+      typeVisitor.TraverseType(canonicalType);
+      rewriter.InsertTextBefore(decl->getEndLoc(), typeVisitor.getOnlyPtrs());
+    }
+  }
+  else {
     llvm_unreachable("Init handler called but could not determine match!\n");
   }
 }

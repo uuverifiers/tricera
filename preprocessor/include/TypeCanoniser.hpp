@@ -20,19 +20,17 @@ class TypeCanoniserMatcher :
   public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
   TypeCanoniserMatcher(clang::Rewriter &r, 
-                       UsedFunAndTypeCollector &usedFunsAndTypes) 
-                       : rewriter(r), usedFunsAndTypes(usedFunsAndTypes) {}
+                  UsedFunAndTypeCollector &usedFunsAndTypes)
+                  : rewriter(r), usedFunsAndTypes(usedFunsAndTypes) {}
   // this callback executes on a match
   void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
   
   // this callback executes at the end of the translation unit
   void onEndOfTranslationUnit() override{};
 
-  private:
+private:
   clang::Rewriter &rewriter;
   llvm::SmallSet<clang::SourceLocation, 32> editedLocations;
-  llvm::SmallSet<const clang::Decl*, 32> canonisedDecls;
-  llvm::SmallSet<const clang::Decl*, 32> commentedDecls;
   UsedFunAndTypeCollector &usedFunsAndTypes;
 };
 
@@ -40,9 +38,7 @@ class TypeCanoniserASTConsumer : public clang::ASTConsumer {
 public:
   TypeCanoniserASTConsumer(clang::Rewriter &r, 
                            UsedFunAndTypeCollector &usedFunsAndTypes);
-  void HandleTranslationUnit(clang::ASTContext &Ctx) override {
-    finder.matchAST(Ctx);
-  }
+  void HandleTranslationUnit(clang::ASTContext &Ctx) override;
 private:
   clang::ast_matchers::MatchFinder finder;
   TypeCanoniserMatcher handler;
@@ -77,6 +73,9 @@ public:
     }
     std::string getUnqualifiedTypeNameWithoutPtrs() const {
       return unqualTypeName; 
+    }
+    std::string getOnlyPtrs() const {
+      return std::string(numPointers, '*');
     }
     bool isFunctionType() const { return isFunctionPrototype; }
     bool convertedArrayToPtr() const { return _convertedArrayToPtr; }

@@ -1047,8 +1047,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case Some(funDef) => {
         setPrefix(entryFunction)
 
-        val exitPred = newPred(1)
         localVars pushFrame
+        val exitPred = newPred(1)
         val stm = pushArguments(funDef)
 
         val translator = FunctionTranslator(exitPred)
