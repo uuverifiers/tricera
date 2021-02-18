@@ -2099,14 +2099,24 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     (printer print exp))
     }
 
-    private def isHeapPointer(t : CCExpr) =
-      t.typ.isInstanceOf[CCHeapPointer] ||
-        t.toTerm.isInstanceOf[IFunApp] &&
-          (getFieldInfo(t.toTerm.asInstanceOf[IFunApp])._2 match {
-        case Left(c) => c.sort.isInstanceOf[Heap.HeapSort]
-        case Right(f) => objectGetters contains f.fun
-      })
+    private def isHeapRead(t : CCExpr) =
+      t.toTerm match {
+        case IFunApp(f, _) if objectGetters contains f => true
+        case _ => false
+      }
+      /*t.toTerm.isInstanceOf[IFunApp] &&
+        t.toTerm.asInstanceOf[IFunApp] match {
+          case Left(c) => c.sort.isInstanceOf[Heap.HeapSort]
+          case Right(f) => objectGetters contains f.fun
+        }*/
+    private def isHeapStructFieldRead (t : CCExpr) =
+      t.toTerm match {
+        case f : IFunApp => getFieldInfo(f)._2.isRight
+        case _ => false
+      }
 
+    private def isHeapPointer(t : CCExpr) =
+      t.typ.isInstanceOf[CCHeapPointer]
     private def isHeapPointer(exp : Exp) =
       getVarType(asLValue(exp)).isInstanceOf[CCHeapPointer]
 
@@ -2221,6 +2231,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     // Returns the root term and a list of names pointing to the given field.
+    // todo: this works incorrectly when root is not a pointer but the field is
+    // e.g. getInt(read(h, f(someStruct)))
     private def getFieldInfo(nested : IFunApp) :
     (List[String], Either[SortedConstantTerm, IFunApp]) = {
       val fieldNames = List()
@@ -2276,16 +2288,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
-        val updatingPointedValue = !exp.exp_1.isInstanceOf[Evar] &&
-          (!isIndirection(exp.exp_1) || isHeapPointer(exp.exp_1))
-        if(isHeapPointer(lhsVal)) { //lhs in form of sel(...(read(h,p)))
-          if (updatingPointedValue) {
-            val actualLhsVal = // deals with the edge case: (*head) = p
-              if (!lhsVal.toTerm.isInstanceOf[IFunApp])
-                heapRead(lhsVal)
-              else lhsVal
-            heapWrite(actualLhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
-          } else {
+        val updatingPointedValue =
+          isHeapRead(lhsVal) || // *(p) = ... where p is a heap ptr
+          isHeapStructFieldRead(lhsVal) // ps->f = ... where ps is a heap ptr
+        if(isHeapPointer(lhsVal) || updatingPointedValue) {
+          if (updatingPointedValue)
+            heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
+          else {
             val lhsName = asLValue(exp.exp_1)
             val actualRhsVal = rhsVal.toTerm match {
               case lit : IIntLit =>
@@ -2293,17 +2302,16 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                   throw new TranslationException("Pointer arithmetic is not " +
                     "allowed, and the only assignable integer value for " +
                     "pointers is 0 (NULL)")
-                } else CCTerm(rhsVal.toTerm, CCHeapPointer(heap, CCInt))
+                } else CCTerm(heap.nullAddr(), CCHeapPointer(heap, lhsVal.typ))
               case _ => rhsVal
             }
-            setValue(lhsName, actualRhsVal)
-            //setVarType(lookupVar(lhsName), actualRhsVal.typ) // todo: this looks wrong...
+            val actualLhsTerm = getActualAssignedTerm(lhsVal, actualRhsVal)
+            setValue(lhsName, actualLhsTerm)
           }
         } else {
           val lhsName = asLValue(exp.exp_1)
-          val lhsInd = lookupVar(lhsName)
           val actualLhsTerm = getActualAssignedTerm(lhsVal, rhsVal)
-          setValue(lhsInd, actualLhsTerm, isIndirection(exp.exp_1))
+          setValue(lhsName, actualLhsTerm)
         }
         pushVal(rhsVal)
       }
@@ -3139,11 +3147,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val finalPred = newPred
       translateWithEntryClause(compound, finalPred)
       // add a default return edge
-      val rp = returnPred.get
-      output(Clause(atom(rp, (allFormalVars take (rp.arity - 1)) ++
-                             List(IConstant(new ConstantTerm("__result")))),
-                    List(atom(finalPred, allFormalVars)),
-                    true))
+      //val rp = returnPred.get
+      //output(Clause(atom(rp, (allFormalVars take (rp.arity - 1)) ++
+      //                       List(IConstant(new ConstantTerm("__result")))),
+      //              List(atom(finalPred, allFormalVars)),
+      //              true))
       postProcessClauses
     }
 
@@ -3152,11 +3160,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val finalPred = newPred
       translate(compound, entry, finalPred)
       // add a default return edge
-      val rp = returnPred.get
-      output(Clause(atom(rp, (allFormalVars take (rp.arity - 1)) ++
-                             List(IConstant(new ConstantTerm("__result")))),
-                    List(atom(finalPred, allFormalVars)),
-                    true))
+      //val rp = returnPred.get
+      //output(Clause(atom(rp, (allFormalVars take (rp.arity - 1)) ++
+      //                       List(IConstant(new ConstantTerm("__result")))),
+      //              List(atom(finalPred, allFormalVars)),
+      //              true))
       postProcessClauses
     }
 

@@ -258,3 +258,7 @@ Init:
 Final:
  main5(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
 ------------------------------------------------------------------
+
+struct-ptrfield-1.c
+Warning: enabling heap model
+SAFE
