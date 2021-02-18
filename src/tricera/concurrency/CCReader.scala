@@ -2747,6 +2747,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       case exp : Econst => evalHelp(exp.constant_)
 //      case exp : Estring.     Exp17 ::= String;
+
+      case _ =>
+        throw new TranslationException("Expression currently not supported by " +
+          "TriCera: " + (printer print exp))
     }
 
     private def handleFunction(name : String,
