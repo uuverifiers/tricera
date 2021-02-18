@@ -34,9 +34,19 @@ TypeCanoniserASTConsumer::TypeCanoniserASTConsumer(clang::Rewriter &r,
       hasCanonicalType(hasDescendant(enumType().bind("enumType"))),
       anything()
     )))).bind("typedefUsingTypeLoc");
+  
+  // matches sizeof expressions such as int * x = malloc(sizeof * x);
+  // these are canonised as malloc(sizeof(int *))  
+  StatementMatcher sizeOfMatcher = sizeOfExpr(unaryExprOrTypeTraitExpr(
+    hasDescendant(
+      declRefExpr(hasType(qualType().bind("sizeOfType"))
+      ).bind("sizeOfDeclRefExpr"))).bind("sizeOfExpr")
+  );    
 
   finder.addMatcher(traverse(TK_IgnoreUnlessSpelledInSource, 
     typedefUsingTypeLocMatcher), &handler);
+  finder.addMatcher(traverse(TK_IgnoreUnlessSpelledInSource, 
+    sizeOfMatcher), &handler);
 }
 
 void TypeCanoniserASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
@@ -66,6 +76,8 @@ void TypeCanoniserMatcher::run(const MatchFinder::MatchResult &Result) {
     Result.Nodes.getNodeAs<clang::DeclStmt>("declStmt"); 
   const TypedefType * TheTypedefType =
     Result.Nodes.getNodeAs<clang::TypedefType>("typedefType"); 
+  const DeclRefExpr * sizeOfDeclRefExpr =
+    Result.Nodes.getNodeAs<clang::DeclRefExpr>("sizeOfDeclRefExpr"); 
 
   if (typedefUsingTypeLoc) {       
 
@@ -131,6 +143,16 @@ void TypeCanoniserMatcher::run(const MatchFinder::MatchResult &Result) {
       typeVisitor.TraverseType(canonicalType);
       rewriter.InsertTextBefore(decl->getEndLoc(), typeVisitor.getOnlyPtrs());
     }
+  }
+  else if (sizeOfDeclRefExpr) {
+    const UnaryExprOrTypeTraitExpr * sizeOfExpr =
+      Result.Nodes.getNodeAs<clang::UnaryExprOrTypeTraitExpr>("sizeOfExpr"); 
+    const QualType * sizeOfType =
+      Result.Nodes.getNodeAs<clang::QualType>("sizeOfType"); 
+    TypeCanoniserVisitor typeVisitor(*Ctx);
+    typeVisitor.TraverseType(sizeOfType->getCanonicalType());
+    rewriter.ReplaceText(sizeOfExpr->getSourceRange(), 
+      "sizeof(" + typeVisitor.getUnqualifiedTypeNameWithoutPtrs() + ")");
   }
   else {
     llvm_unreachable("Init handler called but could not determine match!\n");

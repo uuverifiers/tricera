@@ -781,10 +781,6 @@ class CCReader private (prog : Program,
       case _ =>
     }
 
-  if(structInfos.exists(s => s.fieldInfos isEmpty))
-    throw new TranslationException(
-      "Some structs were declared but never defined!")
-
   import ap.theories.{Heap => HeapObj}
 
   def defObjCtor(objectADT : ADT, allocResADT : ADT) : ITerm = {
@@ -795,7 +791,7 @@ class CCReader private (prog : Program,
 
   val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
     (for (i <- structInfos.indices) yield {
-      if(structInfos(i).fieldInfos isEmpty) throw new TranslationException(
+      if(structInfos(i).fieldInfos isEmpty) warn(
         "Struct " + structInfos(i).name + " was declared, but never defined!")
       val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
         for(FieldInfo(fieldName, fieldType, ptrDepth) <-
@@ -2597,9 +2593,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           val typ = exp.listexp_(0) match {
             case exp : Ebytestype => getType(exp.type_name_)
             //case exp : Ebytesexpr => eval(exp.exp_).typ
-            case _ => throw new TranslationException(
-              "memory functions can currently only be called with argument: " +
-              "sizeof(type).")
+            case _ => throw new TranslationException((printer print exp) +
+              " Memory functions can currently only be called with argument: " +
+              "sizeof(type). Arrays are currently not supported.")
           }
 
           def getNonDet(typ : CCType) : ITerm =
@@ -2704,7 +2700,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case typ : CCStruct => typ
           case CCStructField(name, structs) => structs(name)
           case typ => throw new TranslationException("Epoint is currently " +
-            "only implemented for structs, not " + typ)
+            "only implemented for structs, not " + typ + ": " +
+            (printer print exp))
         }
         if(!structType.contains(fieldName))
           throw new TranslationException(fieldName + " is not a member of "

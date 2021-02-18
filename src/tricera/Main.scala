@@ -36,6 +36,7 @@ import java.io.FileInputStream
 import lazabs.prover._
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
 import lazabs.GlobalParameters
+import net.jcazevedo.moultingyaml.YF
 
 object TriCeraParameters {
   def get : TriCeraParameters =
@@ -335,6 +336,63 @@ object Main {
           "(e.g. varargs)") // todo: more detail
       preprocessedFile.getAbsolutePath
     }
+
+    // check if an accompanying .yml file exists (SV-COMP style)
+    case class BMOption (language : String, data_model : String)
+    case class BMPropertyFile(property_file : String,
+                              expected_verdict : Option[Boolean] = None,
+                              subproperty : Option[String] = None) {
+      def isReachSafety = property_file.contains("unreach-call")
+      def isMemSafety = property_file.contains("valid-memsafety")
+      def getExpectedVerdict : Boolean =
+        expected_verdict match {
+          case Some(verdict) => verdict
+          case None => throw new MainException("Benchmark information provided" +
+            "with no expected verdict!")
+        }
+      def printVerdictComparison(actualResult : Boolean) : Unit =
+        if (actualResult == getExpectedVerdict)
+          println("  expected verdict matches the result!")
+        else println("  expected verdict mismatch!")
+    }
+    case class BenchmarkInfo(format_version : String,
+                             input_files : String,
+                             properties : List[BMPropertyFile],
+                             options : BMOption)
+    val bmInfo : Option[BenchmarkInfo] = try {
+      import java.nio.file.{Paths, Files}
+      val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
+      if (Files.exists(Paths.get(yamlFileName))) {
+        // println("Accompanying yaml file found")
+        import net.jcazevedo.moultingyaml._
+        object BenchmarkYamlProtocol extends DefaultYamlProtocol {
+          implicit val propFormat = yamlFormat3(BMPropertyFile)
+          implicit val optFormat = yamlFormat2(BMOption)
+          implicit val bmInfoFormat = yamlFormat4(BenchmarkInfo)
+        }
+        import BenchmarkYamlProtocol._
+        val src = scala.io.Source.fromFile(yamlFileName)
+        val yamlAst = src.mkString.stripMargin.parseYaml
+        src.close
+        Some(yamlAst.convertTo[BenchmarkInfo])
+      } else None
+    } catch {
+      case _: Throwable => CCReader.warn(
+        "could not parse the accompanying Yaml(.yml) file, ignoring it...")
+      None
+    }
+
+    val checkedProperties = bmInfo match {
+      case Some(info) => val checkedProperties =
+        info.properties.filter(p => p.isReachSafety || p.isMemSafety)
+        if (checkedProperties.isEmpty)
+          throw new MainException("An associated property file (.yml) is " +
+            "found, however TriCera currently can only check for unreach-call" +
+            " and a subset of valid-memsafety properties.")
+        checkedProperties
+      case None => Nil
+    }
+
     // todo: pass string to TriCera instead of writing to and passing file?
     val system =
       CCReader(new java.io.BufferedReader(
@@ -383,6 +441,33 @@ object Main {
           println
           hornconcurrency.VerificationLoop.prettyPrint(cex)
         }
+      }
+    }
+
+    checkedProperties.foreach { p =>
+      println
+      p match {
+        case p if p.isMemSafety =>
+          println("mem-safety")
+          p.subproperty match {
+            case Some("valid-free") =>
+              println("  valid-free")
+              p.printVerdictComparison(result.isLeft)
+            // All memory deallocs are valid (cex: invalid free).
+            case Some("valid-deref") =>
+              println("  valid-deref")
+              p.printVerdictComparison(result.isLeft)
+            // All pointer deref.s are valid (cex: invalid deref.)
+            case Some("valid-memtrack") =>
+              println("  valid-memtrack")
+              p.printVerdictComparison(result.isLeft)
+            // All allocated memory is tracked (cex: memory leak)
+            case Some(s) => // ignore expected result
+            case None => // case should not happen
+          }
+        case p if p.isReachSafety =>
+          println("reach-safety") // no subproperties
+          p.printVerdictComparison(result.isLeft) // left is safe
       }
     }
 
