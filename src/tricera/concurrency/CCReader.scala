@@ -51,7 +51,7 @@ object CCReader {
   def apply(input : java.io.Reader, entryFunction : String,
             arithMode : ArithmeticMode.Value = ArithmeticMode.Mathematical,
             trackMemorySafety : Boolean = false)
-           : ParametricEncoder.System = {
+           : (ParametricEncoder.System, Boolean) = { // second ret. arg is true if modelled heap
     def entry(parser : concurrentC.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
 //    println(printer print prog)
@@ -73,7 +73,7 @@ object CCReader {
           modelHeap = true
         }
       }
-    reader.system
+    (reader.system, modelHeap)
   }
 
   /**

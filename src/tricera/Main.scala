@@ -37,6 +37,7 @@ import lazabs.prover._
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
 import lazabs.GlobalParameters
 import net.jcazevedo.moultingyaml.YF
+import tricera.benchmarking.Benchmarking._
 
 object TriCeraParameters {
   def get : TriCeraParameters =
@@ -77,35 +78,51 @@ class TriCeraParameters extends GlobalParameters {
 ////////////////////////////////////////////////////////////////////////////////
 
 object Main {
-  def assertions = GlobalParameters.get.assertions
-
+  // Exceptions
   class MainException(msg: String) extends Exception(msg)
-
   object TimeoutException extends MainException("timeout")
-
   object StoppedException extends MainException("stopped")
 
-  def openInputFile {
+  // entry point
+  def main(args: Array[String]): Unit = doMain(args, false)
+  def doMain(args: Array[String], stoppingCond: => Boolean) : ExecutionSummary = {
+    val triMain = new Main
+    triMain(args)
+    triMain.run(stoppingCond)
+  }
+
+  private def printError(message: String): Unit =
+    if (message == null)
+      println("error")
+    else
+      println("(error \"" + message.replace("\"", "\"\"\"") + "\")")
+
+}
+
+class Main {
+
+  import Main._
+
+  private def openInputFile {
     val params = TriCeraParameters.get
     import params._
     in = new FileInputStream(fileName)
   }
 
-  def main(args: Array[String]): Unit = doMain(args, false)
-
   val greeting =
     "TriCera v0.2.\n(C) Copyright 2012-2021 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer"
 
-  def doMain(args: Array[String],
-             stoppingCond: => Boolean): Unit = try {
-    val params = new TriCeraParameters
-    GlobalParameters.parameters.value = params
+  val params = new TriCeraParameters
+  GlobalParameters.parameters.value = params
 
-    // work-around: make the Princess wrapper thread-safe
-    lazabs.prover.PrincessWrapper.newWrapper
+  var modelledHeap = false
 
-    import params._
+  // work-around: make the Princess wrapper thread-safe
+  lazabs.prover.PrincessWrapper.newWrapper
 
+  import params._
+
+  def apply(args: Array[String]): Unit = {
     def arguments(args: List[String]): Boolean = args match {
       case Nil => true
       //case "-c" :: rest => drawCFG = true; arguments(rest)
@@ -280,7 +297,9 @@ object Main {
       throw new MainException("no input file given")
       return
     }
+  }
 
+  def run(stoppingCond: => Boolean) : ExecutionSummary = try {
     val startTime = System.currentTimeMillis
 
     timeoutChecker = timeout match {
@@ -349,16 +368,6 @@ object Main {
                               subproperty : Option[String] = None) {
       def isReachSafety = property_file.contains("unreach-call")
       def isMemSafety = property_file.contains("valid-memsafety")
-      def getExpectedVerdict : Boolean =
-        expected_verdict match {
-          case Some(verdict) => verdict
-          case None => throw new MainException("Benchmark information provided" +
-            "with no expected verdict!")
-        }
-      def printVerdictComparison(actualResult : Boolean) : Unit =
-        if (actualResult == getExpectedVerdict)
-          println("  expected verdict matches the result!")
-        else println("  expected verdict mismatch!")
     }
     case class BenchmarkInfo(format_version : String,
                              input_files : String,
@@ -384,27 +393,44 @@ object Main {
     } catch {
       case _: Throwable => CCReader.warn(
         "could not parse the accompanying Yaml(.yml) file, ignoring it...")
-      None
+        None
     }
 
-    val checkedProperties = bmInfo match {
-      case Some(info) => val checkedProperties =
-        info.properties.filter(p => p.isReachSafety || p.isMemSafety)
-        if (checkedProperties.isEmpty)
-          throw new MainException("An associated property file (.yml) is " +
-            "found, however TriCera currently can only check for unreach-call" +
-            " and a subset of valid-memsafety properties.")
-        checkedProperties
+    val bmTracks : List[(BenchmarkTrack, Option[Boolean])]  = bmInfo match {
+      case Some(info) =>
+        for (p <- info.properties if p.isMemSafety || p.isReachSafety) yield {
+          val track =
+            if (p.isReachSafety)
+              Reachability
+            else //(p.isMemSafety)
+              p.subproperty match {
+                case Some("valid-free") => MemSafety(Some(ValidFree))
+                case Some("valid-deref") => MemSafety(Some(ValidDeref))
+                case Some("valid-memtrack") => MemSafety(Some(MemTrack))
+                case _ => MemSafety(None)
+              }
+          (track, p.expected_verdict)
+        }
       case None => Nil
     }
 
-    if (checkedProperties.exists(p =>
-      p.subproperty.contains("valid-memtrack"))) shouldTrackMemory = true
+    if (bmInfo.nonEmpty && bmTracks.isEmpty) {
+      throw new MainException("An associated property file (.yml) is " +
+        "found, however TriCera currently can only check for unreach-call" +
+        " and a subset of valid-memsafety properties.")
+    }
+
+    if (bmTracks.exists(t => t._1 match {
+      case MemSafety(Some(MemTrack)) => true
+      case _  => false
+    })) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
-    val system =
+    val (system, modelledHeapRes) =
       CCReader(new java.io.BufferedReader(
         new java.io.FileReader(new java.io.File(ppFileName))),
         funcName, arithMode, shouldTrackMemory)
+
+    modelledHeap = modelledHeapRes
 
     if (prettyPrint)
       tricera.concurrency.ReaderMain.printClauses(system)
@@ -415,12 +441,12 @@ object Main {
       println
       println("After simplification:")
       tricera.concurrency.ReaderMain.printClauses(smallSystem)
-      return
+      return ExecutionSummary(DidNotExecute, Nil, modelledHeap)
     }
 
     if(smtPrettyPrint) {
       tricera.concurrency.ReaderMain.printSMTClauses(smallSystem)
-      return
+      return ExecutionSummary(DidNotExecute, Nil, modelledHeap)
     }
 
     val result = try {
@@ -438,46 +464,39 @@ object Main {
       }
     }
 
-    result match {
+    val executionResult = result match {
       case Left(_) =>
         println("SAFE")
+        Safe
       case Right(cex) => {
         println("UNSAFE")
         if (plainCEX) {
           println
           hornconcurrency.VerificationLoop.prettyPrint(cex)
         }
+        Unsafe
       }
     }
 
-    checkedProperties.foreach { p =>
-      println
-      p match {
-        case p if p.isMemSafety =>
-          println("mem-safety")
-          p.subproperty match {
-            case Some("valid-free") =>
-              println("  valid-free")
-              p.printVerdictComparison(result.isLeft)
-            // All memory deallocs are valid (cex: invalid free).
-            case Some("valid-deref") =>
-              println("  valid-deref")
-              p.printVerdictComparison(result.isLeft)
-            // All pointer deref.s are valid (cex: invalid deref.)
-            case Some("valid-memtrack") =>
-              println("  valid-memtrack")
-              p.printVerdictComparison(result.isLeft)
-            // All allocated memory is tracked (cex: memory leak)
-            case Some(s) => // ignore expected result
-            case None => // case should not happen
-          }
-        case p if p.isReachSafety =>
-          println("reach-safety") // no subproperties
-          p.printVerdictComparison(result.isLeft) // left is safe
+    def getExpectedVerdict (expected : Option[Boolean]) : Boolean =
+      expected match {
+        case Some(verdict) => verdict
+        case None => throw new MainException("Benchmark information provided" +
+          "with no expected verdict!")
       }
+    def printVerdictComparison(comparison : Boolean) : Unit =
+      if (comparison) println("  expected verdict matches the result!")
+      else println("  expected verdict mismatch!")
+
+    val trackResult = for (track <- bmTracks) yield {
+      println(track._1)
+      val expectedVerdict = getExpectedVerdict(track._2)
+      val verdictMatches =  expectedVerdict == result.isLeft
+      printVerdictComparison(verdictMatches)
+      (track._1, expectedVerdict)
     }
 
-    return
+    ExecutionSummary(executionResult, trackResult, modelledHeap)
 
     //if(drawCFG) {DrawGraph(cfg.transitions.toList,cfg.predicates,absInFile,m); return}
 
@@ -489,20 +508,18 @@ object Main {
 
   } catch {
     case TimeoutException | StoppedException =>
+      ExecutionSummary(Timeout, Nil, modelledHeap)
     // nothing
     case _: java.lang.OutOfMemoryError =>
       printError("out of memory")
+      ExecutionSummary(OutOfMemory, Nil, modelledHeap)
     case _: java.lang.StackOverflowError =>
       printError("stack overflow")
+      ExecutionSummary(StackOverflow, Nil, modelledHeap)
     case t: Exception =>
       //t.printStackTrace
       printError(t.getMessage)
+      ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap)
   }
-
-  private def printError(message: String): Unit =
-    if (message == null)
-      println("error")
-    else
-      println("(error \"" + message.replace("\"", "\"\"\"") + "\")")
 
 }

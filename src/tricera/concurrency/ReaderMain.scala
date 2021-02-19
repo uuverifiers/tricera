@@ -265,7 +265,7 @@ object ReaderMain {
       val system = 
         CCReader(new java.io.BufferedReader (
                    new java.io.FileReader(new java.io.File (name))),
-                 "main")
+                 "main")._1
 
       val smallSystem = system.mergeLocalTransitions
       printClauses(smallSystem)
