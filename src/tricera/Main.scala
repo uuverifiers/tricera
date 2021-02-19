@@ -56,6 +56,8 @@ class TriCeraParameters extends GlobalParameters {
   var dumpPP  : Boolean = false
   var noPP    : Boolean = false
 
+  var shouldTrackMemory : Boolean = false
+
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
     that.arithMode = this.arithMode
@@ -122,6 +124,8 @@ object Main {
       case "-disj" :: rest => disjunctive = true; arguments(rest)
       case "-sol" :: rest => displaySolutionProlog = true; arguments(rest)
       case "-ssol" :: rest => displaySolutionSMT = true; arguments(rest)
+
+      case "-memtrack" :: rest => shouldTrackMemory = true; arguments(rest)
 
       case "-abstract" :: rest => templateBasedInterpolation = true; arguments(rest)
       case "-abstractPO" :: rest => templateBasedInterpolationPortfolio = true; arguments(rest)
@@ -242,6 +246,7 @@ object Main {
         " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
         " -sol\t\tShow solution in Prolog format\n" +
         " -ssol\t\tShow solution in SMT-LIB format\n" +
+        " -memtrack\t\tCheck that there are no memory leaks in the input program \n" +
         " -disj\t\tUse disjunctive interpolation\n" +
         " -stac\t\tStatic acceleration of loops\n" +
         " -lbe\t\tDisable preprocessor (e.g., clause inlining)\n" +
@@ -393,12 +398,13 @@ object Main {
       case None => Nil
     }
 
+    if (checkedProperties.exists(p =>
+      p.subproperty.contains("valid-memtrack"))) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
     val system =
       CCReader(new java.io.BufferedReader(
         new java.io.FileReader(new java.io.File(ppFileName))),
-        funcName,
-        arithMode)
+        funcName, arithMode, shouldTrackMemory)
 
     if (prettyPrint)
       tricera.concurrency.ReaderMain.printClauses(system)

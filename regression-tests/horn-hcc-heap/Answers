@@ -262,3 +262,89 @@ Final:
 struct-ptrfield-1.c
 Warning: enabling heap model
 SAFE
+
+memtrack-01.c
+Warning: enabling heap model
+UNSAFE
+
+-----------------------------------------------
+Init:
+               main2(emptyHeap)                
+-----------------------------------------------
+                       |                       
+                       |                       
+                       V                       
+ main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
+-----------------------------------------------
+Final:
+ main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
+-----------------------------------------------
+
+mem-safety
+  valid-memtrack
+  expected verdict matches the result!
+
+memtrack-02.c
+Warning: enabling heap model
+SAFE
+
+mem-safety
+  valid-memtrack
+  expected verdict matches the result!
+
+memtrack-03.c
+Warning: enabling heap model
+UNSAFE
+
+-----------------------------------------------
+Init:
+               main2(emptyHeap)                
+-----------------------------------------------
+                       |                       
+                       |                       
+                       V                       
+ main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
+-----------------------------------------------
+Final:
+ main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
+-----------------------------------------------
+
+mem-safety
+  valid-memtrack
+  expected verdict matches the result!
+
+memtrack-04.c
+SAFE
+
+mem-safety
+  valid-memtrack
+  expected verdict matches the result!
+
+memtrack-05.c
+Warning: enabling heap model
+UNSAFE
+
+-----------------------------------------------
+Init:
+         main3(emptyHeap, nthAddr(0))          
+-----------------------------------------------
+                       |                       
+                       |                       
+                       V                       
+ main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
+-----------------------------------------------
+Final:
+ main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
+-----------------------------------------------
+
+mem-safety
+  valid-memtrack
+  expected verdict matches the result!
+
+memtrack-06.c
+Warning: enabling heap model
+SAFE
+
+mem-safety
+  valid-memtrack
+  expected verdict matches the result!

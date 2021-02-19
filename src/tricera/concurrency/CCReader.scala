@@ -49,7 +49,8 @@ import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap
 
 object CCReader {
   def apply(input : java.io.Reader, entryFunction : String,
-            arithMode : ArithmeticMode.Value = ArithmeticMode.Mathematical)
+            arithMode : ArithmeticMode.Value = ArithmeticMode.Mathematical,
+            trackMemorySafety : Boolean = false)
            : ParametricEncoder.System = {
     def entry(parser : concurrentC.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
@@ -61,7 +62,7 @@ object CCReader {
     while (reader == null)
       try {
         reader = new CCReader(prog, entryFunction, useTime, modelHeap,
-                              arithMode)
+                              trackMemorySafety, arithMode)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -365,6 +366,7 @@ class CCReader private (prog : Program,
                         entryFunction : String,
                         useTime : Boolean,
                         modelHeap : Boolean,
+                        trackMemorySafety : Boolean,
                         arithmeticMode : CCReader.ArithmeticMode.Value) {
 
   import CCReader._
@@ -896,11 +898,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
 
         case decl : Afunc => {
-          val name = decl.function_def_ match {
-            case f : NewFunc => getName(f.declarator_)
-            case f : NewFuncInt => getName(f.declarator_)
-            case f : NewHintFunc => getName(f.declarator_)
-          }
+          val name = getName(decl.function_def_)
 
           if (functionDefs contains name)
             throw new TranslationException(
@@ -1047,8 +1045,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val exitPred = newPred(1)
         val stm = pushArguments(funDef)
 
-        val translator = FunctionTranslator(exitPred)
-        translator.translateWithReturn(stm)
+        val translator = FunctionTranslator(exitPred,
+          modelHeap && trackMemorySafety) // track memory safety only with heap
+        //translator.translateWithReturn(stm)
+        translator.translateNoReturn(stm)
 
         processes += ((clauses.toList, ParametricEncoder.Singleton))
         clauses.clear
@@ -1359,6 +1359,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
             variableHints(variableHints.size - 1) = hintEls
           }
+
+  private def getName (f : Function_def) : String = f match {
+    case f : NewFunc => getName(f.declarator_)
+    case f : NewFuncInt => getName(f.declarator_)
+    case f : NewHintFunc => getName(f.declarator_)
+  }
 
   private def getName(decl : Declarator) : String = decl match {
     case decl : NoPointer => getName(decl.direct_declarator_)
@@ -3110,12 +3116,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private object FunctionTranslator {
     def apply =
-      new FunctionTranslator(None)
-    def apply(returnPred : Predicate) =
-      new FunctionTranslator(Some(returnPred))
+      new FunctionTranslator(None, false)
+    def apply(returnPred : Predicate,
+              addTrackMemorySafetyAssertion : Boolean = false) =
+      new FunctionTranslator(Some(returnPred), addTrackMemorySafetyAssertion)
   }
 
-  private class FunctionTranslator private (returnPred : Option[Predicate]) {
+  private class FunctionTranslator private (returnPred : Option[Predicate],
+                                      addTrackMemorySafetyAssertion : Boolean) {
 
     private def symexFor(initPred : Predicate,
                          stm : Expression_stm) : (Symex, Option[CCExpr]) = {
@@ -3318,7 +3326,23 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         output(entryClause)
         translateStmSeq(stmsIt, entryPred, exit)
-
+        // add an assertion to track memory safety (i.e., no memory leaks)
+        // currently this is only added to the exit point of the entry function,
+        if (addTrackMemorySafetyAssertion) {
+          import HornClauses._
+          import IExpression._
+          val retPred = returnPred.getOrElse(throw new TranslationException(
+            "return pred does not contain the heap term"))
+          retPred match {
+            case s : MonoSortedPredicate if s.argSorts.head == heap.HeapSort =>
+              val addrTerm = getFreshEvalVar(heap.AddressSort)
+              val retTerm : ITerm = new SortedConstantTerm("__res", s.argSorts.last)
+              assertionClauses += ((heap.read(heapTerm, addrTerm) === defObj())
+                :- atom(retPred, allFormalVars.toList ++ List(retTerm)))
+            case _ => throw new TranslationException("Tried to add -memtrack" +
+              "assertion but could not find the heap term!")
+          }
+        }
         localVars.popFrame
       }
     }
@@ -3388,10 +3412,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         stmsIt.next match {
           case stm : DecS => {
             prevPred = translate(stm.dec_, prevPred)
-            if (!stmsIt.hasNext)
-              output(Clause(atom(exit, allFormalVars),
-                            List(atom(prevPred, allFormalVars)),
-                            true))
+            //if (!stmsIt.hasNext)
+            //  output(Clause(atom(exit, allFormalVars),
+            //                List(atom(returnPred.get, allFormalVars)),
+            //                true))
           }
           case stm => {
             val nextPred = if (stmsIt.hasNext) newPred else exit

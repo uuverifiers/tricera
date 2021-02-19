@@ -10,6 +10,15 @@ for name in $TESTS; do
     $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
+MEMTRACKTESTS="memtrack-01.c memtrack-02.c memtrack-03.c memtrack-04.c memtrack-05.c memtrack-06.c "
+
+for name in $MEMTRACKTESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    # -memtrack can also be added but not required when .yml files are present
+done
+
 # this one runs forever with the current encoding
 #TESTS="list-002.c"
 
