@@ -873,6 +873,16 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
 
+  private var funRetCounter = 0
+  private def getResVar (typ : CCType) : List[ITerm] = typ match {
+    case CCVoid => List()
+    case t      => List(getResVar(typ.toSort))
+  }
+  private def getResVar (sort : IExpression.Sort) : ITerm = {
+    funRetCounter += 1
+    sort newConstant "__res" + funRetCounter
+  }
+
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
     // generous than actual C semantics, where declarations
@@ -976,10 +986,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         case _      => translator.translateWithReturn(stm, entryPred)
       }
 
-      val resVar = typ match {
-        case CCVoid => List()
-        case t      => List(i(t newConstant "__res"))
-      }
+      val resVar = getResVar(typ)
 
       val globalVarTerms : Seq[ITerm] = globalVars.formalVars
       val postArgs : Seq[ITerm] = (allFormalVars drop prePredArgs.size) ++
@@ -2651,7 +2658,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           handlingFunContractArgs = functionContracts.contains(name)
           for (e <- exp.listexp_)
             evalHelp(e)
-          outputClause
+          if(!handlingFunContractArgs) outputClause
           handlingFunContractArgs = false
 
           val functionEntry = initPred
@@ -2773,10 +2780,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             yield IExpression.i(t newConstant ("__gvar" + n))
 
           val resType = getType(funDef)
-          val resVar = resType match {
-            case CCVoid => List()
-            case t      => List(IExpression.i(t newConstant "__res"))
-          }
+          val resVar = getResVar(resType)
 
           val prePredArgs : Seq[ITerm] =
             (for (n <- 0 until globalVars.size)
@@ -3334,9 +3338,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           retPred match {
             case s : MonoSortedPredicate if s.argSorts.head == heap.HeapSort =>
               val addrTerm = getFreshEvalVar(heap.AddressSort)
-              val retTerm : ITerm = new SortedConstantTerm("__res", s.argSorts.last)
+              val resVar = getResVar(s.argSorts.last)
               assertionClauses += ((heap.read(heapTerm, addrTerm) === defObj())
-                :- atom(retPred, allFormalVars.toList ++ List(retTerm)))
+                :- atom(retPred, allFormalVars.toList ++ List(resVar)))
             case _ => throw new TranslationException("Tried to add -memtrack" +
               "assertion but could not find the heap term!")
           }
