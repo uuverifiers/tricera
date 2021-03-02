@@ -36,13 +36,9 @@ import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrentC._
 import concurrentC.Absyn._
 import hornconcurrency.ParametricEncoder
-import ParametricEncoder.SomeBackgroundAxioms
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
-import lazabs.horn.preprocessor.HornPreprocessor
-import lazabs.types.HeapAddressType
-//import lazabs.horn.heap.Heap
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
@@ -101,6 +97,7 @@ object CCReader {
   class TranslationException(msg : String) extends Exception(msg)
   object UndefinedEnumException extends Exception
   object NeedsTimeException extends Exception
+  class ArrayException(msg : String) extends Exception
 
   val heapTermName = "@h"
   object NeedsHeapModelException extends Exception
@@ -2599,7 +2596,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           val typ = exp.listexp_(0) match {
             case exp : Ebytestype => getType(exp.type_name_)
             //case exp : Ebytesexpr => eval(exp.exp_).typ
-            case _ => throw new TranslationException((printer print exp) +
+            case _ => throw new ArrayException((printer print exp) +
               " Memory functions can currently only be called with argument: " +
               "sizeof(type). Arrays are currently not supported.")
           }
@@ -2952,7 +2949,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         case (_ , CCVoid) =>  t // todo: do not do anything for casts to void?
         case (oldType : CCArithType, newType : CCHeapPointer) =>
           t.toTerm match {
-            case lit: IIntLit if lit.value.intValue == 0 => newType cast t
+            case lit: IIntLit if lit.value.intValue == 0 =>
+              CCTerm(heap.nullAddr(), newType) //newType cast t
             case _ => throw new TranslationException(
               "pointer arithmetic is not allowed, cannot convert " + t + " to " +
                 newType)

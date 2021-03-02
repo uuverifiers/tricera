@@ -35,6 +35,7 @@ import lazabs.horn.bottomup.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
 import hornconcurrency.{ParametricEncoder, VerificationLoop}
+import tricera.params.TriCeraParameters
 
 object ReaderMain {
 
@@ -177,7 +178,7 @@ object ReaderMain {
       def graphLabelConstraint (c : Clause, extraConstraint : String = "") = {
         def reformatConstraints (s : String) = {
           val equalTermPattern = "(&* *(.+) :?= \\2 *&*)".r
-          val s2 = equalTermPattern.replaceAllIn(s, "\n")
+          val s2 = s//equalTermPattern.replaceAllIn(s, "\n")
           val andToNewLinePattern = "(.+ = .+ *)&".r
           val s3 = andToNewLinePattern.replaceAllIn(s2, "$1\n")
           val flattenNewLinesPattern = "\n+".r
@@ -242,7 +243,7 @@ object ReaderMain {
       proc.waitFor
       currentId = currentId + 1
     }
-    if(tricera.TriCeraParameters.get.prettyPrintDot) show
+    if(TriCeraParameters.get.prettyPrintDot) show
   }
 
   def printSMTClauses(system : ParametricEncoder.System) : Unit = {
@@ -259,7 +260,7 @@ object ReaderMain {
 
   def main(args: Array[String]) : Unit = {
     ap.util.Debug enableAllAssertions false
-    tricera.TriCeraParameters.get.assertions = false
+    TriCeraParameters.get.assertions = false
 
     for (name <- args) {
       val system = 

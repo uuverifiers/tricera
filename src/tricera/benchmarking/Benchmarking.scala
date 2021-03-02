@@ -2,16 +2,46 @@ package tricera.benchmarking
 
 object Benchmarking {
   // Execution Results
-  sealed trait ExecutionResult
-  case object ParseError extends ExecutionResult // input could not be parsed
-  case object ArrayError extends ExecutionResult // input contains arrays
-  case object OutOfMemory extends ExecutionResult
-  case object StackOverflow extends ExecutionResult
-  case class OtherError (e : String) extends ExecutionResult
-  case object Timeout extends ExecutionResult
-  case object Safe extends ExecutionResult
-  case object Unsafe extends ExecutionResult
-  case object DidNotExecute extends ExecutionResult
+  sealed trait ExecutionError
+  sealed abstract class ExecutionResult {
+    def toString : String
+  }
+  case object ParseError extends ExecutionResult with ExecutionError {
+    override def toString : String =
+      "input could not be parsed"
+  }
+  case object ArrayError extends ExecutionResult with ExecutionError  {
+    override def toString : String =
+      "input file contains arrays"
+  }
+  case object OutOfMemory extends ExecutionResult with ExecutionError  {
+    override def toString : String =
+      "ran out of memory"
+  }
+  case object StackOverflow extends ExecutionResult with ExecutionError  {
+    override def toString : String =
+      "stack overflow"
+  }
+  case class OtherError (e : String) extends ExecutionResult with ExecutionError {
+    override def toString : String =
+      "other error: " + e
+  }
+  case object Timeout extends ExecutionResult with ExecutionError {
+    override def toString : String =
+      "timeout"
+  }
+  case object Safe extends ExecutionResult {
+    override def toString : String =
+      "safe"
+  }
+  case object Unsafe extends ExecutionResult {
+    override def toString : String =
+      "unsafe"
+  }
+  case object DidNotExecute extends ExecutionResult {
+    override def toString : String =
+      "did not execute"
+  }
 
   // SV-COMP related, should probably move somewhere else...
   // supported SV-COMP benchmark tracks
@@ -44,7 +74,26 @@ object Benchmarking {
                                 executionResult: ExecutionResult,
                                 // if a supported SV-COMP track is provided, returns a list of these tracks
                                 // and whether the execution result matched the expected verdict or not
-                                trackResult : List[(BenchmarkTrack, Boolean)],
-                                modelledHeap : Boolean // true if the bm contained heap operations
+                                trackResult : List[(BenchmarkTrack, Boolean)] = Nil,
+                                modelledHeap : Boolean = false, // true if the bm contained heap operations
+                                elapsedTime  : Double = 0,
+                                preprocessTime : Double = 0
                               )
+
+  class Timer {
+    private var stopped = true
+    private var startTime : Double = System.nanoTime()
+    private var stopDuration  : Double = 0
+
+    def pause() { stopped = true; stopDuration = System.nanoTime() - startTime }
+    def stop()  { stopped = true; stopDuration = System.nanoTime() - startTime }
+    def start() { stopped = false; startTime = System.nanoTime() }
+
+    def s  : Double = ns / 1e9d
+    def ms : Double = ns / 1e6d
+    def us : Double = ns / 1e3d
+    def ns : Double =
+      if (stopped) stopDuration else System.nanoTime() - startTime
+  }
+
 }

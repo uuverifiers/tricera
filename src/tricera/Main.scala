@@ -31,49 +31,13 @@
 package tricera
 
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
-import java.io.FileInputStream
+import java.io.{FileInputStream, FileNotFoundException}
 
 import lazabs.prover._
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
 import lazabs.GlobalParameters
 import net.jcazevedo.moultingyaml.YF
 import tricera.benchmarking.Benchmarking._
-
-object TriCeraParameters {
-  def get : TriCeraParameters =
-    GlobalParameters.get.asInstanceOf[TriCeraParameters]
-  val parameters =
-    GlobalParameters.parameters
-}
-
-class TriCeraParameters extends GlobalParameters {
-
-  var arithMode : CCReader.ArithmeticMode.Value =
-    CCReader.ArithmeticMode.Mathematical
-
-  var prettyPrintDot : Boolean = false
-
-  var printPP : Boolean = false
-  var dumpPP  : Boolean = false
-  var noPP    : Boolean = false
-
-  var shouldTrackMemory : Boolean = false
-
-  protected def copyTo(that : TriCeraParameters) = {
-    super.copyTo(that)
-    that.arithMode = this.arithMode
-  }
-
-  override def clone: TriCeraParameters = {
-    val res = new TriCeraParameters
-    this copyTo res
-    res
-  }
-
-  override def withAndWOTemplates : Seq[TriCeraParameters] =
-    for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
-
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -84,10 +48,16 @@ object Main {
   object StoppedException extends MainException("stopped")
 
   // entry point
-  def main(args: Array[String]): Unit = doMain(args, false)
+  def main(args: Array[String]): Unit = {
+    val res = doMain(args, false)
+    res match {
+      case _ : ExecutionError => throw new MainException(res.toString)
+      case _ => // nothing
+    }
+  }
+
   def doMain(args: Array[String], stoppingCond: => Boolean) : ExecutionSummary = {
-    val triMain = new Main
-    triMain(args)
+    val triMain = new Main(args)
     triMain.run(stoppingCond)
   }
 
@@ -99,212 +69,35 @@ object Main {
 
 }
 
-class Main {
-
+class Main (args: Array[String]) {
   import Main._
+  import tricera.params.TriCeraParameters
 
-  private def openInputFile {
-    val params = TriCeraParameters.get
-    import params._
-    in = new FileInputStream(fileName)
-  }
-
-  val greeting =
-    "TriCera v0.2.\n(C) Copyright 2012-2021 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer"
-
-  val params = new TriCeraParameters
+  val params = TriCeraParameters.get
+  params(args.toList)
   GlobalParameters.parameters.value = params
-
-  var modelledHeap = false
-
-  // work-around: make the Princess wrapper thread-safe
-  lazabs.prover.PrincessWrapper.newWrapper
-
   import params._
 
-  def apply(args: Array[String]): Unit = {
-    def arguments(args: List[String]): Boolean = args match {
-      case Nil => true
-      //case "-c" :: rest => drawCFG = true; arguments(rest)
-      //case "-r" :: rest => drawRTree = true; arguments(rest)
-      case "-f" :: rest => absInFile = true; arguments(rest)
-      case "-p" :: rest => prettyPrint = true; arguments(rest)
-      case "-pDot" :: rest => prettyPrint = true; prettyPrintDot = true; arguments(rest)
-      case "-printPP" :: rest => printPP = true; arguments(rest)
-      case "-dumpPP" :: rest => dumpPP = true; arguments(rest)
-      case "-noPP" :: rest => noPP = true; arguments(rest)
-      case "-dumpClauses" :: rest => printIntermediateClauseSets = true; arguments(rest)
-      case "-sp" :: rest => smtPrettyPrint = true; arguments(rest)
-      //      case "-pnts" :: rest => ntsPrint = true; arguments(rest)
-      case "-horn" :: rest => horn = true; arguments(rest)
-      case "-glb" :: rest => global = true; arguments(rest)
-      case "-disj" :: rest => disjunctive = true; arguments(rest)
-      case "-sol" :: rest => displaySolutionProlog = true; arguments(rest)
-      case "-ssol" :: rest => displaySolutionSMT = true; arguments(rest)
-
-      case "-memtrack" :: rest => shouldTrackMemory = true; arguments(rest)
-
-      case "-abstract" :: rest => templateBasedInterpolation = true; arguments(rest)
-      case "-abstractPO" :: rest => templateBasedInterpolationPortfolio = true; arguments(rest)
-      case "-abstract:manual" :: rest => {
-        templateBasedInterpolation = true
-        templateBasedInterpolationType = AbstractionType.Empty
-        arguments(rest)
-      }
-      case "-abstract:term" :: rest => {
-        templateBasedInterpolation = true
-        templateBasedInterpolationType = AbstractionType.Term
-        arguments(rest)
-      }
-      case "-abstract:oct" :: rest => {
-        templateBasedInterpolation = true
-        templateBasedInterpolationType = AbstractionType.Octagon
-        arguments(rest)
-      }
-      case "-abstract:relEqs" :: rest => {
-        templateBasedInterpolation = true
-        templateBasedInterpolationType = AbstractionType.RelationalEqs
-        arguments(rest)
-      }
-      case "-abstract:relIneqs" :: rest => {
-        templateBasedInterpolation = true
-        templateBasedInterpolationType = AbstractionType.RelationalIneqs
-        arguments(rest)
-      }
-      case "-abstract:off" :: rest => {
-        templateBasedInterpolation = false
-        arguments(rest)
-      }
-      case tTimeout :: rest if (tTimeout.startsWith("-abstractTO:")) =>
-        templateBasedInterpolationTimeout =
-          (java.lang.Float.parseFloat(tTimeout.drop(12)) * 1000).toInt;
-        arguments(rest)
-
-      case tFile :: rest if (tFile.startsWith("-hints:")) => {
-        cegarHintsFile = tFile drop 7
-        arguments(rest)
-      }
-
-      case "-splitClauses" :: rest => splitClauses = true; arguments(rest)
-
-      case aMode :: rest if (aMode startsWith "-arithMode:") => {
-        arithMode = aMode match {
-          case "-arithMode:math" => CCReader.ArithmeticMode.Mathematical
-          case "-arithMode:ilp32" => CCReader.ArithmeticMode.ILP32
-          case "-arithMode:lp64" => CCReader.ArithmeticMode.LP64
-          case "-arithMode:llp64" => CCReader.ArithmeticMode.LLP64
-          case _ =>
-            throw new MainException("Unrecognised mode " + aMode)
-        }
-        arguments(rest)
-      }
-
-      case "-n" :: rest => spuriousness = false; arguments(rest)
-      //      case "-i" :: rest => interpolation = true; arguments(rest)
-      case "-lbe" :: rest => lbe = true; arguments(rest)
-
-      case arrayQuans :: rest if (arrayQuans.startsWith("-arrayQuans:")) =>
-        if (arrayQuans == "-arrayQuans:off")
-          arrayQuantification = None
-        else
-          arrayQuantification = Some(arrayQuans.drop(12).toInt)
-        arguments(rest)
-
-      case "-noSlicing" :: rest => slicing = false; arguments(rest)
-      //case "-array" :: rest => arrayRemoval = true; arguments(rest)
-      case "-princess" :: rest => princess = true; arguments(rest)
-      case "-stac" :: rest => staticAccelerate = true; arguments(rest)
-      case "-dynac" :: rest => dynamicAccelerate = true; arguments(rest)
-      case "-unap" :: rest => underApproximate = true; arguments(rest)
-      case "-tem" :: rest => template = true; arguments(rest)
-      case "-dinq" :: rest => dumpInterpolationQuery = true; arguments(rest)
-      case "-brew" :: rest => babarew = true; arguments(rest)
-      /*      case "-bfs" :: rest => searchMethod = BFS; arguments(rest)
-            case "-prq" :: rest => searchMethod = PRQ; arguments(rest)
-            case "-dfs" :: rest => searchMethod = DFS; arguments(rest)
-            case "-rnd" :: rest => searchMethod = RND; arguments(rest)*/
-      case tTimeout :: rest if (tTimeout.startsWith("-t:")) =>
-        val time = (java.lang.Float.parseFloat(tTimeout.drop(3)) * 1000).toInt
-        timeout = Some(time);
-        arguments(rest)
-      case mFuncName :: rest if (mFuncName.startsWith("-m:")) => funcName = mFuncName drop 3; arguments(rest)
-      case sSolFileName :: rest if (sSolFileName.startsWith("-s:")) => solFileName = sSolFileName.drop(3); arguments(rest)
-      case "-log" :: rest => setLogLevel(2); arguments(rest)
-      case "-statistics" :: rest => setLogLevel(1); arguments(rest)
-      case logOption :: rest if (logOption startsWith "-log:") =>
-        setLogLevel((logOption drop 5).toInt); arguments(rest)
-      case "-logSimplified" :: rest => printHornSimplified = true; arguments(rest)
-      case "-dot" :: str :: rest => dotSpec = true; dotFile = str; arguments(rest)
-      case "-pngNo" :: rest => pngNo = true; arguments(rest)
-      case "-dotCEX" :: rest => pngNo = false; arguments(rest)
-      case "-eogCEX" :: rest => pngNo = false; eogCEX = true; arguments(rest)
-      case "-cex" :: rest => plainCEX = true; arguments(rest)
-      case "-assert" :: rest => TriCeraParameters.get.assertions = true; arguments(rest)
-      case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +
-        "General options:\n" +
-        " -h\t\tShow this information\n" +
-        " -assert\tEnable assertions in TriCera\n" +
-        " -log\t\tDisplay progress and found invariants\n" +
-        " -log:n\t\tDisplay progress with verbosity n (currently 0 <= n <= 3)\n" +
-        " -statistics\tDisplay statistics (implied by -log)\n" +
-        " -t:time\tSet timeout (in seconds)\n" +
-        " -cex\t\tShow textual counterexamples\n" +
-        " -dotCEX\tOutput counterexample in dot format\n" +
-        " -eogCEX\tDisplay counterexample using eog\n" +
-        " -m:func\tUse function func as entry point (default: main)\n" +
-        "\n" +
-        "Horn engine:\n" +
-        " -horn\t\tEnable this engine\n" +
-        " -p\t\tPretty Print Horn clauses\n" +
-        " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
-        " -printPP\t\tPrint the output of C preprocessor on screen\n" +
-        " -dumpPP\t\tDump the output of C preprocessor to file (input file name + .tri) \n" +
-        " -noPP\t\tTurn off C preprocessor (typedefs are not allowed in this mode) \n" +
-        " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
-        " -sol\t\tShow solution in Prolog format\n" +
-        " -ssol\t\tShow solution in SMT-LIB format\n" +
-        " -memtrack\t\tCheck that there are no memory leaks in the input program \n" +
-        " -disj\t\tUse disjunctive interpolation\n" +
-        " -stac\t\tStatic acceleration of loops\n" +
-        " -lbe\t\tDisable preprocessor (e.g., clause inlining)\n" +
-        " -arrayQuans:n\tIntroduce n quantifiers for each array argument (default: 1)\n" +
-        " -noSlicing\tDisable slicing of clauses\n" +
-        " -hints:f\tRead initial predicates and abstraction templates from a file\n" +
-        //          " -glb\t\tUse the global approach to solve Horn clauses (outdated)\n" +
-        "\n" +
-        //          " -abstract\tUse interpolation abstraction for better interpolants (default)\n" +
-        " -abstract:t\tInterp. abstraction: off, manual, term, oct,\n" +
-        "            \t                     relEqs (default), relIneqs\n" +
-        " -abstractTO:t\tTimeout (s) for abstraction search (default: 2.0)\n" +
-        " -abstractPO\tRun with and w/o interpolation abstraction in parallel\n" +
-        " -splitClauses\tTurn clause constraints into pure inequalities\n" +
-
-        "\n" +
-        "C/C++/TA front-end:\n" +
-        " -arithMode:t\tInteger semantics: math (default), ilp32, lp64, llp64\n" +
-        " -pIntermediate\tDump Horn clauses encoding concurrent programs\n"
-      )
-        false
-      case fn :: rest => fileName = fn; openInputFile; arguments(rest)
-    }
-
-    // Exit early if we showed the help
-    if (!arguments(args.toList))
-      return
-
-    if (in == null) {
-      arguments(List("-h"))
-      throw new MainException("no input file given")
-      return
-    }
+  if (in == null) {
+    showHelp
+    printError("no input file given")
   }
 
+  private var modelledHeap = false
+  private val programTimer = new Timer
+  private val preprocessTimer = new Timer
+
   def run(stoppingCond: => Boolean) : ExecutionSummary = try {
-    val startTime = System.currentTimeMillis
+    if (params.showedHelp) // Exit early if we showed the help
+      return ExecutionSummary(DidNotExecute)
+    programTimer.start()
+
+    // work-around: make the Princess wrapper thread-safe
+    lazabs.prover.PrincessWrapper.newWrapper
 
     timeoutChecker = timeout match {
       case Some(to) => () => {
-        if (System.currentTimeMillis - startTime > to.toLong)
+        if (programTimer.ms > to.toDouble)
           throw TimeoutException
         if (stoppingCond)
           throw StoppedException
@@ -327,6 +120,8 @@ class Main {
         "---------------------------- Reading C/C++ file --------------------------------")
     }
     import java.io.File
+
+    preprocessTimer.start()
     val ppFileName : String = if (noPP) {
       if(printPP || dumpPP)
         CCReader.warn("Cannot print or dump preprocessor output due to -noPP")
@@ -336,6 +131,7 @@ class Main {
       preprocessedFile.deleteOnExit()
 
       val v = TriCeraPreprocessor.run()
+
       val cmdLineArgs: Array[String] = Array("",
         fileName, "--", "-xc",
         "-Wno-everything") // todo: add switch for clang warnings?
@@ -354,12 +150,17 @@ class Main {
           new FileInputStream(preprocessedFile) getChannel, 0, Long.MaxValue)
       }
       if (res.usesArrays)
-        throw new MainException("C arrays are not supported (yet)")
+        return ExecutionSummary(ArrayError, Nil, false, 0, preprocessTimer.s)
+        //throw new MainException("C arrays are not supported (yet)")
       else if (res.isUnsupported)
-        throw new MainException("Input file has unsupported C features " +
-          "(e.g. varargs)") // todo: more detail
+        return ExecutionSummary(
+          OtherError("Unsupported - detected by preprocessor"),
+            Nil, false,  0, preprocessTimer.s)
+        //throw new MainException("Input file has unsupported C features " +
+        //  "(e.g. varargs)") // todo: more detail
       preprocessedFile.getAbsolutePath
     }
+    preprocessTimer.stop()
 
     // check if an accompanying .yml file exists (SV-COMP style)
     case class BMOption (language : String, data_model : String)
@@ -415,9 +216,10 @@ class Main {
     }
 
     if (bmInfo.nonEmpty && bmTracks.isEmpty) {
-      throw new MainException("An associated property file (.yml) is " +
-        "found, however TriCera currently can only check for unreach-call" +
-        " and a subset of valid-memsafety properties.")
+      return ExecutionSummary(DidNotExecute, preprocessTime = preprocessTimer.s)
+      //throw new MainException("An associated property file (.yml) is " +
+      //  "found, however TriCera currently can only check for unreach-call" +
+      //  " and a subset of valid-memsafety properties.")
     }
 
     if (bmTracks.exists(t => t._1 match {
@@ -441,17 +243,26 @@ class Main {
       println
       println("After simplification:")
       tricera.concurrency.ReaderMain.printClauses(smallSystem)
-      return ExecutionSummary(DidNotExecute, Nil, modelledHeap)
+      return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
     }
 
     if(smtPrettyPrint) {
       tricera.concurrency.ReaderMain.printSMTClauses(smallSystem)
-      return ExecutionSummary(DidNotExecute, Nil, modelledHeap)
+      return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
     }
+
+    val expectedStatus =
+      // sat if no tracks are false, unsat otherwise
+      if (bmTracks.nonEmpty) {
+        if (bmTracks.forall { track => !track._2.contains(false) }) "sat"
+        else "unsat"
+      } else "unknown"
 
     val result = try {
       Console.withOut(outStream) {
-        new hornconcurrency.VerificationLoop(smallSystem).result
+        new hornconcurrency.VerificationLoop(smallSystem, null,
+          printIntermediateClauseSets, fileName + ".smt2",
+          expectedStatus = expectedStatus).result
       }
     } catch {
       case TimeoutException => {
@@ -496,7 +307,8 @@ class Main {
       (track._1, expectedVerdict)
     }
 
-    ExecutionSummary(executionResult, trackResult, modelledHeap)
+    ExecutionSummary(executionResult, trackResult, modelledHeap,
+      programTimer.s, preprocessTimer.s)
 
     //if(drawCFG) {DrawGraph(cfg.transitions.toList,cfg.predicates,absInFile,m); return}
 
@@ -508,18 +320,26 @@ class Main {
 
   } catch {
     case TimeoutException | StoppedException =>
-      ExecutionSummary(Timeout, Nil, modelledHeap)
+      ExecutionSummary(Timeout, Nil, modelledHeap,
+        programTimer.s, preprocessTimer.s)
     // nothing
     case _: java.lang.OutOfMemoryError =>
-      printError("out of memory")
-      ExecutionSummary(OutOfMemory, Nil, modelledHeap)
+      printError(OutOfMemory.toString)
+      ExecutionSummary(OutOfMemory, Nil, modelledHeap,
+        programTimer.s, preprocessTimer.s)
     case _: java.lang.StackOverflowError =>
-      printError("stack overflow")
-      ExecutionSummary(StackOverflow, Nil, modelledHeap)
+      printError(StackOverflow.toString)
+      ExecutionSummary(StackOverflow, Nil, modelledHeap,
+        programTimer.s, preprocessTimer.s)
     case t: Exception =>
       //t.printStackTrace
       printError(t.getMessage)
-      ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap)
+      ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
+        programTimer.s, preprocessTimer.s)
+    case t: AssertionError =>
+      printError(t.getMessage)
+      ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
+        programTimer.s, preprocessTimer.s )
   }
 
 }

@@ -31,9 +31,9 @@ package tricera.concurrency
 
 import ap.parser._
 import ap.theories.nia.GroebnerMultiplication
-import lazabs.horn.bottomup.{HornClauses, HornPredAbs, DagInterpolator, Util}
-import tricera.TriCeraParameters
+import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, Util}
 import hornconcurrency.{ParametricEncoder, VerificationLoop}
+import tricera.params.TriCeraParameters
 
 object ParameterisedExamples extends App {
 

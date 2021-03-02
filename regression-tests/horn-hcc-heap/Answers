@@ -279,17 +279,13 @@ Init:
 Final:
  main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
 -----------------------------------------------
-
-mem-safety
-  valid-memtrack
+valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
 memtrack-02.c
 Warning: enabling heap model
 SAFE
-
-mem-safety
-  valid-memtrack
+valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
 memtrack-03.c
@@ -308,16 +304,12 @@ Init:
 Final:
  main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
 -----------------------------------------------
-
-mem-safety
-  valid-memtrack
+valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
 memtrack-04.c
 SAFE
-
-mem-safety
-  valid-memtrack
+valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
 memtrack-05.c
@@ -336,15 +328,11 @@ Init:
 Final:
  main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
 -----------------------------------------------
-
-mem-safety
-  valid-memtrack
+valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
 memtrack-06.c
 Warning: enabling heap model
 SAFE
-
-mem-safety
-  valid-memtrack
+valid-memsafety/valid-memtrack
   expected verdict matches the result!
