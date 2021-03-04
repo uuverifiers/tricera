@@ -1046,13 +1046,40 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         setPrefix(entryFunction)
 
         localVars pushFrame
-        val exitPred = newPred(1)
+
+        val hasReturn = {
+          (funDef match {
+            case f : NewFunc => getType(f.listdeclaration_specifier_)
+            case f : NewHintFunc => getType(f.listdeclaration_specifier_)
+            case f : NewFuncInt => CCVoid
+          }) != CCVoid
+        }
+
+        val exitPred = newPred(if (hasReturn) 1 else 0)
         val stm = pushArguments(funDef)
 
         val translator = FunctionTranslator(exitPred,
           modelHeap && trackMemorySafety) // track memory safety only with heap
-        //translator.translateWithReturn(stm)
-        translator.translateNoReturn(stm)
+        if (hasReturn)
+          translator.translateWithReturn(stm)
+        else
+          translator.translateNoReturn(stm)
+
+        // add an assertion to track memory safety (i.e., no memory leaks)
+        // currently this is only added to the exit point of the entry function,
+        if (modelHeap && trackMemorySafety) {
+          import HornClauses._
+          import IExpression._
+          exitPred match {
+            case s : MonoSortedPredicate if s.argSorts.head == heap.HeapSort =>
+              val addrTerm = getFreshEvalVar(heap.AddressSort)
+              val resVar = getResVar(s.argSorts.last)
+              assertionClauses += ((heap.read(heapTerm, addrTerm) === defObj())
+                :- atom(exitPred, allFormalVars.toList ++ List(resVar)))
+            case _ => throw new TranslationException("Tried to add -memtrack" +
+              "assertion but could not find the heap term!")
+          }
+        }
 
         processes += ((clauses.toList, ParametricEncoder.Singleton))
         clauses.clear
@@ -2609,10 +2636,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
 
           def getNonDet(typ : CCType) : ITerm =
-            typ match {
-              case CCHeapPointer(_,_) => heap.nullAddr()
-              case _ => new SortedConstantTerm("_nonDet", typ.toSort)
-            }
+            new SortedConstantTerm("_", typ.toSort)
+
           def getZeroInit(typ : CCType) : ITerm = typ match {
             case structType : CCStruct => structType.getZeroInit
             case CCHeapPointer(_,_) => heap.nullAddr()
@@ -2776,8 +2801,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             argTerms = popVal.toTerm :: argTerms
 
           val postGlobalVars : Seq[ITerm] =
-            for ((t, n) <- globalVars.types.zipWithIndex)
-            yield IExpression.i(t newConstant ("__gvar" + n))
+            for ((t, v) <- globalVars.types.zip(globalVars.vars))
+            yield IExpression.i(t newConstant (v.name + "_post"))
 
           val resType = getType(funDef)
           val resVar = getResVar(resType)
@@ -3138,7 +3163,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     def translateNoReturn(compound : Compound_stm) : Unit = {
-      translateWithEntryClause(compound, newPred)
+      val finalPred = newPred
+      translateWithEntryClause(compound, finalPred)
+      // add a default return edge
+      /*val rp = returnPred.get
+      output(Clause(atom(rp, allFormalVars take rp.arity),
+        List(atom(finalPred, allFormalVars)),
+        true))*/
       postProcessClauses
     }
 
@@ -3328,23 +3359,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         output(entryClause)
         translateStmSeq(stmsIt, entryPred, exit)
-        // add an assertion to track memory safety (i.e., no memory leaks)
-        // currently this is only added to the exit point of the entry function,
-        if (addTrackMemorySafetyAssertion) {
-          import HornClauses._
-          import IExpression._
-          val retPred = returnPred.getOrElse(throw new TranslationException(
-            "return pred does not contain the heap term"))
-          retPred match {
-            case s : MonoSortedPredicate if s.argSorts.head == heap.HeapSort =>
-              val addrTerm = getFreshEvalVar(heap.AddressSort)
-              val resVar = getResVar(s.argSorts.last)
-              assertionClauses += ((heap.read(heapTerm, addrTerm) === defObj())
-                :- atom(retPred, allFormalVars.toList ++ List(resVar)))
-            case _ => throw new TranslationException("Tried to add -memtrack" +
-              "assertion but could not find the heap term!")
-          }
-        }
         localVars.popFrame
       }
     }

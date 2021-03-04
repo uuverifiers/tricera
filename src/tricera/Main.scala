@@ -331,6 +331,9 @@ class Main (args: Array[String]) {
       printError(StackOverflow.toString)
       ExecutionSummary(StackOverflow, Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
+    case _: CCReader.ArrayException =>
+      printError(ArrayError.toString)
+      ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
       //t.printStackTrace
       printError(t.getMessage)
@@ -338,6 +341,7 @@ class Main (args: Array[String]) {
         programTimer.s, preprocessTimer.s)
     case t: AssertionError =>
       printError(t.getMessage)
+      //t.printStackTrace
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s )
   }
