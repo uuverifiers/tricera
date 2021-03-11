@@ -1058,24 +1058,22 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val exitPred = newPred(if (hasReturn) 1 else 0)
         val stm = pushArguments(funDef)
 
-        val translator = FunctionTranslator(exitPred,
-          modelHeap && trackMemorySafety) // track memory safety only with heap
-        if (hasReturn)
-          translator.translateWithReturn(stm)
-        else
-          translator.translateNoReturn(stm)
+        val translator = FunctionTranslator(exitPred)
+        val finalPred =
+          if (hasReturn) {translator.translateWithReturn(stm); exitPred}
+          else translator.translateNoReturn(stm)
 
         // add an assertion to track memory safety (i.e., no memory leaks)
         // currently this is only added to the exit point of the entry function,
         if (modelHeap && trackMemorySafety) {
           import HornClauses._
           import IExpression._
-          exitPred match {
+          finalPred match {
             case s : MonoSortedPredicate if s.argSorts.head == heap.HeapSort =>
               val addrTerm = getFreshEvalVar(heap.AddressSort)
               val resVar = getResVar(s.argSorts.last)
               assertionClauses += ((heap.read(heapTerm, addrTerm) === defObj())
-                :- atom(exitPred, allFormalVars.toList ++ List(resVar)))
+                :- atom(finalPred, allFormalVars.toList ++ List(resVar)))
             case _ => throw new TranslationException("Tried to add -memtrack" +
               "assertion but could not find the heap term!")
           }
@@ -3143,14 +3141,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private object FunctionTranslator {
     def apply =
-      new FunctionTranslator(None, false)
-    def apply(returnPred : Predicate,
-              addTrackMemorySafetyAssertion : Boolean = false) =
-      new FunctionTranslator(Some(returnPred), addTrackMemorySafetyAssertion)
+      new FunctionTranslator(None)
+    def apply(returnPred : Predicate) =
+      new FunctionTranslator(Some(returnPred))
   }
 
-  private class FunctionTranslator private (returnPred : Option[Predicate],
-                                      addTrackMemorySafetyAssertion : Boolean) {
+  private class FunctionTranslator private (returnPred : Option[Predicate]) {
 
     private def symexFor(initPred : Predicate,
                          stm : Expression_stm) : (Symex, Option[CCExpr]) = {
@@ -3162,15 +3158,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       (exprSymex, res)
     }
 
-    def translateNoReturn(compound : Compound_stm) : Unit = {
+    def translateNoReturn(compound : Compound_stm) : IExpression.Predicate = {
       val finalPred = newPred
       translateWithEntryClause(compound, finalPred)
-      // add a default return edge
-      /*val rp = returnPred.get
-      output(Clause(atom(rp, allFormalVars take rp.arity),
-        List(atom(finalPred, allFormalVars)),
-        true))*/
       postProcessClauses
+      finalPred
     }
 
     def translateNoReturn(compound : Compound_stm,
@@ -3198,7 +3190,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     def translateWithReturn(compound : Compound_stm,
-                            entry : Predicate) : Unit = {
+                            entry : Predicate) : IExpression.Predicate = {
       val finalPred = newPred
       translate(compound, entry, finalPred)
       // add a default return edge
@@ -3208,6 +3200,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       //              List(atom(finalPred, allFormalVars)),
       //              true))
       postProcessClauses
+      finalPred
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -3428,10 +3421,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         stmsIt.next match {
           case stm : DecS => {
             prevPred = translate(stm.dec_, prevPred)
-            //if (!stmsIt.hasNext)
-            //  output(Clause(atom(exit, allFormalVars),
-            //                List(atom(returnPred.get, allFormalVars)),
-            //                true))
+            if (!stmsIt.hasNext)
+              output(Clause(atom(exit, allFormalVars),
+                            List(atom(prevPred, allFormalVars)),
+                            true))
           }
           case stm => {
             val nextPred = if (stmsIt.hasNext) newPred else exit

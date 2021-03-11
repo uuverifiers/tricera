@@ -267,18 +267,18 @@ memtrack-01.c
 Warning: enabling heap model
 UNSAFE
 
------------------------------------------------
+--------------------------------------------
 Init:
-               main2(emptyHeap)                
------------------------------------------------
-                       |                       
-                       |                       
-                       V                       
- main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
------------------------------------------------
+              main2(emptyHeap)              
+--------------------------------------------
+                     |                      
+                     |                      
+                     V                      
+ main1(newHeap(alloc(emptyHeap, O_Int(7)))) 
+--------------------------------------------
 Final:
- main0(newHeap(alloc(emptyHeap, O_Int(7))), 0) 
------------------------------------------------
+ main1(newHeap(alloc(emptyHeap, O_Int(7)))) 
+--------------------------------------------
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
 

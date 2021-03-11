@@ -1,4 +1,3 @@
-int main() {
+void main() {
   int *x = malloc(sizeof *x);
-  return 0;
 }
