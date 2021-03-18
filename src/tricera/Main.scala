@@ -227,15 +227,18 @@ class Main (args: Array[String]) {
       case _  => false
     })) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
-    val (system, modelledHeapRes) =
+    val (reader, modelledHeapRes) =
       CCReader(new java.io.BufferedReader(
         new java.io.FileReader(new java.io.File(ppFileName))),
         funcName, arithMode, shouldTrackMemory)
 
+    val system = reader.system
+
     modelledHeap = modelledHeapRes
 
-    if (prettyPrint)
-      tricera.concurrency.ReaderMain.printClauses(system)
+    if (prettyPrint) {
+      tricera.concurrency.ReaderMain.printClauses(reader)
+    }
 
     val smallSystem = system.mergeLocalTransitions
 
@@ -283,6 +286,7 @@ class Main (args: Array[String]) {
         println("UNSAFE")
         if (plainCEX) {
           println
+          //reader.printPredsWithArgNames
           hornconcurrency.VerificationLoop.prettyPrint(cex)
         }
         Unsafe
@@ -341,7 +345,7 @@ class Main (args: Array[String]) {
         programTimer.s, preprocessTimer.s)
     case t: AssertionError =>
       printError(t.getMessage)
-      //t.printStackTrace
+      t.printStackTrace
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s )
   }
