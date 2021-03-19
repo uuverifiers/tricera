@@ -81,4 +81,10 @@ settings(
   libraryDependencies += "net.java.dev.jna" % "jna" % "4.2.2",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2"
 )
+
+// added to discard cup 0.11a dependency from Eldarica (TriCera uses cup 0.11b)
+assemblyMergeStrategy in assembly := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case x => MergeStrategy.first
+}
   //

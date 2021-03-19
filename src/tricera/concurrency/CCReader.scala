@@ -33,8 +33,8 @@ import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ADT, Heap, ModuloArithmetic}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
-import concurrentC._
-import concurrentC.Absyn._
+import concurrent_c._
+import concurrent_c.Absyn._
 import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
@@ -48,7 +48,7 @@ object CCReader {
             arithMode : ArithmeticMode.Value = ArithmeticMode.Mathematical,
             trackMemorySafety : Boolean = false)
            : (CCReader, Boolean) = { // second ret. arg is true if modelled heap
-    def entry(parser : concurrentC.parser) = parser.pProgram
+    def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
 //    println(printer print prog)
 
@@ -78,7 +78,7 @@ object CCReader {
   private def parseWithEntry[T](input : java.io.Reader,
                                 entry : (parser) => T) : T = {
     val l = new Yylex(new ap.parser.Parser2InputAbsy.CRRemover2 (input))
-    val p = new parser(l)
+    val p = new parser(l, l.getSymbolFactory())
     
     try { entry(p) } catch {
       case e : Exception =>
@@ -477,18 +477,18 @@ class CCReader private (prog : Program,
 
   import HornClauses.Clause
 
-  private case class SourceInfo (lineNo : Int) // extend with colNo?
+  private case class SourceInfo (line : Int, col : Int, offset : Int)
   private class CCVar (val name : String,
                val srcInfo : Option[SourceInfo],
                val typ  : CCType) {
     val sort = typ.toSort
     val term = new SortedConstantTerm(name, sort)
-    override def toString: String = name /*+ {
+    override def toString: String = name + {
       srcInfo match {
-        case None => // nothing
-        case Some(info) => " at line " + info.lineNo
+        case None => ""
+        case Some(info) if info.line >= 0 => ":" + info.line
       }
-    }*/
+    }
   }
 
   private val predCCPredMap = new MHashMap[Predicate, CCPredicate]
@@ -967,7 +967,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       )
       val postVar = getType(f) match {
         case CCVoid => Nil
-        case t      => List(new CCVar(name + "_res", None, getType(f))) // todo: line no?
+        case t      => List(new CCVar(name + "_res",
+          Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
       }
       // all vars + old global vars + return var (if it exists)
       val postArgs = allFormalVars ++ globalVars.formalVars ++ postVar//.map(v => IConstant(v.term))
@@ -1054,7 +1055,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             case thread : ParaThread => {
               setPrefix(thread.cident_2)
               localVars pushFrame
-              val threadVar = new CCVar(thread.cident_1, None, CCInt) // todo: line no
+              val threadVar = new CCVar(thread.cident_1,
+                Some(SourceInfo(thread.line_num, thread.col_num, thread.offset)),
+                CCInt)
               localVars addVar threadVar
               val translator = FunctionTranslator.apply
               translator translateNoReturn thread.compound_stm_
@@ -1215,9 +1218,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               case initDecl : HintDecl => initDecl.declarator_
             }
             val name = getName(declarator)
-            val (directDecl, isPointer) = declarator match {
-              case decl : NoPointer => (decl.direct_declarator_, false)
-              case decl : BeginPointer => (decl.direct_declarator_, true)
+            val (directDecl, isPointer, sourceInfo) = declarator match {
+              case decl : NoPointer => (decl.direct_declarator_, false,
+                Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
+              case decl : BeginPointer => (decl.direct_declarator_, true,
+                Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
             }
             directDecl match {
               case _ : NewFuncDec /* | _ : OldFuncDef */ | _ : OldFuncDec =>
@@ -1227,7 +1232,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 val actualType =
                   if(isPointer) CCHeapPointer(heap, typ)
                   else typ
-                val declaredVar = new CCVar(name, None, actualType) // todo: line no
+                val declaredVar = new CCVar(name, sourceInfo, actualType)
                 if (global) {
                   globalVars addVar declaredVar
                   variableHints += List()
@@ -1253,15 +1258,17 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
 
           case _ : InitDecl | _ : HintInitDecl => {
-            val (declarator, initializer) = initDecl match {
-              case initDecl : InitDecl =>
-                (initDecl.declarator_, initDecl.initializer_)
-              case initDecl : HintInitDecl =>
-                (initDecl.declarator_, initDecl.initializer_)
+            val (declarator, initializer, sourceInfo) = initDecl match {
+              case d : InitDecl =>
+                (d.declarator_, d.initializer_,
+                  Some(SourceInfo(d.line_num, d.col_num, d.offset)))
+              case d : HintInitDecl =>
+                (d.declarator_, d.initializer_,
+                  Some(SourceInfo(d.line_num, d.col_num, d.offset)))
             }
 
             isVariable = true
-            val newVar = new CCVar(getName(declarator), None, typ) // todo: add line no
+            val newVar = new CCVar(getName(declarator), sourceInfo, typ)
             val (initValue, initGuard) = initializer match {
               case init : InitExpr =>
                 if (init.exp_.isInstanceOf[Enondet])
@@ -1292,7 +1299,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     "allowed, and the only possible initialization value for " +
                     "pointers is 0 (NULL)")
                 val newTyp = CCHeapPointer(heap, typ)
-                new CCVar(getName(declarator), None, newTyp) // todo: add line no
+                new CCVar(getName(declarator), sourceInfo, newTyp)
               }
               else if (typ.isInstanceOf[CCClock.type])
                 new CCVar(newVar.name, newVar.srcInfo, typ)
@@ -1693,7 +1700,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         case s : Plain => {
           val ind = nextInd
           nextInd = nextInd + 1
-          val v = new CCVar(s.cident_, None, CCInt) // todo: add line no
+          val v = new CCVar(s.cident_,
+            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt)
           localVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt))
           enumerators += ((s.cident_, ind))
@@ -1708,7 +1716,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                                              (printer print s))
           }
           nextInd = ind + 1
-          val v = new CCVar(s.cident_, None, CCInt) // todo: add line no
+          val v = new CCVar(s.cident_,
+            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt)
           localVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt))
           enumerators += ((s.cident_, ind))
@@ -3144,7 +3153,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 case p : BeginPointer => createHeapPointer(p, typ)
                 case _ => typ
               }
-              val declaredVar = new CCVar(name, None, actualType) // todo: line no
+              val declaredVar = new CCVar(name,
+                Some(SourceInfo(argDec.line_num, argDec.col_num, argDec.offset)),
+                actualType)
               localVars addVar declaredVar
             }
 
@@ -3155,8 +3166,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 case p : BeginPointer => createHeapPointer(p, typ)
                 case _ => typ
               }
-              val declaredVar = new CCVar(getName(argDec.declarator_), None,
-                                          actualType) // todo: line no
+              val declaredVar = new CCVar(getName(argDec.declarator_),
+                Some(SourceInfo(argDec.line_num, argDec.col_num, argDec.offset)),
+                actualType)
               localVars addVar declaredVar
               processHints(argDec.listabs_hint_)
             }
