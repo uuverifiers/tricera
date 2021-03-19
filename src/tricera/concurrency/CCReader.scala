@@ -483,10 +483,11 @@ class CCReader private (prog : Program,
                val typ  : CCType) {
     val sort = typ.toSort
     val term = new SortedConstantTerm(name, sort)
-    override def toString: String = name + {
+    override def toString: String = name
+    def toStringWithLineNumbers: String = name + {
       srcInfo match {
-        case None => ""
         case Some(info) if info.line >= 0 => ":" + info.line
+        case _ => ""
       }
     }
   }
@@ -501,6 +502,9 @@ class CCReader private (prog : Program,
     def arity : Int = pred.arity
     override def toString: String =
       pred.name + (if(argVars.nonEmpty) "(" + argVars.mkString(", ") + ")" else "")
+    def toStringWithLineNumbers: String =
+      pred.name + (if(argVars.nonEmpty) "(" +
+        argVars.map(_.toStringWithLineNumbers).mkString(", ") + ")" else "")
     predCCPredMap.put(pred, this)
     assert(pred.arity == argVars.size)
   }
@@ -3791,10 +3795,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     println("System predicates:")
     print("  ")
     println((system.allLocalPreds ++ system.backgroundPreds).toList.
-      sortBy(p => p.name).map(predWithArgNames).mkString(", "))
+      sortBy(p => p.name).map(predWithArgNamesAndLineNumbers).mkString(", "))
     println
   }
-  def predWithArgNames (pred : Predicate) : String = predCCPredMap(pred).toString
+  def predWithArgNames (pred : Predicate) : String =
+    predCCPredMap(pred).toString
+  def predWithArgNamesAndLineNumbers (pred : Predicate) : String =
+    predCCPredMap(pred).toStringWithLineNumbers
   def predArgNames (pred : Predicate) : Seq[String] =
     predCCPredMap(pred).argVars.map(_.toString)
 }

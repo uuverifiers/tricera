@@ -57,7 +57,8 @@ object ReaderMain {
     if (_reader != null) {
       println("System predicates:")
       println("  " + (
-        system.allLocalPreds.map(p => _reader.predWithArgNames(p))).mkString(", "))
+        system.allLocalPreds.map(p =>
+          _reader.predWithArgNamesAndLineNumbers(p))).mkString(", "))
       println
     }
 
@@ -97,7 +98,8 @@ object ReaderMain {
         if (_reader != null) { // todo: ugly solution
           println("Background predicates:")
           println("  " + (
-            preds.map(p => _reader.predWithArgNames(p)).toSet).mkString(", "))
+            preds.map(p =>
+              _reader.predWithArgNamesAndLineNumbers(p)).toSet).mkString(", "))
           println
         }
         println("Background axioms:")
