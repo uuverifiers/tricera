@@ -265,7 +265,10 @@ class Main (args: Array[String]) {
       Console.withOut(outStream) {
         new hornconcurrency.VerificationLoop(smallSystem, null,
           printIntermediateClauseSets, fileName + ".smt2",
-          expectedStatus = expectedStatus).result
+          expectedStatus = expectedStatus, log = log,
+          templateBasedInterpolation =  templateBasedInterpolation,
+          templateBasedInterpolationTimeout = templateBasedInterpolationTimeout)
+          .result
       }
     } catch {
       case TimeoutException => {
@@ -279,8 +282,73 @@ class Main (args: Array[String]) {
     }
 
     val executionResult = result match {
-      case Left(_) =>
+      case Left(res) =>
         println("SAFE")
+        res match {
+          case Some(solution) =>
+            import ap.parser.ITerm
+            import tricera.concurrency.ACSLLineariser
+            import reader.CCPredicate
+
+            def replaceArgs(p : CCPredicate, f : String) = {
+              var s = f
+              for (ind <- (p.arity - 1) to 0 by - 1) {
+                val actualArg : String = {
+                  if (p.oldVars contains ind)
+                    "\\old(" + p.argVars(ind) + ")"
+                  else if (p.resVarInd == ind)
+                    "\\res"
+                  else p.argVars(ind).toString
+                }
+                s = s.replace("_" + ind, actualArg)
+              }
+              s
+            }
+
+            val contracts = reader.getFunctionContracts
+            for ((fun, (pre, post)) <- contracts) {
+              val fPre  = ACSLLineariser asString solution(pre.pred)
+              val fPost = ACSLLineariser asString solution(post.pred)
+
+              val fPreWithArgs  = replaceArgs(pre,  fPre)
+              val fPostWithArgs = replaceArgs(post, fPost)
+
+              println("/* contracts for " + fun + " */")
+              println("/*@")
+              print  ("  requires ") ; println(fPreWithArgs + ";")
+              print  ("  ensures ")  ; println(fPostWithArgs + ";")
+              println("*/")
+            }
+
+            /*if(system.backgroundPreds.exists(p => p.name.contains("_pre"))) {
+              println("Contracts:")
+              for (p <- system.backgroundPreds) if (p.name.contains("_pre") ||
+                p.name.contains("_post")) {
+
+                if(p.name.contains("_pre")){
+                  system.backgroundAxioms.clauses.find(c =>
+                    c.body.exists(a => a.pred == p)) match {
+                    case None =>
+                    case Some(pre) =>
+                      val args =
+                        pre.body.find(c => c.pred == p) match {
+                          case Some(a) => a.args
+                          case None => throw new Exception("cannot find f_pre")
+                        }
+                      printFun(args)
+                  }
+                } else { //post
+                  system.backgroundAxioms.clauses.find(c => c.head.pred == p)
+                  match {
+                    case None =>
+                    case Some(post) => printFun(post.head.args)
+                  }
+                }
+              }
+              println
+            }*/
+          case None =>
+        }
         Safe
       case Right(cex) => {
         println("UNSAFE")

@@ -111,7 +111,7 @@ object CCReader {
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private abstract sealed class CCType {
+  abstract sealed class CCType {
     def shortName : String
   }
   private abstract class CCArithType extends CCType {
@@ -477,8 +477,8 @@ class CCReader private (prog : Program,
 
   import HornClauses.Clause
 
-  private case class SourceInfo (line : Int, col : Int, offset : Int)
-  private class CCVar (val name : String,
+  case class SourceInfo (line : Int, col : Int, offset : Int)
+  class CCVar (val name : String,
                val srcInfo : Option[SourceInfo],
                val typ  : CCType) {
     val sort = typ.toSort
@@ -495,7 +495,13 @@ class CCReader private (prog : Program,
   private val predCCPredMap = new MHashMap[Predicate, CCPredicate]
 
   // a wrapper for IExpression.Predicate that keeps more info about arguments
-  private case class CCPredicate(pred : Predicate, argVars : Seq[CCVar]) {
+  case class CCPredicate(pred : Predicate, argVars : Seq[CCVar],
+                         resVarInd : Int = -1,
+                         oldVars : Seq[Int] = Nil) {
+    // resVarInd is used in function contracts, if the post-condition has a
+    // return variable, its index is given here
+    // oldVars is used in function contracts, an index is given for a var
+    // if that var refers to an old arg in post conditions. e.g. f_post(x, x_old)
     import ap.parser.ITerm
     import IExpression._
     def apply(terms : Seq[ITerm]) = pred(terms: _*)
@@ -630,6 +636,8 @@ class CCReader private (prog : Program,
   private val structDefs    = new MHashMap[String, CCStruct]
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
+
+  def getFunctionContracts = functionContracts.toMap
   //////////////////////////////////////////////////////////////////////////////
 
   private val processes =
@@ -974,11 +982,15 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         case t      => List(new CCVar(name + "_res",
           Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
       }
-      // all vars + old global vars + return var (if it exists)
-      val postArgs = allFormalVars ++ globalVars.formalVars ++ postVar//.map(v => IConstant(v.term))
+      // all old vars (includes globals) + global vars + return var (if it exists)
+      val postOldArgs = allFormalVars
+      val postGlobalArgs = globalVars.formalVars
+      val postArgs = postOldArgs ++ postGlobalArgs ++ postVar
+      val oldVarInds = postOldArgs.indices.toList
+      val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
       val postPred = CCPredicate(
         MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
-        postArgs)
+        postArgs, resVarInd, oldVarInds)
       functionContracts.put(name, (prePred, postPred))
       localVars.popFrame
     }
@@ -1111,7 +1123,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           import HornClauses._
           import IExpression._
           finalPred match {
-            case CCPredicate(_, args) if args.head.sort == heap.HeapSort =>
+            case CCPredicate(_, args, _, _) if args.head.sort == heap.HeapSort =>
               // passing sort as CCVoid as it is not important
               val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid))
               val resVar = getResVar(args.last.typ)
