@@ -297,7 +297,7 @@ class Main (args: Array[String]) {
                   if (p.oldVars contains ind)
                     "\\old(" + p.argVars(ind) + ")"
                   else if (p.resVarInd == ind)
-                    "\\res"
+                    "\\result"
                   else p.argVars(ind).toString
                 }
                 s = s.replace("_" + ind, actualArg)
