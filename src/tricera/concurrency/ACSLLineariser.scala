@@ -373,7 +373,7 @@ object ACSLLineariser {
         }
 
         case IBoolLit(value) => {
-          print(value)
+          print("\\" + value)
           noParentOp(ctxt)
         }
 
