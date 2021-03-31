@@ -310,11 +310,15 @@ object ACSLLineariser {
           TryAgain(t, ctxt.addOpPrec("[" + upper + ":" + lower + "]", 10))
 
         case IFunApp(fun, _) => {
-          print(fun2Identifier(fun))
-          if (fun.arity > 0) {
+          if (fun.arity == 1) {
+            allButLast(ctxt setPrecLevel 0, ".", "." + fun2Identifier(fun), 1)
+          }
+          else if (fun.arity > 0) { // is this case possible?
+            print(fun2Identifier(fun))
             print("(")
             allButLast(ctxt setPrecLevel 0, ", ", ")", fun.arity)
           } else {
+            print(fun2Identifier(fun))
             KeepArg
           }
         }
