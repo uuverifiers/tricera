@@ -47,7 +47,7 @@ lazy val root = (project in file(".")).
       case "2.12.8" => "-opt:_"
     }}).value,	
 
-    resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
+    resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
     libraryDependencies += "uuverifiers" %% "eldarica" % "2.0-SNAPSHOT"
 )
 //
