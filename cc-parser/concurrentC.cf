@@ -34,10 +34,15 @@ NewFuncInt.  Function_def ::= [Abs_hint] Declarator Compound_stm ;
 SingleThread. Thread_def ::= "thread" CIdent Compound_stm ;
 ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
 
-NoDeclarator.  Dec ::= [Declaration_specifier] [Extra_specifier] ";";
-Declarators.   Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
+NoDeclarator.   Dec ::= [Declaration_specifier] [Extra_specifier] ";";
+Declarators.    Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
+PredDeclarator. Dec ::= "/*@" [Pred_hint] "@*/";
 
 separator nonempty Dec "";
+
+separator nonempty Pred_hint ",";
+PredicateHint. Pred_hint ::= CIdent "(" [Type_specifier] ")";
+separator nonempty Type_specifier ",";
 
 AChan. Chan_def ::= "chan" [CIdent] ";" ;
 

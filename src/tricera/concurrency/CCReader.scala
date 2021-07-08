@@ -637,6 +637,8 @@ class CCReader private (prog : Program,
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
 
+  private val predDecls     = new MHashMap[String, Predicate]
+
   def getFunctionContracts = functionContracts.toMap
   //////////////////////////////////////////////////////////////////////////////
 
@@ -1202,6 +1204,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ =>
         }
       }
+      case preddecl : PredDeclarator => // nothing
     }
   }
 
@@ -1388,7 +1391,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           // structs were handled in first pass
       }
     }
-    case _ =>
+    case predDecl : PredDeclarator =>
+      for (hint <- predDecl.listpred_hint_) {
+        hint match {
+          case predHint : PredicateHint =>
+            val argTypes =
+              for (typ <- predHint.listtype_specifier_) yield getType(typ)
+            val hintPred = MonoSortedPredicate(predHint.cident_, argTypes.map(_ toSort))
+            predDecls += ((predHint.cident_, hintPred))
+            val argCCVars = // needed for adding to predCCPredMap, used in printing
+              argTypes.map(typ => new CCVar(typ.toString, None, typ))
+            predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
+        }
+      }
+    case decl => warn("ignoring declaration: " + decl) // todo: proper extraction of name & source info
   }
 
   private def useContract(hints : Seq[Abs_hint]) : Boolean =
@@ -1749,6 +1765,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         addEnumerator(n, CCTerm(v, newEnum))
       newEnum
     }
+  }
+
+  private def getType(typespec : Type_specifier) : CCType = {
+    getType(Seq(typespec).iterator)
   }
 
   private def getType(specs : Iterator[Type_specifier]) : CCType = {
@@ -2843,7 +2863,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private def handleFunction(name : String,
                                functionEntry : CCPredicate,
                                argNum : Int) =
-      (functionContracts get name) match {
+      functionContracts get name match {
         case Some((prePred, postPred)) => {
           // use the contract of the function
 //          assert(!(pointerArgs exists (_.isInstanceOf[CCStackPointer])),
@@ -2885,11 +2905,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
         }
         case None => {
-          // get rid of the local variables, which are later
-          // replaced with the formal arguments
-          // pointer arguments are saved and passed on
-          val args = (for (_ <- 0 until argNum) yield popVal.typ).toList.reverse
-          callFunctionInlining(name, functionEntry, args)
+          predDecls get name match {
+            case Some(predDecl) =>
+              var argTerms : List[ITerm] = List()
+              for (_ <- 0 until argNum)
+                argTerms = popVal.toTerm :: argTerms
+              pushVal(CCFormula(IAtom(predDecl, argTerms), CCInt))
+            case None =>
+              val args =
+                (for (_ <- 0 until argNum) yield popVal.typ).toList.reverse
+              // get rid of the local variables, which are later
+              // replaced with the formal arguments
+              // pointer arguments are saved and passed on
+              callFunctionInlining(name, functionEntry, args)
+          }
         }
       }
 
@@ -3774,10 +3803,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
            c <- clauses)
       yield c
     val backgroundPreds =
-      for (c <- backgroundClauses;
+      (for (c <- backgroundClauses;
            p <- c.predicates.toSeq.sortBy(_.name);
            if p != HornClauses.FALSE)
-      yield p
+      yield p) ++ predDecls.values
 
     val backgroundAxioms =
       if (backgroundPreds.isEmpty && backgroundClauses.isEmpty)
