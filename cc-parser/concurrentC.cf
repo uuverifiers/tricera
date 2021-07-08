@@ -36,11 +36,11 @@ ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
 
 NoDeclarator.   Dec ::= [Declaration_specifier] [Extra_specifier] ";";
 Declarators.    Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
-PredDeclarator. Dec ::= "/*@" [Pred_hint] "@*/";
+PredDeclarator. Dec ::= "/*$" [Pred_hint] "$*/";
 
 separator nonempty Dec "";
 
-separator nonempty Pred_hint ",";
+separator Pred_hint ",";
 PredicateHint. Pred_hint ::= CIdent "(" [Type_specifier] ")";
 separator nonempty Type_specifier ",";
 
