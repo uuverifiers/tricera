@@ -2675,12 +2675,22 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Efunkpar => (printer print exp.exp_) match {
         case "assert" | "static_assert" | "__VERIFIER_assert"
                           if (exp.listexp_.size == 1) => {
-          assertProperty(atomicEval(exp.listexp_.head).toFormula)
+          eval(exp.listexp_.head) match {
+            case f@CCFormula(IAtom(_, _), _) =>
+              assertProperty(f.toFormula)
+            case _ =>
+              assertProperty(atomicEval(exp.listexp_.head).toFormula)
+          }
           pushVal(CCFormula(true, CCInt))
         }
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) => {
-          addGuard(atomicEval(exp.listexp_.head).toFormula)
+          eval(exp.listexp_.head) match {
+            case f@CCFormula(IAtom(_, _), _) =>
+              addGuard(f.toFormula)
+            case _ =>
+              addGuard(atomicEval(exp.listexp_.head).toFormula)
+          }
           pushVal(CCFormula(true, CCInt))
         }
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {
