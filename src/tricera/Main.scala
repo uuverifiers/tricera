@@ -52,6 +52,7 @@ object Main {
     val res = doMain(args, false)
     res match {
       case _ : ExecutionError => throw new MainException(res.toString)
+      case e : ExecutionSummary => println(e)
       case _ => // nothing
     }
   }
@@ -149,10 +150,10 @@ class Main (args: Array[String]) {
         new FileOutputStream(dest) getChannel() transferFrom(
           new FileInputStream(preprocessedFile) getChannel, 0, Long.MaxValue)
       }
-      if (res.usesArrays)
-        return ExecutionSummary(ArrayError, Nil, false, 0, preprocessTimer.s)
+      //if (res.usesArrays)
+      //  return ExecutionSummary(ArrayError, Nil, false, 0, preprocessTimer.s)
         //throw new MainException("C arrays are not supported (yet)")
-      else if (res.isUnsupported)
+      /*else*/ if (res.isUnsupported)
         return ExecutionSummary(
           OtherError("Unsupported - detected by preprocessor"),
             Nil, false,  0, preprocessTimer.s)
@@ -407,7 +408,7 @@ class Main (args: Array[String]) {
       printError(ArrayError.toString)
       ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
-      //t.printStackTrace
+      t.printStackTrace
       printError(t.getMessage)
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)

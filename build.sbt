@@ -5,7 +5,8 @@ lazy val commonSettings = Seq(
     version := "0.2",
     scalaVersion := "2.11.12",
     crossScalaVersions := Seq("2.11.12", "2.12.8"),
-    publishTo := Some(Resolver.file("file",  new File( "/home/wv/public_html/maven/" )) )
+    publishTo := Some(Resolver.file("file",  new File( "/home/wv/public_html/maven/" )) ),
+    useCoursier := false
 )
 
 // Jar files for the parsers
@@ -76,7 +77,7 @@ settings(
                                         case "2.12.8" => "-opt:_"
                                       }}).value,
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
-  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.6",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
   libraryDependencies += "net.java.dev.jna" % "jna" % "4.2.2",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2"

@@ -158,8 +158,8 @@ NoPointer.      Declarator ::= Direct_declarator ;
 
 Name.        Direct_declarator ::= CIdent ;
 ParenDecl.   Direct_declarator ::= "(" Declarator ")" ;
--- InitArray.   Direct_declarator ::= Direct_declarator "[" Constant_expression "]" ;
--- Incomplete.  Direct_declarator ::= Direct_declarator "[" "]" ;
+InitArray.   Direct_declarator ::= Direct_declarator "[" Constant_expression "]" ;
+Incomplete.  Direct_declarator ::= Direct_declarator "[" "]" ;
 NewFuncDec.  Direct_declarator ::= Direct_declarator "(" Parameter_type ")" ;
 -- OldFuncDef.  Direct_declarator ::= Direct_declarator "(" [CIdent] ")" ;
 OldFuncDec.  Direct_declarator ::= Direct_declarator "(" ")" ;

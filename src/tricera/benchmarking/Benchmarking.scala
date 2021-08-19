@@ -78,7 +78,12 @@ object Benchmarking {
                                 modelledHeap : Boolean = false, // true if the bm contained heap operations
                                 elapsedTime  : Double = 0,
                                 preprocessTime : Double = 0
-                              )
+                              ) {
+    override def toString: String = {
+      "Result   : " + executionResult + "\n" +
+      "Duration : " + elapsedTime + " s"
+    }
+  }
 
   class Timer {
     private var stopped = true
