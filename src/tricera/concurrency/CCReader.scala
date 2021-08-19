@@ -1356,12 +1356,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                       if(!modelHeap) throw NeedsHeapModelException // all arrays are modeled using haep
                       val arraySize = values eval(directDecl.asInstanceOf[InitArray].constant_expression_.asInstanceOf[Especial].exp_)
                       val elementType = typ
-                      val objTerm : ITerm = {
-                        val objUnwrapped =
+                      val objTerm = CCTerm(
                           if (global) getZeroInit(elementType)
-                          else getNonDet(elementType)
-                        sortWrapperMap(elementType.toSort)(objUnwrapped)
-                      }
+                          else getNonDet(elementType),
+                        elementType)
                       val initHeapTerm =
                         if (values.getValues.head.toTerm == IConstant(heapTerm)) {
                           CCTerm(globalVars.inits.head.toTerm, CCHeap(heap))
@@ -2103,10 +2101,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
     // batch allocates "size" "objectTerm"s, returns the address range
     // if "initHeapTerm" is passed, that is used as the initial heap term
-    def heapBatchAlloc(objectTerm : ITerm, size : ITerm,
-                     initHeapTerm : CCExpr = getValue(heapTermName)) : ITerm = {
+    def heapBatchAlloc(value : CCTerm, size : ITerm,
+                       initHeapTerm : CCExpr = getValue(heapTermName)) : ITerm = {
       val newBatchAlloc =
-        heap.batchAlloc(initHeapTerm.toTerm, objectTerm, size)
+        heap.batchAlloc(initHeapTerm.toTerm,
+                        sortWrapperMap(value.typ.toSort)(value.toTerm), size)
       //val newAllocHeap = heap.batchAllocHeap(initHeapTerm.toTerm, objectTerm, size)
       //setValue(heapTerm.name, CCTerm(newAllocHeap, CCHeap(heap)))
       val newHeap = heap.newBatchHeap(newBatchAlloc)
@@ -2949,7 +2948,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             case CCTerm(IIntLit(IdealInt(1)), CCInt) =>
               pushVal(heapAlloc(objectTerm))
             case CCTerm(sizeExp, CCInt) =>
-              val addressRangeValue = heapBatchAlloc(objectTerm.toTerm, sizeExp)
+              val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
               val addressRangeVar = newAddressRangeVar(typ)
               addressRangeVars += addressRangeVar
 //              localVars.incrementLastFrame
