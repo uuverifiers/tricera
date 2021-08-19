@@ -404,7 +404,8 @@ class Main (args: Array[String]) {
       printError(StackOverflow.toString)
       ExecutionSummary(StackOverflow, Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
-    case _: CCReader.ArrayException =>
+    case e: CCReader.ArrayException =>
+      //e.printStackTrace()
       printError(ArrayError.toString)
       ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
