@@ -2084,7 +2084,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     def getGuard = guard
 
     //todo:Heap get rid of this or change name
-    def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = false) : CCTerm = {
+    def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = true) : CCTerm = {
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
         case _ => throw new TranslationException(
@@ -3110,7 +3110,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val readAddress = CCTerm(heap.nth(addrRange, index.toTerm),
                              CCHeapPointer(heap, arrayPtrTyp.array.elementType))
         val readValue = heapRead(readAddress)
-        //assertProperty(heap.contains(addrRange, readAddress.toTerm))
+        assertProperty(heap.contains(addrRange, readAddress.toTerm))
         pushVal(readValue)
         //throw new TranslationException("Expression currently not supported by " +
         //  "TriCera: " + (printer print exp))
