@@ -52,7 +52,7 @@ object Main {
     val res = doMain(args, false)
     res match {
       case _ : ExecutionError => throw new MainException(res.toString)
-      case e : ExecutionSummary => println(e)
+      case e : ExecutionSummary => //println(e)
       case _ => // nothing
     }
   }
@@ -409,7 +409,7 @@ class Main (args: Array[String]) {
       printError(ArrayError.toString)
       ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
-      t.printStackTrace
+      //t.printStackTrace
       printError(t.getMessage)
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)

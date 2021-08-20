@@ -1055,10 +1055,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0))
     // if while adding glboal variables we have changed the heap, the heap term
     // needs to be reinitialised as well. Happens with global array allocations.
-    val initialisedHeapValue = globalVarSymex.getValues.head
-    val initialHeapValue = IConstant(globalVars.vars.head.term)
-    if (modelHeap && initialisedHeapValue.toTerm != initialHeapValue) {
-      globalVars.inits(0) = initialisedHeapValue
+    if (modelHeap) {
+      val initialisedHeapValue = globalVarSymex.getValues.head
+      val initialHeapValue = IConstant(globalVars.vars.head.term)
+      if (modelHeap && initialisedHeapValue.toTerm != initialHeapValue) {
+        globalVars.inits(0) = initialisedHeapValue
+      }
     }
 
 
@@ -1553,7 +1555,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
         }
       }
-    case decl => warn("ignoring declaration: " + decl) // todo: proper extraction of name & source info
+    case decl => //warn("ignoring declaration: " + decl) // todo: proper extraction of name & source info
   }
 
   private def useContract(hints : Seq[Abs_hint]) : Boolean =
@@ -2881,22 +2883,24 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Efunkpar => (printer print exp.exp_) match {
         case "assert" | "static_assert" | "__VERIFIER_assert"
                           if (exp.listexp_.size == 1) => {
-          eval(exp.listexp_.head) match {
-            case f@CCFormula(IAtom(_, _), _) =>
-              assertProperty(f.toFormula)
-            case _ =>
-              assertProperty(atomicEval(exp.listexp_.head).toFormula)
-          }
+//          eval(exp.listexp_.head) match { // todo: the double evaluation in the second case breaks things...
+//            case f@CCFormula(IAtom(_, _), _) =>
+//              assertProperty(f.toFormula)
+//            case _ =>
+//              assertProperty(atomicEval(exp.listexp_.head).toFormula)
+//          }
+          assertProperty(atomicEval(exp.listexp_.head).toFormula)
           pushVal(CCFormula(true, CCInt))
         }
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) => {
-          eval(exp.listexp_.head) match {
-            case f@CCFormula(IAtom(_, _), _) =>
-              addGuard(f.toFormula)
-            case _ =>
-              addGuard(atomicEval(exp.listexp_.head).toFormula)
-          }
+//          eval(exp.listexp_.head) match { // todo: the double evaluation in the second case breaks things...
+//            case f@CCFormula(IAtom(_, _), _) =>
+//              addGuard(f.toFormula)
+//            case _ =>
+//              addGuard(atomicEval(exp.listexp_.head).toFormula)
+//          }
+          addGuard(atomicEval(exp.listexp_.head).toFormula)
           pushVal(CCFormula(true, CCInt))
         }
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {
