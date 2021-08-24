@@ -1,4 +1,4 @@
-int * a;
+int a[];
 
 void main() {
   a = malloc(sizeof(int)*(2));

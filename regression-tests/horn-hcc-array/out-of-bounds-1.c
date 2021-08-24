@@ -3,14 +3,13 @@
 
 extern int nondet();
 
-int * a;
+int a[];
 
 void main() {
-  //  int n = nondet(); // cannot verify
   int n = 1;
   a = malloc(sizeof(int)*n);
 
   for (int i = 0; i <= n; ++i) {
     a[i] = 3;
-  } // predicate generation failed...
+  }
 }

@@ -3,7 +3,7 @@
 
 extern int nondet();
 
-int * a;
+int a[];
 
 void main() {
   int n = nondet();
