@@ -10,4 +10,5 @@ set -e
 ./rundir horn-hcc-enum "" -assert -t:60
 ./rundir horn-contracts "" -assert -t:60
 ./rundir horn-hcc-heap "" -assert -t:60
+./rundir horn-hcc-array "" -assert -t:60
 #./rundir ParametricEncoder ""

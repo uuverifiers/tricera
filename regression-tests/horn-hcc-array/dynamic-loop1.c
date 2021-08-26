@@ -7,7 +7,7 @@ int a[];
 
 void main() {
   //  int n = nondet(); // cannot verify
-  int n = 5;
+  int n = 2;
   a = malloc(sizeof(int)*n);
 
   for (int i = 0; i < n; ++i) {

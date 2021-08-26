@@ -2061,7 +2061,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
         case _ => throw new TranslationException(
-          "Can only pull from heap pointers! (" + ptrExpr + ")")
+          "Can only read from heap pointers! (" + ptrExpr + ")")
       }
       val readObj = heap.read(getValue(heapTermName).toTerm, ptrExpr.toTerm)
       if (assertMemSafety)
@@ -2415,6 +2415,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     var evaluatingLhs = false
     var handlingFunContractArgs = false
+    var lhsIsArrayPointer = false
     def evalLhs(exp : Exp) : CCExpr = {
       evaluatingLhs = true
       val res = eval(exp)
@@ -2554,7 +2555,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         setValue(asLValue(exp.exp_1), translateDurationValue(topVal))
       }
       case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => {
+        // if lhs is array pointer, an alloc rhs evaluation should produce an
+        // AddressRange even if the allocation size is only 1.
+        lhsIsArrayPointer = eval(exp.exp_1).typ.isInstanceOf[CCHeapArrayPointer]
         evalHelp(exp.exp_2) //first evalate rhs and push
+        lhsIsArrayPointer = false
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
@@ -2919,14 +2924,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             }, typ)
 
           allocSize match {
-            case CCTerm(IIntLit(IdealInt(1)), typ) if typ.isInstanceOf[CCArithType] =>
+            case CCTerm(IIntLit(IdealInt(1)), typ)
+              if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer =>
               pushVal(heapAlloc(objectTerm))
             case CCTerm(sizeExp, typ) if typ.isInstanceOf[CCArithType] =>
               val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
 //              localVars.incrementLastFrame
-
               // todo: values addGuard ?
-
               pushVal(CCTerm(addressRangeValue, CCHeapArrayPointer(heap, typ)))
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
                 // todo: optimise constant size allocations > 1?
@@ -2950,6 +2954,22 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 case _ => throw new TranslationException("Could not resolve" +
                   " the term to free: " + t)
               }
+              heapWrite(termToFree, CCTerm(p.heap._defObj, p))
+              pushVal(CCTerm(0, CCVoid)) // free returns no value, pushing dummy
+            case p : CCHeapArrayPointer =>
+              import IExpression._
+              val n = getFreshEvalVar(CCUInt)
+              addGuard(n.term >= 0 & n.term < heap.addrRangeSize(t.toTerm))
+              val termToFree : IFunApp =
+                heapRead(CCTerm(heap.nth(t.toTerm, n.term),
+                         CCHeapPointer(heap, p.elementType)),
+                         assertMemSafety = false).toTerm match {
+                  case IFunApp(f, Seq(arg)) if (objectGetters contains f) &
+                                                arg.isInstanceOf[IFunApp] =>
+                    arg.asInstanceOf[IFunApp]
+                  case _ => throw new TranslationException("Could not resolve" +
+                    " the term to free: " + t)
+                }
               heapWrite(termToFree, CCTerm(p.heap._defObj, p))
               pushVal(CCTerm(0, CCVoid)) // free returns no value, pushing dummy
             case _ => throw new TranslationException("Unsupported operation: " +

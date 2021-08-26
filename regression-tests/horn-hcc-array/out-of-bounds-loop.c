@@ -12,4 +12,5 @@ void main() {
   for (int i = 0; i <= n; ++i) {
     a[i] = 3;
   }
+  free(a);
 }
