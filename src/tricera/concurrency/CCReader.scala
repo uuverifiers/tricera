@@ -271,7 +271,7 @@ object CCReader {
             case s : CCStruct => s.getInitialized(values)
             case CCHeapPointer(h, _) =>
               if (values.isEmpty) h.nullAddr() else values.pop()
-            case CCHeapArrayPointer(h, _) =>
+            case CCHeapArrayPointer(h, _, _) =>
               if (values.isEmpty)
                 h.AddressRangeADT.constructors.head(h.nullAddr(), IIntLit(1))
               else values.pop()
@@ -312,8 +312,19 @@ object CCReader {
     override def toString : String = typ.shortName + " pointer to heap"
   }
 
-  private case class CCHeapArrayPointer(heap : Heap,
-                                        elementType : CCType) extends CCType {
+  // arrays on the heap do not get automatically freed.
+  // global arrays get automatically freed (as they are not really on the heap)
+  //   when the main function returns.
+  // "alloca" and stack arrays get automatically freed when the calling function returns.
+  object HeapArrayType extends Enumeration {
+    type HeapArrayType = Value
+    val GlobalArray, StackArray, HeapArray = Value
+  }
+  import HeapArrayType._
+  private case class CCHeapArrayPointer(heap        : Heap,
+                                        elementType : CCType,
+                                        arrayType   : HeapArrayType)
+                                                                extends CCType {
     def shortName = "[]"
   }
 
@@ -376,6 +387,7 @@ class CCReader private (prog : Program,
                         arithmeticMode : CCReader.ArithmeticMode.Value) {
 
   import CCReader._
+  import CCReader.HeapArrayType._
 
   private val printer = new PrettyPrinterNonStatic
 
@@ -400,7 +412,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -417,7 +429,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -434,7 +446,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -451,7 +463,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -499,7 +511,7 @@ class CCReader private (prog : Program,
             }
         structType.ctor(const: _*)
       case CCHeapPointer(heap, _) => heap.nullAddr()
-      case CCHeapArrayPointer(heap, _) =>  // todo: start = null, but size 0 or 1?
+      case CCHeapArrayPointer(heap, _, _) =>  // todo: start = null, but size 0 or 1?
         heap.AddressRangeADT.constructors.head(heap.nullAddr(), IIntLit(1))
       case _ => IIntLit(0)
     }
@@ -602,7 +614,8 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
       vars reduceToSize newSize
       variableHints reduceToSize (globalVars.size + newSize)
     }
-//    def incrementLastFrame = frameStack.push(frameStack.pop + 1)
+    def getVarsInTopFrame : List[CCVar] =
+      (vars takeRight (vars.size - frameStack.last)).toList
   }
 
   private def updateVarType(name : String, newType : CCType) = {
@@ -613,7 +626,7 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
         new CCVar(name, oldVar.srcInfo, newType)
     } else {
       val oldVar = localVars.vars(ind - globalVars.size)
-      localVars.vars(ind) =
+      localVars.vars(ind - globalVars.size) =
         new CCVar(name, oldVar.srcInfo, newType)
     }
   }
@@ -1086,7 +1099,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
         postArgs, resVarInd, oldVarInds)
       functionContracts.put(name, (prePred, postPred))
-      localVars.popFrame
+      localVars popFrame
     }
 
     // ... and generate clauses for those functions
@@ -1145,7 +1158,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       clauses.clear
       assertionClauses.clear
         
-      localVars.popFrame
+      localVars popFrame
     }
 
     // then translate the threads
@@ -1173,7 +1186,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               translator translateNoReturn thread.compound_stm_
               processes += ((clauses.toList, ParametricEncoder.Infinite))
               clauses.clear
-              localVars.popFrame
+              localVars popFrame
             }
           }
 
@@ -1221,9 +1234,16 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               // passing sort as CCVoid as it is not important
               val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid))
               val resVar = getResVar(args.last.typ)
-              assertionClauses += ((heap.read(heapTerm, addrVar.term) === defObj())
-                :- atom(finalPred.pred, allFormalVarTerms.toList ++
-                   resVar.map(v => IConstant(v.term))))
+              var excludedAddresses = i(true)
+              for (arg <- args) arg.typ match {
+                case arr : CCHeapArrayPointer if arr.arrayType == GlobalArray =>
+                  excludedAddresses = excludedAddresses &&&
+                  !heap.contains(arg.term, addrVar.term)
+                case _ => // nothing
+              }
+              assertionClauses += ((heap.read(args.head.term, addrVar.term) === defObj())
+                :- (atom(finalPred.pred, allFormalVarTerms.toList ++
+                   resVar.map(v => IConstant(v.term))) &&& excludedAddresses))
             case _ => throw new TranslationException("Tried to add -memtrack" +
               "assertion but could not find the heap term!")
           }
@@ -1232,7 +1252,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         processes += ((clauses.toList, ParametricEncoder.Singleton))
         clauses.clear
         
-        localVars.popFrame
+        localVars popFrame
       }
       case None =>
         warn("entry function \"" + entryFunction + "\" not found")
@@ -1345,7 +1365,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     if(isArrayDeclaration(directDecl)) {
                       if(!modelHeap)
                         throw NeedsHeapModelException // all arrays are modeled using haep
-                      CCHeapArrayPointer(heap, typ)
+                      val arrayType = directDecl match {
+                        case _ : InitArray if global  => GlobalArray
+                        case _ : InitArray if !global => StackArray
+                        case _                        => HeapArray
+                      }
+                      CCHeapArrayPointer(heap, typ, arrayType)
                     } else typ
                   if(isPointer) CCHeapPointer(heap, typ2)
                   else typ2
@@ -2095,9 +2120,51 @@ structDefs += ((structInfos(i).name, structFieldList)) */
      *            e.g. getInt(read(h,a)) or an ADT selector x(getS(read(h,a)))
      * @param rhs the term to be written to the location pointed by lhs
      */
-    private def heapWrite(lhs : IFunApp, rhs : CCExpr) = {
+    def heapWrite(lhs : IFunApp, rhs : CCExpr) = {
       val newHeap = heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
+    }
+
+    def heapBatchWrite(h : ITerm, r : ITerm, o : ITerm) = {
+      val newHeap = heap.batchWrite(h, r, o)
+      setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap)))
+    }
+
+    def heapFree(t : CCExpr) = {
+      t.typ match {
+        case p : CCHeapPointer =>
+          val termToFree : IFunApp =
+            heapRead(t, assertMemSafety = false).toTerm match {
+              case IFunApp(f, Seq(arg)) if (objectGetters contains f) &
+                arg.isInstanceOf[IFunApp] =>
+                arg.asInstanceOf[IFunApp]
+              case _ => throw new TranslationException("Could not resolve" +
+                " the term to free: " + t)
+            }
+          heapWrite(termToFree, CCTerm(p.heap._defObj, p))
+        case p : CCHeapArrayPointer =>
+          import IExpression._
+          //val n = getFreshEvalVar(CCUInt)
+          //addGuard(n.term >= 0 & n.term < heap.addrRangeSize(t.toTerm))
+          //val a = getFreshEvalVar(CCHeapPointer(heap, p.elementType))
+          //addGuard(heap.contains(t.toTerm, a.term))
+          /*val termToFree : IFunApp =
+            heapRead(CCTerm(a.term, a.typ),
+                     assertMemSafety = false).toTerm match {
+              case IFunApp(f, Seq(arg)) if (objectGetters contains f) &
+                                            arg.isInstanceOf[IFunApp] =>
+                arg.asInstanceOf[IFunApp]
+              case _ => throw new TranslationException("Could not resolve" +
+                " the term to free: " + t)
+            }
+          heapWrite(termToFree, CCTerm(p.heap._defObj, p))*/
+          // todo: what about ADTs?
+          //if(p.arrayType != HeapArray) throw new TranslationException("Trying to free global or stack pointer " + p)
+          // todo: unsafe instead of exception?
+          heapBatchWrite(getValue(heapTermName).toTerm, t.toTerm, defObj())
+        case _ => throw new TranslationException("Unsupported operation: " +
+          "trying to free " + t + ".")
+      }
     }
 
     private var initAtom =
@@ -2136,7 +2203,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     private def pushVal(v : CCExpr) = {
       val freshVar = getFreshEvalVar(v.typ)
-// println("push " + v + " -> " + c)
       addValue(v)
       // reserve a local variable, in case we need one later
       localVars addVar freshVar
@@ -2177,7 +2243,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     private def popVal = {
       val res = values.last
-//println("pop " + res)
       values trimEnd 1
       localVars.pop(1)
       res
@@ -2388,9 +2453,17 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       }
 
     private def isHeapPointer(t : CCExpr) =
-      t.typ.isInstanceOf[CCHeapPointer]
+      t.typ match {
+        case _ : CCHeapPointer      => true
+        case _ : CCHeapArrayPointer => true
+        case _                      => false
+      }
     private def isHeapPointer(exp : Exp) =
-      getVar(asLValue(exp)).typ.isInstanceOf[CCHeapPointer]
+      getVar(asLValue(exp)).typ match {
+        case _ : CCHeapPointer      => true
+        case _ : CCHeapArrayPointer => true
+        case _                      => false
+      }
 
     private def isIndirection(exp : Exp) : Boolean =
       exp match {
@@ -2415,7 +2488,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     var evaluatingLhs = false
     var handlingFunContractArgs = false
-    var lhsIsArrayPointer = false
+    //var lhsIsArrayPointer = false
     def evalLhs(exp : Exp) : CCExpr = {
       evaluatingLhs = true
       val res = eval(exp)
@@ -2557,9 +2630,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => {
         // if lhs is array pointer, an alloc rhs evaluation should produce an
         // AddressRange even if the allocation size is only 1.
-        lhsIsArrayPointer = eval(exp.exp_1).typ.isInstanceOf[CCHeapArrayPointer]
+        //lhsIsArrayPointer = evalLhs(exp.exp_1).typ.isInstanceOf[CCHeapArrayPointer]
         evalHelp(exp.exp_2) //first evalate rhs and push
-        lhsIsArrayPointer = false
+        //lhsIsArrayPointer = false
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
@@ -2590,10 +2663,15 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                       "Declaring " + lhsName + " as " + lhsName + "[] might " +
                       "solve this issue.")
                   case arrayPtr2 : CCHeapArrayPointer =>
-                    if (arrayPtr1 != arrayPtr2)
-                      throw new TranslationException(getLineString(exp) +
+                    if (arrayPtr1 != arrayPtr2) {
+                      if (arrayPtr1.arrayType == StackArray &&
+                          arrayPtr2.arrayType == HeapArray) // -> alloca
+                        updateVarType(lhsName, arrayPtr1) // todo: replace with a static analysis? we should detect arrays on stack beforehand maybe?
+                      else throw new TranslationException(getLineString(exp) +
                         "Unsupported operation: pointer " + lhsName +
-                      " points to elements of multiple arrays.")
+                        " points to elements of multiple arrays (or array types)." +
+                        "Try initialising the array directly.")
+                    }
                   case _ => // nothing
                 }
               case _ => // nothing
@@ -2916,22 +2994,24 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               "Unsupported alloc expression: " + (printer print exp))
           }
 
-          val objectTerm = CCTerm(
-            name match {
-              case "calloc" => typ.getZeroInit
-              case "malloc" => typ.getNonDet
-              case "alloca" => typ.getNonDet
-            }, typ)
+          val arrayType = name match {
+            case "malloc" | "calloc" => HeapArray
+            case "alloca"            => StackArray
+          }
+          val objectTerm = CCTerm(name match {
+            case "calloc"            => typ.getZeroInit
+            case "malloc" | "alloca" => typ.getNonDet
+          }, typ)
 
           allocSize match {
             case CCTerm(IIntLit(IdealInt(1)), typ)
-              if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer =>
+              if typ.isInstanceOf[CCArithType] => //&& !lhsIsArrayPointer =>
               pushVal(heapAlloc(objectTerm))
             case CCTerm(sizeExp, typ) if typ.isInstanceOf[CCArithType] =>
               val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
 //              localVars.incrementLastFrame
               // todo: values addGuard ?
-              pushVal(CCTerm(addressRangeValue, CCHeapArrayPointer(heap, typ)))
+              pushVal(CCTerm(addressRangeValue, CCHeapArrayPointer(heap, typ, arrayType)))
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
                 // todo: optimise constant size allocations > 1?
           }
@@ -2940,41 +3020,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           if (!modelHeap)
             throw NeedsHeapModelException
           throw new TranslationException("realloc is not supported.")
-        case "free" =>
+        case "free" => // todo: what about trying to free unallocated or already freed addresses?
           if (!modelHeap)
             throw NeedsHeapModelException
           val t = atomicEval(exp.listexp_.head)
-          t.typ match {
-            case p : CCHeapPointer =>
-              val termToFree : IFunApp =
-                heapRead(t, assertMemSafety = false).toTerm match {
-                case IFunApp(f, Seq(arg)) if (objectGetters contains f) &
-                                             arg.isInstanceOf[IFunApp] =>
-                  arg.asInstanceOf[IFunApp]
-                case _ => throw new TranslationException("Could not resolve" +
-                  " the term to free: " + t)
-              }
-              heapWrite(termToFree, CCTerm(p.heap._defObj, p))
-              pushVal(CCTerm(0, CCVoid)) // free returns no value, pushing dummy
-            case p : CCHeapArrayPointer =>
-              import IExpression._
-              val n = getFreshEvalVar(CCUInt)
-              addGuard(n.term >= 0 & n.term < heap.addrRangeSize(t.toTerm))
-              val termToFree : IFunApp =
-                heapRead(CCTerm(heap.nth(t.toTerm, n.term),
-                         CCHeapPointer(heap, p.elementType)),
-                         assertMemSafety = false).toTerm match {
-                  case IFunApp(f, Seq(arg)) if (objectGetters contains f) &
-                                                arg.isInstanceOf[IFunApp] =>
-                    arg.asInstanceOf[IFunApp]
-                  case _ => throw new TranslationException("Could not resolve" +
-                    " the term to free: " + t)
-                }
-              heapWrite(termToFree, CCTerm(p.heap._defObj, p))
-              pushVal(CCTerm(0, CCVoid)) // free returns no value, pushing dummy
-            case _ => throw new TranslationException("Unsupported operation: " +
-              "trying to free " + t + ".")
-          }
+          heapFree(t)
+          pushVal(CCTerm(0, CCVoid)) // free returns no value, pushing dummy
         case name => {
           // then we inline the called function
 
@@ -3402,7 +3453,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     val translator = FunctionTranslator(exit)
     if (isNoReturn) translator.translateNoReturn(stm, entry)
     else translator.translateWithReturn(stm, entry)
-    localVars.popFrame
+    localVars popFrame
   }
 
   private def createHeapPointer(decl : BeginPointer, typ : CCType) :
@@ -3447,7 +3498,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 case np : NoPointer =>
                   np.direct_declarator_ match {
                     case _ : Incomplete =>
-                      CCHeapArrayPointer(heap, typ)
+                      CCHeapArrayPointer(heap, typ, HeapArray)
                     case _ => typ
                   }
                 case _ => typ
@@ -3696,10 +3747,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           entryPred = newPred
           entryClause = merge(decSymex genClause entryPred.pred, entryClause)
         }
-
         output(entryClause)
-        translateStmSeq(stmsIt, entryPred, exit)
-        localVars.popFrame
+
+        translateStmSeq(stmsIt, entryPred, exit,
+                        freeArraysOnStack = trackMemorySafety && modelHeap)
+        localVars popFrame
       }
     }
 
@@ -3754,28 +3806,56 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         localVars pushFrame
 
         val stmsIt = compound.liststm_.iterator
-        translateStmSeq(stmsIt, entry, exit)
-
-        localVars.popFrame
+        translateStmSeq(stmsIt, entry, exit,
+                        freeArraysOnStack = trackMemorySafety && modelHeap)
+        localVars popFrame
       }
     }
 
     private def translateStmSeq(stmsIt : Iterator[Stm],
                                 entry : CCPredicate,
-                                exit : CCPredicate) : Unit = {
+                                exit : CCPredicate,
+                                freeArraysOnStack : Boolean = false) : Unit = {
       var prevPred = entry
       while (stmsIt.hasNext)
         stmsIt.next match {
           case stm : DecS => {
             prevPred = translate(stm.dec_, prevPred)
-            if (!stmsIt.hasNext)
-              output(Clause(atom(exit, allFormalVarTerms),
-                            List(atom(prevPred, allFormalVarTerms)),
-                            true))
+            if (!stmsIt.hasNext) {
+              if (freeArraysOnStack) {
+                // free stack allocated arrays that use the theory of heap
+                val freeSymex = Symex(prevPred)
+                for (v <- localVars.getVarsInTopFrame) v.typ match {
+                  case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                    freeSymex.heapFree(CCTerm(v.term, v.typ))
+                    prevPred = newPred
+                    freeSymex.outputClause(prevPred.pred)
+                  case _ => // nothing
+                }
+                freeSymex.outputClause(exit.pred)
+              } else {
+                output(Clause(atom(exit, allFormalVarTerms),
+                  List(atom(prevPred, allFormalVarTerms)),
+                  true))
+              }
+            }
           }
           case stm => {
-            val nextPred = if (stmsIt.hasNext) newPred else exit
+            var nextPred = if (stmsIt.hasNext || freeArraysOnStack) newPred
+                           else exit
             translate(stm, prevPred, nextPred)
+            if (freeArraysOnStack && !stmsIt.hasNext) {
+              // free stack allocated arrays that use the theory of heap
+              val freeSymex = Symex(nextPred)
+              for (v <- localVars.getVarsInTopFrame) v.typ match {
+                case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                  freeSymex.heapFree(CCTerm(v.term, v.typ))
+                  nextPred = newPred
+                  freeSymex.outputClause(nextPred.pred)
+                case _ => // nothing
+              }
+              freeSymex.outputClause(exit.pred)
+            }
             prevPred = nextPred
           }
         }
@@ -3972,9 +4052,21 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case jump : SjumpFour => // return
         returnPred match {
           case Some(rp) => {
+            var nextPred = entry
+            if (modelHeap && trackMemorySafety) {
+              // free stack allocated arrays that use the theory of heap
+              val freeSymex = Symex(entry)
+              for (v <- localVars.getVarsInTopFrame) v.typ match {
+                case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                  freeSymex.heapFree(CCTerm(v.term, v.typ))
+                  nextPred = newPred
+                  freeSymex.outputClause(nextPred.pred)
+                case _ => // nothing
+              }
+            }
             val args = allFormalVarTerms take (rp.arity)
             output(Clause(atom(rp, args),
-                          List(atom(entry, allFormalVarTerms)),
+                          List(atom(nextPred, allFormalVarTerms)),
                           true))
           }
           case None =>
@@ -3986,9 +4078,30 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val retValue = symex eval jump.exp_
         returnPred match {
           case Some(rp) => {
-            val args = (symex.getValuesAsTerms take (rp.arity - 1)) ++
-                       List(retValue.toTerm)
-            symex outputClause atom(rp, args)
+            if (modelHeap && trackMemorySafety) {
+              localVars.pushFrame
+              localVars.addVar(rp.argVars.last)
+              var nextPred = newPred//(List(rp.argVars.last))
+              val args = symex.getValuesAsTerms ++ List(retValue.toTerm)
+              symex outputClause atom(nextPred, args) //output one clause in case return expr modifies heap
+              val freeSymex = Symex(nextPred) // reinitialise init atom
+              // free stack allocated arrays that use the theory of heap
+              for (v <- localVars.getVarsInTopFrame) v.typ match {
+                case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                  freeSymex.heapFree(CCTerm(v.term, v.typ))
+                  nextPred = newPred
+                  freeSymex.outputClause(nextPred.pred)
+                case _ => // nothing
+              }
+              val retArgs = (freeSymex.getValuesAsTerms take (rp.arity - 1)) ++
+                Seq(freeSymex.getValuesAsTerms.last)
+              freeSymex outputClause atom(rp.pred, retArgs)
+              localVars.popFrame
+            } else {
+              val args = (symex.getValuesAsTerms take (rp.arity - 1)) ++
+                List(retValue.toTerm)
+              symex outputClause atom(rp, args)
+            }
           }
           case None =>
             throw new TranslationException(

@@ -14,11 +14,11 @@ void main() {
     a[i] = 3;
   }
   
-  int sum = 0;
+//  int sum = 0;
   for (int i = 0; i < n; ++i) {
-    sum += a[i];
+    //sum += a[i];
     assert(a[i] == 3);
   }
   
-  assert(sum == n*3);
+  //assert(sum == n*3);
 }

@@ -323,10 +323,10 @@ Init:
                        |                       
                        |                       
                        V                       
- main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
+ main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
 -----------------------------------------------
 Final:
- main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
+ main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
 -----------------------------------------------
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
