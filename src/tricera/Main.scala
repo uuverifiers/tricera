@@ -125,20 +125,34 @@ class Main (args: Array[String]) {
     preprocessTimer.start()
     val ppFileName : String = if (noPP) {
       if(printPP || dumpPP)
-        CCReader.warn("Cannot print or dump preprocessor output due to -noPP")
+        Util.warn("Cannot print or dump preprocessor output due to -noPP")
       fileName // no preprocessing
     } else {
       val preprocessedFile = File.createTempFile("tri-", ".tmp")
       preprocessedFile.deleteOnExit()
 
-      val v = TriCeraPreprocessor.run()
+      if(logPPLevel > 0)
+        Console.withOut(outStream) {
+          println("=" * 80 + "\nPreprocessor warnings and errors\n")
+        }
 
-      val cmdLineArgs: Array[String] = Array("",
-        fileName, "--", "-xc",
-        "-Wno-everything") // todo: add switch for clang warnings?
-      // todo: wrapper around the following
-      val res = v._Z7runTooliPPKcS0_(cmdLineArgs.length, cmdLineArgs,
-        preprocessedFile.getAbsolutePath)
+      val pp = new TriCeraPreprocessor(fileName,
+                                      preprocessedFile.getAbsolutePath,
+                                      displayWarnings = logPPLevel == 2,
+                                      quiet = logPPLevel == 0)
+      if(logPPLevel > 0) Console.withOut(outStream) {
+        println("\n\nEnd of preprocessor warnings and errors")
+        println("=" * 80)
+      }
+
+      if(pp.hasError && logPPLevel > 0)
+        Util.warn("The preprocessor (LLVM) reported an error in the" +
+          " input file, This might be due to TriCera accepting a non-standard" +
+          " subset of the C language, or due to an actual error in the " +
+          "input program. You can safely ignore this warning if it is" +
+          " the former. You can print preprocessor warnings and errors " +
+          "using the -warnPP option.")
+
       if (printPP) {
         val src = scala.io.Source.fromFile(preprocessedFile)
         println(src.mkString)
@@ -153,10 +167,10 @@ class Main (args: Array[String]) {
       //if (res.usesArrays)
       //  return ExecutionSummary(ArrayError, Nil, false, 0, preprocessTimer.s)
         //throw new MainException("C arrays are not supported (yet)")
-      /*else*/ if (res.isUnsupported)
-        return ExecutionSummary(
-          OtherError("Unsupported - detected by preprocessor"),
-            Nil, false,  0, preprocessTimer.s)
+//      /*else*/ if (res.isUnsupported)
+//        return ExecutionSummary(
+//          OtherError("Unsupported - detected by preprocessor"),
+//            Nil, false,  0, preprocessTimer.s)
         //throw new MainException("Input file has unsupported C features " +
         //  "(e.g. varargs)") // todo: more detail
       preprocessedFile.getAbsolutePath
@@ -193,7 +207,7 @@ class Main (args: Array[String]) {
         Some(yamlAst.convertTo[BenchmarkInfo])
       } else None
     } catch {
-      case _: Throwable => CCReader.warn(
+      case _: Throwable => Util.warn(
         "could not parse the accompanying Yaml(.yml) file, ignoring it...")
         None
     }

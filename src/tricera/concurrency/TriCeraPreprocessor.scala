@@ -1,25 +1,41 @@
 package tricera.concurrency
 
-import com.sun.jna._
+import tricera.Main
 
-trait TriCeraPreprocessor extends Library {
-  def _Z7runTooliPPKcS0_(argc : Int, argv : Array[String],
-                         outputFileAbsolutePath : String) : PreprocessOutput
-}
+import sys.process._
+import sys.env
 
-object TriCeraPreprocessor {
-  private var _tp : TriCeraPreprocessor = _
-
-  def run() : TriCeraPreprocessor = {
-    if ( _tp == null ) {
-      NativeLibrary.addSearchPath("tricera-preprocessor", "lib")
-      NativeLibrary.addSearchPath("tricera-preprocessor", "dist")
-      NativeLibrary.addSearchPath("tricera-preprocessor", "preprocessor/build")
-      Native.DEBUG_JNA_LOAD=true;
-      _tp = Native.loadLibrary("tricera-preprocessor",
-        classOf[TriCeraPreprocessor]).asInstanceOf[TriCeraPreprocessor]
-      // todo: error handling if cannot find library? maybe run without pp
-    }
-    _tp
+class TriCeraPreprocessor(val inputFilePath : String,
+                          val outputFilePath : String,
+                          val displayWarnings : Boolean,
+                          val quiet : Boolean) {
+  val ppPath = sys.env.get("TRI_PP_PATH") match {
+    case Some(path) => path + "/tri-pp"
+    case _ => throw new Main.MainException("The preprocessor binary" +
+      " (tri-pp) could not be found. Please ensure that the environment " +
+      "variable TRI_PP_PATH is exported and points to the preprocessor's" +
+      " base directory")
   }
+  // todo: check tricera executable directory automatically before fail?
+  private val cmdLine = List(
+    ppPath,
+    inputFilePath,
+    "-o " + outputFilePath,
+    if(quiet) "-q" else "",
+    "--",
+    "-xc",
+    if(displayWarnings) "" else "-Wno-everything"
+    ).mkString(" ")
+  val returnCode =
+    try { cmdLine !}
+    catch {
+      case _: Throwable =>
+        throw new Main.MainException("The preprocessor could not" +
+          " be executed. This might be due to TriCera preprocessor binary " +
+          "not being in the current directory. Alternatively, use the " +
+          "-noPP switch to disable the preprocessor.\n" +
+          "Preprocessor command: " + cmdLine
+        )
+    }
+  val hasError = returnCode != 0
 }

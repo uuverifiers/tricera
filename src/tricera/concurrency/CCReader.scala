@@ -104,9 +104,6 @@ object CCReader {
   val heapTermName = "@h"
   object NeedsHeapModelException extends Exception
 
-  def warn(msg : String) : Unit =
-    Console.err.println("Warning: " + msg)
-
   object ArithmeticMode extends Enumeration {
     val Mathematical, ILP32, LP64, LLP64 = Value
   }

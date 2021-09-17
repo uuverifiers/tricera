@@ -33,7 +33,7 @@ with `T1 ** x`.
 ## ForLoopStmtExtractor
 Moves declarations from inside the for loop declaration to outside. E.g.,
 `for (int i = 0, j = 0; ...){...}` becomes 
-`{int i = 0, j = 0;} for (; ...){...}}`
+`{int i = 0, j = 0; for (; ...){...}}`
 TriCera cannot parse the former directly.
 
 # Requirements

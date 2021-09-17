@@ -18,18 +18,17 @@ done;
 
 LAZABS_HOME=`dirname "${SOURCE}"`;
 
-if [ -f ${LAZABS_HOME}/dist/libtricera-preprocessor.so ]; then
+if [ -f ${LAZABS_HOME}/dist/tri-pp ]; then
    	# binary distribution
-  export LD_LIBRARY_PATH="${LAZABS_HOME}/dist";
+  export TRI_PP_PATH="${LAZABS_HOME}/dist";
 
-else if [ -f ${LAZABS_HOME}/preprocessor/build/libtricera-preprocessor.so ]; then
+else if [ -f ${LAZABS_HOME}/tri-pp ]; then
 
     # binary distribution from sbt
-  export LD_LIBRARY_PATH="${LAZABS_HOME}/preprocessor/build";
+  export TRI_PP_PATH="${LAZABS_HOME}";
 
 else
-
-    echo "Could not find libtricera-preprocessor.so" >&2
+    echo "Could not find tri-pp." >&2
     exit 1
 
 fi; fi

@@ -19,9 +19,10 @@ class TriCeraParameters extends GlobalParameters {
 
   var prettyPrintDot : Boolean = false
 
-  var printPP : Boolean = false
-  var dumpPP  : Boolean = false
-  var noPP    : Boolean = false
+  var printPP    : Boolean = false
+  var dumpPP     : Boolean = false
+  var noPP       : Boolean = false
+  var logPPLevel : Int = 0 // 0: quiet, 1: errors only, 2: errors + warnings
 
   var shouldTrackMemory : Boolean = false
 
@@ -51,6 +52,8 @@ class TriCeraParameters extends GlobalParameters {
     case "-pDot" :: rest => prettyPrint = true; prettyPrintDot = true; parseArgs(rest)
     case "-printPP" :: rest => printPP = true; parseArgs(rest)
     case "-dumpPP" :: rest => dumpPP = true; parseArgs(rest)
+    case ppLogOption :: rest if (ppLogOption startsWith "-logPP:") =>
+      logPPLevel = (ppLogOption drop 7).toInt; parseArgs(rest)
     case "-noPP" :: rest => noPP = true; parseArgs(rest)
     case "-dumpClauses" :: rest => printIntermediateClauseSets = true; parseArgs(rest)
     case "-sp" :: rest => smtPrettyPrint = true; parseArgs(rest)
@@ -176,8 +179,9 @@ class TriCeraParameters extends GlobalParameters {
       " -horn\t\tEnable this engine\n" +
       " -p\t\tPretty Print Horn clauses\n" +
       " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
-      " -printPP\t\tPrint the output of C preprocessor on screen\n" +
+      " -printPP\t\tPrint the output of C preprocessor to stdout\n" +
       " -dumpPP\t\tDump the output of C preprocessor to file (input file name + .tri) \n" +
+      " -logPP:n\t\tDisplay preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +
       " -noPP\t\tTurn off C preprocessor (typedefs are not allowed in this mode) \n" +
       " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
       " -sol\t\tShow solution in Prolog format\n" +

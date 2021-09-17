@@ -14,8 +14,3 @@ typedef struct PreprocessOutput {
   char* outputBuffer;  
   //...
 } PreprocessOutput;
-
-// returns above described struct, inputs are the same as other clang tools
-// argc: arg count, argv: array of strings
-PreprocessOutput runTool(int argc, const char **argv, 
-                         const char *outputFileAbsolutePath);

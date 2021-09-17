@@ -38,7 +38,7 @@ lazy val preprocessorGen = Seq(
     def sources : PathFinder  =
       (preprocessorDir ** "*") ** ("*.hpp" || "*.cpp")
     val libDir = preprocessorDir / "build"
-    val libFile = libDir / "libtricera-preprocessor.so"
+    val execFile = baseDirectory.value / "tri-pp"
     val cacheDir = libDir / ".cache"
 
     val cache = FileFunction.cached(cacheDir,
@@ -50,7 +50,7 @@ lazy val preprocessorGen = Seq(
         Set()
     }
 
-    cache(sources.get.toSet + libFile).toSeq
+    cache(sources.get.toSet + execFile).toSeq
   }.taskValue
  )
 

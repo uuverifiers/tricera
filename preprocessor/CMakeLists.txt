@@ -32,10 +32,10 @@ endif()
 # TOOLS
 # ===================
 set(TRICERA_TOOLS
-    tricera-preprocessor
+    tri-pp
 )
 
-set(tricera-preprocessor_SOURCES
+set(tri-pp_SOURCES
   TriceraPreprocessorMain.cpp
   lib/TriceraPreprocessor.cpp
   lib/UsedFunctionAndTypeCollector.cpp
@@ -49,15 +49,15 @@ set(tricera-preprocessor_SOURCES
 # CONFIGURATION
 # ===================
 foreach( tool ${TRICERA_TOOLS} )
-# Create a library corresponding to 'plugin'
-#    add_executable(
-#      ${tool}
-#      ${${tool}_SOURCES}
-#      )
-
-    add_library(${tool} SHARED
+# Create a library/executable corresponding to 'plugin'
+    add_executable(
+      ${tool}
       ${${tool}_SOURCES}
-    )
+      )
+
+#    add_library(${tool} SHARED
+#      ${${tool}_SOURCES}
+#    )
 
 # Link with libclangTooling
     target_link_libraries(
