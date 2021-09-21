@@ -130,12 +130,12 @@ void TypeCanoniserMatcher::run(const MatchFinder::MatchResult &Result) {
   else if (declStmt) {
     // this matcher cannot match unless decl is DeclaratorDecl
     auto it = declStmt->decl_begin();
-    const DeclaratorDecl* firstDecl = dynamic_cast<DeclaratorDecl*>(*it);
+    const DeclaratorDecl* firstDecl = static_cast<DeclaratorDecl*>(*it);
     // sanity check, first declaration should have already been canonised
     assert(!editedLocations.insert(firstDecl->getTypeSpecStartLoc()).second);
     ++it;
     for (; it != declStmt->decl_end(); ++it) {
-      const DeclaratorDecl* decl = dynamic_cast<DeclaratorDecl*>(*it);
+      const DeclaratorDecl* decl = static_cast<DeclaratorDecl*>(*it);
       //decl->dumpColor();
       auto canonicalType = 
         QualType(TheTypedefType->getCanonicalTypeUnqualified());

@@ -37,20 +37,35 @@ lazy val preprocessorGen = Seq(
     val preprocessorDir = baseDirectory.value / "preprocessor"
     def sources : PathFinder  =
       (preprocessorDir ** "*") ** ("*.hpp" || "*.cpp")
-    val libDir = preprocessorDir / "build"
+    val buildDir = preprocessorDir / "build"
+    val llvmBuildDir = preprocessorDir / "llvm" / "build"
     val execFile = baseDirectory.value / "tri-pp"
-    val cacheDir = libDir / ".cache"
+    val cacheDir = buildDir / ".cache"
 
-    val cache = FileFunction.cached(cacheDir,
-                                    inStyle = FilesInfo.lastModified,
-                                    outStyle = FilesInfo.exists){ _ =>
+    def buildPreprocessor = {
       scala.sys.process.Process(
-        "cmake -DCT_LLVM_INSTALL_DIR=/usr/lib/llvm-11 " +  preprocessorDir).!
-      scala.sys.process.Process("make -j 3").!
-        Set()
+        "mkdir -p " +  llvmBuildDir).!
+        scala.sys.process.Process(
+          "cmake " +  llvmBuildDir + "/.. -B" + llvmBuildDir).!
+
+      scala.sys.process.Process("make -C " + llvmBuildDir + " -j 3").!
+
+      scala.sys.process.Process(
+        "cmake " +  buildDir + "/.. -B" + buildDir).!
+
+      scala.sys.process.Process("make install -C " + buildDir + " -j 3").!
     }
 
-    cache(sources.get.toSet + execFile).toSeq
+    import java.nio.file.{ Files, Paths }
+    if (!Files.exists(Paths.get(execFile.toString)))
+      buildPreprocessor
+
+    val cache = FileFunction.cached(cacheDir,
+                                    inStyle = FilesInfo.lastModified){ _ =>
+      buildPreprocessor
+      Set()
+    }
+    cache(sources.get.toSet).toSeq
   }.taskValue
  )
 
@@ -79,7 +94,6 @@ settings(
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.6",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
-  libraryDependencies += "net.java.dev.jna" % "jna" % "4.2.2",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2"
 )
 

@@ -47,16 +47,16 @@ void TypedefMatcher::run(const MatchFinder::MatchResult &Result) {
   // ASTContext is used to retrieve the source location
   ASTContext *Ctx = Result.Context;
 
-  // this callback removes all typedef declarations, 
+  // this callback removes all typedef declarations,
   // record typedefs which also has a record body are converted to regular
   // record declarations if they are in UsedFunctionAndTypeCollector::seenTypes
 
   const TypedefDecl * TheTypedefDecl =
-    Result.Nodes.getNodeAs<clang::TypedefDecl>("aTypedefDecl"); 
+    Result.Nodes.getNodeAs<clang::TypedefDecl>("aTypedefDecl");
 
   if (!TheTypedefDecl)
     assert(false && "Typedef remover handler called but could not determine match!\n");
-  
+
   // remove all typedef declarations from source code
   //TheTypedefDecl->dump();
   SourceLocation TypeDefBeginLoc;
@@ -69,7 +69,7 @@ void TypedefMatcher::run(const MatchFinder::MatchResult &Result) {
   }
 
   // return if this declaration is not in the main file
-  if (Ctx->getFullLoc(TypeDefBeginLoc).getFileID() != 
+  if (Ctx->getFullLoc(TypeDefBeginLoc).getFileID() !=
        rewriter.getSourceMgr().getMainFileID()) return;
 
   // get end location of typedef, this might correspond to the end location of
@@ -78,18 +78,18 @@ void TypedefMatcher::run(const MatchFinder::MatchResult &Result) {
   const TypedefDecl * lastDecl;
   while(curDecl) {
     lastDecl = curDecl;
-    curDecl = dynamic_cast<const TypedefDecl*>(getNextDeclInSameStmt(curDecl));
+    curDecl = static_cast<const TypedefDecl*>(getNextDeclInSameStmt(curDecl));
     assert(curDecl != lastDecl);
   }
 
   TypeDefEndLoc = Lexer::findLocationAfterToken(lastDecl->getEndLoc(),
-    tok::semi, Ctx->getSourceManager(), Ctx->getLangOpts(), false); 
+    tok::semi, Ctx->getSourceManager(), Ctx->getLangOpts(), false);
   if (!TypeDefEndLoc.isValid())
     TypeDefEndLoc = lastDecl->getEndLoc();
-  
+
   if(!TypeDefBeginLoc.isValid() || !TypeDefEndLoc.isValid()) return;
    // this is to prevent deleting/commenting multiple typedefs.
-   // e.g.: typedef struct S {...} S1, S2;  
+   // e.g.: typedef struct S {...} S1, S2;
   if (!EditedLocations.insert(TypeDefBeginLoc).second){
     //llvm::outs() << "already edited!\n";
     return;
@@ -110,11 +110,11 @@ void TypedefMatcher::run(const MatchFinder::MatchResult &Result) {
   }
 
   // check if this typedef contains a record (struct/union) declaration
-  const RecordType * TheRecordType = 
+  const RecordType * TheRecordType =
     Result.Nodes.getNodeAs<clang::RecordType>("aTypedefRecord");
-  const EnumType * TheEnumType = 
+  const EnumType * TheEnumType =
     Result.Nodes.getNodeAs<clang::EnumType>("aTypedefEnum");
-  
+
   bool declaresRecord = false;
   FullSourceLoc RecordDeclBeginLoc;
   FullSourceLoc RecordDeclEndLoc;
@@ -128,13 +128,13 @@ void TypedefMatcher::run(const MatchFinder::MatchResult &Result) {
     // get the beginning of the record declaration
     RecordDeclBeginLoc = Ctx->getFullLoc(recOrEnumDecl->getBeginLoc());
     // get the end of the record declaration
-    RecordDeclEndLoc   = Ctx->getFullLoc(recOrEnumDecl->getEndLoc());  
+    RecordDeclEndLoc   = Ctx->getFullLoc(recOrEnumDecl->getEndLoc());
     if(RecordDeclBeginLoc >= TypeDefBeginLoc &&
        RecordDeclEndLoc <= TypeDefEndLoc)
        declaresRecord = true;
   }
-  
-  if (declaresRecord && typeSeen) {     
+
+  if (declaresRecord && typeSeen) {
     //const RecordDecl * TheRecordDecl = TheRecordType->getAsRecordDecl();
     std::string declName;
     if (TheRecordType) declName = TheRecordType->getDecl()->getNameAsString();
@@ -150,7 +150,7 @@ void TypedefMatcher::run(const MatchFinder::MatchResult &Result) {
     wrapWithCComment(SourceRange(
       RecordDeclEndLoc, TypeDefEndLoc.getLocWithOffset(-1)),
                      rewriter, false);
-    
+
     // copies x in "typedef struct {} x" to right after "struct" if missing
     if(declName.empty())
       rewriter.InsertTextAfterToken(RecordDeclBeginLoc,

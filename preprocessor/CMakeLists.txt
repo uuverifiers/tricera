@@ -5,17 +5,12 @@ project(tricera-preprocessors)
 # 1. LOAD LLVM CONFIGURATION
 #===============================================================================
 # Set this to a valid LLVM installation dir
-set(CT_LLVM_INSTALL_DIR "" CACHE PATH "LLVM installation directory")
+#set(CT_LLVM_INSTALL_DIR "" CACHE PATH "LLVM installation directory")
 
-# Add the location of ClangConfig.cmake to CMake search paths (so that
-# find_package can locate it)
-list(APPEND CMAKE_PREFIX_PATH "${CT_LLVM_INSTALL_DIR}/lib/cmake/clang/")
-
-find_package(Clang REQUIRED CONFIG)
-
-# HelloWorld includes headers from LLVM and Clang - update the include paths
-# accordingly
-include_directories(SYSTEM "${LLVM_INCLUDE_DIRS};${CLANG_INCLUDE_DIRS}")
+#include_directories(SYSTEM "${LLVM_INCLUDE_DIRS};${CLANG_INCLUDE_DIRS}")
+include_directories(
+  "${CMAKE_CURRENT_SOURCE_DIR}/llvm/build/_deps/libclang_prebuilt-src/include"
+)
 
 #===============================================================================
 # 2. TRICERA PREPROCESSOR BUILD CONFIGURATION
@@ -24,10 +19,7 @@ include_directories(SYSTEM "${LLVM_INCLUDE_DIRS};${CLANG_INCLUDE_DIRS}")
 set(CMAKE_CXX_STANDARD 14 CACHE STRING "")
 
 # LLVM is normally built without RTTI. Be consistent with that.
-if(NOT LLVM_ENABLE_RTTI)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
-endif()
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -static")
 
 # TOOLS
 # ===================
@@ -44,7 +36,7 @@ set(tri-pp_SOURCES
   lib/TypeCanoniser.cpp
   lib/ForLoopStmtExtractor.cpp
   lib/Utilites.cpp
-)
+  )
 
 # CONFIGURATION
 # ===================
@@ -60,9 +52,16 @@ foreach( tool ${TRICERA_TOOLS} )
 #    )
 
 # Link with libclangTooling
+#    include_directories(${CMAKE_SOURCE_DIR}/llvm/include)
     target_link_libraries(
       ${tool}
-      clangTooling
+#      clangTooling
+    "${CMAKE_CURRENT_SOURCE_DIR}/llvm/build/_all_archives/libclangTooling.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/llvm/build/_all_archives/libclang_bundled.a"
+      m
+      dl
+      pthread
+      z
     )
 
 # Configure include directories for 'tool'
@@ -87,3 +86,4 @@ endforeach()
 # add_executable(tricera-preprocessor TriceraPreprocessorMain.cpp)
 
 # target_link_libraries(tricera-preprocessor clangTooling)
+INSTALL(TARGETS tri-pp DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/..)
