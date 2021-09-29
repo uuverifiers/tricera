@@ -270,7 +270,7 @@ object CCReader {
               if (values.isEmpty) h.nullAddr() else values.pop()
             case CCHeapArrayPointer(h, _, _) =>
               if (values.isEmpty)
-                h.AddressRangeADT.constructors.head(h.nullAddr(), IIntLit(1))
+                h.addressRangeCtor(h.nullAddr(), IIntLit(1))
               else values.pop()
             case _ => if (values.isEmpty) Int2ITerm(0) else values.pop()
           }
@@ -409,7 +409,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -426,7 +426,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -443,7 +443,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -460,7 +460,7 @@ class CCReader private (prog : Program,
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -509,7 +509,7 @@ class CCReader private (prog : Program,
         structType.ctor(const: _*)
       case CCHeapPointer(heap, _) => heap.nullAddr()
       case CCHeapArrayPointer(heap, _, _) =>  // todo: start = null, but size 0 or 1?
-        heap.AddressRangeADT.constructors.head(heap.nullAddr(), IIntLit(1))
+        heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
       case _ => IIntLit(0)
     }
 
@@ -888,8 +888,9 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
 
   import ap.theories.{Heap => HeapObj}
 
-  def defObjCtor(objectADT : ADT, allocResADT : ADT) : ITerm = {
-    objectADT.constructors.last()
+  def defObjCtor(objectCtors : Seq[IFunction],
+                 heapADTs : ADT) : ITerm = {
+    objectCtors.last()
   }
 
   val ObjSort = HeapObj.ADTSort(0)
@@ -953,18 +954,18 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
   }
 
   private val structCtorsOffset = predefSignatures.size
-  val defObj = heap.ObjectADT.constructors.last
+  val defObj = heap.userADTCtors.last
   val structCount = structInfos.size
-  val objectWrappers = heap.ObjectADT.constructors.take(structCount+structCtorsOffset)
+  val objectWrappers = heap.userADTCtors.take(structCount+structCtorsOffset)
   val objectGetters =
-    for (sels <- heap.ObjectADT.selectors.take(structCount+structCtorsOffset)
+    for (sels <- heap.userADTSels.take(structCount+structCtorsOffset)
          if sels.nonEmpty) yield sels.head
-  val structCtors = heap.ObjectADT.constructors.slice(structCtorsOffset+structCount,
+  val structCtors = heap.userADTCtors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
-  val structSels = heap.ObjectADT.selectors.slice(structCtorsOffset+structCount,
+  val structSels = heap.userADTSels.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
 
-  val objectSorts : IndexedSeq[Sort] = objectGetters.map(f => f.resSort)
+  val objectSorts : IndexedSeq[Sort] = objectGetters.toIndexedSeq.map(f => f.resSort)
   val sortGetterMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectGetters).toMap
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
@@ -1394,9 +1395,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                         val arraySize = values eval initArray.constant_expression_.asInstanceOf[Especial].exp_
                         values.heapBatchAlloc(objTerm, arraySize.toTerm, initHeapTerm)
                       case _: Incomplete =>
-                        heap.AddressRangeADT.constructors.head(
-                          heap.nullAddr(), IIntLit(0)
-                        )
+                        heap.addressRangeCtor(heap.nullAddr(), IIntLit(0))
                     }
                     // initialise using the first address of the range
                     values addValue CCTerm(addressRangeValue, typ)
@@ -2079,7 +2078,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     def getGuard = guard
 
     //todo:Heap get rid of this or change name
-    def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = true) : CCTerm = {
+    def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = true,
+                 assumeMemSafety : Boolean = true) : CCTerm = {
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
         case _ => throw new TranslationException(
@@ -2087,7 +2087,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       }
       val readObj = heap.read(getValue(heapTermName).toTerm, ptrExpr.toTerm)
       if (assertMemSafety)
-        assertProperty(heap.ObjectADT.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
+        assertProperty(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort))) // todo: add tester methods for user ADT sorts?
+      // also add memory safety assumptions to the clause
+      if (assertMemSafety && assumeMemSafety)
+        addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
       CCTerm(objectGetter(readObj), typ)
     }
     def heapAlloc(value : CCTerm) : CCTerm = {
@@ -2970,7 +2973,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 name + " is not a declared channel")
           }
         }
-        case name@("malloc" | "calloc" | "alloca") => { // todo: proper alloca and calloc
+        case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca") => { // todo: proper alloca and calloc
           if (!modelHeap)
             throw NeedsHeapModelException
           val (typ, allocSize) = exp.listexp_(0) match {
@@ -2992,12 +2995,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
 
           val arrayType = name match {
-            case "malloc" | "calloc" => HeapArray
-            case "alloca"            => StackArray
+            case "malloc" | "calloc"           => HeapArray
+            case "alloca" | "__builtin_alloca" => StackArray
           }
           val objectTerm = CCTerm(name match {
-            case "calloc"            => typ.getZeroInit
-            case "malloc" | "alloca" => typ.getNonDet
+            case "calloc"                                 => typ.getZeroInit
+            case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
           }, typ)
 
           allocSize match {
@@ -3120,7 +3123,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             (enumeratorDefs get name) match {
               case Some(e) => e
               case None => throw new TranslationException(
-                "Symbol " + name + " is not declared")
+                getLineString(exp) + "Symbol " + name + " is not declared")
             }
           case ind =>
             getValue(ind, false)
@@ -3151,8 +3154,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         //  "TriCera: " + (printer print exp))
 
       case _ =>
-        throw new TranslationException("Expression currently not supported by " +
-          "TriCera: " + (printer print exp))
+        throw new TranslationException(getLineString(exp) +
+          "Expression currently not supported by TriCera: " +
+          (printer print exp))
     }
 
     private def handleFunction(name : String,
