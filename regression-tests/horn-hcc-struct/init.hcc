@@ -1,4 +1,4 @@
-typedef struct{
+struct S{
     unsigned char flag;
     int x;
     struct{
@@ -17,7 +17,7 @@ typedef struct{
 }S;
 
 thread A {
-    S a = { 1, 2, {3, 4}, 5, {{6, 7}, 8}, 9};
+    struct S a = { 1, 2, {3, 4}, 5, {{6, 7}, 8}, 9};
     assert(a.flag == 1);
     assert(a.x == 2);
     assert (a.s.y == 3);
@@ -27,7 +27,7 @@ thread A {
     assert (a.s2.s3.z == 7);
     assert (a.s2.x == 8);
     assert (a.z == 9);
-    S b = { 1, 2, 3, };
+    struct S b = { 1, 2, 3, };
     assert(b.flag == 1);
     assert(b.x == 2);
     assert (b.s.y == 3);

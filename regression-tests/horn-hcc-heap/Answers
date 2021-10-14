@@ -1,0 +1,338 @@
+
+list-001.c
+Warning: enabling heap model
+SAFE
+
+list-001-fail.c
+Warning: enabling heap model
+UNSAFE
+
+------------------------------------------------------------------
+Init:
+                         main2(emptyHeap)                         
+------------------------------------------------------------------
+                                |                                 
+                                |                                 
+                                V                                 
+  main3(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1))   
+------------------------------------------------------------------
+                                |                                 
+                                |                                 
+                                V                                 
+ main4(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
+------------------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
+------------------------------------------------------------------
+
+list-002-fail.c
+Warning: enabling heap model
+Warning: no definition of function "nondet_bool" available
+UNSAFE
+
+------------------------------------------------------------------------------------------------
+Init:
+                                        main2(emptyHeap)                                        
+------------------------------------------------------------------------------------------------
+                                               |                                                
+                                               |                                                
+                                               V                                                
+       main3(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
+------------------------------------------------------------------------------------------------
+                                               |                                                
+                                               |                                                
+                                               V                                                
+       main4(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(1))))), nthAddr(1))       
+------------------------------------------------------------------------------------------------
+                                               |                                                
+                                               |                                                
+                                               V                                                
+ main7(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------------------------------------
+Final:
+ main7(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------------------------------------
+
+mutually-referential-structs.c
+Warning: enabling heap model
+SAFE
+
+mutually-referential-structs-fail.c
+Warning: enabling heap model
+SAFE
+
+mutually-referential-structs-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                                      main2(emptyHeap)                                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                             |                                                                                              
+                                                                                             |                                                                                              
+                                                                                             V                                                                                              
+                       main5(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(0), nthAddr(0))))), O_child(child(nthAddr(0))))), nthAddr(1), nthAddr(2))                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                             |                                                                                              
+                                                                                             |                                                                                              
+                                                                                             V                                                                                              
+                             main4(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(0))))), O_child(child(nthAddr(0))))), nthAddr(1))                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                             |                                                                                              
+                                                                                             |                                                                                              
+                                                                                             V                                                                                              
+ main8(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(0))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1), nthAddr(3)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                             |                                                                                              
+                                                                                             |                                                                                              
+                                                                                             V                                                                                              
+       main7(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1))       
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+       main7(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1))       
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+simple-struct.c
+Warning: enabling heap model
+SAFE
+
+simple-struct-2.c
+Warning: enabling heap model
+SAFE
+
+simple-struct-fail.c
+Warning: enabling heap model
+SAFE
+
+swap-1.c
+Warning: enabling heap model
+SAFE
+
+swap-1-fail.c
+Warning: enabling heap model
+SAFE
+
+swap-2.c
+Warning: enabling heap model
+SAFE
+
+swap-2-fail.c
+Warning: enabling heap model
+SAFE
+
+swap-3.c
+Warning: enabling heap model
+SAFE
+
+simple-arith.c
+Warning: enabling heap model
+SAFE
+
+typecastUnsafe-001.c
+Warning: enabling heap model
+UNSAFE
+
+--------------------------------------------------------------------
+Init:
+                          main2(emptyHeap)                          
+--------------------------------------------------------------------
+                                 |                                  
+                                 |                                  
+                                 V                                  
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------
+
+typecastSafe-001.c
+Warning: enabling heap model
+SAFE
+
+illegal-access-001.c
+Warning: enabling heap model
+(error "Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)")
+
+illegal-access-002.c
+Warning: enabling heap model
+(error "Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)")
+
+postop.c
+Warning: enabling heap model
+SAFE
+
+postop-struct.c
+Warning: enabling heap model
+SAFE
+
+preop.c
+Warning: enabling heap model
+SAFE
+
+preop-struct.c
+Warning: enabling heap model
+SAFE
+
+opassign.c
+Warning: enabling heap model
+SAFE
+
+opassign-struct.c
+Warning: enabling heap model
+SAFE
+
+unsafe-access-001.c
+Warning: enabling heap model
+UNSAFE
+
+--------------------------------------------------------------------
+Init:
+                          main2(emptyHeap)                          
+--------------------------------------------------------------------
+                                 |                                  
+                                 |                                  
+                                 V                                  
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(0)) 
+--------------------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(0)) 
+--------------------------------------------------------------------
+
+stackptr-to-heapptr.c
+Warning: enabling heap model
+SAFE
+
+free-1-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+------------------------------------------------------
+Init:
+                   main2(emptyHeap)                   
+------------------------------------------------------
+                          |                           
+                          |                           
+                          V                           
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+
+free-2-nondet-unsafe.c
+Warning: enabling heap model
+Warning: no definition of function "nondet" available
+UNSAFE
+
+------------------------------------------------------
+Init:
+                   main2(emptyHeap)                   
+------------------------------------------------------
+                          |                           
+                          |                           
+                          V                           
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+Final:
+ main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
+------------------------------------------------------
+
+free-3-safe.c
+Warning: enabling heap model
+SAFE
+
+free-4-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+------------------------------------------------------------------
+Init:
+                         main2(emptyHeap)                         
+------------------------------------------------------------------
+                                |                                 
+                                |                                 
+                                V                                 
+ main5(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------
+Final:
+ main5(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------
+
+struct-ptrfield-1.c
+Warning: enabling heap model
+SAFE
+
+memtrack-01.c
+Warning: enabling heap model
+UNSAFE
+
+--------------------------------------------
+Init:
+              main2(emptyHeap)              
+--------------------------------------------
+                     |                      
+                     |                      
+                     V                      
+ main1(newHeap(alloc(emptyHeap, O_Int(8)))) 
+--------------------------------------------
+Final:
+ main1(newHeap(alloc(emptyHeap, O_Int(8)))) 
+--------------------------------------------
+valid-memsafety/valid-memtrack
+  expected verdict matches the result!
+
+memtrack-02.c
+Warning: enabling heap model
+SAFE
+valid-memsafety/valid-memtrack
+  expected verdict matches the result!
+
+memtrack-03.c
+Warning: enabling heap model
+UNSAFE
+
+-----------------------------------------------
+Init:
+               main2(emptyHeap)                
+-----------------------------------------------
+                       |                       
+                       |                       
+                       V                       
+ main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+-----------------------------------------------
+Final:
+ main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+-----------------------------------------------
+valid-memsafety/valid-memtrack
+  expected verdict matches the result!
+
+memtrack-04.c
+SAFE
+valid-memsafety/valid-memtrack
+  expected verdict matches the result!
+
+memtrack-05.c
+Warning: enabling heap model
+UNSAFE
+
+-----------------------------------------------
+Init:
+         main3(emptyHeap, nthAddr(0))          
+-----------------------------------------------
+                       |                       
+                       |                       
+                       V                       
+ main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+-----------------------------------------------
+Final:
+ main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+-----------------------------------------------
+valid-memsafety/valid-memtrack
+  expected verdict matches the result!
+
+memtrack-06.c
+Warning: enabling heap model
+SAFE
+valid-memsafety/valid-memtrack
+  expected verdict matches the result!

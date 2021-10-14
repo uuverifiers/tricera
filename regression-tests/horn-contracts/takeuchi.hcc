@@ -1,0 +1,20 @@
+
+
+int tak(int x, int y, int z) {
+    if (y < x)
+       return 
+           tak( 
+             tak(x-1, y, z),
+             tak(y-1, z, x),
+             tak(z-1, x, y)
+           );
+    else
+      return y;
+}
+
+void main() {
+  int x, y, z;
+  assume(x > y && y <= z);
+  int res = tak(x, y, z);
+  assert(res == z);
+}

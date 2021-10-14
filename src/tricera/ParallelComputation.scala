@@ -30,7 +30,8 @@
 
 package tricera
 
-import tricera.Main.{TimeoutException, StoppedException}
+import tricera.Main.{StoppedException, TimeoutException}
+import tricera.params.TriCeraParameters
 
 object ParallelComputation {
   /**

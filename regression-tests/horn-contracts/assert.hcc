@@ -1,0 +1,20 @@
+int N = _;  // uninitialised
+int N2 = _;
+
+
+void main(void) {
+  assume(N >= 0);
+
+  assert(N <= mult(N,N));
+
+}
+
+int mult(int x, int y) {
+  if (x <= 0 || y <= 0) {
+     return 0;
+  }
+  else {
+     return (x + mult(x, y - 1));
+  }
+} 
+
