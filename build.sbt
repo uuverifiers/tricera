@@ -88,7 +88,7 @@ settings(
                                         case "2.12.8" => "-opt:_"
                                       }}).value,
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.6",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2"
 )
