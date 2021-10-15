@@ -1,20 +1,20 @@
 /**
  * Copyright (c) 2015-2019 Philipp Ruemmer. All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice, this
  *   list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of the authors nor the names of their
  *   contributors may be used to endorse or promote products derived from
  *   this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -81,7 +81,7 @@ object CCReader {
                                 entry : (parser) => T) : T = {
     val l = new Yylex(new ap.parser.Parser2InputAbsy.CRRemover2 (input))
     val p = new parser(l, l.getSymbolFactory())
-    
+
     try { entry(p) } catch {
       case e : Exception =>
         throw new ParseException(
@@ -527,8 +527,6 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
   //////////////////////////////////////////////////////////////////////////////
 
   import HornClauses.Clause
-
-  case class SourceInfo (line : Int, col : Int, offset : Int)
   class CCVar (val name : String,
                val srcInfo : Option[SourceInfo],
                val typ  : CCType) {
@@ -598,7 +596,7 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
       variableHints trimEnd n
       assert(variableHints.size == size + globalVars.size)
     }
-    
+
     def remove(n : Int): Unit = {
       assume(n >= 0 && n < size)
       vars.remove(n)
@@ -1155,7 +1153,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       clauses.clear
       assertionClauses.clear
-        
+
       localVars popFrame
     }
 
@@ -1236,7 +1234,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               for (arg <- args) arg.typ match {
                 case arr : CCHeapArrayPointer if arr.arrayType == GlobalArray =>
                   excludedAddresses = excludedAddresses &&&
-                  !heap.contains(arg.term, addrVar.term)
+                  !heap.within(arg.term, addrVar.term)
                 case _ => // nothing
               }
               assertionClauses += ((heap.read(args.head.term, addrVar.term) === defObj())
@@ -1249,7 +1247,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         processes += ((clauses.toList, ParametricEncoder.Singleton))
         clauses.clear
-        
+
         localVars popFrame
       }
       case None =>
@@ -2147,7 +2145,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           //val n = getFreshEvalVar(CCUInt)
           //addGuard(n.term >= 0 & n.term < heap.addrRangeSize(t.toTerm))
           //val a = getFreshEvalVar(CCHeapPointer(heap, p.elementType))
-          //addGuard(heap.contains(t.toTerm, a.term))
+          //addGuard(heap.within(t.toTerm, a.term))
           /*val termToFree : IFunApp =
             heapRead(CCTerm(a.term, a.typ),
                      assertMemSafety = false).toTerm match {
@@ -2213,7 +2211,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         // temporary variables with the original variables
         //
         // TODO: this is currently not very effective ...
-        
+
         val varMapping =
           (for (d <- v.occurringConstants.iterator;
                 index = lookupVarNoException(d.name))
@@ -3148,7 +3146,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                              CCHeapPointer(heap, arrayPtr.elementType))
         val readValue = heapRead(readAddress)
         import IExpression._
-        assertProperty(heap.contains(addressRangeValue.toTerm, readAddress.toTerm))
+        assertProperty(heap.within(addressRangeValue.toTerm, readAddress.toTerm))
         pushVal(readValue)
         //throw new TranslationException("Expression currently not supported by " +
         //  "TriCera: " + (printer print exp))
@@ -3952,7 +3950,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         withinLoop(third, exit) {
           translate(body, second, third)
         }
-        
+
         stm match {
           case stm : SiterThree =>
             output(Clause(atom(first, allFormalVarTerms),

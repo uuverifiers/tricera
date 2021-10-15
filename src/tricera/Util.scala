@@ -1,10 +1,11 @@
 package tricera
-import tricera.concurrency.ccreader.Vars.SourceInfo
 import tricera.concurrency.concurrent_c.Absyn._
 
 object Util {
   def warn(msg : String) : Unit =
     Console.err.println("Warning: " + msg)
+
+  case class SourceInfo (line : Int, col : Int, offset : Int)
 
   // todo: is below really the only way to get line numbers?
   def getSourceInfo(exp: Exp): SourceInfo = exp match {

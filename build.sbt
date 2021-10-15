@@ -1,3 +1,6 @@
+import scala.sys.process._ // needed for url to fetch tri-pp
+import java.nio.file.{Paths, Files}
+import java.nio.file.attribute.PosixFilePermission._
 
 lazy val commonSettings = Seq(
     name := "TriCera",
@@ -31,51 +34,44 @@ lazy val ccParser = (project in file("cc-parser")).
 // horn-concurrency dependency
 //lazy val hornConcurrency = RootProject(uri("git://github.com/zafer-esen/horn-concurrency-test.git"))
 
-// Preprocessor generation
-lazy val preprocessorGen = Seq(
-  sourceGenerators in Compile += Def.task {
-    val preprocessorDir = baseDirectory.value / "preprocessor"
-    def sources : PathFinder  =
-      (preprocessorDir ** "*") ** ("*.hpp" || "*.cpp")
-    val buildDir = preprocessorDir / "build"
-    val llvmBuildDir = preprocessorDir / "llvm" / "build"
-    val execFile = baseDirectory.value / "tri-pp"
-    val cacheDir = buildDir / ".cache"
-
-    def buildPreprocessor = {
-      scala.sys.process.Process(
-        "mkdir -p " +  llvmBuildDir).!
-        scala.sys.process.Process(
-          "cmake " +  llvmBuildDir + "/.. -B" + llvmBuildDir).!
-
-      scala.sys.process.Process("make -C " + llvmBuildDir + " -j 3").!
-
-      scala.sys.process.Process(
-        "cmake " +  buildDir + "/.. -B" + buildDir).!
-
-      scala.sys.process.Process("make install -C " + buildDir + " -j 3").!
+lazy val pp = taskKey[Unit]("")
+pp := {
+  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.0/tri-pp")
+  f #> file("tri-pp") !
+}
+def addExecutePermissions(file : File) {
+  val rf = fileToRichFile(file)
+  val permissions = Seq(OTHERS_EXECUTE, OWNER_EXECUTE, GROUP_EXECUTE).toSet
+  if(!permissions.subsetOf(rf.permissions)) {
+    permissions.foreach(rf.addPermission(_))
+  }
+}
+lazy val ppWithErrorHandling = taskKey[Unit]("Download the preprocessor")
+ppWithErrorHandling := {
+  if ({val f = baseDirectory.value / "tri-pp"
+        Files.exists(Paths.get(f.toString)) &&
+          fileToRichFile(f).attributes.size > 0}) {
+    println("tri-pp found, skipping download.")
+    addExecutePermissions(baseDirectory.value / "tri-pp")
+  }
+  else {
+    pp.result.value match{
+      case Inc(inc : Incomplete) =>
+        println("failure! Please double check the link in build.sbt" +
+                  " and make sure it exists.")
+      case _ =>
+        println("tri-pp downloaded.")
+        addExecutePermissions(baseDirectory.value / "tri-pp")
     }
-
-    import java.nio.file.{ Files, Paths }
-    if (!Files.exists(Paths.get(execFile.toString)))
-      buildPreprocessor
-
-    val cache = FileFunction.cached(cacheDir,
-                                    inStyle = FilesInfo.lastModified){ _ =>
-      buildPreprocessor
-      Set()
-    }
-    cache(sources.get.toSet).toSeq
-  }.taskValue
- )
+  }
+}
+  (compile in Compile) := ((compile in Compile) dependsOn ppWithErrorHandling).value
 
 // Actual project
-
 lazy val root = (project in file(".")).
   aggregate(ccParser).
   dependsOn(ccParser).
   // dependsOn(hornConcurrency).
-  settings(preprocessorGen: _*).
   settings(commonSettings: _*).
 
 //
