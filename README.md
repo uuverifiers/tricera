@@ -53,4 +53,4 @@ TriCera is under development, and bug reports are welcome!
 * `thread <name> { ... }`: statically declare a (singleton) thread.
 * `thread[<id-var>] <name> { ... }`: statically declare an infinitely replicated thread.
 * `clock <name>, duration <name>`: declare clocks or variables representing time periods.
-* `chan <name>`: declare a binary (UPPAAL-style) communication channel, which can be used via chan_send and chan_receive.
+* `chan <name>`: declare a binary (UPPAAL-style) communication channel, which can be used via `chan_send` and `chan_receive`.

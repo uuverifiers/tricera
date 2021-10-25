@@ -4,6 +4,7 @@ import tricera.Main
 
 import sys.process._
 import sys.env
+import java.nio.file.{Paths, Files}
 
 class TriCeraPreprocessor(val inputFilePath : String,
                           val outputFilePath : String,
@@ -11,12 +12,15 @@ class TriCeraPreprocessor(val inputFilePath : String,
                           val quiet : Boolean) {
   val ppPath = sys.env.get("TRI_PP_PATH") match {
     case Some(path) => path + "/tri-pp"
-    case _ => throw new Main.MainException("The preprocessor binary" +
-      " (tri-pp) could not be found. Please ensure that the environment " +
-      "variable TRI_PP_PATH is exported and points to the preprocessor's" +
-      " base directory")
+    case _ =>
+      val path = Paths.get(System.getProperty("user.dir") + "/tri-pp")
+      if (Files.exists(path)) path
+      else
+        throw new Main.MainException("The preprocessor binary" +
+        " (tri-pp) could not be found. Please ensure that the environment " +
+        "variable TRI_PP_PATH is exported and points to the preprocessor's" +
+        " base directory")
   }
-  // todo: check tricera executable directory automatically before fail?
   private val cmdLine = List(
     ppPath,
     inputFilePath,

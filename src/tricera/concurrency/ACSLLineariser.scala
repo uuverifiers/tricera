@@ -23,7 +23,6 @@ package tricera.concurrency
 import ap.Signature
 import ap.theories.{ADT, ModuloArithmetic, MulTheory}
 import ap.terfor.preds.Predicate
-import ap.terfor.{ConstantTerm, TermOrder}
 import ap.terfor.conjunctions.Quantifier
 import ap.parser._
 import IExpression.Sort
@@ -69,7 +68,9 @@ object ACSLLineariser {
   }
 
   def printExpression(e : IExpression) = {
-    val enriched = EnrichingVisitor.visit(e, ())
+    val solutionPreprocessor = new SolutionPreprocessor
+    val simplified = solutionPreprocessor(e)
+    val enriched = EnrichingVisitor.visit(simplified, ())
     AbsyPrinter.visit(enriched, PrintContext(List(), "", 0))
   }
 
@@ -312,8 +313,7 @@ object ACSLLineariser {
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {
             allButLast(ctxt setPrecLevel 0, ".", "." + fun2Identifier(fun), 1)
-          }
-          else if (fun.arity > 0) { // is this case possible?
+          } else if (fun.arity > 0) { // todo: should not be possible in ACSL
             print(fun2Identifier(fun))
             print("(")
             allButLast(ctxt setPrecLevel 0, ", ", ")", fun.arity)
