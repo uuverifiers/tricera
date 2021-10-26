@@ -1433,8 +1433,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               case init : InitExpr =>
                 if (init.exp_.isInstanceOf[Enondet])
                   (CCTerm(newVar.term, typ), typ rangePred newVar.term)
-                else
-                  (values eval init.exp_, IExpression.i(true))
+                else {
+                  if (isArrayDeclaration(declarator))
+                    values.lhsIsArrayPointer = true // todo: find smarter solution!
+                  val res = (values eval init.exp_, IExpression.i(true))
+                  values.lhsIsArrayPointer = false
+                  res
+                }
               case _ : InitListOne | _: InitListTwo => {
                 val initStack = getInitsStack(initializer, values)
                 typ match {
@@ -1913,6 +1918,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
   }
 
+  private def isArrayDeclaration (decl : Declarator) : Boolean = {
+    decl match {
+      case d : NoPointer => isArrayDeclaration(d.direct_declarator_)
+      case _ => false
+    }
+  }
   private def isArrayDeclaration (decl : Direct_declarator) : Boolean = {
       decl match {
         case _ : InitArray => true
@@ -2486,7 +2497,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     var evaluatingLhs = false
     var handlingFunContractArgs = false
-    //var lhsIsArrayPointer = false
+    var lhsIsArrayPointer = false
     def evalLhs(exp : Exp) : CCExpr = {
       evaluatingLhs = true
       val res = eval(exp)
@@ -2628,9 +2639,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => {
         // if lhs is array pointer, an alloc rhs evaluation should produce an
         // AddressRange even if the allocation size is only 1.
-        //lhsIsArrayPointer = evalLhs(exp.exp_1).typ.isInstanceOf[CCHeapArrayPointer]
-        evalHelp(exp.exp_2) //first evalate rhs and push
-        //lhsIsArrayPointer = false
+        lhsIsArrayPointer = exp.exp_1.isInstanceOf[Earray] // todo: preprocessor should ensure that lhs is always an instance of Earray...
+        evalHelp(exp.exp_2) //first evaluate rhs and push
+        lhsIsArrayPointer = false
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
@@ -3003,7 +3014,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
           allocSize match {
             case CCTerm(IIntLit(IdealInt(1)), typ)
-              if typ.isInstanceOf[CCArithType] => //&& !lhsIsArrayPointer =>
+              if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer =>
               pushVal(heapAlloc(objectTerm))
             case CCTerm(sizeExp, typ) if typ.isInstanceOf[CCArithType] =>
               val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)

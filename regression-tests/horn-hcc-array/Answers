@@ -91,6 +91,10 @@ valid-memsafety
 unreach-call
   expected verdict matches the result!
 
+array-single-alloc.c
+Warning: enabling heap model
+SAFE
+
 simple-dynamic-memsafety1.c
 Warning: enabling heap model
 SAFE
