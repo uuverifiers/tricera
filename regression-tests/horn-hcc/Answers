@@ -7,140 +7,6 @@ test2.hcc
 Warning: entry function "main" not found
 SAFE
 
-test2b.hcc
-Warning: entry function "main" not found
-UNSAFE
-
---------------------------
-Init:
- A2(0, 0, 0)  B2(0, 0, 0) 
---------------------------
-      |      
-      |      
-      V      
- A2(1, 0, 1) 
---------------------------
-      |      
-      |      
-      V      
- A2(2, 0, 2) 
---------------------------
-      |      
-      |      
-      V      
- A2(3, 0, 3) 
---------------------------
-                   |      
-                   |      
-                   V      
-              B2(4, 0, 1) 
---------------------------
-                   |      
-                   |      
-                   V      
-              B2(5, 0, 2) 
---------------------------
-                   |      
-                   |      
-                   V      
-              B2(6, 0, 3) 
---------------------------
-      |      
-      |      
-      V      
- A3(6, 0, 3) 
---------------------------
-                   |      
-                   |      
-                   V      
-               B0(6, 1)   
---------------------------
-Final:
- A3(6, 1, 3)   B0(6, 1)   
---------------------------
-
-test2c.hcc
-Warning: entry function "main" not found
-UNSAFE
-
---------------------------------
-Init:
-  A2(0, 0, 0)     B2(0, 0, 0)   
---------------------------------
-                       |        
-                       |        
-                       V        
-                 B6(0, 0, 0, 0) 
---------------------------------
-                       |        
-                       |        
-                       V        
-                  B2(1, 0, 1)   
---------------------------------
-                       |        
-                       |        
-                       V        
-                 B6(1, 0, 1, 1) 
---------------------------------
-                       |        
-                       |        
-                       V        
-                  B2(2, 0, 2)   
---------------------------------
-                       |        
-                       |        
-                       V        
-                 B6(2, 0, 2, 2) 
---------------------------------
-       |        
-       |        
-       V        
- A6(2, 0, 0, 2) 
---------------------------------
-       |        
-       |        
-       V        
-  A2(3, 0, 1)   
---------------------------------
-       |        
-       |        
-       V        
- A6(3, 0, 1, 3) 
---------------------------------
-                       |        
-                       |        
-                       V        
-                  B2(3, 0, 3)   
---------------------------------
-       |        
-       |        
-       V        
-  A2(4, 0, 2)   
---------------------------------
-       |        
-       |        
-       V        
- A6(4, 0, 2, 4) 
---------------------------------
-                       |        
-                       |        
-                       V        
-                    B0(4, 1)    
---------------------------------
-       |        
-       |        
-       V        
-  A2(5, 1, 3)   
---------------------------------
-       |        
-       |        
-       V        
-  A3(5, 1, 3)   
---------------------------------
-Final:
-  A3(5, 1, 3)       B0(5, 1)    
---------------------------------
-
 test3.hcc
 Warning: entry function "main" not found
 SAFE
@@ -148,28 +14,6 @@ SAFE
 test4.hcc
 Warning: entry function "main" not found
 SAFE
-
-test-para1.hcc
-Warning: entry function "main" not found
-UNSAFE
-
----------------------------------------
-Init:
- Proc1(0, 2)  Proc1(0, 0)  Proc1(0, 1) 
----------------------------------------
-      |      
-      |      
-      V      
- Proc2(2, 2) 
----------------------------------------
-                   |      
-                   |      
-                   V      
-              Proc2(0, 0) 
----------------------------------------
-Final:
- Proc2(0, 2)  Proc2(0, 0)  Proc1(0, 1) 
----------------------------------------
 
 test-para2.hcc
 Warning: entry function "main" not found
@@ -249,23 +93,6 @@ SAFE
 atomic3d.hcc
 SAFE
 
-atomic4.hcc
-Warning: entry function "main" not found
-UNSAFE
-
---------------------
-Init:
-  A1(1)     B1(1)   
---------------------
-    |     
-    |     
-    V     
-  A2(1)   
---------------------
-Final:
-  A2(1)     B1(1)   
---------------------
-
 diamond_true-unreach-call1.c
 SAFE
 
@@ -284,6 +111,22 @@ SAFE
 
 down_true-unreach-call.i.c
 SAFE
+
+test2b.hcc
+Warning: entry function "main" not found
+UNSAFE
+
+test2c.hcc
+Warning: entry function "main" not found
+UNSAFE
+
+test-para1.hcc
+Warning: entry function "main" not found
+UNSAFE
+
+atomic4.hcc
+Warning: entry function "main" not found
+UNSAFE
 
 test4.hcc
 Warning: entry function "main" not found

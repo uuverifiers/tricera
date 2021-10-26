@@ -14,9 +14,6 @@ class SolutionPreprocessor { // make object? / parameters?
     rewrite(expr, explodeADTs)
   }
 
-  // a mapping from adt ctor expressions to a sequence of their field terms at postvisit
-  val ADTFieldTerms = new MHashMap[ITerm, Seq[ITerm]]
-
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
     def getADTTerm(t : IExpression) : Option[ADTTerm] = {
@@ -35,18 +32,33 @@ class SolutionPreprocessor { // make object? / parameters?
 
     override def postVisit(t: IExpression, none : Object,
                            subres: Seq[IExpression]) : IExpression = {
+
       import IExpression._
+      def explodeADTSelectors (originalEq : IEquation, ctorFun : IFunction,
+                               lhsIsCtor : Boolean) = {
+        val newEq = originalEq update subres
+        val (newFunApp, selectorTerms, newRootTerm) =
+          if (lhsIsCtor) {
+            val Eq(newFunApp@IFunApp(_, selectorTerms), newRootTerm) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          } else {
+            val Eq(newRootTerm, newFunApp@IFunApp(_, selectorTerms)) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          }
+        val adtTerm = getADTTerm(newFunApp).get
+        val adt = adtTerm.adtSort.adtTheory
+        val ctorIndex = adt.constructors.indexOf(ctorFun)
+        val selectors = adt.selectors(ctorIndex)
+        (for ((fieldTerm, selectorInd) <- selectorTerms zipWithIndex)
+          yield selectors(selectorInd)(newRootTerm) ===
+            fieldTerm.asInstanceOf[ITerm]).reduce(_ &&& _)
+      }
+
       t match {
         case e@Eq(funApp@IFunApp(fun, _), _) if getADTTerm(funApp).nonEmpty =>
-          val Eq(newFunApp@IFunApp(_, fieldTerms), newRootTerm) =
-            (e update subres).asInstanceOf[IEquation]
-          val adtTerm = getADTTerm(newFunApp).get
-          val adt = adtTerm.adtSort.adtTheory
-          val ctorIndex = adt.constructors.indexOf(fun)
-          val selectors = adt.selectors(ctorIndex)
-          (for ((fieldTerm, selectorInd) <- fieldTerms zipWithIndex)
-            yield selectors(selectorInd)(newRootTerm) ===
-              fieldTerm.asInstanceOf[ITerm]).reduce(_ &&& _)
+          explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = true)
+        case e@Eq(_, funApp@IFunApp(fun, _)) if getADTTerm(funApp).nonEmpty =>
+          explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = false)
         case t@IFunApp(f,_) =>
           val newApp = t update subres
           (for (theory <- TheoryRegistry lookupSymbol f;
