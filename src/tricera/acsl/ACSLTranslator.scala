@@ -3,7 +3,6 @@ package tricera.acsl;
 import tricera.acsl._;
 import tricera.acsl.Absyn._;
 //import tricera.acsl.{Absyn => ASTNode};
-import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
 
 import tricera.Util._
 import collection.JavaConverters._
@@ -42,6 +41,7 @@ object ACSLTranslator {
     }
   }
 
+// TODO: Make all private? (If testable, must see how scala handles that.)
 // ---- Contracts ------------------------------------------
   def translate(contract : FunctionContract) : (IFormula, IFormula) = contract match {
     case c : Contract =>
