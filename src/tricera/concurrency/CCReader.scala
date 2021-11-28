@@ -42,8 +42,8 @@ import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
-
 import tricera.Util._
+import tricera.acsl.{ACSLTranslator, FunctionContract}
 
 object CCReader {
   def apply(input : java.io.Reader, entryFunction : String,
@@ -110,55 +110,56 @@ object CCReader {
 
   //////////////////////////////////////////////////////////////////////////////
 
+  // todo: maybe make private to package?
   abstract sealed class CCType {
     def shortName : String
   }
-  private abstract class CCArithType extends CCType {
+  abstract class CCArithType extends CCType {
     val UNSIGNED_RANGE : IdealInt
     val isUnsigned : Boolean
   }
-  private case object CCVoid extends CCType {
+  case object CCVoid extends CCType {
     override def toString : String = "void"
     def shortName = "void"
   }
-  private case object CCInt extends CCArithType {
+  case object CCInt extends CCArithType {
     override def toString : String = "int"
     def shortName = "int"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
     val isUnsigned : Boolean = false
   }
-  private case object CCUInt extends CCArithType {
+  case object CCUInt extends CCArithType {
     override def toString : String = "unsigned int"
     def shortName = "uint"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
     val isUnsigned : Boolean = true
   }
-  private case object CCLong extends CCArithType {
+  case object CCLong extends CCArithType {
     override def toString : String = "long"
     def shortName = "long"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = false
   }
-  private case object CCULong extends CCArithType {
+  case object CCULong extends CCArithType {
     override def toString : String = "unsigned long"
     def shortName = "ulong"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = true
   }
-  private case object CCLongLong extends CCArithType {
+  case object CCLongLong extends CCArithType {
     override def toString : String = "long long"
     def shortName = "llong"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = false
   }
-  private case object CCULongLong extends CCArithType {
+  case object CCULongLong extends CCArithType {
     override def toString : String = "unsigned long long"
     def shortName = "ullong"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = true
   }
 
-  private case class CCHeap(heap : Heap) extends CCType {
+  case class CCHeap(heap : Heap) extends CCType {
     override def toString : String = heap.toString
     def shortName = "heap"
   }
@@ -166,18 +167,18 @@ object CCReader {
   /**
    * typ is either an index into structInfos (if ADT type), or a CCType
    * ptrDepth 0 => not a pointer, 1 => *, 2 => **, ...*/
-  private case class FieldInfo(name : String,
+  case class FieldInfo(name : String,
                                typ : Either[Integer, CCType],
                                ptrDepth : Integer)
-  private case class StructInfo(name : String, fieldInfos : Seq[FieldInfo])
+  case class StructInfo(name : String, fieldInfos : Seq[FieldInfo])
 
-  private case class CCStructField(structName : String,
+  case class CCStructField(structName : String,
                                    structs    : MHashMap[String, CCStruct])
     extends CCType{
     override def toString : String = "field with type: " + structName
     def shortName = "field:" + structName
   }
-  private case class CCStruct(ctor : MonoSortedIFunction,
+  case class CCStruct(ctor : MonoSortedIFunction,
                               sels : IndexedSeq[(MonoSortedIFunction, CCType)])
     extends CCType{
     override def toString : String =
@@ -281,7 +282,7 @@ object CCReader {
   /**
    * Type for enums that are directly mapped to integers
    */
-  private case class CCIntEnum(name: String,
+  case class CCIntEnum(name: String,
                                enumerators: Seq[(String, IdealInt)])
     extends CCType{
     override def toString : String =
@@ -289,10 +290,10 @@ object CCReader {
     def shortName = name
   }
 
-  private abstract sealed class CCPointer(typ : CCType) extends CCType {
+  abstract sealed class CCPointer(typ : CCType) extends CCType {
     def shortName = typ.shortName + "*"
   }
-  private case class CCStackPointer(targetInd    : Int, typ : CCType,
+  case class CCStackPointer(targetInd    : Int, typ : CCType,
                                     fieldAddress : List[Int] = Nil)
     extends CCPointer(typ) {
     override def toString : String = typ.shortName +
@@ -304,7 +305,7 @@ object CCReader {
   // e.g.: what does &(p->x) return when p is a heap pointer?
   //       needs to be a Heap.Address along with a way to reach the field
   //       maybe another class for this? CCHeapADTFieldPointer...
-  private case class CCHeapPointer(heap : Heap,
+  case class CCHeapPointer(heap : Heap,
                                     typ : CCType) extends CCPointer(typ) {
     override def toString : String = typ.shortName + " pointer to heap"
   }
@@ -318,7 +319,7 @@ object CCReader {
     val GlobalArray, StackArray, HeapArray = Value
   }
   import HeapArrayType._
-  private case class CCHeapArrayPointer(heap        : Heap,
+  case class CCHeapArrayPointer(heap        : Heap,
                                         elementType : CCType,
                                         arrayType   : HeapArrayType)
                                                                 extends CCType {
@@ -334,22 +335,22 @@ object CCReader {
     def shortName = elementType + "[]"
   }*/
 
-  private case object CCClock extends CCType {
+  case object CCClock extends CCType {
     override def toString : String = "clock"
     def shortName = "clock"
   }
-  private case object CCDuration extends CCType {
+  case object CCDuration extends CCType {
     override def toString : String = "duration"
     def shortName = "duration"
   }
   //////////////////////////////////////////////////////////////////////////////
 
-  private[concurrency] abstract sealed class CCExpr(val typ : CCType) {
+  abstract sealed class CCExpr(val typ : CCType) {
     def toTerm : ITerm
     def toFormula : IFormula
     def occurringConstants : Seq[IExpression.ConstantTerm]
   }
-  private case class CCTerm(t : ITerm, _typ : CCType)
+  case class CCTerm(t : ITerm, _typ : CCType)
                extends CCExpr(_typ) {
     def toTerm : ITerm = t
     def toFormula : IFormula = t match {
@@ -361,7 +362,7 @@ object CCReader {
     def occurringConstants : Seq[IExpression.ConstantTerm] =
       SymbolCollector constantsSorted t
   }
-  private case class CCFormula(f : IFormula, _typ : CCType)
+  case class CCFormula(f : IFormula, _typ : CCType)
                      extends CCExpr(_typ) {
     def toTerm : ITerm = f match {
       case IBoolLit(true) =>  1
@@ -865,15 +866,43 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
         }
     }
   }
+
+  object FuncDef {
+    def apply(funDef : Function_def) : FuncDef = {
+      funDef match {
+        case f : NewFunc =>
+          FuncDef(f.compound_stm_, f.declarator_,
+                  SourceInfo(f.line_num, f.col_num, f.offset),
+                  Some(f.listdeclaration_specifier_))
+        case f : NewHintFunc =>
+          FuncDef(f.compound_stm_, f.declarator_,
+                  SourceInfo(f.line_num, f.col_num, f.offset),
+                  Some(f.listdeclaration_specifier_))
+        case f : NewFuncInt =>
+          FuncDef(f.compound_stm_, f.declarator_,
+                  SourceInfo(f.line_num, f.col_num, f.offset),
+                  listAbs_hint = Some(f.listabs_hint_))
+        case f : ContractFunc =>
+          val innerFunDef = apply(f.function_def_)
+          FuncDef(innerFunDef.body, innerFunDef.decl, innerFunDef.sourceInfo,
+                  innerFunDef.declSpecs, innerFunDef.listAbs_hint,
+                  Some(f.annotationstring_))
+      }
+    }
+  }
+  case class FuncDef(body : Compound_stm,
+                     decl : Declarator,
+                     sourceInfo : SourceInfo,
+                     declSpecs : Option[ListDeclaration_specifier] = None,
+                     listAbs_hint: Option[ListAbs_hint] = None,
+                     contract : Option[String] = None) {
+  }
+
   for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
     decl match {
       case decl: Global => collectStructDefs(decl.dec_)
       case fun: Afunc =>
-        val comp = fun.function_def_ match {
-            case f: NewFunc => f.compound_stm_
-            case f: NewHintFunc => f.compound_stm_
-            case f: NewFuncInt => f.compound_stm_
-          }
+        val comp = FuncDef(fun.function_def_).body
         collectStructDefsFromComp(comp)
       case thread : Athread =>
         val comp = thread.thread_def_ match {
@@ -1072,6 +1101,47 @@ structDefs += ((structInfos(i).name, structFieldList)) */
            if useContract(funDef.asInstanceOf[NewHintFunc].listabs_hint_))
       yield funDef.asInstanceOf[NewHintFunc]
 
+    // todo: clean up this part to decouple contract generation from contract parsing
+    val annotatedFuns : Seq[(ContractFunc, FunctionContract)] = // todo: naming is ambiguous
+      for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_;
+           if decl.isInstanceOf[Afunc];
+           funDef = decl.asInstanceOf[Afunc].function_def_;
+           if funDef.isInstanceOf[ContractFunc]) yield {
+        val f = funDef.asInstanceOf[ContractFunc]
+        // todo: define and initialise context
+//        val name = getName(f)
+//        localVars.pushFrame
+//        pushArguments(f)
+//        val prePred = CCPredicate(
+//          MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
+//          allFormalVars
+//        )
+//        val postVar = getType(f) match {
+//          case CCVoid => Nil
+//          case t      => List(new CCVar(name + "_res",
+//            Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
+//        }
+        // all old vars (includes globals) + global vars + return var (if it exists)
+//        val postOldArgs = allFormalVars
+//        val postGlobalArgs = globalVars.formalVars
+//        val postArgs = postOldArgs ++ postGlobalArgs ++ postVar
+//        val oldVarInds = postOldArgs.indices.toList
+//        val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
+//        val postPred = CCPredicate(
+//          MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
+//          postArgs, resVarInd, oldVarInds)
+//        localVars.popFrame
+        println("Calling ACSLTranslator.tranlateContract with the annotation:\n" + f.annotationstring_)
+        (f,
+              ACSLTranslator.translateContract(
+                f.annotationstring_
+                /* , context */))
+      }
+
+    println("Contract annotations\n" + "-"*80)
+    for ((fun, contract) <- annotatedFuns)
+      println(getName(fun) + ": " + contract)
+
     for (f <- contractFuns) {
       val name = getName(f.declarator_)
       localVars.pushFrame
@@ -1198,11 +1268,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         localVars pushFrame
 
         val returnType = {
-          (funDef match {
-            case f : NewFunc => getType(f.listdeclaration_specifier_)
-            case f : NewHintFunc => getType(f.listdeclaration_specifier_)
-            case f : NewFuncInt => CCVoid
-          })
+          FuncDef(funDef).declSpecs match {
+            case Some(declSpec) => getType(declSpec)
+            case None => CCVoid
+          }
         }
 
         val exitVar = getResVar(returnType)
@@ -1613,11 +1682,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             variableHints(variableHints.size - 1) = hintEls
           }
 
-  private def getName (f : Function_def) : String = f match {
-    case f : NewFunc => getName(f.declarator_)
-    case f : NewFuncInt => getName(f.declarator_)
-    case f : NewHintFunc => getName(f.declarator_)
-  }
+  private def getName (f : Function_def) : String = getName(FuncDef(f).decl)
 
   private def getName(decl : Declarator) : String = decl match {
     case decl : NoPointer => getName(decl.direct_declarator_)
@@ -2004,14 +2069,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
   }
 
   private def getType(functionDef : Function_def) : CCType = {
-    val (typ, isPtr) = functionDef match {
-      case f: NewFunc =>
-        (getType(f.listdeclaration_specifier_), f.declarator_.isInstanceOf[BeginPointer])
-      case _: NewFuncInt => (CCInt, false)
-      case f: NewHintFunc =>
-        (getType(f.listdeclaration_specifier_), f.declarator_.isInstanceOf[BeginPointer])
+    val f = FuncDef(functionDef)
+    val typ = f.declSpecs match {
+      case Some(listDeclSpecs) =>
+        getType(listDeclSpecs)
+      case None => CCInt
     }
-    if(isPtr) CCHeapPointer(heap, typ) // todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 
@@ -3481,12 +3545,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private def pushArguments(functionDef : Function_def,
                             pointerArgs : List[CCType] = Nil) : Compound_stm = {
-    val (declarator, stm) = functionDef match {
-      case f : NewFunc    => (f.declarator_, f.compound_stm_)
-      case f : NewFuncInt => (f.declarator_, f.compound_stm_)
-      case f : NewHintFunc=> (f.declarator_, f.compound_stm_)
-    }
-    val decl = declarator match {
+    val f = FuncDef(functionDef)
+    val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
     }
@@ -3540,7 +3600,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case dec : OldFuncDec =>
         // arguments are not specified ...
     }
-    stm
+    f.body
   }
 
   //////////////////////////////////////////////////////////////////////////////

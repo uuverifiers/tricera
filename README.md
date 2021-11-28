@@ -1,5 +1,5 @@
 # Summary
-TriCera is a model checker for C programs, that is being developed and mainted by Uppsala University. TriCera accepts programs in a C-like language, and currently supports:
+TriCera is a model checker for C programs, that is being developed and maintained by Uppsala University. TriCera accepts programs in a C-like language, and currently supports:
 * C structs, 
 * arrays, 
 * stack and heap pointers (but no pointer arithmetic),
@@ -11,7 +11,7 @@ and much more. See the `.c` and `.hcc` files under [`regression-tests`](https://
 
 TriCera works by encoding the input program into a set of Constrained Horn Clauses (CHCs), which include properties explicitly added to the program through `assert` and `assume` statements, but also some explicit properties such as checking the type and runtime safety of heap accesses. It then passes the generated CHCs to [Eldarica](https://github.com/uuverifiers/eldarica) for solving. This is similar to, for instance, what [JayHorn](https://jayhorn.github.io/jayhorn/) does for Java.
 
-TriCera can also automatically generate function contracts for functions annotated wuth `/*@contract@*/`. Contracts will then be generated when the clauses can be solved. See [`regression-tests/horn-contracts`](https://github.com/uuverifiers/tricera/tree/master/regression-tests/horn-contracts) for examples. To print the contracts, `-log:3` option must be passed to the tool.
+TriCera can also automatically generate function contracts for functions annotated with `/*@contract@*/`. Contracts will then be generated when the clauses can be solved. See [`regression-tests/horn-contracts`](https://github.com/uuverifiers/tricera/tree/master/regression-tests/horn-contracts) for examples. To print the contracts, `-log:3` option must be passed to the tool.
 
 TriCera can parse [SV-Comp](https://sv-comp.sosy-lab.org/) style `.yml` property files, and output if the expected verdict matches the analysis result. The property file must have the same name as the input file except the extension (`input_files` provided in the property file is currently ignored ). [Here](https://github.com/uuverifiers/tricera/blob/master/regression-tests/horn-hcc-heap/memtrack-01.yml) is an example from the regression tests.
 
@@ -49,7 +49,7 @@ TriCera is under development, and bug reports are welcome!
 * `assume(condition)`: assume that a condition holds.
 * `atomic { stm1; stm2; ... }`: execute a block of statements atomically. 
 * `atomic { assume(!lock); lock=1; }` will atomically check that lock has value 0, and then set the variable to 1.
-* `within (cond) { stm1; stm2; ... }`: execute a block of statements (atomically) before cond expires. This corresponds to time invariants in Uppaal timed automata.
+* `within (cond) { stm1; stm2; ... }`: execute a block of statements (atomically) before cond expires. This corresponds to time invariants in UPPAAL timed automata.
 * `thread <name> { ... }`: statically declare a (singleton) thread.
 * `thread[<id-var>] <name> { ... }`: statically declare an infinitely replicated thread.
 * `clock <name>, duration <name>`: declare clocks or variables representing time periods.

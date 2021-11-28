@@ -25,6 +25,7 @@ StraySemi.     IgnoredDecl ::= ";" ;
 
 separator nonempty External_declaration "";
 
+ContractFunc. Function_def ::= AnnotationString Function_def;
 -- OldFunc.     Function_def ::= [Declaration_specifier] Declarator [Dec] Compound_stm ;
 NewFunc.     Function_def ::= [Declaration_specifier] Declarator Compound_stm ;
 NewHintFunc.     Function_def ::= [Abs_hint] [Declaration_specifier] Declarator Compound_stm ;
@@ -69,7 +70,7 @@ HintInitDecl. Init_declarator ::= [Abs_hint] Declarator "=" Initializer;
 
 separator nonempty Init_declarator ",";
 
-Comment_abs_hint. Abs_hint ::= "/*@" [Abs_hint_clause] "@*/";
+Comment_abs_hint. Abs_hint ::= "/*$" [Abs_hint_clause] "$*/";
 
 separator nonempty Abs_hint "";
 
@@ -262,6 +263,8 @@ SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
 separator nonempty Stm "";
 
 token CIdent (letter | '_' | '$') (letter | digit | '_' | '$')*;
+
+token AnnotationString  '/' '*' '@' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '@' '*' '/';
 
 token UnboundedInteger ["123456789"] digit *;
 
