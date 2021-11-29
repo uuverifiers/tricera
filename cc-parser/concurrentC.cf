@@ -264,7 +264,7 @@ separator nonempty Stm "";
 
 token CIdent (letter | '_' | '$') (letter | digit | '_' | '$')*;
 
-token AnnotationString  '/' '*' '@' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '@' '*' '/';
+token AnnotationString  '/' '*' '@' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* '*' '/';
 
 token UnboundedInteger ["123456789"] digit *;
 

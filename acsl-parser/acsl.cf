@@ -3,7 +3,7 @@
 -- https://frama-c.com/download/acsl.pdf
 
 --- Annotation ---------------------------------------------
-AnnotContract. Annotation ::= FunctionContract ;
+AnnotContract. Annotation ::= "/*@" FunctionContract "*/";
 
 ---- Contracts (2.6) ---------------------------------------
 Contract. FunctionContract ::= [RequiresClause] MaybeTerminatesClause MaybeDecreasesClause [SimpleClause] [NamedBehavior] [CompletenessClause] ;

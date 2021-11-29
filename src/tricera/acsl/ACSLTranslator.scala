@@ -17,7 +17,7 @@ object ACSLTranslator {
   }
 
   def translateContract(annot : String/*, context : Context*/) : FunctionContract = {
-    val l : Yylex = new Yylex(new java.io.StringReader(annot))
+    val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
     val p : parser = new parser(l, l.getSymbolFactory())
     try {
       val ast : AST.Annotation = p.pAnnotation()
@@ -33,6 +33,14 @@ object ACSLTranslator {
           "     " + e.getMessage()
         )
     }
+  }
+
+  private def preprocess(annot : String) : String = {
+    def replaceAtSymbols(annot : String) : String = {
+      val (left, right) = annot.splitAt(3)
+      left.concat(right.replace('@', ' '))
+    }
+    replaceAtSymbols(annot)
   }
 
 // TODO: Make all `translate` private?
