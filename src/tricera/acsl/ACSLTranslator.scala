@@ -8,24 +8,39 @@ import collection.JavaConverters._
 import ap.parser.IExpression
 import ap.parser.{IConstant, ITerm, IIntLit, IBoolLit, IFormula, IFormulaITE}
 
+import tricera.concurrency.CCReader
+import tricera.concurrency.CCReader.{CCType, CCExpr}
+
 class ACSLParseException(msg : String) extends Exception(msg)
 class ACSLTranslateException(msg : String) extends Exception(msg)
 
 object ACSLTranslator {
-  private def throwNotImpl[T](obj : T) = {
-    throw new NotImplementedError(s"Support missing for ${obj.getClass}.")
+
+  trait Context {
+    // Lookup if a variable referenced in annotation exists (in scope).
+    // For function contract scope is _atleast_ global vars + formal args.
+    def lookupVar(ident : String) : Option[CCReader#CCVar]
+
+    def toRichType(typ : CCType)  : Object
+
+    // Eventually we will need lookup for globally defined ACSL logic
+    // functions/predicate reference (if/when that gets supported) like:
+    // def lookupGlobalPredicate(ident : String) : Option[acsl.GlobalPredicate]
   }
 
-  def translateContract(annot : String/*, context : Context*/) : FunctionContract = {
+  def translateContract(annot : String, ctx : Context) : FunctionContract = {
     val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
     val p : parser = new parser(l, l.getSymbolFactory())
     try {
       val ast : AST.Annotation = p.pAnnotation()
+      val translator = new ACSLTranslator(ast, ctx)
+      // FIXME: Probably handle this in companion class aswell.
       ast match {
-        case ac : AST.AnnotContract => translate(ac.functioncontract_)
+        case ac : AST.AnnotContract => translator.translate(ac.functioncontract_)
         case _ => throw new ACSLParseException("Not a contract annotation.")
       }
     } catch {
+      // FIXME: Exceptions not thrown by lexer/parser should just be re-thrown?
       case e : Exception =>
         throw new ACSLParseException(
           "At line " + String.valueOf(l.line_num()) +
@@ -43,8 +58,16 @@ object ACSLTranslator {
     replaceAtSymbols(annot)
   }
 
-// TODO: Make all `translate` private?
-// ---- Contracts ------------------------------------------
+}
+
+class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
+  //import scala.collections.mutable.Stack
+  //val localBindings : Stack = new Stack[IExpression]
+
+  // TODO: Use annot from field and a generic translate method.
+
+  // TODO: Make all `translate` private?
+  // ---- Contracts ------------------------------------------
   def translate(contract : AST.FunctionContract) : FunctionContract = contract match {
     case c : AST.Contract =>
       val requiresClauses = c.listrequiresclause_.asScala.toList
@@ -77,7 +100,7 @@ object ACSLTranslator {
     case _ => throwNotImpl(clause) // NOTE: Shouldn't happen? Assert instead?
   }
 
-// ---- Predicates -----------------------------------------
+  // ---- Predicates -----------------------------------------
   def translate(pred : AST.Predicate) : IFormula = pred match {
     case p : AST.PredTrue             => translate(p)
     case p : AST.PredFalse            => translate(p)
@@ -179,7 +202,7 @@ object ACSLTranslator {
     translate(pred.predicate_)
   }
 
-// ---- Terms ----------------------------------------------
+  // ---- Terms ----------------------------------------------
   def translate(term : AST.Term) : ITerm = term match {
     case t : AST.TermLiteral                 => translate(t)
     case t : AST.TermIdent                   => translate(t)
@@ -208,14 +231,16 @@ object ACSLTranslator {
   }
 
   def translate(term : AST.TermIdent) : ITerm = {
-    val id = term.id_
-    // TODO: Lookup if var exists in scope (or as local binding) first.
-    //       If so, use either same or equivalent MonoSortedConstant?
-    //       Otherwise, parse error.
-    IConstant(new IExpression.ConstantTerm(id))
+    val ident = term.id_
+    // TODO: Lookup if var exists as as local binding.
+    ctx.lookupVar(ident) match {
+      case Some(v) => v.term
+      case None => 
+        throw new ACSLParseException(s"Identifier $ident not found in scope.")
+    }
   }
 
-// ---- Literals -------------------------------------------
+  // ---- Literals -------------------------------------------
   def translate(literal : AST.Literal) : ITerm = literal match {
     // Do we want to use CCTypes here or what?
     case l : AST.LiteralTrue   => throwNotImpl(l)
@@ -230,5 +255,9 @@ object ACSLTranslator {
     // FIXME: Unsure if this is semantically correct with integer types and all.
     //        Probably need to know ArithmeticMode as context.
     IExpression.i(li.integer_)
+  }
+
+  private def throwNotImpl[T](obj : T) = {
+    throw new NotImplementedError(s"Support missing for ${obj.getClass}.")
   }
 }

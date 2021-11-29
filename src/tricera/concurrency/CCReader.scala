@@ -1109,33 +1109,42 @@ structDefs += ((structInfos(i).name, structFieldList)) */
            if funDef.isInstanceOf[ContractFunc]) yield {
         val f = funDef.asInstanceOf[ContractFunc]
         // todo: define and initialise context
-//        val name = getName(f)
-//        localVars.pushFrame
-//        pushArguments(f)
-//        val prePred = CCPredicate(
-//          MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
-//          allFormalVars
-//        )
-//        val postVar = getType(f) match {
-//          case CCVoid => Nil
-//          case t      => List(new CCVar(name + "_res",
-//            Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
-//        }
+        val name = getName(f)
+        localVars.pushFrame
+        pushArguments(f)
+        val prePred = CCPredicate(
+          MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
+          allFormalVars
+        )
+        val postVar = getType(f) match {
+          case CCVoid => Nil
+          case t      => List(new CCVar(name + "_res",
+            Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
+        }
         // all old vars (includes globals) + global vars + return var (if it exists)
-//        val postOldArgs = allFormalVars
-//        val postGlobalArgs = globalVars.formalVars
-//        val postArgs = postOldArgs ++ postGlobalArgs ++ postVar
-//        val oldVarInds = postOldArgs.indices.toList
-//        val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
-//        val postPred = CCPredicate(
-//          MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
-//          postArgs, resVarInd, oldVarInds)
-//        localVars.popFrame
-        println("Calling ACSLTranslator.tranlateContract with the annotation:\n" + f.annotationstring_)
-        (f,
-              ACSLTranslator.translateContract(
-                f.annotationstring_
-                /* , context */))
+        val postOldArgs = allFormalVars
+        val postGlobalArgs = globalVars.formalVars
+        val postArgs = postOldArgs ++ postGlobalArgs ++ postVar
+        val oldVarInds = postOldArgs.indices.toList
+        val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
+        val postPred = CCPredicate(
+          MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
+          postArgs, resVarInd, oldVarInds)
+        localVars.popFrame
+
+        import scala.collection.Map
+        class Context(vars : Map[String, CCVar]) extends ACSLTranslator.Context {
+          def lookupVar(ident : String) : Option[CCVar] = {
+            vars.get(ident)
+          }
+          def toRichType(typ : CCType) : Object = toRichType _
+        }
+
+        // FIXME: What vars are needed to include?
+        val vars : Map[String, CCVar] = postArgs.map(v => (v.name, v)).toMap
+        val context = new Context(vars)
+
+        (f, ACSLTranslator.translateContract(f.annotationstring_, context))
       }
 
     println("Contract annotations\n" + "-"*80)
