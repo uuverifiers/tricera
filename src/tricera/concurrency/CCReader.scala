@@ -1137,7 +1137,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           def lookupVar(ident : String) : Option[CCVar] = {
             vars.get(ident)
           }
-          def toRichType(typ : CCType) : Object = toRichType _
+          def toSort(typ : CCType) : Sort = toRichType(typ).toSort
         }
 
         // FIXME: What vars are needed to include?

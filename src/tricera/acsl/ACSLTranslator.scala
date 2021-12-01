@@ -6,7 +6,8 @@ import tricera.acsl.{Absyn => AST};
 import collection.JavaConverters._
 
 import ap.parser.IExpression
-import ap.parser.{IConstant, ITerm, IIntLit, IBoolLit, IFormula, IFormulaITE}
+import ap.parser.{ISortedQuantified, IConstant, ITerm, IIntLit, IBoolLit, IFormula, IFormulaITE}
+import ap.types.{SortedConstantTerm, Sort}
 
 import tricera.concurrency.CCReader
 import tricera.concurrency.CCReader.{CCType, CCExpr}
@@ -21,7 +22,7 @@ object ACSLTranslator {
     // For function contract scope is _atleast_ global vars + formal args.
     def lookupVar(ident : String) : Option[CCReader#CCVar]
 
-    def toRichType(typ : CCType)  : Object
+    def toSort(typ : CCType) : Sort
 
     // Eventually we will need lookup for globally defined ACSL logic
     // functions/predicate reference (if/when that gets supported) like:
@@ -61,8 +62,8 @@ object ACSLTranslator {
 }
 
 class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
-  //import scala.collections.mutable.Stack
-  //val localBindings : Stack = new Stack[IExpression]
+  import scala.collection.mutable.{HashMap => MHashMap}
+  val locals = new MHashMap[String, SortedConstantTerm]
 
   // TODO: Use annot from field and a generic translate method.
 
@@ -117,7 +118,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case p : AST.PredTernaryCond2     => translate(p)
     case p : AST.PredLocalBinding     => throwNotImpl(p)
     case p : AST.PredLocalBinding2    => throwNotImpl(p)
-    case p : AST.PredForAll           => throwNotImpl(p)
+    case p : AST.PredForAll           => translate(p)
     case p : AST.PredExists           => throwNotImpl(p)
     case p : AST.PredSyntacticNaming  => translate(p)
     case p : AST.PredSyntacticNaming2 => translate(p)
@@ -193,6 +194,51 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     IFormulaITE(cond, left, right)
   }
 
+  def translate(pred : AST.PredForAll) : IFormula = {
+    val binders : Seq[AST.ABinder] = 
+      pred.listbinder_.asScala.toList.map(_.asInstanceOf[AST.ABinder])
+    val terms : Seq[SortedConstantTerm] = bindersToConstants(binders)
+
+    terms.map(v => locals.put(v.name, v))
+    val inner : IFormula = translate(pred.predicate_)
+    terms.map(v => locals.remove(v.name))
+    
+    //// FIXME: Look over order of creation here.
+    terms.foldLeft(inner)((formula, term) =>
+        new ISortedQuantified(IExpression.Quantifier.ALL, term.sort, formula)
+    )
+  }
+
+  private def bindersToConstants(binders : Seq[AST.ABinder]) : Seq[SortedConstantTerm] = {
+    binders.flatMap(b => {
+      val typ : AST.CTypeSpecifier = b.typename_.asInstanceOf[AST.TypeNameC].ctypespecifier_
+      val ctyp : CCType = toCCType(typ)
+      val idents : Seq[AST.VariableIdent] = b.listvariableident_.asScala.toList
+      idents.map(i => i match {
+        case v : AST.VariableIdentId => new SortedConstantTerm(v.id_, ctx.toSort(ctyp))
+        case v : AST.VariableIdentPtrDeref    => throwNotImpl(v)
+        case v : AST.VariableIdentArray       => throwNotImpl(v)
+        case v : AST.VariableIdentParentheses => throwNotImpl(v)
+      })
+    })
+  }
+
+  private def toCCType(typ : AST.CTypeSpecifier) : CCType = typ match {
+    case t : AST.CTypeSpecifierVoid => throwNotImpl(t)
+    case t : AST.CTypeSpecifierChar => throwNotImpl(t)
+    case t : AST.CTypeSpecifierShort => throwNotImpl(t)
+    case t : AST.CTypeSpecifierInt => CCReader.CCInt
+    case t : AST.CTypeSpecifierLong => throwNotImpl(t)
+    case t : AST.CTypeSpecifierFloat => throwNotImpl(t)
+    case t : AST.CTypeSpecifierDouble => throwNotImpl(t)
+    case t : AST.CTypeSpecifierSigned => throwNotImpl(t)
+    case t : AST.CTypeSpecifierUnsigned => throwNotImpl(t)
+    //CTypeSpecifierStruct.   CTypeSpecifier ::= "struct" Id ;
+    //CTypeSpecifierUnion.    CTypeSpecifier ::= "union" Id ;
+    //CTypeSpecifierEnum.     CTypeSpecifier ::= "enum" Id ;
+    //CTypeSpecifierId.       CTypeSpecifier ::= Id ;
+  }
+
   // `INamedPart` relevant?
   def translate(pred : AST.PredSyntacticNaming) : IFormula = {
     translate(pred.predicate_)
@@ -233,10 +279,16 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   def translate(term : AST.TermIdent) : ITerm = {
     val ident = term.id_
     // TODO: Lookup if var exists as as local binding.
-    ctx.lookupVar(ident) match {
-      case Some(v) => v.term
+    // FIXME: Order of lookups (priority)?
+    // FIXME: Ugly code.
+    locals.get(ident) match {
+      case Some(v) => v
       case None => 
-        throw new ACSLParseException(s"Identifier $ident not found in scope.")
+        ctx.lookupVar(ident) match {
+          case Some(v) => v.term
+          case None => 
+            throw new ACSLParseException(s"Identifier $ident not found in scope.")
+      }
     }
   }
 
