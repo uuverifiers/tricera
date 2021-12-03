@@ -63,7 +63,7 @@ object ACSLTranslator {
 
 class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   import scala.collection.mutable.{HashMap => MHashMap}
-  val locals = new MHashMap[String, SortedConstantTerm]
+  val locals = new MHashMap[String, ITerm]
 
   // TODO: Use annot from field and a generic translate method.
 
@@ -116,7 +116,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case p : AST.PredXOr              => translate(p)
     case p : AST.PredTernaryCond      => throwNotImpl(p)
     case p : AST.PredTernaryCond2     => translate(p)
-    case p : AST.PredLocalBinding     => throwNotImpl(p)
+    case p : AST.PredLocalBinding     => translate(p)
     case p : AST.PredLocalBinding2    => throwNotImpl(p)
     case p : AST.PredForAll           => translate(p)
     case p : AST.PredExists           => throwNotImpl(p)
@@ -194,6 +194,27 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     IFormulaITE(cond, left, right)
   }
 
+  def translate(pred : AST.PredLocalBinding) : IFormula = {
+    val ident   : String = pred.id_
+    val boundTo : ITerm  = translate(pred.term_)
+
+    locals.put(ident, boundTo)
+    val inner : IFormula = translate(pred.predicate_)
+    locals.remove(ident)
+    inner
+  }
+
+  /* TODO: Requires all translate to just return IExpression - desired?
+           Alternative approach could be preprocessing/replacement.
+  def translate(pred : AST.PredLocalBinding2) : IFormula = {
+    val ident   : String   = pred.id_
+    val boundTo : IFormula = translate(pred.predicate_1)
+    locals.put(ident, boundTo)
+    val inner : IFormula = translate(pred.predicate_2)
+    locals.remove(ident)
+    inner
+  }*/
+
   def translate(pred : AST.PredForAll) : IFormula = {
     val binders : Seq[AST.ABinder] = 
       pred.listbinder_.asScala.toList.map(_.asInstanceOf[AST.ABinder])
@@ -203,7 +224,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     val inner : IFormula = translate(pred.predicate_)
     terms.map(v => locals.remove(v.name))
     
-    //// FIXME: Look over order of creation here.
+    // FIXME: Look over order of creation here.
+    // FIXME: Use IExpression.all?
     terms.foldLeft(inner)((formula, term) =>
         new ISortedQuantified(IExpression.Quantifier.ALL, term.sort, formula)
     )
@@ -252,8 +274,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   def translate(term : AST.Term) : ITerm = term match {
     case t : AST.TermLiteral                 => translate(t)
     case t : AST.TermIdent                   => translate(t)
-    case t : AST.TermUnaryOp                 => throwNotImpl(t)
-    case t : AST.TermBinOp                   => throwNotImpl(t)
+    case t : AST.TermUnaryOp                 => translate(t)
+    case t : AST.TermBinOp                   => translate(t)
     case t : AST.TermArrayAccess             => throwNotImpl(t)
     case t : AST.TermArrayFunctionalModifier => throwNotImpl(t)
     case t : AST.TermStructFieldAccess       => throwNotImpl(t)
@@ -261,7 +283,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case t : AST.TermStructPtrFieldAccess    => throwNotImpl(t)
     case t : AST.TermTypeCast                => throwNotImpl(t)
     case t : AST.TermFuncAppl                => throwNotImpl(t)
-    case t : AST.TermParentheses             => throwNotImpl(t)
+    case t : AST.TermParentheses             => translate(t)
     case t : AST.TermTernaryCond             => throwNotImpl(t)
     case t : AST.TermLocalBinding            => throwNotImpl(t)
     case t : AST.TermSizeOfTerm              => throwNotImpl(t)
@@ -280,16 +302,58 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     val ident = term.id_
     // TODO: Lookup if var exists as as local binding.
     // FIXME: Order of lookups (priority)?
-    // FIXME: Ugly code.
-    locals.get(ident) match {
-      case Some(v) => v
-      case None => 
-        ctx.lookupVar(ident) match {
-          case Some(v) => v.term
-          case None => 
-            throw new ACSLParseException(s"Identifier $ident not found in scope.")
-      }
+    val bound  : Option[ITerm] = locals.get(ident)
+    val scoped : Option[ITerm] = ctx.lookupVar(ident).map(_.term)
+    bound.getOrElse(
+      scoped.getOrElse(
+        throw new ACSLParseException(s"Identifier $ident not found in scope.")
+      )
+    )
+  }
+
+  def translate(term : AST.TermUnaryOp) : ITerm = {
+    val right : ITerm = translate(term.term_)
+    term.unaryop_ match {
+      case op : AST.UnaryOpPlus            => throwNotImpl(op)
+      case op : AST.UnaryOpMinus           => throwNotImpl(op)
+      case op : AST.UnaryOpNegation        => right.unary_-
+      case op : AST.UnaryOpComplementation => throwNotImpl(op)
+      case op : AST.UnaryOpPtrDeref        => throwNotImpl(op)
+      case op : AST.UnaryOpAddressOf       => throwNotImpl(op)
     }
+  }
+
+  def translate(term : AST.TermBinOp) : ITerm = {
+    val left  : ITerm = translate(term.term_1)
+    val right : ITerm = translate(term.term_2)
+    term.binop_ match {
+      case op : AST.BinOpPlus         => left + right
+      case op : AST.BinOpMinus        => left - right
+      case op : AST.BinOpMult         => left * right
+      case op : AST.BinOpDiv          => throwNotImpl(op)
+      case op : AST.BinOpMod          => throwNotImpl(op)
+      // FIXME: Comparisons create IFormula:s.. Desired?
+      case op : AST.BinOpEQ           => throwNotImpl(op) // left === right
+      case op : AST.BinOpNEQ          => throwNotImpl(op) // left =/= right
+      case op : AST.BinOpLEQ          => throwNotImpl(op) // left <= right
+      case op : AST.BinOpGEQ          => throwNotImpl(op) // left >= right
+      case op : AST.BinOpGT           => throwNotImpl(op) // left > right
+      case op : AST.BinOpLT           => throwNotImpl(op) // left < right
+      case op : AST.BinOpAnd          => throwNotImpl(op)
+      case op : AST.BinOpOr           => throwNotImpl(op)
+      case op : AST.BinOpXOr          => throwNotImpl(op)
+      case op : AST.BinOpLShift       => throwNotImpl(op)
+      case op : AST.BinOpRShift       => throwNotImpl(op)
+      case op : AST.BinOpBitwiseAnd   => throwNotImpl(op)
+      case op : AST.BinOpBitwiseOr    => throwNotImpl(op)
+      case op : AST.BinOpBitwiseImpl  => throwNotImpl(op)
+      case op : AST.BinOpBitwiseEquiv => throwNotImpl(op)
+      case op : AST.BinOpBitwiseXOr   => throwNotImpl(op)
+    }
+  }
+
+  def translate(term : AST.TermParentheses) : ITerm = {
+    translate(term.term_)
   }
 
   // ---- Literals -------------------------------------------
