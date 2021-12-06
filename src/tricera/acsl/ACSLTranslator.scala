@@ -20,9 +20,9 @@ object ACSLTranslator {
   trait Context {
     // Lookup if a variable referenced in annotation exists (in scope).
     // For function contract scope is _atleast_ global vars + formal args.
-    def lookupVar(ident : String) : Option[CCReader#CCVar]
+    def lookupVar(ident : String) : Option[CCReader.CCVar]
 
-    def toSort(typ : CCType) : Sort
+    implicit val arithMode : CCReader.ArithmeticMode.Value
 
     // Eventually we will need lookup for globally defined ACSL logic
     // functions/predicate reference (if/when that gets supported) like:
@@ -63,6 +63,7 @@ object ACSLTranslator {
 
 class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   import scala.collection.mutable.{HashMap => MHashMap}
+  import ctx.arithMode
   val locals = new MHashMap[String, ITerm]
 
   // TODO: Use annot from field and a generic translate method.
@@ -237,7 +238,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       val ctyp : CCType = toCCType(typ)
       val idents : Seq[AST.VariableIdent] = b.listvariableident_.asScala.toList
       idents.map(i => i match {
-        case v : AST.VariableIdentId => new SortedConstantTerm(v.id_, ctx.toSort(ctyp))
+        case v : AST.VariableIdentId => new SortedConstantTerm(v.id_, ctyp.toSort)
         case v : AST.VariableIdentPtrDeref    => throwNotImpl(v)
         case v : AST.VariableIdentArray       => throwNotImpl(v)
         case v : AST.VariableIdentParentheses => throwNotImpl(v)
@@ -249,7 +250,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case t : AST.CTypeSpecifierVoid => throwNotImpl(t)
     case t : AST.CTypeSpecifierChar => throwNotImpl(t)
     case t : AST.CTypeSpecifierShort => throwNotImpl(t)
-    case t : AST.CTypeSpecifierInt => CCReader.CCInt
+    case t : AST.CTypeSpecifierInt => CCReader.CCInt()
     case t : AST.CTypeSpecifierLong => throwNotImpl(t)
     case t : AST.CTypeSpecifierFloat => throwNotImpl(t)
     case t : AST.CTypeSpecifierDouble => throwNotImpl(t)

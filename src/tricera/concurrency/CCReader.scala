@@ -111,55 +111,181 @@ object CCReader {
   //////////////////////////////////////////////////////////////////////////////
 
   // todo: maybe make private to package?
-  abstract sealed class CCType {
+  abstract sealed class CCType (arithmeticMode : ArithmeticMode.Value) {
     def shortName : String
+
+    import ModuloArithmetic._
+
+    // todo: make this abstract. nice to have them all in the same place but would lead to runtime errors if there are missing cases.
+    def toSort : Sort = arithmeticMode match {
+      case ArithmeticMode.Mathematical => this match {
+        case typ : CCArithType if typ.isUnsigned => Sort.Nat
+        case _ : CCDuration => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField( n, s) => s(n).ctor.resSort
+        case CCIntEnum( _, _) => Sort.Integer
+        case _ => Sort.Integer
+      }
+      case ArithmeticMode.ILP32 => this match {
+        case CCInt() => SignedBVSort(32)
+        case CCUInt() => UnsignedBVSort(32)
+        case CCLong() => SignedBVSort(32)
+        case CCULong() => UnsignedBVSort(32)
+        case CCLongLong() => SignedBVSort(64)
+        case CCULongLong() => UnsignedBVSort(64)
+        case CCDuration() => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
+        case _ => Sort.Integer
+      }
+      case ArithmeticMode.LP64 => this match {
+        case CCInt() => SignedBVSort(32)
+        case CCUInt() => UnsignedBVSort(32)
+        case CCLong() => SignedBVSort(64)
+        case CCULong() => UnsignedBVSort(64)
+        case CCLongLong() => SignedBVSort(64)
+        case CCULongLong() => UnsignedBVSort(64)
+        case CCDuration() => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
+        case _ => Sort.Integer
+      }
+      case ArithmeticMode.LLP64 => this match {
+        case CCInt() => SignedBVSort(32)
+        case CCUInt() => UnsignedBVSort(32)
+        case CCLong() => SignedBVSort(32)
+        case CCULong() => UnsignedBVSort(32)
+        case CCLongLong() => SignedBVSort(64)
+        case CCULongLong() => UnsignedBVSort(64)
+        case CCDuration() => Sort.Nat
+        case CCHeap(heap) => heap.HeapSort
+        case CCStackPointer(_, _, _) => Sort.Integer
+        case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCStruct(ctor, _) => ctor.resSort
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
+        case _ => Sort.Integer
+      }
+    }
+
+    def rangePred(t : ITerm) : IFormula =
+      toSort match {
+        case Sort.Nat =>
+          t >= 0
+        case ModSort(lower, upper) =>
+          t >= lower & t <= upper
+        case _ => true // includes Integer, HeapAddress, ADTs
+      }
+
+    def newConstant(name : String) : ConstantTerm = toSort newConstant name
+
+    def cast(t : ITerm) : ITerm = toSort match {
+      case s : ModSort => cast2Sort(s, t)
+      case _ => t
+    }
+
+    def cast2Unsigned(t : ITerm) : ITerm = toSort match {
+      case SignedBVSort(n) => cast2UnsignedBV(n, t)
+      case _ => t
+    }
+
+    def cast(e : CCExpr) : CCExpr = e match {
+      case CCTerm(t, _)    => CCTerm(cast(t), this)
+      case CCFormula(f, _) => CCFormula(f, this)
+    }
+
+    def getNonDet : ITerm =
+      new SortedConstantTerm("_", toSort)
+
+    // todo: make this abstract
+    def getZeroInit : ITerm = this match {
+      case structType : CCStruct =>
+        import IExpression._
+        val const: IndexedSeq[ITerm] =
+          for ((_, fieldType) <- structType.sels) yield
+            fieldType match {
+              case CCStructField(name, structs) => structs(name).getZeroInit
+              case _ => fieldType.getZeroInit
+            }
+        structType.ctor(const: _*)
+      case CCHeapPointer(heap, _) => heap.nullAddr()
+      case CCHeapArrayPointer(heap, _, _) =>  // todo: start = null, but size 0 or 1?
+        heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
+      case _ => IIntLit(0)
+    }
   }
-  abstract class CCArithType extends CCType {
+
+  abstract class CCArithType(arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     val UNSIGNED_RANGE : IdealInt
     val isUnsigned : Boolean
   }
-  case object CCVoid extends CCType {
+  case class CCVoid()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     override def toString : String = "void"
     def shortName = "void"
   }
-  case object CCInt extends CCArithType {
+  case class CCInt()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCArithType(arithmeticMode) {
     override def toString : String = "int"
     def shortName = "int"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
     val isUnsigned : Boolean = false
   }
-  case object CCUInt extends CCArithType {
+  case class CCUInt()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCArithType(arithmeticMode) {
     override def toString : String = "unsigned int"
     def shortName = "uint"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
     val isUnsigned : Boolean = true
   }
-  case object CCLong extends CCArithType {
+  case class CCLong()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCArithType(arithmeticMode) {
     override def toString : String = "long"
     def shortName = "long"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = false
   }
-  case object CCULong extends CCArithType {
+  case class CCULong()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCArithType(arithmeticMode) {
     override def toString : String = "unsigned long"
     def shortName = "ulong"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = true
   }
-  case object CCLongLong extends CCArithType {
+  case class CCLongLong()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCArithType(arithmeticMode) {
     override def toString : String = "long long"
     def shortName = "llong"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = false
   }
-  case object CCULongLong extends CCArithType {
+  case class CCULongLong()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCArithType(arithmeticMode) {
     override def toString : String = "unsigned long long"
     def shortName = "ullong"
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
     val isUnsigned : Boolean = true
   }
 
-  case class CCHeap(heap : Heap) extends CCType {
+  case class CCHeap(heap : Heap)
+                   (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     override def toString : String = heap.toString
     def shortName = "heap"
   }
@@ -173,14 +299,16 @@ object CCReader {
   case class StructInfo(name : String, fieldInfos : Seq[FieldInfo])
 
   case class CCStructField(structName : String,
-                                   structs    : MHashMap[String, CCStruct])
-    extends CCType{
+                           structs    : MHashMap[String, CCStruct])
+                          (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode){
     override def toString : String = "field with type: " + structName
     def shortName = "field:" + structName
   }
   case class CCStruct(ctor : MonoSortedIFunction,
-                              sels : IndexedSeq[(MonoSortedIFunction, CCType)])
-    extends CCType{
+                      sels : IndexedSeq[(MonoSortedIFunction, CCType)])
+                     (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode){
     override def toString : String =
       "struct " + ctor.name + ": (" +sels.mkString + ")"
     def shortName = ctor.name
@@ -283,18 +411,22 @@ object CCReader {
    * Type for enums that are directly mapped to integers
    */
   case class CCIntEnum(name: String,
-                               enumerators: Seq[(String, IdealInt)])
-    extends CCType{
+                       enumerators: Seq[(String, IdealInt)])
+                      (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode){
     override def toString : String =
       "enum-int " + name + ": (" + enumerators.mkString + ")"
     def shortName = name
   }
 
-  abstract sealed class CCPointer(typ : CCType) extends CCType {
+  abstract sealed class CCPointer(typ : CCType)
+                                 (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     def shortName = typ.shortName + "*"
   }
   case class CCStackPointer(targetInd    : Int, typ : CCType,
-                                    fieldAddress : List[Int] = Nil)
+                            fieldAddress : List[Int] = Nil)
+                           (implicit arithmeticMode : ArithmeticMode.Value)
     extends CCPointer(typ) {
     override def toString : String = typ.shortName +
       " pointer (to: " + targetInd + ")"
@@ -306,7 +438,9 @@ object CCReader {
   //       needs to be a Heap.Address along with a way to reach the field
   //       maybe another class for this? CCHeapADTFieldPointer...
   case class CCHeapPointer(heap : Heap,
-                                    typ : CCType) extends CCPointer(typ) {
+                           typ : CCType)
+                          (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCPointer(typ) {
     override def toString : String = typ.shortName + " pointer to heap"
   }
 
@@ -319,10 +453,11 @@ object CCReader {
     val GlobalArray, StackArray, HeapArray = Value
   }
   import HeapArrayType._
-  case class CCHeapArrayPointer(heap        : Heap,
-                                        elementType : CCType,
-                                        arrayType   : HeapArrayType)
-                                                                extends CCType {
+  case class CCHeapArrayPointer(heap : Heap,
+                                elementType : CCType,
+                                arrayType   : HeapArrayType)
+                               (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     def shortName = "[]"
   }
 
@@ -335,11 +470,13 @@ object CCReader {
     def shortName = elementType + "[]"
   }*/
 
-  case object CCClock extends CCType {
+  case class CCClock()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     override def toString : String = "clock"
     def shortName = "clock"
   }
-  case object CCDuration extends CCType {
+  case class CCDuration()(implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     override def toString : String = "duration"
     def shortName = "duration"
   }
@@ -373,6 +510,21 @@ object CCReader {
     def occurringConstants : Seq[IExpression.ConstantTerm] =
       SymbolCollector constantsSorted f
   }
+
+  class CCVar (val name : String,
+               val srcInfo : Option[SourceInfo],
+               val typ  : CCType) {
+    val sort = typ.toSort
+    val term = new SortedConstantTerm(name, sort)
+    override def toString: String = name
+    def toStringWithLineNumbers: String = name + {
+      srcInfo match {
+        case Some(info) if info.line >= 0 => ":" + info.line
+        case _ => ""
+      }
+    }
+  }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -389,158 +541,20 @@ class CCReader private (prog : Program,
 
   private val printer = new PrettyPrinterNonStatic
 
+  implicit val _arithmeticMode = arithmeticMode
+
   //////////////////////////////////////////////////////////////////////////////
 
-  private implicit def toRichType(typ : CCType): Object {
-    def newConstant(name: String): ConstantTerm
-    def getZeroInit: ITerm
-    def getNonDet: ITerm
-    def cast2Unsigned(t: ITerm): ITerm
-    def rangePred(t: ITerm): IFormula
-    def toSort: Sort
-    def cast(e: CCExpr): CCExpr
-    def cast(t: ITerm): ITerm
-  } = new Object {
-    import ModuloArithmetic._
-
-    def toSort : Sort = arithmeticMode match {
-      case ArithmeticMode.Mathematical => typ match {
-        case typ: CCArithType if typ.isUnsigned => Sort.Nat
-        case CCDuration => Sort.Nat
-        case CCHeap(heap) => heap.HeapSort
-        case CCStackPointer(_, _, _) => Sort.Integer
-        case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
-        case CCStruct(ctor, _) => ctor.resSort
-        case CCStructField(n, s) => s(n).ctor.resSort
-        case CCIntEnum(_, _) => Sort.Integer
-        case _ => Sort.Integer
-      }
-      case ArithmeticMode.ILP32 => typ match {
-        case CCInt => SignedBVSort(32)
-        case CCUInt => UnsignedBVSort(32)
-        case CCLong => SignedBVSort(32)
-        case CCULong => UnsignedBVSort(32)
-        case CCLongLong => SignedBVSort(64)
-        case CCULongLong => UnsignedBVSort(64)
-        case CCDuration => Sort.Nat
-        case CCHeap(heap) => heap.HeapSort
-        case CCStackPointer(_, _, _) => Sort.Integer
-        case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
-        case CCStruct(ctor, _) => ctor.resSort
-        case CCStructField(n, s) => s(n).ctor.resSort
-        case CCIntEnum(_, _) => Sort.Integer
-        case _ => Sort.Integer
-      }
-      case ArithmeticMode.LP64 => typ match {
-        case CCInt => SignedBVSort(32)
-        case CCUInt => UnsignedBVSort(32)
-        case CCLong => SignedBVSort(64)
-        case CCULong => UnsignedBVSort(64)
-        case CCLongLong => SignedBVSort(64)
-        case CCULongLong => UnsignedBVSort(64)
-        case CCDuration => Sort.Nat
-        case CCHeap(heap) => heap.HeapSort
-        case CCStackPointer(_, _, _) => Sort.Integer
-        case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
-        case CCStruct(ctor, _) => ctor.resSort
-        case CCStructField(n, s) => s(n).ctor.resSort
-        case CCIntEnum(_, _) => Sort.Integer
-        case _ => Sort.Integer
-      }
-      case ArithmeticMode.LLP64 => typ match {
-        case CCInt => SignedBVSort(32)
-        case CCUInt => UnsignedBVSort(32)
-        case CCLong => SignedBVSort(32)
-        case CCULong => UnsignedBVSort(32)
-        case CCLongLong => SignedBVSort(64)
-        case CCULongLong => UnsignedBVSort(64)
-        case CCDuration => Sort.Nat
-        case CCHeap(heap) => heap.HeapSort
-        case CCStackPointer(_, _, _) => Sort.Integer
-        case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
-        case CCStruct(ctor, _) => ctor.resSort
-        case CCStructField(n, s) => s(n).ctor.resSort
-        case CCIntEnum(_, _) => Sort.Integer
-        case _ => Sort.Integer
-      }
-    }
-
-    def rangePred(t : ITerm) : IFormula =
-      toSort match {
-        case Sort.Nat =>
-          t >= 0
-        case ModSort(lower, upper) =>
-          t >= lower & t <= upper
-        case _ => true // includes Integer, HeapAddress, ADTs
-      }
-
-    def newConstant(name : String) : ConstantTerm = toSort newConstant name
-
-    def cast(t : ITerm) : ITerm = toSort match {
-      case s : ModSort => cast2Sort(s, t)
-      case _ => t
-    }
-
-    def cast2Unsigned(t : ITerm) : ITerm = toSort match {
-      case SignedBVSort(n) => cast2UnsignedBV(n, t)
-      case _ => t
-    }
-
-    def cast(e : CCExpr) : CCExpr = e match {
-      case CCTerm(t, _)    => CCTerm(cast(t), typ)
-      case CCFormula(f, _) => CCFormula(f, typ)
-    }
-
-    def getNonDet : ITerm =
-      new SortedConstantTerm("_", toSort)
-
-    def getZeroInit : ITerm = typ match {
-      case structType : CCStruct =>
-        import IExpression._
-        val const: IndexedSeq[ITerm] =
-          for ((_, fieldType) <- structType.sels) yield
-            fieldType match {
-              case CCStructField(name, structs) => toRichType(structs(name)).getZeroInit
-              case _ => toRichType(fieldType).getZeroInit
-            }
-        structType.ctor(const: _*)
-      case CCHeapPointer(heap, _) => heap.nullAddr()
-      case CCHeapArrayPointer(heap, _, _) =>  // todo: start = null, but size 0 or 1?
-        heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
-      case _ => IIntLit(0)
-    }
-
-}
-
-//////////////////////////////////////////////////////////////////////////////
-
-private implicit def toRichExpr(expr : CCExpr) :
-Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
-  def mapTerm(m : ITerm => ITerm) : CCExpr =
-  // TODO: type promotion when needed
-  CCTerm(expr.typ cast m(expr.toTerm), expr.typ)
-}
+  private implicit def toRichExpr(expr : CCExpr) :
+    Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
+    def mapTerm(m : ITerm => ITerm) : CCExpr =
+    // TODO: type promotion when needed
+    CCTerm(expr.typ cast m(expr.toTerm), expr.typ)
+  }
 
   //////////////////////////////////////////////////////////////////////////////
 
   import HornClauses.Clause
-  class CCVar (val name : String,
-               val srcInfo : Option[SourceInfo],
-               val typ  : CCType) {
-    val sort = typ.toSort
-    val term = new SortedConstantTerm(name, sort)
-    override def toString: String = name
-    def toStringWithLineNumbers: String = name + {
-      srcInfo match {
-        case Some(info) if info.line >= 0 => ":" + info.line
-        case _ => ""
-      }
-    }
-  }
 
   private val predCCPredMap = new MHashMap[Predicate, CCPredicate]
 
@@ -843,14 +857,14 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
   import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator}
 
   // Reserve two variables for time
-  private val GT = new CCVar("_GT", None, CCClock)
-  private val GTU = new CCVar("_GTU", None, CCInt)
+  private val GT = new CCVar("_GT", None, CCClock())
+  private val GTU = new CCVar("_GTU", None, CCInt())
 
   if (useTime) {
     globalVars addVar GT
-    globalVars.inits += CCTerm(GT.term, CCClock)
+    globalVars.inits += CCTerm(GT.term, CCClock())
     globalVars addVar GTU
-    globalVars.inits += CCTerm(GTU.term, CCInt)
+    globalVars.inits += CCTerm(GTU.term, CCInt())
     variableHints += List()
     variableHints += List()
   }
@@ -1028,8 +1042,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private var funRetCounter = 0
   private def getResVar (typ : CCType) : List[CCVar] = typ match {
-    case CCVoid => Nil
-    case t      =>
+    case _ : CCVoid => Nil
+    case t          =>
       funRetCounter += 1
       List(new CCVar("__res" + funRetCounter, None, typ)) // todo: line no?
   }
@@ -1117,8 +1131,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           allFormalVars
         )
         val postVar = getType(f) match {
-          case CCVoid => Nil
-          case t      => List(new CCVar(name + "_res",
+          case _ : CCVoid => Nil
+          case t          => List(new CCVar(name + "_res",
             Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
         }
         // all old vars (includes globals) + global vars + return var (if it exists)
@@ -1133,11 +1147,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         localVars.popFrame
 
         import scala.collection.Map
-        class Context(vars : Map[String, CCVar]) extends ACSLTranslator.Context {
-          def lookupVar(ident : String) : Option[CCVar] = {
+        class Context(vars : Map[String, CCVar])
+          extends ACSLTranslator.Context {
+          def lookupVar(ident : String) : Option[CCReader.CCVar] = {
             vars.get(ident)
           }
-          def toSort(typ : CCType) : Sort = toRichType(typ).toSort
+
+          override implicit val arithMode: CCReader.ArithmeticMode.Value =
+            arithmeticMode
         }
 
         // FIXME: What vars are needed to include?
@@ -1160,8 +1177,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         allFormalVars
       )
       val postVar = getType(f) match {
-        case CCVoid => Nil
-        case t      => List(new CCVar(name + "_res",
+        case _ : CCVoid => Nil
+        case t          => List(new CCVar(name + "_res",
           Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
       }
       // all old vars (includes globals) + global vars + return var (if it exists)
@@ -1207,8 +1224,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       val translator = FunctionTranslator(exitPred)
       typ match {
-        case CCVoid => translator.translateNoReturn(stm, entryPred)
-        case _      => translator.translateWithReturn(stm, entryPred)
+        case _ : CCVoid => translator.translateNoReturn(stm, entryPred)
+        case _          => translator.translateWithReturn(stm, entryPred)
       }
 
 
@@ -1255,7 +1272,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               localVars pushFrame
               val threadVar = new CCVar(thread.cident_1,
                 Some(SourceInfo(thread.line_num, thread.col_num, thread.offset)),
-                CCInt)
+                CCInt())
               localVars addVar threadVar
               val translator = FunctionTranslator.apply
               translator translateNoReturn thread.compound_stm_
@@ -1279,7 +1296,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val returnType = {
           FuncDef(funDef).declSpecs match {
             case Some(declSpec) => getType(declSpec)
-            case None => CCVoid
+            case None => CCVoid()
           }
         }
 
@@ -1291,7 +1308,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         val translator = FunctionTranslator(exitPred)
         val finalPred =
-          if (returnType != CCVoid) {
+          if (!returnType.isInstanceOf[CCVoid]) {
             translator.translateWithReturn(stm)
             exitPred
           }
@@ -1306,7 +1323,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           finalPred match {
             case CCPredicate(_, args, _, _) if args.head.sort == heap.HeapSort =>
               // passing sort as CCVoid as it is not important
-              val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid))
+              val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid()))
               val resVar = getResVar(args.last.typ)
               var excludedAddresses = i(true)
               for (arg <- args) arg.typ match {
@@ -1545,7 +1562,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 val newTyp = CCHeapPointer(heap, typ)
                 new CCVar(getName(declarator), sourceInfo, newTyp)
               }
-              else if (typ.isInstanceOf[CCClock.type])
+              else if (typ.isInstanceOf[CCClock])
                 new CCVar(newVar.name, newVar.srcInfo, typ)
               else new CCVar(newVar.name, newVar.srcInfo, initValue.typ)
             }
@@ -1558,9 +1575,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             }
 
             actualVar.typ match {
-              case CCClock =>
+              case _ : CCClock =>
                 values addValue translateClockValue(initValue)
-              case CCDuration =>
+              case _ : CCDuration =>
                 values addValue translateDurationValue(initValue)
               case _ =>
                 values addValue (actualVar.typ cast initValue)
@@ -1929,7 +1946,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         buildEnumType(dec.listenumerator_, getAnonEnumName)
       case named : EnumName =>
         buildEnumType(named.listenumerator_, named.cident_)
-      case _ => CCInt
+      case _ => CCInt()
     }
   }
 
@@ -1958,9 +1975,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           val ind = nextInd
           nextInd = nextInd + 1
           val v = new CCVar(s.cident_,
-            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt)
+            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt())
           localVars addVar v
-          symex.addValue(CCTerm(IIntLit(ind), CCInt))
+          symex.addValue(CCTerm(IIntLit(ind), CCInt()))
           enumerators += ((s.cident_, ind))
         }
         case s : EnumInit => {
@@ -1974,9 +1991,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
           nextInd = ind + 1
           val v = new CCVar(s.cident_,
-            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt)
+            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt())
           localVars addVar v
-          symex.addValue(CCTerm(IIntLit(ind), CCInt))
+          symex.addValue(CCTerm(IIntLit(ind), CCInt()))
           enumerators += ((s.cident_, ind))
         }
       }
@@ -2027,28 +2044,28 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private def getType(specs : Iterator[Type_specifier]) : CCType = {
     // by default assume that the type is int
-    var typ : CCType = CCInt
+    var typ : CCType = CCInt()
 
     for (specifier <- specs)
       specifier match {
             case _ : Tvoid =>
-              typ = CCVoid
+              typ = CCVoid()
             case _ : Tint =>
               // ignore
             case _ : Tchar =>
               // ignore
             case _ : Tsigned =>
-              typ = CCInt
+              typ = CCInt()
             case _ : Tunsigned =>
-              typ = CCUInt
-            case _ : Tlong if (typ == CCInt) =>
-              typ = CCLong
-            case _ : Tlong if (typ == CCUInt) =>
-              typ = CCULong
-            case _ : Tlong if (typ == CCLong) =>
-              typ = CCLongLong
-            case _ : Tlong if (typ == CCULong) =>
-              typ = CCULongLong
+              typ = CCUInt()
+            case _ : Tlong if typ.isInstanceOf[CCInt] =>
+              typ = CCLong()
+            case _ : Tlong if typ.isInstanceOf[CCUInt] =>
+              typ = CCULong()
+            case _ : Tlong if typ.isInstanceOf[CCLong] =>
+              typ = CCLongLong()
+            case _ : Tlong if typ.isInstanceOf[CCULong] =>
+              typ = CCULongLong()
             case structOrUnion : Tstruct =>
               val structName = getStructName(structOrUnion)
               typ = structDefs get structName match {
@@ -2061,17 +2078,17 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             case _ : Tclock => {
               if (!useTime)
                 throw NeedsTimeException
-              typ = CCClock
+              typ = CCClock()
             }
             case _ : Tduration => {
               if (!useTime)
                 throw NeedsTimeException
-              typ = CCDuration
+              typ = CCDuration()
             }
             case x => {
               warn("type " + (printer print x) +
                    " not supported, assuming int")
-              typ = CCInt
+              typ = CCInt()
             }
           }
     typ
@@ -2082,7 +2099,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     val typ = f.declSpecs match {
       case Some(listDeclSpecs) =>
         getType(listDeclSpecs)
-      case None => CCInt
+      case None => CCInt()
     }
     if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // todo: can be stack pointer too, this needs to be fixed
     else typ
@@ -2094,11 +2111,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       throw NeedsTimeException
     expr.toTerm match {
       case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm(GT.term + GTU.term*(-v), CCClock)
-      case t if (expr.typ == CCClock) =>
-        CCTerm(t, CCClock)
-      case t if (expr.typ == CCDuration) =>
-        CCTerm(GT.term - t, CCClock)
+        CCTerm(GT.term + GTU.term*(-v), CCClock())
+      case t if (expr.typ.isInstanceOf[CCClock]) =>
+        CCTerm(t, CCClock())
+      case t if (expr.typ.isInstanceOf[CCDuration]) =>
+        CCTerm(GT.term - t, CCClock())
       case t =>
         throw new TranslationException(
           "clocks can only be set to or compared with integers")
@@ -2110,10 +2127,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     if (!useTime)
       throw NeedsTimeException
     expr.toTerm match {
-      case _ if (expr.typ == CCDuration) =>
+      case _ if (expr.typ.isInstanceOf[CCDuration]) =>
         expr
       case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm(GTU.term*v, CCDuration)
+        CCTerm(GTU.term*v, CCDuration())
       case t =>
         throw new TranslationException(
           "duration variable cannot be set or compared to " + t)
@@ -2226,7 +2243,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           heapWrite(termToFree, CCTerm(p.heap._defObj, p))
         case p : CCHeapArrayPointer =>
           import IExpression._
-          //val n = getFreshEvalVar(CCUInt)
+          //val n = getFreshEvalVar(CCUInt())
           //addGuard(n.term >= 0 & n.term < heap.addrRangeSize(t.toTerm))
           //val a = getFreshEvalVar(CCHeapPointer(heap, p.elementType))
           //addGuard(heap.within(t.toTerm, a.term))
@@ -2501,7 +2518,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     private def isClockVariable(exp : Exp) : Boolean = exp match {
-      case exp : Evar => getValue(exp.cident_).typ == CCClock
+      case exp : Evar => getValue(exp.cident_).typ.isInstanceOf[CCClock]
       case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
       case exp =>
         throw new TranslationException(getLineString(exp) +
@@ -2510,7 +2527,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     private def isDurationVariable(exp : Exp) : Boolean = exp match {
-      case exp : Evar => getValue(exp.cident_).typ == CCDuration
+      case exp : Evar => getValue(exp.cident_).typ.isInstanceOf[CCDuration]
       case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
       case exp =>
         throw new TranslationException(getLineString(exp) +
@@ -2608,7 +2625,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val initSize = values.size
 
       inAtomicMode {
-        pushVal(CCFormula(true, CCVoid))
+        pushVal(CCFormula(true, CCVoid()))
         for (exp <- exps) {
           popVal
           evalHelp(exp)
@@ -2777,7 +2794,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val rhs = rhsE.toTerm
         val lhsE = popVal
         val lhs = lhsE.toTerm
-        if (lhsE.typ == CCClock || lhsE.typ == CCDuration)
+        if (lhsE.typ.isInstanceOf[CCClock] || lhsE.typ.isInstanceOf[CCDuration])
           throw new TranslationException("unsupported assignment to clock")
         val newVal = CCTerm(lhsE.typ cast (exp.assignment_op_ match {
           case _ : AssignMul =>
@@ -2845,14 +2862,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         if ((guard eq newGuard) && atomValuesUnchanged) {
           val cond2 = popVal.toFormula
           restoreState
-          pushVal(CCFormula(cond ||| cond2, CCInt))
+          pushVal(CCFormula(cond ||| cond2, CCInt()))
         } else {
           outputClause
           val intermediatePred = initPred
 
           restoreState
           addGuard(cond)
-          pushVal(CCFormula(true, CCInt))
+          pushVal(CCFormula(true, CCInt()))
           outputClause(intermediatePred)
         }
       }
@@ -2871,14 +2888,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         if ((guard eq newGuard) && atomValuesUnchanged) {
           val cond2 = popVal.toFormula
           restoreState
-          pushVal(CCFormula(cond &&& cond2, CCInt))
+          pushVal(CCFormula(cond &&& cond2, CCInt()))
         } else {
           outputClause
           val intermediatePred = initPred
 
           restoreState
           addGuard(~cond)
-          pushVal(CCFormula(false, CCInt))
+          pushVal(CCFormula(false, CCInt()))
           outputClause(intermediatePred)
         }
       }
@@ -2995,7 +3012,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ : Plus       => // nothing
           case _ : Negative   => pushVal(popVal mapTerm (-(_)))
 //          case _ : Complement.  Unary_operator ::= "~" ;
-          case _ : Logicalneg => pushVal(CCFormula(~popVal.toFormula, CCInt))
+          case _ : Logicalneg => pushVal(CCFormula(~popVal.toFormula, CCInt()))
         }
       }
 //      case exp : Ebytesexpr.  Exp15 ::= "sizeof" Exp15;
@@ -3007,7 +3024,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         printer print exp.exp_ match {
           case "__VERIFIER_error" | "reach_error" => {
             assertProperty(false)
-            pushVal(CCFormula(true, CCInt))
+            pushVal(CCFormula(true, CCInt()))
           }
           case name => {
             outputClause
@@ -3026,7 +3043,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 //              assertProperty(atomicEval(exp.listexp_.head).toFormula)
 //          }
           assertProperty(atomicEval(exp.listexp_.head).toFormula)
-          pushVal(CCFormula(true, CCInt))
+          pushVal(CCFormula(true, CCInt()))
         }
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) => {
@@ -3037,7 +3054,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 //              addGuard(atomicEval(exp.listexp_.head).toFormula)
 //          }
           addGuard(atomicEval(exp.listexp_.head).toFormula)
-          pushVal(CCFormula(true, CCInt))
+          pushVal(CCFormula(true, CCInt()))
         }
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {
           val name = printer print exp.listexp_.head
@@ -3048,7 +3065,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 case "chan_receive" => ParametricEncoder.Receive(chan)
               }
               outputClause(newPred.pred, sync)
-              pushVal(CCFormula(true, CCInt))
+              pushVal(CCFormula(true, CCInt()))
             }
             case None =>
               throw new TranslationException(
@@ -3060,7 +3077,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             throw NeedsHeapModelException
           val (typ, allocSize) = exp.listexp_(0) match {
             case exp : Ebytestype =>
-              (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt))
+              (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt()))
             //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
             case exp : Etimes =>
               exp.exp_1 match {
@@ -3094,7 +3111,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 //              localVars.incrementLastFrame
               // todo: values addGuard ?
               pushVal(CCTerm(addressRangeValue, CCHeapArrayPointer(heap, typ, arrayType)))
-            // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
+            // case CCTerm(IIntLit(IdealInt(n)), _ : CCInt) =>
                 // todo: optimise constant size allocations > 1?
           }
         }
@@ -3107,7 +3124,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             throw NeedsHeapModelException
           val t = atomicEval(exp.listexp_.head)
           heapFree(t)
-          pushVal(CCTerm(0, CCVoid)) // free returns no value, pushing dummy
+          pushVal(CCTerm(0, CCVoid())) // free returns no value, pushing dummy
         case name => {
           // then we inline the called function
 
@@ -3282,7 +3299,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
           resVar match {
             case Seq(v) => pushVal(CCTerm(v.term, v.typ))
-            case Seq()  => pushVal(CCTerm(0, CCVoid)) // push a dummy result
+            case Seq()  => pushVal(CCTerm(0, CCVoid())) // push a dummy result
           }
         }
         case None => {
@@ -3291,7 +3308,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               var argTerms : List[ITerm] = List()
               for (_ <- 0 until argNum)
                 argTerms = popVal.toTerm :: argTerms
-              pushVal(CCFormula(IAtom(predDecl, argTerms), CCInt))
+              pushVal(CCFormula(IAtom(predDecl, argTerms), CCInt()))
             case None =>
               val args =
                 (for (_ <- 0 until argNum) yield popVal.typ).toList.reverse
@@ -3309,7 +3326,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       (functionDefs get name) match {
         case Some(fundef) => {
           val typ = getType(fundef)
-          val isNoReturn = (typ.isInstanceOf[CCVoid.type])
+          val isNoReturn = (typ.isInstanceOf[CCVoid])
           val exitVar =
             if (isNoReturn) Nil
             else List(new CCVar("_" + name + "Ret", None, typ)) // todo: return line no?
@@ -3320,8 +3337,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
           // reserve an argument for the function result
 
-          if (typ == CCVoid)
-            pushFormalVal(CCInt)
+          if (typ.isInstanceOf[CCVoid])
+            pushFormalVal(CCInt())
           else
             pushFormalVal(typ)
           resetFields(functionExit.pred)
@@ -3341,12 +3358,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private def checkPointerIntComparison(t1 : CCExpr, t2 : CCExpr) :
       (CCExpr, CCExpr) =
       (t1.typ, t2.typ) match {
-        case (_: CCHeapPointer, CCInt) =>
+        case (_: CCHeapPointer, _: CCInt) =>
           if (t2.toTerm != IIntLit(IdealInt(0)))
             throw new TranslationException("Pointers can only compared with `null` or `0`.")
           else
             (t1, CCTerm(heap.nullAddr(), t1.typ)) // 0 to nullAddr()
-        case (CCInt, _: CCHeapPointer) =>
+        case (_: CCInt, _: CCHeapPointer) =>
           if (t1.toTerm != IIntLit(IdealInt(0)))
             throw new TranslationException("Pointers can only compared with `null` or `0`.")
           else
@@ -3396,29 +3413,29 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       import IExpression._
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => (lhs.typ, rhs.typ) match {
-                    case (CCClock, _ : CCArithType) =>
+                    case (_ : CCClock, _ : CCArithType) =>
                       CCFormula(op(GT.term - lhs.toTerm,
-                                   GTU.term * rhs.toTerm), CCInt)
-                    case (_ : CCArithType, CCClock) =>
+                                   GTU.term * rhs.toTerm), CCInt())
+                    case (_ : CCArithType, _ : CCClock) =>
                       CCFormula(op(GTU.term * lhs.toTerm,
-                                   GT.term - rhs.toTerm), CCInt)
-                    case (CCClock, CCClock) =>
-                      CCFormula(op(-lhs.toTerm, -rhs.toTerm), CCInt)
+                                   GT.term - rhs.toTerm), CCInt())
+                    case (_ : CCClock, _ : CCClock) =>
+                      CCFormula(op(-lhs.toTerm, -rhs.toTerm), CCInt())
 
-                    case (CCDuration, _ : CCArithType) =>
-                      CCFormula(op(lhs.toTerm, GTU.term * rhs.toTerm), CCInt)
-                    case (_ : CCArithType, CCDuration) =>
-                      CCFormula(op(GTU.term * lhs.toTerm, rhs.toTerm), CCInt)
-                    case (CCDuration, CCDuration) =>
-                      CCFormula(op(lhs.toTerm, rhs.toTerm), CCInt)
+                    case (_ : CCDuration, _ : CCArithType) =>
+                      CCFormula(op(lhs.toTerm, GTU.term * rhs.toTerm), CCInt())
+                    case (_ : CCArithType, _ : CCDuration) =>
+                      CCFormula(op(GTU.term * lhs.toTerm, rhs.toTerm), CCInt())
+                    case (_ : CCDuration, _ : CCDuration) =>
+                      CCFormula(op(lhs.toTerm, rhs.toTerm), CCInt())
 
-                    case (CCClock, CCDuration) =>
-                      CCFormula(op(GT.term - lhs.toTerm, rhs.toTerm), CCInt)
-                    case (CCDuration, CCClock) =>
-                      CCFormula(op(lhs.toTerm, GT.term - rhs.toTerm), CCInt)
+                    case (_ : CCClock, _ : CCDuration) =>
+                      CCFormula(op(GT.term - lhs.toTerm, rhs.toTerm), CCInt())
+                    case (_ : CCDuration, _ : CCClock) =>
+                      CCFormula(op(lhs.toTerm, GT.term - rhs.toTerm), CCInt())
 
                     case _ =>
-                      CCFormula(op(lhs.toTerm, rhs.toTerm), CCInt)
+                      CCFormula(op(lhs.toTerm, rhs.toTerm), CCInt())
                   })
     }
 
@@ -3431,16 +3448,16 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             t
         case (oldType : CCArithType, newType : CCArithType) =>
           newType cast t
-        case (oldType : CCArithType, CCDuration) => {
+        case (oldType : CCArithType, _ : CCDuration) => {
           if (!useTime)
             throw NeedsTimeException
           import IExpression._
-          CCTerm(GTU.term * t.toTerm, CCDuration)
+          CCTerm(GTU.term * t.toTerm, CCDuration())
         }
         // newType is actually heap pointer
         //case (oldType : CCHeapPointer, newType : CCStackPointer) =>
         //  newType.typ cast t
-        case (_ , CCVoid) =>  t // todo: do not do anything for casts to void?
+        case (_ , _ : CCVoid) =>  t // todo: do not do anything for casts to void?
         case (oldType : CCArithType, newType : CCHeapPointer) =>
           t.toTerm match {
             case lit: IIntLit if lit.value.intValue == 0 =>
@@ -3468,10 +3485,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           else
             (convertType(a, bt), b)
 
-        case (at: CCArithType, CCDuration) =>
-          (convertType(a, CCDuration), b)
-        case (CCDuration, bt: CCArithType) =>
-          (a, convertType(b, CCDuration))
+        case (at: CCArithType, _ : CCDuration) =>
+          (convertType(a, CCDuration()), b)
+        case (_ : CCDuration, bt: CCArithType) =>
+          (a, convertType(b, CCDuration()))
 
         case _ =>
           throw new TranslationException("incompatible types")
@@ -3483,41 +3500,41 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private def evalHelp(constant : Constant) : Unit = constant match {
 //      case constant : Efloat.        Constant ::= Double;
       case constant : Echar =>
-        pushVal(CCTerm(IdealInt(constant.char_.toInt), CCInt))
+        pushVal(CCTerm(IdealInt(constant.char_.toInt), CCInt()))
       case constant : Eunsigned =>
         pushVal(CCTerm(IdealInt(
           constant.unsigned_.substring(0,
-            constant.unsigned_.size - 1)), CCUInt))
+          constant.unsigned_.size - 1)), CCUInt()))
       case constant : Elong =>
         pushVal(CCTerm(IdealInt(
-          constant.long_.substring(0, constant.long_.size - 1)), CCLong))
+          constant.long_.substring(0, constant.long_.size - 1)), CCLong()))
       case constant : Eunsignlong =>
         pushVal(CCTerm(IdealInt(
           constant.unsignedlong_.substring(0,
-            constant.unsignedlong_.size - 2)), CCULong))
+          constant.unsignedlong_.size - 2)), CCULong()))
       case constant : Ehexadec =>
-        pushVal(CCTerm(IdealInt(constant.hexadecimal_ substring 2, 16), CCInt))
+        pushVal(CCTerm(IdealInt(constant.hexadecimal_ substring 2, 16), CCInt()))
       case constant : Ehexaunsign =>
         pushVal(CCTerm(IdealInt(constant.hexunsigned_.substring(2,
-                                  constant.hexunsigned_.size - 1), 16), CCUInt))
+                                constant.hexunsigned_.size - 1), 16), CCUInt()))
       case constant : Ehexalong =>
         pushVal(CCTerm(IdealInt(constant.hexlong_.substring(2,
-                                  constant.hexlong_.size - 1), 16), CCLong))
+                                constant.hexlong_.size - 1), 16), CCLong()))
       case constant : Ehexaunslong =>
         pushVal(CCTerm(IdealInt(constant.hexunslong_.substring(2,
-                                  constant.hexunslong_.size - 2), 16), CCULong))
+                                constant.hexunslong_.size - 2), 16), CCULong()))
       case constant : Eoctal =>
-        pushVal(CCTerm(IdealInt(constant.octal_, 8), CCInt))
+        pushVal(CCTerm(IdealInt(constant.octal_, 8), CCInt()))
 //      case constant : Eoctalunsign.  Constant ::= OctalUnsigned;
       case constant : Eoctallong =>
         pushVal(CCTerm(IdealInt(constant.octallong_.substring(0,
-                                  constant.octallong_.size - 1), 8), CCLong))
+                                constant.octallong_.size - 1), 8), CCLong()))
 //      case constant : Eoctalunslong. Constant ::= OctalUnsLong;
 //      case constant : Ecdouble.      Constant ::= CDouble;
 //      case constant : Ecfloat.       Constant ::= CFloat;
 //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
-        pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt))
+        pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt()))
     }
   }
 
