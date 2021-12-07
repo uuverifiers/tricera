@@ -1153,12 +1153,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             vars.get(ident)
           }
 
+          def getResultVar : Option[CCReader.CCVar] = {
+            postVar match {
+              case (v : CCVar) :: _ => Some(v)
+              case _ => None
+            }
+          }
+
           override implicit val arithMode: CCReader.ArithmeticMode.Value =
             arithmeticMode
         }
 
         // FIXME: What vars are needed to include?
-        val vars : Map[String, CCVar] = postArgs.map(v => (v.name, v)).toMap
+        val vars : Map[String, CCVar] =
+          (postOldArgs ++ postGlobalArgs).map(v => (v.name, v)).toMap
         val context = new Context(vars)
 
         (f, ACSLTranslator.translateContract(f.annotationstring_, context))

@@ -22,6 +22,8 @@ object ACSLTranslator {
     // For function contract scope is _atleast_ global vars + formal args.
     def lookupVar(ident : String) : Option[CCReader.CCVar]
 
+    def getResultVar : Option[CCReader.CCVar]
+
     implicit val arithMode : CCReader.ArithmeticMode.Value
 
     // Eventually we will need lookup for globally defined ACSL logic
@@ -65,6 +67,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   import scala.collection.mutable.{HashMap => MHashMap}
   import ctx.arithMode
   val locals = new MHashMap[String, ITerm]
+  // NOTE: Might want a "state" covering various state, if more use cases.
+  //       Currently only used for `\result` construct.
+  var inPostCond = false
 
   // TODO: Use annot from field and a generic translate method.
 
@@ -81,7 +86,10 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       // NOTE: `pre` and `post` defaults to true given usage of `and`.
       val pre = IExpression.and(requiresClauses.map(translate))
       // TODO: val assigns = ???
+      inPostCond = true
       val post = IExpression.and(ensuresClauses.map(translate))
+      inPostCond = false
+
       new FunctionContract(pre,/* assigns, */post)
 
     case _ => throwNotImpl(contract)
@@ -292,7 +300,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case t : AST.TermSyntacticNaming         => throwNotImpl(t)
     case t : AST.TermSyntacticNaming2        => throwNotImpl(t)
     case t : AST.TermOld                     => throwNotImpl(t)
-    case t : AST.TermResult                  => throwNotImpl(t)
+    case t : AST.TermResult                  => translate(t)
   }
 
   def translate(term : AST.TermLiteral) : ITerm = {
@@ -355,6 +363,15 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
   def translate(term : AST.TermParentheses) : ITerm = {
     translate(term.term_)
+  }
+
+  def translate(term : AST.TermResult) : ITerm = {
+    if (!inPostCond) {
+      throw new ACSLParseException("\\result has no meaning.")
+    }
+
+    ctx.getResultVar.map(_.term)
+      .getOrElse(throw new ACSLParseException("\\result used in void function."))
   }
 
   // ---- Literals -------------------------------------------
