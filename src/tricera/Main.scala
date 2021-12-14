@@ -247,12 +247,14 @@ class Main (args: Array[String]) {
         new java.io.FileReader(new java.io.File(ppFileName))),
         funcName, arithMode, shouldTrackMemory)
 
-    val system = reader.system
+    import tricera.acsl.Encoder
+    val enc : Encoder = new Encoder(reader, reader.annotFunctionContracts)
+    val system = enc.encode
 
     modelledHeap = modelledHeapRes
 
     if (prettyPrint) {
-      tricera.concurrency.ReaderMain.printClauses(reader)
+      tricera.concurrency.ReaderMain.printClauses(system)
     }
 
     val smallSystem = system.mergeLocalTransitions

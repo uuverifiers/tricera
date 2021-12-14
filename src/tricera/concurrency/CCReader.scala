@@ -710,6 +710,7 @@ class CCReader private (prog : Program,
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (CCPredicate, CCPredicate)]
+  val annotFunctionContracts = new MHashMap[String, FunctionContract]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
@@ -1169,12 +1170,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           (postOldArgs ++ postGlobalArgs).map(v => (v.name, v)).toMap
         val context = new Context(vars)
 
+        functionContracts.put(name, (prePred, postPred))
+
         (f, ACSLTranslator.translateContract(f.annotationstring_, context))
       }
 
-    println("Contract annotations\n" + "-"*80)
     for ((fun, contract) <- annotatedFuns)
-      println(getName(fun) + ": " + contract)
+      annotFunctionContracts.put(getName(fun), contract)
 
     for (f <- contractFuns) {
       val name = getName(f.declarator_)
@@ -1199,6 +1201,69 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
         postArgs, resVarInd, oldVarInds)
       functionContracts.put(name, (prePred, postPred))
+      localVars popFrame
+    }
+
+    // NOTE: Pretty much just copied as above.
+    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_;
+         if decl.isInstanceOf[Afunc];
+         funDef = decl.asInstanceOf[Afunc].function_def_;
+         if funDef.isInstanceOf[ContractFunc]) yield {
+      val f = funDef.asInstanceOf[ContractFunc]
+      import HornClauses._
+
+      val name = getName(f)
+      val typ = getType(f)
+      val (prePred, postPred) = functionContracts(name)
+      setPrefix(name)
+
+      localVars.pushFrame
+      val stm = pushArguments(f)
+
+      val prePredArgs = allFormalVarTerms.toList
+
+      // save the initial values of global and local variables
+      for (v <- globalVars.vars ++ localVars.vars) {
+        val initialVar = new CCVar(v.name + "_old", v.srcInfo, v.typ)
+        localVars addVar initialVar
+      }
+
+      val entryPred = newPred
+
+      val resVar = getResVar(typ)
+      val exitPred = newPred(resVar)
+
+      output(entryPred(prePredArgs ++ prePredArgs) :-
+               prePred(prePredArgs))
+
+      val translator = FunctionTranslator(exitPred)
+      typ match {
+        case _ : CCVoid => translator.translateNoReturn(stm, entryPred)
+        case _          => translator.translateWithReturn(stm, entryPred)
+      }
+
+
+
+      val globalVarTerms : Seq[ITerm] = globalVars.formalVarTerms
+      val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
+                                  globalVarTerms ++ resVar.map(v => IConstant(v.term))
+
+      output(postPred(postArgs) :- exitPred(allFormalVarTerms ++
+                                   resVar.map(v => IConstant(v.term))))
+
+      if (!timeInvariants.isEmpty)
+        throw new TranslationException(
+          "Contracts cannot be used for functions with time invariants")
+      if (clauses exists (_._2 != ParametricEncoder.NoSync))
+        throw new TranslationException(
+          "Contracts cannot be used for functions using communication channels")
+
+      functionClauses.put(name,
+                          clauses.map(_._1).toList ++ assertionClauses.toList)
+
+      clauses.clear
+      assertionClauses.clear
+
       localVars popFrame
     }
 
