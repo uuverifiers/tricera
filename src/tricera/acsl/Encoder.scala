@@ -34,8 +34,7 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
     val body : List[IAtom] = old.body
     val funName : String = head.pred.name.stripSuffix("_pre")
     val oldPre : IFormula = contracts.get(funName)
-      .getOrElse(throw new Exception(funName + "not found in map."))
-      .pre.asInstanceOf[IFormula]
+      .getOrElse(throw new Exception(funName + "not found in map.")).pre
     val constraint : IFormula = replaceParams(oldPre, funName, head).unary_!
     new Clause(falseHead, old.body, constraint)
   }
@@ -44,13 +43,12 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
     val (pre, post) = reader.getFunctionContracts(funName)
     val preArgs : Seq[ITerm] = pre.argVars.map(_.term)
     val paramToArgMap : Map[ITerm, ITerm] = preArgs.zip(pred.args).toMap
-    ArgSubstVisitor(formula, paramToArgMap).asInstanceOf[IFormula]
+    ArgSubstVisitor(formula, paramToArgMap)
   }
 
   private def buildPostClauses : Seq[Clause] = {
     for ((name, (_, post)) <- reader.getFunctionContracts.toSeq)
-      yield new Clause(falseHead, List(new IAtom(post.pred, post.argVars.map(_.term))), contracts(name).post.asInstanceOf[IFormula].unary_!)
-      // FIXME: asInstanceOf[IFormula] redundant if fix FunctionContract
+      yield new Clause(falseHead, List(new IAtom(post.pred, post.argVars.map(_.term))), contracts(name).post.unary_!)
   }
 
   private def encodeAssertions : Seq[Clause] = {
@@ -77,7 +75,7 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
             }
           )
         val updated = preConds.map(c => 
-            new Clause(c.head, List(), contracts(c.body(0).pred.name.stripSuffix("_pre")).pre.asInstanceOf[IFormula])
+            new Clause(c.head, List(), contracts(c.body(0).pred.name.stripSuffix("_pre")).pre)
         )
         ParametricEncoder.SomeBackgroundAxioms(preds, updated ++ others)
       }
@@ -87,8 +85,8 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
   }
 
   object ArgSubstVisitor extends CollectingVisitor[Map[ITerm, ITerm], IExpression] {
-    def apply(e : IExpression, paramToArgMap : Map[ITerm, ITerm]) : IExpression = {
-      visit(e, paramToArgMap)
+    def apply(e : IFormula, paramToArgMap : Map[ITerm, ITerm]) : IFormula = {
+      visit(e, paramToArgMap).asInstanceOf[IFormula]
     }
 
     override def postVisit(e: IExpression, paramToArgMap : Map[ITerm, ITerm], subres: Seq[IExpression]) : IExpression = {

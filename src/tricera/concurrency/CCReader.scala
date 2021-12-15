@@ -1204,7 +1204,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       localVars popFrame
     }
 
-    // NOTE: Pretty much just copied as above.
+    // NOTE: Pretty much just copied as below.
     for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_;
          if decl.isInstanceOf[Afunc];
          funDef = decl.asInstanceOf[Afunc].function_def_;
