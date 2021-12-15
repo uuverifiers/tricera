@@ -888,7 +888,7 @@ class CCReader private (prog : Program,
     val str = annot match {
       case a : Annot1 => a.annotationstring_
     }
-    str.substring(2, str.length-2)
+    str.substring(2, str.length-2) // removes the annotation markers
   }
 
   object FuncDef {
@@ -1189,7 +1189,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         // todo: try / catch and print msg?
         (fun,
           try ACSLTranslator.translateContract(
-                possibleACSLAnnotation.annot, context)
+                "/*@" + possibleACSLAnnotation.annot + "*/", context)
           catch {
             case e : Exception =>
               warn("ACSL Translator Exception, using dummy contract for " +

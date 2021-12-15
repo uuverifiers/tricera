@@ -3,6 +3,7 @@ import java.io.{BufferedReader, BufferedWriter, StringReader, StringWriter}
 
 // preprocesses ACSL style comments to make life easier for the parser
 object CommentPreprocessor {
+  val annotationMarker = "■■" // ascii 254 times 2
   def apply(reader : BufferedReader, readerBufferSize : Int = 1000) :
   BufferedReader = {
     val stringWriter = new StringWriter(readerBufferSize)
@@ -24,12 +25,12 @@ object CommentPreprocessor {
           case i if i < line.length - 2 => // need at least 2 more chars
             line.substring(i + 1, i + 3) match {
               case "*@" =>
-                newLine ++= line.substring(curInd, i) ++ "\\\\" // replace /*@ with \\
+                newLine ++= line.substring(curInd, i) ++ annotationMarker
                 isInComment = true
                 curInd = i + 3
               case "/@" =>
-                newLine ++= line.substring(curInd, i) ++ "\\\\" ++
-                  line.substring(i + 3) ++ "\\\\"
+                newLine ++= line.substring(curInd, i) ++ annotationMarker ++
+                  line.substring(i + 3) ++ annotationMarker
                 curInd = line.length // will move on to next line
               case _ => // found slash but not a comment in our desired format
                 newLine ++= line.substring(curInd, i + 1)
@@ -47,11 +48,11 @@ object CommentPreprocessor {
             curInd = line.length // will move on to next line
           case i if i < line.length - 1 && line.charAt(i + 1) == '/' &&
             i > 0 && line.charAt(i - 1) == '@' =>
-            newLine ++= line.substring(curInd, i - 1) + " \\\\"
+            newLine ++= line.substring(curInd, i - 1) + annotationMarker
             curInd = i + 2
             isInComment = false
           case i if i < line.length - 1 && line.charAt(i + 1) == '/' =>
-            newLine ++= line.substring(curInd, i) ++ "\\\\"
+            newLine ++= line.substring(curInd, i) ++ annotationMarker
             curInd = i + 2
             isInComment = false
           case i =>

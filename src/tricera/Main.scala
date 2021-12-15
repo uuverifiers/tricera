@@ -432,7 +432,7 @@ class Main (args: Array[String]) {
       printError(ArrayError.toString)
       ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
-      //t.printStackTrace
+      t.printStackTrace
       printError(t.getMessage)
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
