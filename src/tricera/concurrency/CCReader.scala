@@ -712,6 +712,7 @@ class CCReader private (prog : Program,
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (CCPredicate, CCPredicate)]
+  val annotFunctionContracts = new MHashMap[String, FunctionContract]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
@@ -1126,14 +1127,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     // functions for which contracts should be generated
     // todo: generate contracts for ACSL annotated funs
-    val contractFuns : Map[Afunc, Seq[AnnotationInfo]] =
-      functionAnnotations.filter(_._2.exists(_ == ContractGen))
+    val contractFuns : Seq[Afunc] =
+      functionAnnotations.filter(_._2.exists(_ == ContractGen)).keys.toSeq
 
-    val funsThatMightHaveACSLContracts =
+    val funsThatMightHaveACSLContracts : Map[Afunc, Seq[AnnotationInfo]] =
       functionAnnotations.filter(_._2.exists(_.isInstanceOf[InvalidAnnotation]))
 
     // todo: clean up this part to decouple contract generation from contract parsing
-    val annotatedFuns : Map[Function_def, FunctionContract] = // todo: naming is ambiguous
+    val annotatedFuns : Map[Afunc, FunctionContract] = // todo: naming is ambiguous
       for ((fun, annots) <- funsThatMightHaveACSLContracts;
            annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
         // todo: define and initialise context
@@ -1186,8 +1187,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
         // todo: try / catch and print msg?
-        (fun.function_def_,
-          try ACSLTranslator.translateContract(possibleACSLAnnotation.annot, context)
+        (fun,
+          try ACSLTranslator.translateContract(
+                possibleACSLAnnotation.annot, context)
           catch {
             case e : Exception =>
               warn("ACSL Translator Exception, using dummy contract for " +
@@ -1199,10 +1201,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     if (annotatedFuns.nonEmpty)
       println("Contract annotations\n" + "-"*80)
-    for ((fun, contract) <- annotatedFuns)
-      println(getName(fun) + ": " + contract)
+    for ((fun, contract) <- annotatedFuns) {
+      annotFunctionContracts.put(getName(fun.function_def_), contract)
+      println(getName(fun.function_def_) + ": " + contract)
+    }
 
-    for ((f, _) <- contractFuns) {
+    for (f <- contractFuns ++ annotatedFuns.keys) {
       val name = getName(f.function_def_)
       localVars.pushFrame
       pushArguments(f.function_def_)
@@ -1213,7 +1217,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val postVar = getType(f.function_def_) match {
         case _ : CCVoid => Nil
         case t          => List(new CCVar(name + "_res",
-          Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f.function_def_)))
+          Some(FuncDef(f.function_def_).sourceInfo), getType(f.function_def_)))
       }
       // all old vars (includes globals) + global vars + return var (if it exists)
       val postOldArgs = allFormalVars
@@ -1229,7 +1233,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     // ... and generate clauses for those functions
-    for ((f, _) <- contractFuns) {
+    for (f <- contractFuns  ++ annotatedFuns.keys) {
       import HornClauses._
 
       val name = getName(FuncDef(f.function_def_).decl) // todo clean up

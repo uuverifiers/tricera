@@ -249,7 +249,9 @@ class Main (args: Array[String]) {
     val (reader, modelledHeapRes) =
       CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
 
-    val system = reader.system
+    import tricera.acsl.Encoder
+    val enc : Encoder = new Encoder(reader, reader.annotFunctionContracts)
+    val system = enc.encode
 
     val systemPostProcessors = Seq()
 
@@ -259,7 +261,7 @@ class Main (args: Array[String]) {
     modelledHeap = modelledHeapRes
 
     if (prettyPrint) {
-      tricera.concurrency.ReaderMain.printClauses(reader)
+      tricera.concurrency.ReaderMain.printClauses(system)
     }
 
     val smallSystem = system.mergeLocalTransitions
