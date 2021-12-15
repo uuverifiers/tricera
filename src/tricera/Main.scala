@@ -242,12 +242,19 @@ class Main (args: Array[String]) {
       case _  => false
     })) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
+
+    // todo: add a switch for this, also benchmark/profile
+    val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
+      new java.io.FileReader(new java.io.File(ppFileName))))
     val (reader, modelledHeapRes) =
-      CCReader(new java.io.BufferedReader(
-        new java.io.FileReader(new java.io.File(ppFileName))),
-        funcName, arithMode, shouldTrackMemory)
+      CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
 
     val system = reader.system
+
+    val systemPostProcessors = Seq()
+
+    // todo: generate new system here by substituting pre-/post-conditions
+
 
     modelledHeap = modelledHeapRes
 
@@ -423,7 +430,7 @@ class Main (args: Array[String]) {
       printError(ArrayError.toString)
       ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
-      t.printStackTrace
+      //t.printStackTrace
       printError(t.getMessage)
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)

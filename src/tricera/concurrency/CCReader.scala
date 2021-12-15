@@ -44,6 +44,8 @@ import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
 import tricera.Util._
 import tricera.acsl.{ACSLTranslator, FunctionContract}
+import tricera.parsers.AnnotationParser
+import tricera.parsers.AnnotationParser._
 
 object CCReader {
   def apply(input : java.io.Reader, entryFunction : String,
@@ -881,26 +883,30 @@ class CCReader private (prog : Program,
     }
   }
 
+  implicit def annotationStringExtractor(annot : Annotation) : String = {
+    val str = annot match {
+      case a : Annot1 => a.annotationstring_
+    }
+    str.substring(2, str.length-2)
+  }
+
   object FuncDef {
     def apply(funDef : Function_def) : FuncDef = {
       funDef match {
         case f : NewFunc =>
           FuncDef(f.compound_stm_, f.declarator_,
                   SourceInfo(f.line_num, f.col_num, f.offset),
-                  Some(f.listdeclaration_specifier_))
-        case f : NewHintFunc =>
-          FuncDef(f.compound_stm_, f.declarator_,
-                  SourceInfo(f.line_num, f.col_num, f.offset),
-                  Some(f.listdeclaration_specifier_))
+                  Some(f.listdeclaration_specifier_), // todo: why optional?
+                  Nil)
         case f : NewFuncInt =>
           FuncDef(f.compound_stm_, f.declarator_,
+                  SourceInfo(f.line_num, f.col_num, f.offset), None,
+                  f.listannotation_)
+        case f : AnnotatedFunc =>
+          FuncDef(f.compound_stm_, f.declarator_,
                   SourceInfo(f.line_num, f.col_num, f.offset),
-                  listAbs_hint = Some(f.listabs_hint_))
-        case f : ContractFunc =>
-          val innerFunDef = apply(f.function_def_)
-          FuncDef(innerFunDef.body, innerFunDef.decl, innerFunDef.sourceInfo,
-                  innerFunDef.declSpecs, innerFunDef.listAbs_hint,
-                  Some(f.annotationstring_))
+                  Some(f.listdeclaration_specifier_),
+                  f.listannotation_)
       }
     }
   }
@@ -908,8 +914,7 @@ class CCReader private (prog : Program,
                      decl : Declarator,
                      sourceInfo : SourceInfo,
                      declSpecs : Option[ListDeclaration_specifier] = None,
-                     listAbs_hint: Option[ListAbs_hint] = None,
-                     contract : Option[String] = None) {
+                     annotations : Seq[Annotation]) {
   }
 
   for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
@@ -1106,34 +1111,44 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     globalPreconditions = globalPreconditions &&& globalVarSymex.getGuard
 
-    // then create contracts for functions that will not be inlined ...
-    val contractFuns : Seq[NewHintFunc] =
-      for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_;
-           if decl.isInstanceOf[Afunc];
-           funDef = decl.asInstanceOf[Afunc].function_def_;
-           if funDef.isInstanceOf[NewHintFunc];
-           if useContract(funDef.asInstanceOf[NewHintFunc].listabs_hint_))
-      yield funDef.asInstanceOf[NewHintFunc]
+    // todo: what about functions without definitions? replace Afunc type
+    val functionAnnotations : Map[Afunc, Seq[AnnotationInfo]] =
+      prog.asInstanceOf[Progr].listexternal_declaration_.collect {
+        case f : Afunc  =>
+          val annots = f.function_def_ match {
+            case f: AnnotatedFunc => f.listannotation_.toList
+            case f: NewFuncInt    => f.listannotation_.toList
+            case _: NewFunc       => Nil
+          }
+          (f, (for (annot <- annots) yield
+            AnnotationParser(annot)).flatten)
+      }.toMap
+
+    // functions for which contracts should be generated
+    // todo: generate contracts for ACSL annotated funs
+    val contractFuns : Map[Afunc, Seq[AnnotationInfo]] =
+      functionAnnotations.filter(_._2.exists(_ == ContractGen))
+
+    val funsThatMightHaveACSLContracts =
+      functionAnnotations.filter(_._2.exists(_.isInstanceOf[InvalidAnnotation]))
 
     // todo: clean up this part to decouple contract generation from contract parsing
-    val annotatedFuns : Seq[(ContractFunc, FunctionContract)] = // todo: naming is ambiguous
-      for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_;
-           if decl.isInstanceOf[Afunc];
-           funDef = decl.asInstanceOf[Afunc].function_def_;
-           if funDef.isInstanceOf[ContractFunc]) yield {
-        val f = funDef.asInstanceOf[ContractFunc]
+    val annotatedFuns : Map[Function_def, FunctionContract] = // todo: naming is ambiguous
+      for ((fun, annots) <- funsThatMightHaveACSLContracts;
+           annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
         // todo: define and initialise context
-        val name = getName(f)
+        val funDef = FuncDef(fun.function_def_)
+        val name = getName(fun.function_def_)
         localVars.pushFrame
-        pushArguments(f)
+        pushArguments(fun.function_def_)
         val prePred = CCPredicate(
           MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
           allFormalVars
         )
-        val postVar = getType(f) match {
+        val postVar = getType(fun.function_def_) match {
           case _ : CCVoid => Nil
           case t          => List(new CCVar(name + "_res",
-            Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
+            Some(funDef.sourceInfo), getType(fun.function_def_))) // todo: clean this (and similar code) up a bit
         }
         // all old vars (includes globals) + global vars + return var (if it exists)
         val postOldArgs = allFormalVars
@@ -1169,25 +1184,36 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           (postOldArgs ++ postGlobalArgs).map(v => (v.name, v)).toMap
         val context = new Context(vars)
 
-        (f, ACSLTranslator.translateContract(f.annotationstring_, context))
+        val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
+        // todo: try / catch and print msg?
+        (fun.function_def_,
+          try ACSLTranslator.translateContract(possibleACSLAnnotation.annot, context)
+          catch {
+            case e : Exception =>
+              warn("ACSL Translator Exception, using dummy contract for " +
+                "annotation: " + possibleACSLAnnotation.annot)
+              new FunctionContract(IBoolLit(true), IBoolLit(true))
+          }
+        )
       }
 
-    println("Contract annotations\n" + "-"*80)
+    if (annotatedFuns.nonEmpty)
+      println("Contract annotations\n" + "-"*80)
     for ((fun, contract) <- annotatedFuns)
       println(getName(fun) + ": " + contract)
 
-    for (f <- contractFuns) {
-      val name = getName(f.declarator_)
+    for ((f, _) <- contractFuns) {
+      val name = getName(f.function_def_)
       localVars.pushFrame
-      pushArguments(f)
+      pushArguments(f.function_def_)
       val prePred = CCPredicate(
         MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
         allFormalVars
       )
-      val postVar = getType(f) match {
+      val postVar = getType(f.function_def_) match {
         case _ : CCVoid => Nil
         case t          => List(new CCVar(name + "_res",
-          Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f)))
+          Some(SourceInfo(f.line_num, f.col_num, f.offset)), getType(f.function_def_)))
       }
       // all old vars (includes globals) + global vars + return var (if it exists)
       val postOldArgs = allFormalVars
@@ -1203,16 +1229,16 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     // ... and generate clauses for those functions
-    for (f <- contractFuns) {
+    for ((f, _) <- contractFuns) {
       import HornClauses._
 
-      val name = getName(f.declarator_)
-      val typ = getType(f)
+      val name = getName(FuncDef(f.function_def_).decl) // todo clean up
+      val typ = getType(f.function_def_)
       val (prePred, postPred) = functionContracts(name)
       setPrefix(name)
 
       localVars.pushFrame
-      val stm = pushArguments(f)
+      val stm = pushArguments(f.function_def_)
 
       val prePredArgs = allFormalVarTerms.toList
 
@@ -1415,7 +1441,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ =>
         }
       }
-      case preddecl : PredDeclarator => // nothing
+//todo      case preddecl : PredDeclarator => // nothing // todo: fix this back
     }
   }
 
@@ -1600,9 +1626,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         if (isVariable) {
           // parse possible model checking hints
-          val hints : Seq[Abs_hint] = initDecl match {
-            case decl : HintDecl => decl.listabs_hint_
-            case decl : HintInitDecl => decl.listabs_hint_
+          val hints : Seq[Annotation] = initDecl match {
+            case decl : HintDecl => decl.listannotation_
+            case decl : HintInitDecl => decl.listannotation_
             case _ => List()
           }
 
@@ -1641,80 +1667,68 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           // structs were handled in first pass
       }
     }
-    case predDecl : PredDeclarator =>
-      for (hint <- predDecl.listpred_hint_) {
-        hint match {
-          case predHint : PredicateHint =>
-            val argTypes =
-              for (typ <- predHint.listtype_specifier_) yield getType(typ)
-            val hintPred = MonoSortedPredicate(predHint.cident_, argTypes.map(_ toSort))
-            predDecls += ((predHint.cident_, hintPred))
-            val argCCVars = // needed for adding to predCCPredMap, used in printing
-              argTypes.map(typ => new CCVar(typ.toString, None, typ))
-            predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
-        }
-      }
+// todo: enable this back   case predDecl : PredDeclarator =>
+//      for (hint <- predDecl.listpred_hint_) {
+//        hint match {
+//          case predHint : PredicateHint =>
+//            val argTypes =
+//              for (typ <- predHint.listtype_specifier_) yield getType(typ)
+//            val hintPred = MonoSortedPredicate(predHint.cident_, argTypes.map(_ toSort))
+//            predDecls += ((predHint.cident_, hintPred))
+//            val argCCVars = // needed for adding to predCCPredMap, used in printing
+//              argTypes.map(typ => new CCVar(typ.toString, None, typ))
+//            predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
+//        }
+//      }
     case decl => //warn("ignoring declaration: " + decl) // todo: proper extraction of name & source info
   }
 
-  private def useContract(hints : Seq[Abs_hint]) : Boolean =
-            hints exists {
-              case hint : Comment_abs_hint => hint.listabs_hint_clause_ exists {
-                case hint : Predicate_hint => hint.cident_ == "contract"
-              }
-              case _ => false
-            }
+  private def processHints(hintAnnotations : Seq[Annotation]) : Unit = {
+    val hints : Seq[AbsHintClause] = (for (hint <- hintAnnotations) yield {
+      AnnotationParser(hint)
+    }).flatten.filter(_.isInstanceOf[AbsHintClause]).
+      map(_.asInstanceOf[AbsHintClause])
+    if (hints.nonEmpty) {
+      val hintSymex = Symex(null)
+      hintSymex.saveState
 
-  private def processHints(hints : Seq[Abs_hint]) : Unit =
-          if (!hints.isEmpty) {
-            val hintSymex = Symex(null)
-            hintSymex.saveState
+      val subst =
+        (for ((v, n) <-
+                (globalVars.iterator ++ localVars.iterator).zipWithIndex)
+          yield (v.term.asInstanceOf[ConstantTerm] -> IExpression.v(n))).toMap
 
-            val subst =
-              (for ((v, n) <-
-                      (globalVars.iterator ++ localVars.iterator).zipWithIndex)
-               yield (v.term.asInstanceOf[ConstantTerm] -> IExpression.v(n))).toMap
-
-            val hintEls =
-              for (hint <- hints;
-                   cHint = hint.asInstanceOf[Comment_abs_hint];
-                   hint_clause <- cHint.listabs_hint_clause_;
-                   if (hint_clause.isInstanceOf[Predicate_hint]);
-                   pred_hint = hint_clause.asInstanceOf[Predicate_hint];
-                   cost = pred_hint.maybe_cost_ match {
-                     case c : SomeCost => c.unboundedinteger_.toInt
-                     case _ : NoCost => 1
-                   };
-                   e <- pred_hint.maybe_exp_args_ match {
-                     case args : SomeExpArgs =>
-                       inAtomicMode(hintSymex evalList args.exp_)
-                     case _ : NoExpArgs =>
-                       List()
-                   })
-              yield pred_hint.cident_ match {
-                case "predicates" => {
+      import AnnotationParser._
+      val hintEls =
+        for (hint <- hints;
+             cost = hint.cost.getOrElse("1").toInt;
+             e <- hint.exp_args match {
+               case Some(args) => inAtomicMode(hintSymex evalList args)
+               case None => Nil
+             })
+              yield hint.hint match {
+                case Predicates => {
                   usingInitialPredicates = true
                   VerifHintInitPred(ConstantSubstVisitor(e.toFormula, subst))
                 }
-                case "predicates_tpl" =>
+                case PredicatesTpl =>
                   VerifHintTplPred(ConstantSubstVisitor(e.toFormula, subst),
                                    cost)
-                case "terms_tpl" =>
+                case TermsTpl =>
                   VerifHintTplEqTerm(ConstantSubstVisitor(e.toTerm, subst),
                                      cost)
                 case _ =>
                   throw new TranslationException("cannot handle hint " +
-                                                 pred_hint.cident_)
+                                                 hint.hint)
               }
 
             if (!hintSymex.atomValuesUnchanged)
               throw new TranslationException(
                 "Hints are not side effect-free: " +
-                (for (h <- hints.iterator)
-                 yield (printer print h)).mkString(""))
+                hints.mkString(""))
 
             variableHints(variableHints.size - 1) = hintEls
           }
+    }
 
   private def getName (f : Function_def) : String = getName(FuncDef(f).decl)
 
@@ -3624,7 +3638,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 Some(SourceInfo(argDec.line_num, argDec.col_num, argDec.offset)),
                 actualType)
               localVars addVar declaredVar
-              processHints(argDec.listabs_hint_)
+              processHints(argDec.listannotation_)
             }
 //            case argDec : Abstract =>
           }
