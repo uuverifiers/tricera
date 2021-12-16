@@ -1,6 +1,6 @@
 /*@
   requires x >= 0;
-  ensures \result == 2;
+  ensures \result == 42;
 */
 int foo(int x) {
   return -42;
@@ -9,5 +9,5 @@ int foo(int x) {
 
 void main()
 {
-  foo(0);
+  foo(1);
 }
