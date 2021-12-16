@@ -9,19 +9,26 @@ import lazabs.horn.bottomup.HornClauses.FALSE
 import hornconcurrency.ParametricEncoder.System
 import hornconcurrency.ParametricEncoder
 
-import scala.collection.Map
+import scala.collection.{Map, Set}
 
-import tricera.concurrency.CCReader.{CCVar}
 import tricera.concurrency.CCReader
 
-// FIXME: Maybe just object?
-class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
+// FIXME: Maybe just object? Or create companion?
+// FIXME: We should try not to have to pass around the reader object itself,
+//        but only necessary data therein.
+class Encoder(reader : CCReader) {
+  // FIXME: Static, goes in companion object?
   // FIXME: Check if correct construction of false head.
   val falseHead = new IAtom(FALSE, Seq())
-  val system = reader.system
-  // FIXME: Not allowed, but maybe would be convenient.
-  //val preds = reader.getFunctionContracts
   val suffix : String = "_pre"
+
+  // FIXME: Maybe access these via some Context object?
+  val system = reader.system
+  val funsWithAnnot : Set[String] = reader.funsWithAnnot
+  val funToPreAtom  : Map[String, IAtom] = reader.funToPreAtom
+  val funToPostAtom : Map[String, IAtom] = reader.funToPostAtom
+  val funToContract : Map[String, FunctionContract] = reader.funToContract
+  val prePredsToReplace : Set[IExpression.Predicate] = reader.prePredsToReplace
 
   def encode : System = {
     val asserts = encodeAssertions
@@ -33,33 +40,28 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
     assert(old.head.pred.name.endsWith(suffix))
     val body : List[IAtom] = old.body
     val funName : String = old.head.pred.name.stripSuffix(suffix)
-    val oldPre : IFormula = contracts.get(funName)
-      .getOrElse(throw new Exception(funName + "not found in map.")).pre
+    val oldPre : IFormula = funToContract(funName).pre
     val constraint : IFormula = replaceParams(oldPre, funName, old.head).unary_!
     new Clause(falseHead, old.body, constraint)
   }
 
   private def replaceParams(formula : IFormula, funName : String, pred : IAtom) : IFormula = {
-    val (pre, post) = reader.getFunctionContracts(funName)
-    val preArgs : Seq[ITerm] = pre.argVars.map(_.term)
-    val paramToArgMap : Map[ITerm, ITerm] = preArgs.zip(pred.args).toMap
+    val preAtom  = funToPreAtom(funName)
+    val paramToArgMap = preAtom.args.zip(pred.args).toMap
     ArgSubstVisitor(formula, paramToArgMap)
   }
 
-  private def buildPostClauses : Seq[Clause] = {
-    for ((name, (_, post)) <- reader.getFunctionContracts.toSeq
-         if reader.functionsWithAnnot(name))
-      yield new Clause(falseHead, List(new IAtom(post.pred, post.argVars.map(_.term))), contracts(name).post.unary_!)
+  private def buildPostClause(name : String) : Clause = {
+    new Clause(falseHead, List(funToPostAtom(name)), funToContract(name).post.unary_!)
   }
 
   private def encodeAssertions : Seq[Clause] = {
     val (preClauses, others) : (Seq[Clause], Seq[Clause]) = 
       system.assertions.partition(c => {
-        val name = c.head.pred.name
-        name.endsWith(suffix) && reader.functionsWithAnnot(name.stripSuffix(suffix))
+        prePredsToReplace(c.head.pred)
       })
     val newPreClauses : Seq[Clause] = preClauses.map(buildPreClause)
-    val newPostClauses : Seq[Clause] = buildPostClauses 
+    val newPostClauses : Seq[Clause] = funsWithAnnot.map(buildPostClause).toSeq
     
     newPreClauses ++ newPostClauses ++ others
   }
@@ -70,20 +72,15 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
   private def encodeBackgroundAxioms = {
     system.backgroundAxioms match {
       case ParametricEncoder.SomeBackgroundAxioms(preds, clauses) => {
-        // TODO: Delete *_pre predicates from preds?
-        val (preConds, others) = 
-          clauses.partition(
-            _.body match {
-              case atom :: Nil => 
-                val name = atom.pred.name
-                name.endsWith(suffix) && reader.functionsWithAnnot(name.stripSuffix(suffix))
-              case _ => false
-            }
-          )
-        val updated = preConds.map(c => 
-            new Clause(c.head, List(), contracts(c.body(0).pred.name.stripSuffix(suffix)).pre)
-        )
-        ParametricEncoder.SomeBackgroundAxioms(preds, updated ++ others)
+        // TODO: Delete *_pre predicates relating to annotated functions from preds?
+        val encoded = clauses.map({
+          case Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
+            val name = atom.pred.name.stripSuffix(suffix)
+            new Clause(head, List(), funToContract(name).pre)
+          }
+          case c => c
+        })
+        ParametricEncoder.SomeBackgroundAxioms(preds, encoded)
       }
       case ParametricEncoder.NoBackgroundAxioms => 
         ParametricEncoder.NoBackgroundAxioms

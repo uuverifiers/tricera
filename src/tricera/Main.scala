@@ -250,9 +250,7 @@ class Main (args: Array[String]) {
       CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
 
     import tricera.acsl.Encoder
-    // FIXME: We should try not to have to pass around the reader object itself,
-    //        but only necessary data therein.
-    val enc : Encoder = new Encoder(reader, reader.annotFunctionContracts)
+    val enc : Encoder = new Encoder(reader)
     val system = enc.encode
 
     val systemPostProcessors = Seq()

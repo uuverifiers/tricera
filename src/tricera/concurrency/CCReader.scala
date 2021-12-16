@@ -41,7 +41,8 @@ import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintIn
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
-import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap}
+import scala.collection.mutable.{ArrayBuffer, Buffer, Stack}
+import scala.collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
 import tricera.Util._
 import tricera.acsl.{ACSLTranslator, FunctionContract}
 import tricera.parsers.AnnotationParser
@@ -721,12 +722,15 @@ class CCReader private (prog : Program,
 
   private val predDecls     = new MHashMap[String, Predicate]
 
-  import scala.collection.mutable.{HashSet => MHashSet}
-  val functionsWithAnnot : MHashSet[String] = new MHashSet()
-  val annotFunctionContracts = new MHashMap[String, FunctionContract]
-
-
   def getFunctionContracts = functionContracts.toMap
+
+  // NOTE: Used by ACSL encoder.
+  val funToPreAtom  : MHashMap[String, IAtom] = new MHashMap()
+  val funToPostAtom : MHashMap[String, IAtom] = new MHashMap()
+  val funToContract : MHashMap[String, FunctionContract] = new MHashMap()
+  val funsWithAnnot : MHashSet[String] = new MHashSet()
+  val prePredsToReplace : MHashSet[Predicate] = new MHashSet()
+
   //////////////////////////////////////////////////////////////////////////////
 
   private val processes =
@@ -1144,13 +1148,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         // todo: define and initialise context
         val funDef = FuncDef(fun.function_def_)
         val name = getName(fun.function_def_)
-        functionsWithAnnot.add(name)
         localVars.pushFrame
         pushArguments(fun.function_def_)
         val prePred = CCPredicate(
           MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
           allFormalVars
         )
+
         val postVar = getType(fun.function_def_) match {
           case _ : CCVoid => Nil
           case t          => List(new CCVar(name + "_res",
@@ -1193,25 +1197,34 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
         // todo: try / catch and print msg?
-        (fun,
-          try ACSLTranslator.translateContract(
+        val contract =
+          try {
+            ACSLTranslator.translateContract(
                 "/*@" + possibleACSLAnnotation.annot + "*/", context)
+          }
           catch {
             case e : Exception =>
               warn("ACSL Translator Exception, using dummy contract for " +
                 "annotation: " + possibleACSLAnnotation.annot)
               new FunctionContract(IBoolLit(true), IBoolLit(true))
           }
-        )
+
+        // NOTE: Put stuff for encoder.
+        prePredsToReplace.add(prePred.pred)
+        funToPreAtom.put(name, atom(prePred))
+        funToPostAtom.put(name, atom(postPred))
+        funsWithAnnot.add(name)
+        funToContract.put(name, contract)
+
+        (fun, contract)
       }
 
     // TODO: If we want printing add as switch.
     //if (annotatedFuns.nonEmpty)
     //  println("Contract annotations\n" + "-"*80)
-    for ((fun, contract) <- annotatedFuns) {
-      annotFunctionContracts.put(getName(fun.function_def_), contract)
+    //for ((fun, contract) <- annotatedFuns) {
     //  println(getName(fun.function_def_) + ": " + contract)
-    }
+    //}
 
     for (f <- contractFuns) {
       val name = getName(f.function_def_)
@@ -2196,6 +2209,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     IAtom(pred, args take pred.arity)
   private def atom(ccPred : CCPredicate, args : Seq[ITerm]) : IAtom =
     atom(ccPred.pred, args)
+  private def atom(ccPred : CCPredicate) : IAtom =
+    atom(ccPred.pred, ccPred.argVars.map(_.term))
 
   private class Symex private (oriInitPred : CCPredicate,
                                values : Buffer[CCExpr]) {
