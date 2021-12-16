@@ -1,0 +1,28 @@
+
+contract1.hcc
+SAFE
+
+contract2.hcc
+SAFE
+
+contract3.hcc
+UNSAFE
+
+----------
+Init:
+  main2   
+----------
+Final:
+  main2   
+----------
+
+contract4.hcc
+UNSAFE
+
+----------
+Init:
+  main2   
+----------
+Final:
+  main2   
+----------

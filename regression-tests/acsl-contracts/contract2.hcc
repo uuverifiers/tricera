@@ -1,0 +1,13 @@
+/*@
+  requires (x >= 0) && (x <= 4);
+  ensures (\result >= 10) && (\result <= 14);
+*/
+int foo(int x) {
+  return 12;
+}
+
+
+void main()
+{
+  foo(2);
+}

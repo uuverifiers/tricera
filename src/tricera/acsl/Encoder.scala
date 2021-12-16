@@ -21,6 +21,7 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
   val system = reader.system
   // FIXME: Not allowed, but maybe would be convenient.
   //val preds = reader.getFunctionContracts
+  val suffix : String = "_pre"
 
   def encode : System = {
     val asserts = encodeAssertions
@@ -29,13 +30,12 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
   }
 
   private def buildPreClause(old : Clause) : Clause = {
-    assert(old.head.pred.name.endsWith("_pre"))
-    val head : IAtom = old.head
+    assert(old.head.pred.name.endsWith(suffix))
     val body : List[IAtom] = old.body
-    val funName : String = head.pred.name.stripSuffix("_pre")
+    val funName : String = old.head.pred.name.stripSuffix(suffix)
     val oldPre : IFormula = contracts.get(funName)
       .getOrElse(throw new Exception(funName + "not found in map.")).pre
-    val constraint : IFormula = replaceParams(oldPre, funName, head).unary_!
+    val constraint : IFormula = replaceParams(oldPre, funName, old.head).unary_!
     new Clause(falseHead, old.body, constraint)
   }
 
@@ -47,13 +47,17 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
   }
 
   private def buildPostClauses : Seq[Clause] = {
-    for ((name, (_, post)) <- reader.getFunctionContracts.toSeq)
+    for ((name, (_, post)) <- reader.getFunctionContracts.toSeq
+         if reader.functionsWithAnnot(name))
       yield new Clause(falseHead, List(new IAtom(post.pred, post.argVars.map(_.term))), contracts(name).post.unary_!)
   }
 
   private def encodeAssertions : Seq[Clause] = {
     val (preClauses, others) : (Seq[Clause], Seq[Clause]) = 
-      system.assertions.partition(c => c.head.pred.name.endsWith("_pre"))
+      system.assertions.partition(c => {
+        val name = c.head.pred.name
+        name.endsWith(suffix) && reader.functionsWithAnnot(name.stripSuffix(suffix))
+      })
     val newPreClauses : Seq[Clause] = preClauses.map(buildPreClause)
     val newPostClauses : Seq[Clause] = buildPostClauses 
     
@@ -70,12 +74,14 @@ class Encoder(reader : CCReader, contracts : Map[String, FunctionContract]) {
         val (preConds, others) = 
           clauses.partition(
             _.body match {
-              case atom :: Nil if atom.pred.name.endsWith("_pre") => true
+              case atom :: Nil => 
+                val name = atom.pred.name
+                name.endsWith(suffix) && reader.functionsWithAnnot(name.stripSuffix(suffix))
               case _ => false
             }
           )
         val updated = preConds.map(c => 
-            new Clause(c.head, List(), contracts(c.body(0).pred.name.stripSuffix("_pre")).pre)
+            new Clause(c.head, List(), contracts(c.body(0).pred.name.stripSuffix(suffix)).pre)
         )
         ParametricEncoder.SomeBackgroundAxioms(preds, updated ++ others)
       }

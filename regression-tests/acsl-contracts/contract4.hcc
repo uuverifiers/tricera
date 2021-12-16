@@ -1,0 +1,13 @@
+/*@
+  requires x >= 0;
+  ensures \result == 2;
+*/
+int foo(int x) {
+  return -42;
+}
+
+
+void main()
+{
+  foo(0);
+}

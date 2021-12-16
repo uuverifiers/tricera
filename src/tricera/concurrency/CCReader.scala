@@ -712,7 +712,6 @@ class CCReader private (prog : Program,
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (CCPredicate, CCPredicate)]
-  val annotFunctionContracts = new MHashMap[String, FunctionContract]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
@@ -721,6 +720,11 @@ class CCReader private (prog : Program,
   private val enumeratorDefs= new MHashMap[String, CCExpr]
 
   private val predDecls     = new MHashMap[String, Predicate]
+
+  import scala.collection.mutable.{HashSet => MHashSet}
+  val functionsWithAnnot : MHashSet[String] = new MHashSet()
+  val annotFunctionContracts = new MHashMap[String, FunctionContract]
+
 
   def getFunctionContracts = functionContracts.toMap
   //////////////////////////////////////////////////////////////////////////////
@@ -1140,6 +1144,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         // todo: define and initialise context
         val funDef = FuncDef(fun.function_def_)
         val name = getName(fun.function_def_)
+        functionsWithAnnot.add(name)
         localVars.pushFrame
         pushArguments(fun.function_def_)
         val prePred = CCPredicate(
@@ -1160,6 +1165,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val postPred = CCPredicate(
           MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
           postArgs, resVarInd, oldVarInds)
+        functionContracts.put(name, (prePred, postPred))
         localVars.popFrame
 
         import scala.collection.Map
@@ -1199,14 +1205,15 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         )
       }
 
-    if (annotatedFuns.nonEmpty)
-      println("Contract annotations\n" + "-"*80)
+    // TODO: If we want printing add as switch.
+    //if (annotatedFuns.nonEmpty)
+    //  println("Contract annotations\n" + "-"*80)
     for ((fun, contract) <- annotatedFuns) {
       annotFunctionContracts.put(getName(fun.function_def_), contract)
-      println(getName(fun.function_def_) + ": " + contract)
+    //  println(getName(fun.function_def_) + ": " + contract)
     }
 
-    for (f <- contractFuns ++ annotatedFuns.keys) {
+    for (f <- contractFuns) {
       val name = getName(f.function_def_)
       localVars.pushFrame
       pushArguments(f.function_def_)
