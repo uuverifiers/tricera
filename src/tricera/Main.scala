@@ -250,6 +250,8 @@ class Main (args: Array[String]) {
       CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
 
     import tricera.acsl.Encoder
+    // FIXME: We should try not to have to pass around the reader object itself,
+    //        but only necessary data therein.
     val enc : Encoder = new Encoder(reader, reader.annotFunctionContracts)
     val system = enc.encode
 
@@ -432,7 +434,7 @@ class Main (args: Array[String]) {
       printError(ArrayError.toString)
       ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
-      t.printStackTrace
+      //t.printStackTrace
       printError(t.getMessage)
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)

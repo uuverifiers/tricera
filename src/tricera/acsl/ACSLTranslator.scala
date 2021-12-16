@@ -115,7 +115,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case p : AST.PredTrue             => translate(p)
     case p : AST.PredFalse            => translate(p)
     case p : AST.PredRelOp            => translate(p)
-    case p : AST.PredApplication      => throwNotImpl(p)
+    case p : AST.PredApplication      => throwNotImpl(p) // Redundant for now.
     case p : AST.PredParentheses      => translate(p)
     case p : AST.PredConjunction      => translate(p)
     case p : AST.PredDisjunction      => translate(p)
@@ -324,7 +324,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     val right : ITerm = translate(term.term_)
     term.unaryop_ match {
       case op : AST.UnaryOpPlus            => throwNotImpl(op)
-      case op : AST.UnaryOpMinus           => throwNotImpl(op)
+      case op : AST.UnaryOpMinus           => throwNotImpl(op) // right.unary_-
       case op : AST.UnaryOpNegation        => right.unary_-
       case op : AST.UnaryOpComplementation => throwNotImpl(op)
       case op : AST.UnaryOpPtrDeref        => throwNotImpl(op)
@@ -339,6 +339,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       case op : AST.BinOpPlus         => left + right
       case op : AST.BinOpMinus        => left - right
       case op : AST.BinOpMult         => left * right
+      // NOTE: See ap.terfor.BitShiftMultiplication.{tDiv, tMod}
       case op : AST.BinOpDiv          => throwNotImpl(op)
       case op : AST.BinOpMod          => throwNotImpl(op)
       // FIXME: Comparisons create IFormula:s.. Desired?
@@ -377,11 +378,11 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   // ---- Literals -------------------------------------------
   def translate(literal : AST.Literal) : ITerm = literal match {
     // Do we want to use CCTypes here or what?
-    case l : AST.LiteralTrue   => throwNotImpl(l)
-    case l : AST.LiteralFalse  => throwNotImpl(l)
+    case l : AST.LiteralTrue   => throwNotImpl(l) // IBoolLit(true)
+    case l : AST.LiteralFalse  => throwNotImpl(l) // IBoolLit(false)
     case l : AST.LiteralInt    => translate(l)
     case l : AST.LiteralReal   => throwNotImpl(l)
-    case l : AST.LiteralString => throwNotImpl(l)
+    case l : AST.LiteralString => throwNotImpl(l) // ap.theories.string.StringTheory?
     case l : AST.LiteralChar   => throwNotImpl(l)
   }
 

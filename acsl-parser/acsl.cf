@@ -28,7 +28,7 @@ ADecreasesClause. DecreasesClause ::= "decreases" Term ";" ; -- TODO: ("for" ide
 SimpleClauseAssigns. SimpleClause ::= AssignsClause ;
 SimpleClauseEnsures. SimpleClause ::= EnsuresClause ;
 -- FIXME: AllocationClause and AbruptClause are referenced but not defined in
---        the BNF of manual.
+--        the BNF of 2.6 (but later on). Skipping for now.
 -- SimpleClauseAllocation. SimpleClause ::= AllocationClause ;
 -- SimpleClauseAbrupt.     SimpleClause ::= AbruptClause ;
 separator SimpleClause "" ;
@@ -155,6 +155,7 @@ separator nonempty Binder "," ;
 TypeNameLogic. TypeName ::= LogicTypeName ;
 TypeNameC.     TypeName ::= CTypeSpecifier ; -- FIXME: Should be CTypeName
 
+-- NOTE: Referenced but not used in 2.4
 TypeExprLogic. TypeExpr ::= LogicTypeName ;
 TypeExprC.     TypeExpr ::= CTypeSpecifier ; -- FIXME: Should be CTypeExpr
 
