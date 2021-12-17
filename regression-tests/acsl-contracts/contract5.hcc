@@ -1,0 +1,24 @@
+// Multiple annotated functions.
+
+/*@
+  requires x < 0;
+  ensures \result >= 0;
+*/
+int foo(int x) {
+  return 1;
+}
+
+/*@
+  requires x >= 0;
+  ensures \result == 42;
+*/
+int bar(int x) {
+  return 42;
+}
+
+void main()
+{
+  int a = -2;
+  int b = foo(a);
+  bar(b);
+}

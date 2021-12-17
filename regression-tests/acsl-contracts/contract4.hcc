@@ -1,3 +1,5 @@
+// Postcondition violation.
+
 /*@
   requires x >= 0;
   ensures \result == 42;

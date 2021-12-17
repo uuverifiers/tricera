@@ -8,21 +8,8 @@ SAFE
 contract3.hcc
 UNSAFE
 
-----------
-Init:
-  main2   
-----------
-Final:
-  main2   
-----------
-
 contract4.hcc
 UNSAFE
 
-----------
-Init:
-  main2   
-----------
-Final:
-  main2   
-----------
+contract5.hcc
+SAFE

@@ -5,11 +5,12 @@ LAZABS=../../tri
 TESTS="contract1.hcc \
        contract2.hcc \
        contract3.hcc \
-       contract4.hcc"
+       contract4.hcc \
+       contract5.hcc"
 
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex "$@" $name 2>&1 | grep -v 'at '
+    $LAZABS "$@" $name 2>&1 | grep -v 'at '
 done
 
