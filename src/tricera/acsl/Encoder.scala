@@ -66,26 +66,27 @@ class Encoder(reader : CCReader) {
     newPreClauses ++ newPostClauses ++ others
   }
 
-  // FIXME: Honestly no idea what type this returns.
-  //        Not Option[Seq[ITerm] => IFormula]..
-  //        Where does ParametricEncoder.SomeBackgroundAxioms come from?
-  private def encodeBackgroundAxioms = {
+  private def encodeBackgroundAxioms : ParametricEncoder.BackgroundAxioms = {
+    import ParametricEncoder.{NoBackgroundAxioms, SomeBackgroundAxioms}
     system.backgroundAxioms match {
-      case ParametricEncoder.SomeBackgroundAxioms(preds, clauses) => {
+      case SomeBackgroundAxioms(preds, clauses) => {
         // TODO: Delete *_pre predicates relating to annotated functions from preds?
         val encoded = clauses.map({
           case Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
-            val name = atom.pred.name.stripSuffix(suffix)
-            new Clause(head, List(), funToContract(name).pre)
+            val name    : String   = atom.pred.name.stripSuffix(suffix)
+            val preAtom : IAtom    = funToPreAtom(name)
+            val preCond : IFormula = funToContract(name).pre
+            val paramToArgMap : Map[ITerm, ITerm] = preAtom.args.zip(atom.args).toMap
+            new Clause(head, List(), ArgSubstVisitor(preCond, paramToArgMap))
           }
           case c => c
         })
-        ParametricEncoder.SomeBackgroundAxioms(preds, encoded)
+        SomeBackgroundAxioms(preds, encoded)
       }
-      case ParametricEncoder.NoBackgroundAxioms => 
-        ParametricEncoder.NoBackgroundAxioms
+      case NoBackgroundAxioms => NoBackgroundAxioms
     }
   }
+
 
   object ArgSubstVisitor extends CollectingVisitor[Map[ITerm, ITerm], IExpression] {
     def apply(e : IFormula, paramToArgMap : Map[ITerm, ITerm]) : IFormula = {
