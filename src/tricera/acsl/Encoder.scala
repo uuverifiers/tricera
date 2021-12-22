@@ -20,7 +20,9 @@ class Encoder(reader : CCReader) {
   // FIXME: Static, goes in companion object?
   // FIXME: Check if correct construction of false head.
   val falseHead = new IAtom(FALSE, Seq())
-  val suffix : String = "_pre"
+  // NOTE: Need to match whatever CCReader uses. Ideally we extract it from there.
+  val preSuffix  : String = "_pre"
+  val postSuffix : String = "_post"
 
   // FIXME: Maybe access these via some Context object?
   val system = reader.system
@@ -29,30 +31,54 @@ class Encoder(reader : CCReader) {
   val funToPostAtom : Map[String, IAtom] = reader.funToPostAtom
   val funToContract : Map[String, FunctionContract] = reader.funToContract
   val prePredsToReplace : Set[IExpression.Predicate] = reader.prePredsToReplace
+  val postPredsToReplace : Set[IExpression.Predicate] = reader.postPredsToReplace
 
   def encode : System = {
     val asserts = encodeAssertions
     val backAxi = encodeBackgroundAxioms
-    system.copy(assertions = asserts, backgroundAxioms = backAxi)
+    val transitions = encodeTransitions
+    system.copy(assertions = asserts, backgroundAxioms = backAxi, processes = transitions)
+  }
+
+  private def encodeTransitions : ParametricEncoder.ProcessSet = {
+    system.processes.map({
+      case (p, r) =>
+        val (clauses, syncs) = p.unzip
+        (replacePostPredInBody(clauses).zip(syncs), r)
+    })
+  }
+
+  private def replacePostPredInBody(clauses : Seq[Clause]) : Seq[Clause] = {
+    clauses.map({
+      case Clause(head, body, constr) =>
+        val (toss, keep) = body.partition(a => postPredsToReplace(a.pred))
+        val maybeNewConstr = toss match {
+          case atom :: Nil =>
+            val name : String = atom.pred.name.stripSuffix(postSuffix)
+            val postAtom : IAtom = funToPostAtom(name)
+            val postCond : IFormula = funToContract(name).post
+            val paramToArgMap : Map[ITerm, ITerm] = postAtom.args.zip(atom.args).toMap
+            constr &&& ArgSubstVisitor(postCond, paramToArgMap)
+          case _ => constr
+        }
+        Clause(head, keep, maybeNewConstr)
+    })
   }
 
   private def buildPreClause(old : Clause) : Clause = {
-    assert(old.head.pred.name.endsWith(suffix))
+    assert(old.head.pred.name.endsWith(preSuffix))
     val body : List[IAtom] = old.body
-    val funName : String = old.head.pred.name.stripSuffix(suffix)
+    val funName : String = old.head.pred.name.stripSuffix(preSuffix)
     val oldPre : IFormula = funToContract(funName).pre
     val constraint : IFormula = replaceParams(oldPre, funName, old.head).unary_!
     new Clause(falseHead, old.body, constraint)
   }
 
+  // TODO: Make generic with formula + two atoms, so usable for postconds aswell.
   private def replaceParams(formula : IFormula, funName : String, pred : IAtom) : IFormula = {
     val preAtom  = funToPreAtom(funName)
     val paramToArgMap = preAtom.args.zip(pred.args).toMap
     ArgSubstVisitor(formula, paramToArgMap)
-  }
-
-  private def buildPostClause(name : String) : Clause = {
-    new Clause(falseHead, List(funToPostAtom(name)), funToContract(name).post.unary_!)
   }
 
   private def encodeAssertions : Seq[Clause] = {
@@ -61,7 +87,7 @@ class Encoder(reader : CCReader) {
         prePredsToReplace(c.head.pred)
       })
     val newPreClauses : Seq[Clause] = preClauses.map(buildPreClause)
-    val newPostClauses : Seq[Clause] = funsWithAnnot.map(buildPostClause).toSeq
+    val newPostClauses : Seq[Clause] = buildPostAsserts
     
     newPreClauses ++ newPostClauses ++ others
   }
@@ -71,19 +97,37 @@ class Encoder(reader : CCReader) {
     system.backgroundAxioms match {
       case SomeBackgroundAxioms(preds, clauses) => {
         // TODO: Delete *_pre predicates relating to annotated functions from preds?
-        val encoded = clauses.map({
+        val encoded = clauses.collect({
           case Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
-            val name    : String   = atom.pred.name.stripSuffix(suffix)
+            val name    : String   = atom.pred.name.stripSuffix(preSuffix)
             val preAtom : IAtom    = funToPreAtom(name)
             val preCond : IFormula = funToContract(name).pre
             val paramToArgMap : Map[ITerm, ITerm] = preAtom.args.zip(atom.args).toMap
             new Clause(head, List(), ArgSubstVisitor(preCond, paramToArgMap))
           }
-          case c => c
+          case c@Clause(head, _, _) if !postPredsToReplace(head.pred) => c
         })
         SomeBackgroundAxioms(preds, encoded)
       }
       case NoBackgroundAxioms => NoBackgroundAxioms
+    }
+  }
+
+  private def buildPostAsserts : Seq[Clause] = {
+    import ParametricEncoder.{NoBackgroundAxioms, SomeBackgroundAxioms}
+    system.backgroundAxioms match {
+      case SomeBackgroundAxioms(_, clauses) => {
+        clauses.collect({
+          case Clause(head, body, _) if postPredsToReplace(head.pred) => {
+            val name : String = head.pred.name.stripSuffix(postSuffix)
+            val postAtom : IAtom = funToPostAtom(name)
+            val postCond : IFormula = funToContract(name).post
+            val paramToArgMap : Map[ITerm, ITerm] = postAtom.args.zip(head.args).toMap
+            new Clause(falseHead, body, ArgSubstVisitor(postCond, paramToArgMap).unary_!)
+          }
+        })
+      }
+      case NoBackgroundAxioms => Seq()
     }
   }
 

@@ -730,6 +730,7 @@ class CCReader private (prog : Program,
   val funToContract : MHashMap[String, FunctionContract] = new MHashMap()
   val funsWithAnnot : MHashSet[String] = new MHashSet()
   val prePredsToReplace : MHashSet[Predicate] = new MHashSet()
+  val postPredsToReplace : MHashSet[Predicate] = new MHashSet()
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -1211,6 +1212,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         // NOTE: Put stuff for encoder.
         prePredsToReplace.add(prePred.pred)
+        postPredsToReplace.add(postPred.pred)
         funToPreAtom.put(name, atom(prePred))
         funToPostAtom.put(name, atom(postPred))
         funsWithAnnot.add(name)
