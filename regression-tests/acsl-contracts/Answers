@@ -22,3 +22,6 @@ SAFE
 
 contract8.hcc
 UNSAFE
+
+contract9.hcc
+SAFE
