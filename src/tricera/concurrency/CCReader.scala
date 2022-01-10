@@ -1228,7 +1228,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     //  println(getName(fun.function_def_) + ": " + contract)
     //}
 
-    for (f <- contractFuns) {
+    for (f <- contractFuns if !annotatedFuns.isDefinedAt(f)) {
       val name = getName(f.function_def_)
       localVars.pushFrame
       pushArguments(f.function_def_)
@@ -1255,7 +1255,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     }
 
     // ... and generate clauses for those functions
-    for (f <- contractFuns  ++ annotatedFuns.keys) {
+    for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
       import HornClauses._
 
       val name = getName(FuncDef(f.function_def_).decl) // todo clean up

@@ -67,13 +67,17 @@ class Encoder(reader : CCReader) {
         //       Not sure what its usage is.
         val encoded = clauses.collect({
           case Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
+            // Handles entry clause.
             val name    : String   = atom.pred.name.stripSuffix(preSuffix)
             val preAtom : IAtom    = funToPreAtom(name)
             val preCond : IFormula = funToContract(name).pre
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
             Clause(head, List(), constr)
           }
-          case c@Clause(head, _, _) if !postPredsToReplace(head.pred) => c
+          case c@Clause(head, _, _)
+            // Keep all other clauses besides those which we generate assertions for.
+            if !(postPredsToReplace(head.pred) || prePredsToReplace(head.pred)) =>
+              replacePostPredInBody(c)
         })
         SomeBackgroundAxioms(preds, encoded)
       }
@@ -118,12 +122,19 @@ class Encoder(reader : CCReader) {
     system.backgroundAxioms match {
       case SomeBackgroundAxioms(_, clauses) => {
         clauses.collect({
-          case Clause(head, body, _) if postPredsToReplace(head.pred) => {
+          case Clause(head, body, oldConstr) if prePredsToReplace(head.pred) => {
+            val name     : String   = head.pred.name.stripSuffix(preSuffix)
+            val preAtom  : IAtom    = funToPreAtom(name)
+            val preCond  : IFormula = funToContract(name).pre
+            val constr   : IFormula = applyArgs(preCond, preAtom, head).unary_!
+            Clause(falseHead, body, oldConstr &&& constr)
+          }
+          case Clause(head, body, oldConstr) if postPredsToReplace(head.pred) => {
             val name     : String   = head.pred.name.stripSuffix(postSuffix)
             val postAtom : IAtom    = funToPostAtom(name)
             val postCond : IFormula = funToContract(name).post
             val constr   : IFormula = applyArgs(postCond, postAtom, head).unary_!
-            Clause(falseHead, body, constr)
+            Clause(falseHead, body, oldConstr &&& constr)
           }
         })
       }
@@ -145,7 +156,7 @@ class Encoder(reader : CCReader) {
       e match {
         case t : ITerm => 
           val exp = paramToArgMap.getOrElse(t, t)
-          // NOTE: Seems to fix so that expressions as args works (e.g. foo(2+2)).
+          // NOTE: Check fixes so that expressions as args works (e.g. foo(2+2)).
           if (subres.isEmpty) exp else exp.update(subres)
         case exp =>
           exp.update(subres)
