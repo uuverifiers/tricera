@@ -1141,11 +1141,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     val funsThatMightHaveACSLContracts : Map[Afunc, Seq[AnnotationInfo]] =
       functionAnnotations.filter(_._2.exists(_.isInstanceOf[InvalidAnnotation]))
 
-    // todo: clean up this part to decouple contract generation from contract parsing
-    val annotatedFuns : Map[Afunc, FunctionContract] = // todo: naming is ambiguous
-      for ((fun, annots) <- funsThatMightHaveACSLContracts;
-           annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
-        // todo: define and initialise context
+    // todo: this is again not clean, but should fix the issue
+    class FunctionContext (val prePred  : CCPredicate,
+                           val postPred : CCPredicate,
+                           val acslContext : ACSLTranslator.Context)
+
+    val functionContexts : Map[Afunc, FunctionContext] =
+      (for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) yield {
         val funDef = FuncDef(fun.function_def_)
         val name = getName(fun.function_def_)
         localVars.pushFrame
@@ -1194,13 +1196,21 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val vars : Map[String, CCVar] =
           (postOldArgs ++ postGlobalArgs).map(v => (v.name, v)).toMap
         val context = new Context(vars)
+        (fun, new FunctionContext(prePred, postPred, context))
+      }).toMap
 
+    val annotatedFuns : Map[Afunc, FunctionContract] = // todo: naming is ambiguous
+      for ((fun, annots) <- funsThatMightHaveACSLContracts;
+           annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
+
+        val funContext = functionContexts(fun)
         val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
         // todo: try / catch and print msg?
         val contract =
           try {
             ACSLTranslator.translateContract(
-                "/*@" + possibleACSLAnnotation.annot + "*/", context)
+                "/*@" + possibleACSLAnnotation.annot + "*/",
+                funContext.acslContext)
           }
           catch {
             case e : Exception =>
@@ -1209,10 +1219,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               new FunctionContract(IBoolLit(true), IBoolLit(true))
           }
 
+        val name = getName(fun.function_def_)
         // NOTE: Put stuff for encoder.
-        prePredsToReplace.add(prePred.pred)
-        funToPreAtom.put(name, atom(prePred))
-        funToPostAtom.put(name, atom(postPred))
+        prePredsToReplace.add(funContext.prePred.pred)
+        funToPreAtom.put(name, atom(funContext.prePred))
+        funToPostAtom.put(name, atom(funContext.postPred))
         funsWithAnnot.add(name)
         funToContract.put(name, contract)
 
@@ -1228,32 +1239,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     for (f <- contractFuns) {
       val name = getName(f.function_def_)
-      localVars.pushFrame
-      pushArguments(f.function_def_)
-      val prePred = CCPredicate(
-        MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
-        allFormalVars
-      )
-      val postVar = getType(f.function_def_) match {
-        case _ : CCVoid => Nil
-        case t          => List(new CCVar(name + "_res",
-          Some(FuncDef(f.function_def_).sourceInfo), getType(f.function_def_)))
-      }
-      // all old vars (includes globals) + global vars + return var (if it exists)
-      val postOldArgs = allFormalVars
-      val postGlobalArgs = globalVars.formalVars
-      val postArgs = postOldArgs ++ postGlobalArgs ++ postVar
-      val oldVarInds = postOldArgs.indices.toList
-      val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
-      val postPred = CCPredicate(
-        MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
-        postArgs, resVarInd, oldVarInds)
-      functionContracts.put(name, (prePred, postPred))
-      localVars popFrame
+      val funContext = functionContexts(f)
+      functionContracts.put(name, (funContext.prePred, funContext.postPred))
     }
 
     // ... and generate clauses for those functions
-    for (f <- contractFuns  ++ annotatedFuns.keys) {
+    for (f <- contractFuns ++ annotatedFuns.keys) {
       import HornClauses._
 
       val name = getName(FuncDef(f.function_def_).decl) // todo clean up
