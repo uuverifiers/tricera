@@ -19,3 +19,12 @@ SAFE
 
 contract7.hcc
 SAFE
+
+contract8.hcc
+UNSAFE
+
+contract9.hcc
+SAFE
+
+contract10.hcc
+SAFE

@@ -730,6 +730,7 @@ class CCReader private (prog : Program,
   val funToContract : MHashMap[String, FunctionContract] = new MHashMap()
   val funsWithAnnot : MHashSet[String] = new MHashSet()
   val prePredsToReplace : MHashSet[Predicate] = new MHashSet()
+  val postPredsToReplace : MHashSet[Predicate] = new MHashSet()
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -1222,6 +1223,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val name = getName(fun.function_def_)
         // NOTE: Put stuff for encoder.
         prePredsToReplace.add(funContext.prePred.pred)
+        postPredsToReplace.add(funContext.postPred.pred)
         funToPreAtom.put(name, atom(funContext.prePred))
         funToPostAtom.put(name, atom(funContext.postPred))
         funsWithAnnot.add(name)
@@ -1237,14 +1239,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     //  println(getName(fun.function_def_) + ": " + contract)
     //}
 
-    for (f <- contractFuns) {
+    for (f <- contractFuns if !annotatedFuns.isDefinedAt(f)) {
       val name = getName(f.function_def_)
       val funContext = functionContexts(f)
       functionContracts.put(name, (funContext.prePred, funContext.postPred))
     }
 
     // ... and generate clauses for those functions
-    for (f <- contractFuns ++ annotatedFuns.keys) {
+    for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
       import HornClauses._
 
       val name = getName(FuncDef(f.function_def_).decl) // todo clean up
