@@ -714,6 +714,7 @@ class CCReader private (prog : Program,
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (CCPredicate, CCPredicate)]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
+  private val functionAssertionClauses = new MHashMap[String, Seq[Clause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
   private val structDefs    = new MHashMap[String, CCStruct]
@@ -1296,7 +1297,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           "Contracts cannot be used for functions using communication channels")
 
       functionClauses.put(name,
-                          clauses.map(_._1).toList ++ assertionClauses.toList)
+        functionClauses.getOrElse(name, Nil) ++ clauses.map(_._1).toList)
+      functionAssertionClauses.put(name,
+        functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
 
       clauses.clear
       assertionClauses.clear
@@ -4308,6 +4311,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       for ((_, clauses) <- functionClauses.toSeq.sortBy(_._1);
            c <- clauses)
       yield c
+    val backgroundAssertionClauses =
+      for ((_, clauses) <- functionAssertionClauses.toSeq.sortBy(_._1);
+           c <- clauses)
+        yield c
     val backgroundPreds =
       (for (c <- backgroundClauses;
            p <- c.predicates.toSeq.sortBy(_.name);
@@ -4333,7 +4340,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                              else
                                ParametricEncoder.NoTime,
                              timeInvariants,
-                             assertionClauses.toList,
+                             (assertionClauses ++ backgroundAssertionClauses).toList,
                              VerificationHints(predHints),
                              backgroundAxioms)
   }
