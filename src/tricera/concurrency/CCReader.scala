@@ -989,7 +989,7 @@ class CCReader private (prog : Program,
     defObjCtor)
 
   private val heapVar = new CCVar(heapTermName, None, CCHeap(heap))
-  private val heapTerm = heapVar.term
+  val heapTerm = heapVar.term
   /*if (arraySizes.nonEmpty) {
     warn("Currently all arrays are modelled using the heap.")
     throw NeedsHeapModelException
@@ -1190,14 +1190,38 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             }
           }
 
+          def getHeap : Heap = {
+            heap
+          }
+
+          def getHeapTerm : ITerm = {
+            heapTerm
+          }
+
+          def sortWrapper(s : Sort) : Option[MonoSortedIFunction] = {
+            sortWrapperMap.get(s)
+          }
+
+          def sortGetter(s : Sort) : Option[MonoSortedIFunction] = {
+            sortGetterMap.get(s)
+          }
+
+          def getTypOfPointer(t : CCType) : CCType = t match {
+            case p : CCHeapPointer => p.typ
+            case t => t
+          }
+
+          def getCtor(s : Sort) : Int = {
+            sortCtorIdMap(s)
+          }
+
           override implicit val arithMode: CCReader.ArithmeticMode.Value =
             arithmeticMode
         }
 
-        // FIXME: What vars are needed to include?
-        val vars : Map[String, CCVar] =
+        val varsMap : Map[String, CCVar] =
           (postOldArgs ++ postGlobalArgs).map(v => (v.name, v)).toMap
-        val context = new Context(vars)
+        val context = new Context(varsMap)
         (fun, new FunctionContext(prePred, postPred, context))
       }).toMap
 
@@ -1216,6 +1240,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
           catch {
             case e : Exception =>
+              warn("Got exception while translating ACSL:\n" + e)
               warn("ACSL Translator Exception, using dummy contract for " +
                 "annotation: " + possibleACSLAnnotation.annot)
               new FunctionContract(IBoolLit(true), IBoolLit(true))
@@ -1237,12 +1262,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     //if (annotatedFuns.nonEmpty)
     //  println("Contract annotations\n" + "-"*80)
     //for ((fun, contract) <- annotatedFuns) {
-    //  println(getName(fun.function_def_) + ": " + contract)
+    //  println(getName(fun.function_def_) + ":\n" + contract)
     //}
 
     for (f <- contractFuns if !annotatedFuns.isDefinedAt(f)) {
       val name = getName(f.function_def_)
       val funContext = functionContexts(f)
+
       functionContracts.put(name, (funContext.prePred, funContext.postPred))
     }
 

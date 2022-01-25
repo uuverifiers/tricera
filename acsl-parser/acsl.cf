@@ -84,7 +84,8 @@ PredSyntacticNaming.  Predicate ::= Id ":" Predicate ;
 PredSyntacticNaming2. Predicate ::= String ":" Predicate ;
 -- PredicateOld is extension for contracts.
 -- Maybe want separate `ContractPredicate` for this?
-PredicateOld.         Predicate ::= "\\old" "(" Predicate ")" ;
+PredOld.              Predicate ::= "\\old" "(" Predicate ")" ;
+PredValid.            Predicate ::= "\\valid" "(" [Location] ")" ;
 
 ---- Terms (2.1) -------------------------------------------
 LiteralTrue.   Literal ::= "\\true" ;
