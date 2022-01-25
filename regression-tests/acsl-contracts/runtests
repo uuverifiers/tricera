@@ -2,16 +2,19 @@
 
 LAZABS=../../tri
 
-TESTS="contract1.hcc \
-       contract2.hcc \
-       contract3.hcc \
-       contract4.hcc \
-       contract5.hcc \
-       contract6.hcc \
-       contract7.hcc \
-       contract8.hcc \
-       contract9.hcc \
-       contract10.hcc"
+TESTS="contract1.hcc  \
+       contract2.hcc  \
+       contract3.hcc  \
+       contract4.hcc  \
+       contract5.hcc  \
+       contract6.hcc  \
+       contract7.hcc  \
+       contract8.hcc  \
+       contract9.hcc  \
+       contract10.hcc \
+       contract11.hcc \
+       contract12.hcc \
+       contract13.hcc"
 
 for name in $TESTS; do
     echo

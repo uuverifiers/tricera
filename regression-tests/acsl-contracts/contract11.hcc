@@ -1,0 +1,20 @@
+/*@ 
+  requires \valid(p, q);
+  ensures ((\result == *p) || (\result == *q));
+  ensures \result >= (*p);
+  ensures \result >= (*q);
+*/
+int max(int* p, int* q) {
+  if (*p >= *q) {
+    return *p;
+  } else {
+    return *q;
+  }
+}
+
+void main()
+{
+  int* p = malloc(sizeof(*p));
+  int* q = malloc(sizeof(*q));
+  max(p, q);
+}

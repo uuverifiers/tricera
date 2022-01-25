@@ -28,3 +28,15 @@ SAFE
 
 contract10.hcc
 SAFE
+
+contract11.hcc
+Warning: enabling heap model
+SAFE
+
+contract12.hcc
+Warning: enabling heap model
+SAFE
+
+contract13.hcc
+Warning: enabling heap model
+UNSAFE

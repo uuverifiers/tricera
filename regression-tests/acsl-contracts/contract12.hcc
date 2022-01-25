@@ -1,0 +1,13 @@
+/*@ 
+  requires \valid(p);
+  ensures \result == 42;
+*/
+int get(int* p) {
+  *p = 42;
+  return *p;
+}
+
+void main(void) {
+  int* p = malloc(sizeof(*p));
+  get(p);
+}
