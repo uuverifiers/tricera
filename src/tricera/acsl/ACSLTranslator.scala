@@ -135,7 +135,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case p : AST.PredTernaryCond2     => translate(p)
     case p : AST.PredLocalBinding     => translate(p)
     case p : AST.PredLocalBinding2    => throwNotImpl(p)
-    case p : AST.PredForAll           => throwNotImpl(p)//translate(p)
+    case p : AST.PredForAll           => translate(p)
     case p : AST.PredExists           => throwNotImpl(p)
     case p : AST.PredSyntacticNaming  => translate(p)
     case p : AST.PredSyntacticNaming2 => translate(p)
@@ -233,52 +233,54 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     inner
   }*/
 
-//  def translate(pred : AST.PredForAll) : IFormula = {
-//    val binders : Seq[AST.ABinder] = 
-//      pred.listbinder_.asScala.toList.map(_.asInstanceOf[AST.ABinder])
-//    val terms : Seq[(String, IVariable)] = bindersToConstants(binders)
-//
-//    terms.map(v => locals.put(v._1, v._2))
-//    val inner : IFormula = translate(pred.predicate_)
-//    terms.map(v => locals.remove(v._1))
-//    
-//    // FIXME: Look over order of creation here.
-//    // FIXME: Use IExpression.all?
-//    // FIXME: Seems to generate a new quantified variable - not what we want.
-//    terms.foldLeft(inner)((formula, term) =>
-//        new ISortedQuantified(IExpression.Quantifier.ALL, term._2.sort, formula)
-//    )
-//  }
-//
-//  private def bindersToConstants(binders : Seq[AST.ABinder]) : Seq[(String, IVariable)] = {
-//    binders.flatMap(b => {
-//      val typ : AST.CTypeSpecifier = b.typename_.asInstanceOf[AST.TypeNameC].ctypespecifier_
-//      val ctyp : CCType = toCCType(typ)
-//      val idents : Seq[AST.VariableIdent] = b.listvariableident_.asScala.toList
-//      idents.map(i => i match {
-//        case v : AST.VariableIdentId => (v.id_, new ISortedVariable(0, ctyp.toSort))
-//        case v : AST.VariableIdentPtrDeref    => throwNotImpl(v)
-//        case v : AST.VariableIdentArray       => throwNotImpl(v)
-//        case v : AST.VariableIdentParentheses => throwNotImpl(v)
-//      })
-//    })
-//  }
-//
-//  private def toCCType(typ : AST.CTypeSpecifier) : CCType = typ match {
-//    case t : AST.CTypeSpecifierVoid     => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierChar     => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierShort    => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierInt      => CCReader.CCInt()
-//    case t : AST.CTypeSpecifierLong     => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierFloat    => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierDouble   => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierSigned   => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierUnsigned => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierStruct   => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierUnion    => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierEnum     => throwNotImpl(t)
-//    case t : AST.CTypeSpecifierId       => throwNotImpl(t)
-//  }
+  def translate(pred : AST.PredForAll) : IFormula = {
+    val binders : Seq[AST.ABinder] = 
+      pred.listbinder_.asScala.toList.map(_.asInstanceOf[AST.ABinder])
+    val namedTerms : Seq[(String, CCTerm)] = bindersToConstants(binders)
+
+    namedTerms.map(t => locals.put(t._1, t._2))
+    val inner : IFormula = translate(pred.predicate_)
+    val (names, terms) : (Seq[String], Seq[CCTerm]) = namedTerms.unzip
+    // FIXME: If v is shadowed, this will remove the shadowed term.
+    names.map(locals.remove(_))
+
+    // FIXME: Look over order of creation here.
+    // FIXME: Use IExpression.all?
+    terms.foldLeft(inner)((formula, term) =>
+        new ISortedQuantified(IExpression.Quantifier.ALL, term.typ.toSort, formula)
+    )
+  }
+
+  private def bindersToConstants(binders : Seq[AST.ABinder]) : Seq[(String, CCTerm)] = {
+    binders.flatMap(b => {
+      val typ : AST.CTypeSpecifier = b.typename_.asInstanceOf[AST.TypeNameC].ctypespecifier_
+      val ctyp : CCType = toCCType(typ)
+      val idents : Seq[AST.VariableIdent] = b.listvariableident_.asScala.toList
+      idents.map(i => i match {
+        case v : AST.VariableIdentId =>
+          (v.id_, CCTerm(ISortedVariable(0, ctyp.toSort), ctyp))
+        case v : AST.VariableIdentPtrDeref    => throwNotImpl(v)
+        case v : AST.VariableIdentArray       => throwNotImpl(v)
+        case v : AST.VariableIdentParentheses => throwNotImpl(v)
+      })
+    })
+  }
+
+  private def toCCType(typ : AST.CTypeSpecifier) : CCType = typ match {
+    case t : AST.CTypeSpecifierVoid     => throwNotImpl(t)
+    case t : AST.CTypeSpecifierChar     => throwNotImpl(t)
+    case t : AST.CTypeSpecifierShort    => throwNotImpl(t)
+    case t : AST.CTypeSpecifierInt      => CCReader.CCInt()
+    case t : AST.CTypeSpecifierLong     => throwNotImpl(t)
+    case t : AST.CTypeSpecifierFloat    => throwNotImpl(t)
+    case t : AST.CTypeSpecifierDouble   => throwNotImpl(t)
+    case t : AST.CTypeSpecifierSigned   => throwNotImpl(t)
+    case t : AST.CTypeSpecifierUnsigned => throwNotImpl(t)
+    case t : AST.CTypeSpecifierStruct   => throwNotImpl(t)
+    case t : AST.CTypeSpecifierUnion    => throwNotImpl(t)
+    case t : AST.CTypeSpecifierEnum     => throwNotImpl(t)
+    case t : AST.CTypeSpecifierId       => throwNotImpl(t)
+  }
 
   // `INamedPart` relevant?
   def translate(pred : AST.PredSyntacticNaming) : IFormula = {
