@@ -216,7 +216,7 @@ object CCReader {
             case Nil => sel(t)
             case _ => nested.structs(nested.structName).getFieldTerm (sel(t), tl)
           }
-        case nested : CCStruct => // todo: simplify
+        case nested : CCStruct =>
           tl match {
             case Nil => sel(t)
             case _ => nested.getFieldTerm (sel(t), tl)
@@ -571,7 +571,6 @@ Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
       size - 1
     }
     def size : Int = vars.size
-    // todo : refactor for CCVar
     def lastIndexWhere(name : String) = vars lastIndexWhere(_.name == name)
     //def contains (c : ConstantTerm) = vars contains c
     def contains (c : ConstantTerm) = vars exists (_.term == c)
@@ -1141,7 +1140,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       output(postPred(postArgs) :- exitPred(allFormalVarTerms ++
                                    resVar.map(v => IConstant(v.term))))
 
-      if (!timeInvariants.isEmpty)
+      if (timeInvariants.nonEmpty)
         throw new TranslationException(
           "Contracts cannot be used for functions with time invariants")
       if (clauses exists (_._2 != ParametricEncoder.NoSync))
@@ -1551,7 +1550,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
         }
       }
-    case decl => //warn("ignoring declaration: " + decl) // todo: proper extraction of name & source info
+    case decl => //warn("ignoring declaration: " + decl)
   }
 
   private def useContract(hints : Seq[Abs_hint]) : Boolean =
@@ -1787,14 +1786,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ : BeginPointer => 1 //todo:heap find out actual depth
           case _ => 0
         }
-        /*val realFieldType: CCType = decl.declarator_ match {
-          case _ : BeginPointer
-            if !fieldType.isInstanceOf[CCDeclarationOnlyPointer] =>
-            CCHeapPointer(heap, fieldType) //todo:heap
-          case _ => fieldType // todo: does this work for multiple lvl ptrs?
-        }*/
         FieldInfo(fieldName, fieldType, ptrDepth) // todo: deal with pointer fields
-        //(fieldName, realFieldType)
       }
     }).toList.flatten.toIndexedSeq
 

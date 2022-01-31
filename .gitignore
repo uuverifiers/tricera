@@ -15,3 +15,5 @@ Makefile
 cmake_install.cmake
 preprocessor/build
 tri-pp
+*.swp
+*.swo

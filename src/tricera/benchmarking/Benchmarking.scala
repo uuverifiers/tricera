@@ -10,10 +10,6 @@ object Benchmarking {
     override def toString : String =
       "input could not be parsed"
   }
-  case object ArrayError extends ExecutionResult with ExecutionError  {
-    override def toString : String =
-      "input file contains arrays"
-  }
   case object OutOfMemory extends ExecutionResult with ExecutionError  {
     override def toString : String =
       "ran out of memory"

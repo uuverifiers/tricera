@@ -90,12 +90,8 @@ settings(
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
   libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
-  libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2"
+  libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
+  excludeDependencies ++= Seq(
+    // exclude java-cup from transitive dependencies, ccParser includes newer version
+    ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
 )
-
-// added to discard cup 0.11a dependency from Eldarica (TriCera uses cup 0.11b)
-assemblyMergeStrategy in assembly := {
-  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
-  case x => MergeStrategy.first
-}
-  //
