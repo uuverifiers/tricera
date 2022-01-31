@@ -713,7 +713,8 @@ class CCReader private (prog : Program,
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (CCPredicate, CCPredicate)]
-  private val functionClauses = new MHashMap[String, Seq[Clause]]
+  private val functionClauses =
+    new MHashMap[String, Seq[(Clause, ParametricEncoder.Synchronisation)]]
   private val functionAssertionClauses = new MHashMap[String, Seq[Clause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
@@ -1323,7 +1324,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           "Contracts cannot be used for functions using communication channels")
 
       functionClauses.put(name,
-        functionClauses.getOrElse(name, Nil) ++ clauses.map(_._1).toList)
+        functionClauses.getOrElse(name, Nil) ++ clauses)
       functionAssertionClauses.put(name,
         functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
 
@@ -1366,67 +1367,77 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           // nothing
       }
 
-    // is there a global entry point in the program?
-    (functionDefs get entryFunction) match {
-      case Some(funDef) => {
-        setPrefix(entryFunction)
+    if (functionClauses contains entryFunction) {
+      // do not encode entry function clauses if they are already generated
+      processes +=
+        ((functionClauses(entryFunction), ParametricEncoder.Singleton))
+      assertionClauses ++= functionAssertionClauses(entryFunction)
+      functionClauses remove entryFunction
+      functionAssertionClauses remove entryFunction
+    }
+    else {
+      // is there a global entry point in the program?
+      (functionDefs get entryFunction) match {
+        case Some(funDef) => {
+          setPrefix(entryFunction)
 
-        localVars pushFrame
+          localVars pushFrame
 
-        val returnType = {
-          FuncDef(funDef).declSpecs match {
-            case Some(declSpec) => getType(declSpec)
-            case None => CCVoid()
+          val returnType = {
+            FuncDef(funDef).declSpecs match {
+              case Some(declSpec) => getType(declSpec)
+              case None => CCVoid()
+            }
           }
+
+          val exitVar = getResVar(returnType)
+
+          val exitPred = newPred(exitVar)
+
+          val stm = pushArguments(funDef)
+
+          val translator = FunctionTranslator(exitPred)
+          val finalPred =
+            if (!returnType.isInstanceOf[CCVoid]) {
+              translator.translateWithReturn(stm)
+              exitPred
+            }
+            else
+              translator.translateNoReturn(stm)
+
+          // add an assertion to track memory safety (i.e., no memory leaks)
+          // currently this is only added to the exit point of the entry function,
+          if (modelHeap && trackMemorySafety) {
+            import HornClauses._
+            import IExpression._
+            finalPred match {
+              case CCPredicate(_, args, _, _) if args.head.sort == heap.HeapSort =>
+                // passing sort as CCVoid as it is not important
+                val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid()))
+                val resVar = getResVar(args.last.typ)
+                var excludedAddresses = i(true)
+                for (arg <- args) arg.typ match {
+                  case arr: CCHeapArrayPointer if arr.arrayType == GlobalArray =>
+                    excludedAddresses = excludedAddresses &&&
+                      !heap.within(arg.term, addrVar.term)
+                  case _ => // nothing
+                }
+                assertionClauses += ((heap.read(args.head.term, addrVar.term) === defObj())
+                  :- (atom(finalPred.pred, allFormalVarTerms.toList ++
+                  resVar.map(v => IConstant(v.term))) &&& excludedAddresses))
+              case _ => throw new TranslationException("Tried to add -memtrack" +
+                "assertion but could not find the heap term!")
+            }
+          }
+
+          processes += ((clauses.toList, ParametricEncoder.Singleton))
+          clauses.clear
+
+          localVars popFrame
         }
-
-        val exitVar = getResVar(returnType)
-
-        val exitPred = newPred(exitVar)
-
-        val stm = pushArguments(funDef)
-
-        val translator = FunctionTranslator(exitPred)
-        val finalPred =
-          if (!returnType.isInstanceOf[CCVoid]) {
-            translator.translateWithReturn(stm)
-            exitPred
-          }
-          else
-            translator.translateNoReturn(stm)
-
-        // add an assertion to track memory safety (i.e., no memory leaks)
-        // currently this is only added to the exit point of the entry function,
-        if (modelHeap && trackMemorySafety) {
-          import HornClauses._
-          import IExpression._
-          finalPred match {
-            case CCPredicate(_, args, _, _) if args.head.sort == heap.HeapSort =>
-              // passing sort as CCVoid as it is not important
-              val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid()))
-              val resVar = getResVar(args.last.typ)
-              var excludedAddresses = i(true)
-              for (arg <- args) arg.typ match {
-                case arr : CCHeapArrayPointer if arr.arrayType == GlobalArray =>
-                  excludedAddresses = excludedAddresses &&&
-                  !heap.within(arg.term, addrVar.term)
-                case _ => // nothing
-              }
-              assertionClauses += ((heap.read(args.head.term, addrVar.term) === defObj())
-                :- (atom(finalPred.pred, allFormalVarTerms.toList ++
-                   resVar.map(v => IConstant(v.term))) &&& excludedAddresses))
-            case _ => throw new TranslationException("Tried to add -memtrack" +
-              "assertion but could not find the heap term!")
-          }
-        }
-
-        processes += ((clauses.toList, ParametricEncoder.Singleton))
-        clauses.clear
-
-        localVars popFrame
+        case None =>
+          warn("entry function \"" + entryFunction + "\" not found")
       }
-      case None =>
-        warn("entry function \"" + entryFunction + "\" not found")
     }
 
     // remove assertions that are no longer connected to predicates
@@ -4336,7 +4347,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     val backgroundClauses =
       for ((_, clauses) <- functionClauses.toSeq.sortBy(_._1);
            c <- clauses)
-      yield c
+      yield c._1
     val backgroundAssertionClauses =
       for ((_, clauses) <- functionAssertionClauses.toSeq.sortBy(_._1);
            c <- clauses)
@@ -4366,7 +4377,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                              else
                                ParametricEncoder.NoTime,
                              timeInvariants,
-                             (assertionClauses ++ backgroundAssertionClauses).toList,
+                             (assertionClauses).toList,
                              VerificationHints(predHints),
                              backgroundAxioms)
   }
