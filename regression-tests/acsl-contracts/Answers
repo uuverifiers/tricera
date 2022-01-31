@@ -43,3 +43,24 @@ UNSAFE
 
 contract14.hcc
 SAFE
+
+contract15.hcc
+SAFE
+
+contract16.hcc
+Warning: enabling heap model
+SAFE
+
+contract17.hcc
+UNSAFE
+
+contract18.hcc
+UNSAFE
+
+contract19.hcc
+Warning: enabling heap model
+SAFE
+
+contract20.hcc
+Warning: enabling heap model
+UNSAFE

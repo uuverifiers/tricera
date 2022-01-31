@@ -1,0 +1,15 @@
+// UNSAFE because g's value might have changed.
+
+int g = 1;
+
+/*@ 
+  ensures \result == 13;
+*/
+int get() {
+  return 13;
+}
+
+void main(void) {
+  get();
+  assert(g == 1);
+}

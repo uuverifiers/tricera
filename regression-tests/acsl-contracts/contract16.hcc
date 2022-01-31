@@ -1,0 +1,25 @@
+// SAFE as values are reset.
+
+int g = 1;
+
+/*@ 
+  requires \valid(p);
+  assigns \nothing;
+  ensures \result == *p;
+*/
+int get(int* p) {
+  int g_before = g;
+  int p_before = *p;
+  g = 42;
+  *p = 42;
+  g = g_before;
+  *p = p_before;
+  return *p;
+}
+
+void main(void) {
+  int* p = malloc(sizeof(*p));
+  int res = get(p);
+  assert(g == 1);
+  assert(*p == res);
+}
