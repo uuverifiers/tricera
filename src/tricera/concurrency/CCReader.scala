@@ -4345,13 +4345,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
        yield (p -> maybePreds.get.toList)).toMap
 
     val backgroundClauses =
-      for ((_, clauses) <- functionClauses.toSeq.sortBy(_._1);
-           c <- clauses)
-      yield c._1
-    val backgroundAssertionClauses =
-      for ((_, clauses) <- functionAssertionClauses.toSeq.sortBy(_._1);
-           c <- clauses)
-        yield c
+      (for ((_, clauses) <- functionClauses.toSeq.sortBy(_._1);
+            c <- clauses) yield c._1) ++
+      (for ((_, clauses) <- functionAssertionClauses.toSeq.sortBy(_._1);
+            c <- clauses) yield c)
     val backgroundPreds =
       (for (c <- backgroundClauses;
            p <- c.predicates.toSeq.sortBy(_.name);
