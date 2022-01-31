@@ -252,12 +252,8 @@ class Main (args: Array[String]) {
     import tricera.acsl.Encoder
     val enc : Encoder = new Encoder(reader)
     val system = enc.encode
-    //val system = reader.system
 
     val systemPostProcessors = Seq()
-
-    // todo: generate new system here by substituting pre-/post-conditions
-
 
     modelledHeap = modelledHeapRes
 

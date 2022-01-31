@@ -102,7 +102,8 @@ class Encoder(reader : CCReader) {
           val name : String = atom.pred.name.stripSuffix(postSuffix)
           val postAtom : IAtom = funToPostAtom(name)
           val postCond : IFormula = funToContract(name).post
-          constr &&& applyArgs(postCond, postAtom, atom)
+          val assigns  : IFormula = funToContract(name).assigns
+          constr &&& applyArgs(postCond &&& assigns, postAtom, atom)
         case _ => constr
       }
       Clause(head, keep, maybeNewConstr)
@@ -133,8 +134,9 @@ class Encoder(reader : CCReader) {
             val name     : String   = head.pred.name.stripSuffix(postSuffix)
             val postAtom : IAtom    = funToPostAtom(name)
             val postCond : IFormula = funToContract(name).post
-            val constr   : IFormula = applyArgs(postCond, postAtom, head).unary_!
-            Clause(falseHead, body, oldConstr &&& constr)
+            val constr   : IFormula = applyArgs(postCond, postAtom, head)
+            val assigns  : IFormula = funToContract(name).assigns
+            Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
           }
         })
       }

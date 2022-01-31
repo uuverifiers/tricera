@@ -713,6 +713,7 @@ class CCReader private (prog : Program,
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContracts = new MHashMap[String, (CCPredicate, CCPredicate)]
+  private val functionOldVars = new MHashMap[String, Seq[CCVar]]
   private val functionClauses = new MHashMap[String, Seq[Clause]]
   private val functionAssertionClauses = new MHashMap[String, Seq[Clause]]
   private val uniqueStructs = new MHashMap[Unique, String]
@@ -1164,25 +1165,48 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case t          => List(new CCVar(name + "_res",
             Some(funDef.sourceInfo), getType(fun.function_def_))) // todo: clean this (and similar code) up a bit
         }
+
+        // Generate old vars
+        // NOTE: Heap is included in globalVars.vars.
+        val oldGlobalVars =
+          for (v <- globalVars.vars)
+          yield new CCVar(v.name + "_old", v.srcInfo, v.typ)
+        val oldArgsVars =
+          for (v <- localVars.vars)
+          yield new CCVar(v.name + "_old", v.srcInfo, v.typ)
+        val oldVars = oldGlobalVars ++ oldArgsVars
+        functionOldVars.put(name, oldVars)
+
         // all old vars (includes globals) + global vars + return var (if it exists)
+        // FIXME: Naming is misleading (not *_old vars).
         val postOldArgs = allFormalVars
-        val postGlobalArgs = globalVars.formalVars
+        val postGlobalArgs = oldGlobalVars
         val postArgs = postOldArgs ++ postGlobalArgs ++ postVar
         val oldVarInds = postOldArgs.indices.toList
         val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
+
         val postPred = CCPredicate(
           MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
           postArgs, resVarInd, oldVarInds)
+
         functionContracts.put(name, (prePred, postPred))
         localVars.popFrame
 
+
         import scala.collection.Map
-        class Context(vars : Map[String, CCVar])
+        class Context(vars : Map[String, CCVar], oldVars : Map[String, CCVar])
           extends ACSLTranslator.Context {
-          def lookupVar(ident : String) : Option[CCReader.CCVar] = {
+          def getVar(ident : String) : Option[CCReader.CCVar] = {
             vars.get(ident)
           }
 
+          def getOldVar(ident : String) : Option[CCReader.CCVar] = {
+            oldVars.get(ident)
+          }
+
+          def getGlobals : Seq[CCReader.CCVar] = {
+            globalVars.vars
+          }
           def getResultVar : Option[CCReader.CCVar] = {
             postVar match {
               case (v : CCVar) :: _ => Some(v)
@@ -1191,6 +1215,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
 
           def getHeap : Heap = {
+            // FIXME: This doesn't work..
+            // if (modelHeap) heap else throw NeedsHeapModelException
             heap
           }
 
@@ -1221,7 +1247,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
         val varsMap : Map[String, CCVar] =
           (postOldArgs ++ postGlobalArgs).map(v => (v.name, v)).toMap
-        val context = new Context(varsMap)
+        // Old heap gets included. Unsure if desired.
+        val oldVarsMap : Map[String, CCVar] =
+          oldVars.map(v => (v.name.stripSuffix("_old"), v)).toMap
+        val context = new Context(varsMap, oldVarsMap)
         (fun, new FunctionContext(prePred, postPred, context))
       }).toMap
 
@@ -1243,7 +1272,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               warn("Got exception while translating ACSL:\n" + e)
               warn("ACSL Translator Exception, using dummy contract for " +
                 "annotation: " + possibleACSLAnnotation.annot)
-              new FunctionContract(IBoolLit(true), IBoolLit(true))
+              new FunctionContract(IBoolLit(true), IBoolLit(true), IBoolLit(true))
           }
 
         val name = getName(fun.function_def_)
@@ -1268,7 +1297,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     for (f <- contractFuns if !annotatedFuns.isDefinedAt(f)) {
       val name = getName(f.function_def_)
       val funContext = functionContexts(f)
-
       functionContracts.put(name, (funContext.prePred, funContext.postPred))
     }
 
@@ -1279,6 +1307,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val name = getName(FuncDef(f.function_def_).decl) // todo clean up
       val typ = getType(f.function_def_)
       val (prePred, postPred) = functionContracts(name)
+      val oldVars = functionOldVars(name)
       setPrefix(name)
 
       localVars.pushFrame
@@ -1286,10 +1315,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       val prePredArgs = allFormalVarTerms.toList
 
-      // save the initial values of global and local variables
-      for (v <- globalVars.vars ++ localVars.vars) {
-        val initialVar = new CCVar(v.name + "_old", v.srcInfo, v.typ)
-        localVars addVar initialVar
+      for (v <- oldVars) {
+        localVars addVar v
       }
 
       val entryPred = newPred

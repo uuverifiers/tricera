@@ -20,9 +20,9 @@ class ACSLTranslateException(msg : String) extends Exception(msg)
 object ACSLTranslator {
 
   trait Context {
-    // Lookup if a variable referenced in annotation exists (in scope).
-    // For function contract scope is _atleast_ global vars + formal args.
-    def lookupVar(ident : String) : Option[CCVar]
+    def getVar(ident : String) : Option[CCVar]
+    def getOldVar(ident : String) : Option[CCVar]
+    def getGlobals : Seq[CCVar]
     def getResultVar : Option[CCVar]
     def getHeap : Heap
     def getHeapTerm : ITerm
@@ -32,10 +32,6 @@ object ACSLTranslator {
     def getTypOfPointer(t : CCType) : CCType
 
     implicit val arithMode : CCReader.ArithmeticMode.Value
-
-    // Eventually we will need lookup for globally defined ACSL logic
-    // functions/predicate reference (if/when that gets supported) like:
-    // def lookupGlobalPredicate(ident : String) : Option[acsl.GlobalPredicate]
   }
 
   def translateContract(annot : String, ctx : Context) : FunctionContract = {
@@ -85,22 +81,51 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   // ---- Contracts ------------------------------------------
   def translate(contract : AST.FunctionContract) : FunctionContract = contract match {
     case c : AST.Contract =>
-      val requiresClauses = c.listrequiresclause_.asScala.toList
-      val simpleClauses = c.listsimpleclause_.asScala.toList
-      val (ensuresClauses, assignsClauses) = simpleClauses.partition(sc => {
-        sc.isInstanceOf[AST.SimpleClauseEnsures]
-      })
-      
-      // NOTE: `pre` and `post` defaults to true given usage of `and`.
-      val pre = IExpression.and(requiresClauses.map(translate))
-      // TODO: val assigns = ???
-      inPostCond = true
-      val post = IExpression.and(ensuresClauses.map(translate))
-      inPostCond = false
+      val rcs = c.listrequiresclause_.asScala.toList
+      val scs = c.listsimpleclause_.asScala.toList
 
-      new FunctionContract(pre,/* assigns, */post)
+      val nils : (List[AST.SimpleClauseEnsures], List[AST.SimpleClauseAssigns]) = (Nil, Nil)
+      val (ecs : List[AST.SimpleClauseEnsures], acs : List[AST.SimpleClauseAssigns]) =
+        scs.foldRight(nils) {
+          case (ec : AST.SimpleClauseEnsures, (ecs, acs)) => (ec :: ecs, acs)
+          case (ac : AST.SimpleClauseAssigns, (ecs, acs)) => (ecs, ac :: acs)
+          case _ => throw new ACSLParseException("Unsupported simple clause.")
+        }
+ 
+      // NOTE: `pre` and `post` defaults to true given usage of `and`.
+      val pre  : IFormula = IExpression.and(rcs.map(translate))
+      val post : IFormula = IExpression.and(ecs.map(translate))
+
+      val assigns : IFormula = acs match {
+        case Nil => IBoolLit(true)
+        case acs =>
+          val validSet : Set[ITerm] = acs.foldLeft(Set[ITerm]())((set, clause) =>
+            set.union(translateAssigns(clause.assignsclause_.asInstanceOf[AST.AnAssignsClause]))
+          )
+          validSet match {
+            case s if s.isEmpty =>
+              ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
+                (formula, globVar) => {
+                  val glob    : ITerm = globVar.term
+                  val globOld : ITerm = ctx.getOldVar(globVar.name).get.term
+                  formula &&& glob === globOld
+                }
+              )
+            case _ => throw new ACSLParseException("assigns not fully supported.")
+          }
+      }
+
+      new FunctionContract(pre, post, assigns)
 
     case _ => throwNotImpl(contract)
+  }
+
+  // TODO: Only handles `assigns \nothing`. Return type may want to be changed.
+  def translateAssigns(clause : AST.AnAssignsClause) : Set[ITerm] = {
+    clause.locations_ match {
+      case ls : AST.LocationsSome    => throwNotImpl(ls)
+      case _  : AST.LocationsNothing => Set()
+    }
   }
 
   def translate(clause : AST.SimpleClause) : IFormula = clause match {
@@ -110,7 +135,10 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
   
   def translate(clause : AST.EnsuresClause) : IFormula = {
-    translate(clause.asInstanceOf[AST.AnEnsuresClause].predicate_)
+    inPostCond = true
+    val res = translate(clause.asInstanceOf[AST.AnEnsuresClause].predicate_)
+    inPostCond = false
+    res
   }
 
   def translate(clause : AST.RequiresClause) : IFormula = clause match {
@@ -349,7 +377,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     // TODO: Lookup if var exists as as local binding.
     // FIXME: Order of lookups (priority)?
     val bound  : Option[CCTerm] = locals.get(ident)
-    val scoped : Option[CCTerm] = ctx.lookupVar(ident).map(v => CCTerm(v.term, v.typ))
+    val scoped : Option[CCTerm] = ctx.getVar(ident).map(v => CCTerm(v.term, v.typ))
     bound.getOrElse(
       scoped.getOrElse(
         throw new ACSLParseException(s"Identifier $ident not found in scope.")
@@ -389,14 +417,19 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     //assert(left.typ == right.typ) 
     val typ : CCType = left.typ
     term.binop_ match {
-      case op : AST.BinOpPlus         => 
+      case op : AST.BinOpPlus =>
         CCTerm(left.toTerm + right.toTerm, typ)
-      case op : AST.BinOpMinus        => 
+      case op : AST.BinOpMinus =>
         CCTerm(left.toTerm - right.toTerm, typ)
-      case op : AST.BinOpMult         => throwNotImpl(op) // left * right requires constant.
-      // NOTE: See ap.terfor.BitShiftMultiplication.{tDiv, tMod}
-      case op : AST.BinOpDiv          => throwNotImpl(op)
-      case op : AST.BinOpMod          => throwNotImpl(op)
+      case op : AST.BinOpMult =>
+        import ap.theories.nia.GroebnerMultiplication.mult
+        CCTerm(mult(left.toTerm, right.toTerm), typ)
+      case op : AST.BinOpDiv =>
+        import ap.theories.nia.GroebnerMultiplication.tDiv
+        CCTerm(tDiv(left.toTerm, right.toTerm), typ)
+      case op : AST.BinOpMod =>
+        import ap.theories.nia.GroebnerMultiplication.tMod
+        CCTerm(tMod(left.toTerm, right.toTerm), typ)
       // FIXME: Comparisons create IFormula:s.. Desired?
       case op : AST.BinOpEQ           => throwNotImpl(op) // left === right
       case op : AST.BinOpNEQ          => throwNotImpl(op) // left =/= right
