@@ -53,10 +53,9 @@ class Encoder(reader : CCReader) {
       system.assertions.partition(c => {
         prePredsToReplace(c.head.pred)
       })
+
     val newPreClauses : Seq[Clause] = preClauses.map(buildPreClause)
-    val newPostClauses : Seq[Clause] = buildPostAsserts
-    
-    newPreClauses ++ newPostClauses ++ others
+    newPreClauses ++ others
   }
 
   private def encodeBackgroundAxioms : ParametricEncoder.BackgroundAxioms = {
@@ -65,19 +64,32 @@ class Encoder(reader : CCReader) {
       case SomeBackgroundAxioms(preds, clauses) => {
         // TODO: Delete *_pre/*_post predicates relating to annotated functions from preds?
         //       Not sure what its usage is.
-        val encoded = clauses.collect({
+        val encoded = clauses.map({
           case Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
-            // Handles entry clause.
+            // Handles entry clause, e.g: 
+            // f0(..) :- f_pre(..) ==> f0(..) :- <pre>
             val name    : String   = atom.pred.name.stripSuffix(preSuffix)
             val preAtom : IAtom    = funToPreAtom(name)
             val preCond : IFormula = funToContract(name).pre
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
             Clause(head, List(), constr)
           }
-          case c@Clause(head, _, _)
-            // Keep all other clauses besides those which we generate assertions for.
-            if !(postPredsToReplace(head.pred) || prePredsToReplace(head.pred)) =>
-              replacePostPredInBody(c)
+          case c@Clause(head, body, oldConstr) if prePredsToReplace(head.pred) => {
+            // Handles recursive calls, e.g:
+            // f_pre(..) :- fN(..) ==> false :- fN(..), !<pre>
+            buildPreClause(c)
+          }
+          case Clause(head, body, oldConstr) if postPredsToReplace(head.pred) => {
+            // Handles final clause, e.g:
+            // f_post(..) :- f1(..) ==> false :- f1(..), !<post>
+            val name     : String   = head.pred.name.stripSuffix(postSuffix)
+            val postAtom : IAtom    = funToPostAtom(name)
+            val postCond : IFormula = funToContract(name).post
+            val constr   : IFormula = applyArgs(postCond, postAtom, head)
+            val assigns  : IFormula = funToContract(name).assigns
+            Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
+          }
+          case c => replacePostPredInBody(c)
         })
         SomeBackgroundAxioms(preds, encoded)
       }
@@ -116,32 +128,6 @@ class Encoder(reader : CCReader) {
     val preAtom : IAtom    = funToPreAtom(name)
     val constr  : IFormula = applyArgs(preCond, preAtom, old.head).unary_!
     new Clause(falseHead, old.body, constr)
-  }
-
-  private def buildPostAsserts : Seq[Clause] = {
-    import ParametricEncoder.{NoBackgroundAxioms, SomeBackgroundAxioms}
-    system.backgroundAxioms match {
-      case SomeBackgroundAxioms(_, clauses) => {
-        clauses.collect({
-          case Clause(head, body, oldConstr) if prePredsToReplace(head.pred) => {
-            val name     : String   = head.pred.name.stripSuffix(preSuffix)
-            val preAtom  : IAtom    = funToPreAtom(name)
-            val preCond  : IFormula = funToContract(name).pre
-            val constr   : IFormula = applyArgs(preCond, preAtom, head).unary_!
-            Clause(falseHead, body, oldConstr &&& constr)
-          }
-          case Clause(head, body, oldConstr) if postPredsToReplace(head.pred) => {
-            val name     : String   = head.pred.name.stripSuffix(postSuffix)
-            val postAtom : IAtom    = funToPostAtom(name)
-            val postCond : IFormula = funToContract(name).post
-            val constr   : IFormula = applyArgs(postCond, postAtom, head)
-            val assigns  : IFormula = funToContract(name).assigns
-            Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
-          }
-        })
-      }
-      case NoBackgroundAxioms => Seq()
-    }
   }
 
   private def applyArgs(formula : IFormula, predParams : IAtom, predArgs : IAtom) : IFormula = {
