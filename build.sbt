@@ -39,9 +39,6 @@ lazy val acslParser = (project in file("acsl-parser")).
     packageBin in Compile := baseDirectory.value / "acsl-parser.jar"
   ).disablePlugins(AssemblyPlugin)
 
-// horn-concurrency dependency
-//lazy val hornConcurrency = RootProject(uri("git://github.com/zafer-esen/horn-concurrency-test.git"))
-
 lazy val pp = taskKey[Unit]("")
 pp := {
   val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.0/tri-pp")
@@ -81,7 +78,6 @@ lazy val root = (project in file(".")).
   dependsOn(ccParser).
   aggregate(acslParser).
   dependsOn(acslParser).
-  // dependsOn(hornConcurrency).
   settings(commonSettings: _*).
 
 //
@@ -100,12 +96,7 @@ settings(
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
   libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
-  libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2"
+  libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
+  excludeDependencies ++= Seq(
+    ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
 )
-
-// added to discard cup 0.11a dependency from Eldarica (TriCera uses cup 0.11b)
-assemblyMergeStrategy in assembly := {
-  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
-  case x => MergeStrategy.first
-}
-  //

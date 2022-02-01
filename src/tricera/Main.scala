@@ -374,9 +374,15 @@ class Main (args: Array[String]) {
       case Right(cex) => {
         println("UNSAFE")
         if (plainCEX) {
-          println
-          //reader.printPredsWithArgNames
-          hornconcurrency.VerificationLoop.prettyPrint(cex)
+          if (cex == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
+            println("(An assertion has failed in the background clauses, " +
+              "counterexample is not available.)")
+          }
+          else {
+            println
+            //reader.printPredsWithArgNames
+            hornconcurrency.VerificationLoop.prettyPrint(cex)
+          }
         }
         Unsafe
       }
