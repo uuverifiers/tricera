@@ -1,0 +1,134 @@
+
+inc_safe.c
+SAFE
+
+inc_unsafe.c
+UNSAFE
+
+---------------
+Init:
+  foo0(0, 0)   
+---------------
+       |       
+       |       
+       V       
+ foo1(0, 0, 0) 
+---------------
+Final:
+ foo1(0, 0, 0) 
+---------------
+
+mc91_safe.c
+SAFE
+
+mc91_unsafe.c
+UNSAFE
+
+-------------------
+Init:
+   foo0(90, 90)    
+-------------------
+         |         
+         |         
+         V         
+   foo4(90, 90)    
+-------------------
+         |         
+         |         
+         V         
+ foo5(90, 90, 102) 
+-------------------
+         |         
+         |         
+         V         
+ foo1(90, 90, 92)  
+-------------------
+Final:
+ foo1(90, 90, 92)  
+-------------------
+
+incdec_safe.c
+SAFE
+
+incdec_unsafe.c
+UNSAFE
+
+----------------
+Init:
+   foo0(0, 0)   
+----------------
+       |        
+       |        
+       V        
+ foo3(0, 0, -1) 
+----------------
+       |        
+       |        
+       V        
+ foo1(0, 0, 1)  
+----------------
+Final:
+ foo1(0, 0, 1)  
+----------------
+
+getptr_safe.c
+Warning: enabling heap model
+SAFE
+
+getptr_unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+----------------------------------------------------
+Init:
+ foo0(emptyHeap, nthAddr(1), emptyHeap, nthAddr(1)) 
+----------------------------------------------------
+Final:
+ foo0(emptyHeap, nthAddr(1), emptyHeap, nthAddr(1)) 
+----------------------------------------------------
+
+assigns_safe.c
+SAFE
+
+assigns_unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+--------------------------------------------------------------------------------------------------------------
+Init:
+   foo0(newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1))   
+--------------------------------------------------------------------------------------------------------------
+                                                      |                                                       
+                                                      |                                                       
+                                                      V                                                       
+ foo1(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), 42) 
+--------------------------------------------------------------------------------------------------------------
+Final:
+ foo1(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), 42) 
+--------------------------------------------------------------------------------------------------------------
+
+maxptr_safe.c
+Warning: enabling heap model
+SAFE
+
+maxptr_unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+  foo0(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2))   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                           |                                                                                           
+                                                                                           |                                                                                           
+                                                                                           V                                                                                           
+  foo3(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2))   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                           |                                                                                           
+                                                                                           |                                                                                           
+                                                                                           V                                                                                           
+ foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), 5) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), 5) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

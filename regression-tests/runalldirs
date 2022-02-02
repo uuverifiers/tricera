@@ -12,4 +12,5 @@ set -e
 ./rundir horn-hcc-enum "" -assert -t:60
 ./rundir horn-contracts "" -assert -t:60
 ./rundir acsl-contracts "" -assert -t:60
+./rundir acsl-standalone "" -noPP -m:foo -assert -cex -t:60
 #./rundir ParametricEncoder ""
