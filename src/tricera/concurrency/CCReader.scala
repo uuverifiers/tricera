@@ -728,6 +728,7 @@ class CCReader private (prog : Program,
   def getFunctionContracts = functionContracts.toMap
 
   // NOTE: Used by ACSL encoder.
+  var hasACSLEntryFunction : Boolean = false
   val funToPreAtom  : MHashMap[String, IAtom] = new MHashMap()
   val funToPostAtom : MHashMap[String, IAtom] = new MHashMap()
   val funToContract : MHashMap[String, FunctionContract] = new MHashMap()
@@ -1395,6 +1396,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       }
 
     if (functionClauses contains entryFunction) {
+      hasACSLEntryFunction = true
       // do not encode entry function clauses if they are already generated
       processes +=
         ((functionClauses(entryFunction), ParametricEncoder.Singleton))
