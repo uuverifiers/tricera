@@ -1219,11 +1219,24 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           def getHeap : Heap = {
             // FIXME: This doesn't work..
             // if (modelHeap) heap else throw NeedsHeapModelException
-            heap
+            if (modelHeap)
+              heap
+            else
+              throw NeedsHeapModelException
           }
 
           def getHeapTerm : ITerm = {
-            heapTerm
+            if (modelHeap)
+              heapTerm
+            else
+              throw NeedsHeapModelException
+          }
+
+          def getOldHeapTerm : ITerm = {
+            if (modelHeap)
+              getOldVar(heapTermName).get.term
+            else
+              throw NeedsHeapModelException
           }
 
           def sortWrapper(s : Sort) : Option[MonoSortedIFunction] = {
@@ -1270,6 +1283,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 funContext.acslContext)
           }
           catch {
+            case NeedsHeapModelException =>
+              throw NeedsHeapModelException
             case e : Exception =>
               warn("Got exception while translating ACSL:\n" + e)
               warn("ACSL Translator Exception, using dummy contract for " +

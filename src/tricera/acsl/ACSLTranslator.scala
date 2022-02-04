@@ -26,6 +26,7 @@ object ACSLTranslator {
     def getResultVar : Option[CCVar]
     def getHeap : Heap
     def getHeapTerm : ITerm
+    def getOldHeapTerm : ITerm
     def sortWrapper(s : Sort) : Option[IFunction]
     def sortGetter(s : Sort) : Option[IFunction]
     def getCtor(s : Sort) : Int
@@ -47,6 +48,7 @@ object ACSLTranslator {
       }
     } catch {
       // FIXME: Exceptions not thrown by lexer/parser should just be re-thrown?
+      case CCReader.NeedsHeapModelException => throw CCReader.NeedsHeapModelException
       case e : Exception =>
         throw new ACSLParseException(
           "At line " + String.valueOf(l.line_num()) +
@@ -99,7 +101,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       val assigns : IFormula = acs match {
         case Nil => IBoolLit(true)
         case acs =>
-          val validSet : Set[ITerm] = acs.foldLeft(Set[ITerm]())((set, clause) =>
+          val validSet : Set[CCTerm] = acs.foldLeft(Set[CCTerm]())((set, clause) =>
             set.union(translateAssigns(clause.assignsclause_.asInstanceOf[AST.AnAssignsClause]))
           )
           validSet match {
@@ -111,7 +113,46 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                   formula &&& glob === globOld
                 }
               )
-            case _ => throw new ACSLParseException("assigns not fully supported.")
+            case s => 
+              import scala.collection.mutable.{HashSet}
+              import tricera.concurrency.CCReader.{CCHeapPointer}
+              val globals : Seq[ITerm] = ctx.getGlobals.map(_.term)
+              val oldGlobals : Seq[ITerm] = 
+                ctx.getGlobals.map(g => ctx.getOldVar(g.name).get.term)
+              val globToOld /*: Map[ITerm, ITerm]*/ =
+                globals.zip(oldGlobals).toMap
+
+              val (ptrs, other) /*: (HashSet[CCTerm], HashSet[CCTerm])*/ = 
+                s.partition(t => t.typ.isInstanceOf[CCReader.CCHeapPointer])
+
+              val nonAssignedGlobals /*: Set[ITerm]*/ = 
+                globals.toSet.diff(other.map(_.toTerm)).diff(Set(ctx.getHeapTerm))
+
+              val globConstr : IFormula =
+                nonAssignedGlobals.foldLeft(IBoolLit(true) : IFormula) (
+                  (formula, term) => formula &&& term === globToOld(term)
+                )
+
+              val (newHeapTerm, sorts) : (ITerm, Seq[Sort]) = 
+                ptrs.foldLeft((ctx.getOldHeapTerm, List[Sort]())) (
+                  (carry, term) => {
+                    val heap  : ITerm = carry._1
+                    val sorts : List[Sort] = carry._2
+
+                    val sort : Sort = term.typ.asInstanceOf[CCHeapPointer].typ.toSort
+                    val obj : IFunction = ctx.sortWrapper(sort).get
+                    val exVar : ISortedVariable = ISortedVariable(0, sort)
+                    import ap.parser.IExpression.toFunApplier
+                    val funApp : IFunApp = obj(exVar)
+                    val write : ITerm = 
+                      ctx.getHeap.write(IExpression.shiftVars(heap, 1), term.toTerm, funApp)
+                    (write, sort :: sorts)
+                  }
+                )
+              val heapConstr : IFormula = 
+                IExpression.ex(sorts, ctx.getHeapTerm === newHeapTerm)
+
+              heapConstr &&& globConstr
           }
       }
 
@@ -121,13 +162,21 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   }
 
   // TODO: Only handles `assigns \nothing`. Return type may want to be changed.
-  def translateAssigns(clause : AST.AnAssignsClause) : Set[ITerm] = {
+  def translateAssigns(clause : AST.AnAssignsClause) : Set[CCTerm] = {
     clause.locations_ match {
-      case ls : AST.LocationsSome    => throwNotImpl(ls)
+      case ls : AST.LocationsSome    =>
+        val tSets : List[AST.TSet] = 
+          ls.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
+        val terms : Set[CCTerm] = tSets.map({
+          case t : AST.TSetTerm  => translate(t.term_)
+          case t => throwNotImpl(t)
+        }).toSet
+        terms
       case _  : AST.LocationsNothing => Set()
     }
   }
 
+  // FIXME: Type is specified already.
   def translate(clause : AST.SimpleClause) : IFormula = clause match {
     case ac : AST.SimpleClauseAssigns => throwNotImpl(ac)
     case ec : AST.SimpleClauseEnsures => translate(ec.ensuresclause_)
