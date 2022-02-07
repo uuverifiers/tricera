@@ -335,7 +335,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       val idents : Seq[AST.VariableIdent] = b.listvariableident_.asScala.toList
       idents.map(i => i match {
         case v : AST.VariableIdentId =>
-          (v.id_, CCTerm(ISortedVariable(0, ctyp.toSort), ctyp))
+          (v.id_, CCTerm(ISortedVariable(0, ctyp.toSort), ctyp, None)) // todo: line no?
         case v : AST.VariableIdentPtrDeref    => throwNotImpl(v)
         case v : AST.VariableIdentArray       => throwNotImpl(v)
         case v : AST.VariableIdentParentheses => throwNotImpl(v)
@@ -426,7 +426,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     // TODO: Lookup if var exists as as local binding.
     // FIXME: Order of lookups (priority)?
     val bound  : Option[CCTerm] = locals.get(ident)
-    val scoped : Option[CCTerm] = ctx.getVar(ident).map(v => CCTerm(v.term, v.typ))
+    val scoped : Option[CCTerm] = ctx.getVar(ident).map(v => CCTerm(v.term, v.typ, v.srcInfo))
     bound.getOrElse(
       scoped.getOrElse(
         throw new ACSLParseException(s"Identifier $ident not found in scope.")
@@ -440,7 +440,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       case op : AST.UnaryOpPlus            => throwNotImpl(op)
       case op : AST.UnaryOpMinus           => throwNotImpl(op) // right.unary_-
       case op : AST.UnaryOpNegation => 
-        CCTerm(right.toTerm.unary_-, right.typ)
+        CCTerm(right.toTerm.unary_-, right.typ, right.srcInfo)
       case op : AST.UnaryOpComplementation => throwNotImpl(op)
       case op : AST.UnaryOpPtrDeref => 
         right.typ match {
@@ -450,7 +450,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
             val getObj  : IFunction = ctx.sortGetter(p.typ.toSort).getOrElse(
                 throw new ACSLParseException(s"Cannot dereference pointer of type ${p.typ}.")
               )
-            CCTerm(getObj(readObj), p.typ)
+            CCTerm(getObj(readObj), p.typ, right.srcInfo)
           // FIXME: Handle stackptr
           case p => throwNotImpl(p)
         }
@@ -465,20 +465,21 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     // FIXME: Type promotion?
     //assert(left.typ == right.typ) 
     val typ : CCType = left.typ
+    val srcInfo = left.srcInfo
     term.binop_ match {
       case op : AST.BinOpPlus =>
-        CCTerm(left.toTerm + right.toTerm, typ)
+        CCTerm(left.toTerm + right.toTerm, typ, srcInfo)
       case op : AST.BinOpMinus =>
-        CCTerm(left.toTerm - right.toTerm, typ)
+        CCTerm(left.toTerm - right.toTerm, typ, srcInfo)
       case op : AST.BinOpMult =>
         import ap.theories.nia.GroebnerMultiplication.mult
-        CCTerm(mult(left.toTerm, right.toTerm), typ)
+        CCTerm(mult(left.toTerm, right.toTerm), typ, srcInfo)
       case op : AST.BinOpDiv =>
         import ap.theories.nia.GroebnerMultiplication.tDiv
-        CCTerm(tDiv(left.toTerm, right.toTerm), typ)
+        CCTerm(tDiv(left.toTerm, right.toTerm), typ, srcInfo)
       case op : AST.BinOpMod =>
         import ap.theories.nia.GroebnerMultiplication.tMod
-        CCTerm(tMod(left.toTerm, right.toTerm), typ)
+        CCTerm(tMod(left.toTerm, right.toTerm), typ, srcInfo)
       // FIXME: Comparisons create IFormula:s.. Desired?
       case op : AST.BinOpEQ           => throwNotImpl(op) // left === right
       case op : AST.BinOpNEQ          => throwNotImpl(op) // left =/= right
@@ -516,7 +517,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     val getObj  : IFunction = ctx.sortGetter(typ.toSort).getOrElse(
       throw new ACSLParseException(s"Cannot access $array[$index].")
     )
-    CCTerm(getObj(readObj), typ)
+    CCTerm(getObj(readObj), typ, array.srcInfo)
   }
 
   def translate(term : AST.TermParentheses) : CCTerm = {
@@ -528,7 +529,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       throw new ACSLParseException("\\result has no meaning.")
     }
 
-    ctx.getResultVar.map(v => CCTerm(v.term, v.typ))
+    ctx.getResultVar.map(v => CCTerm(v.term, v.typ, v.srcInfo))
       .getOrElse(throw new ACSLParseException("\\result used in void function."))
   }
 
@@ -538,7 +539,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case l : AST.LiteralTrue   => throwNotImpl(l) // IBoolLit(true)
     case l : AST.LiteralFalse  => throwNotImpl(l) // IBoolLit(false)
     case l : AST.LiteralInt    => 
-      CCTerm(IExpression.i(l.integer_), CCReader.CCInt())
+      CCTerm(IExpression.i(l.integer_), CCReader.CCInt(), None) // todo; line no?
     case l : AST.LiteralReal   => throwNotImpl(l)
     case l : AST.LiteralString => throwNotImpl(l) // ap.theories.string.StringTheory?
     case l : AST.LiteralChar   => throwNotImpl(l)

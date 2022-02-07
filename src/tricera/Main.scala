@@ -253,7 +253,42 @@ class Main (args: Array[String]) {
     val enc : Encoder = new Encoder(reader)
     val system = enc.encode
 
-    val systemPostProcessors = Seq()
+    def checkForSameNamedTerms = {
+      val clausesWithSameNamedTerms =
+        (system.processes.flatMap(_._1).map(_._1) ++ system.assertions).filter(
+          c => c.constants.size != c.constants.map(_.name).size)
+      for (c <- clausesWithSameNamedTerms) {
+        import ap.parser.{IBinJunctor, LineariseVisitor, Transform2NNF}
+        import ap.parser.IExpression._
+        val sameNamedTerms =
+          c.constants.groupBy(_.name).filter(_._2.size > 1)
+        val conjuncts =
+          LineariseVisitor(Transform2NNF(c.constraint), IBinJunctor.And)
+
+        val possibleEqualityFormulas =
+          for ((_, terms) <- sameNamedTerms) yield {
+            val termEqualityFormulas =
+              terms.toSeq.combinations(2).flatMap(ts =>
+                Seq(ts(0) === ts(1), ts(1) === ts(0))).toSeq
+            termEqualityFormulas
+          }
+
+        val sameTermFormulasThatAreNotEqual = possibleEqualityFormulas.filter(f =>
+          f.forall(eq => !conjuncts.contains(eq)))
+
+        for (f <- sameTermFormulasThatAreNotEqual) {
+          f.head match {
+            case Eq(ap.parser.IConstant(t), _) =>
+              Util.warn("The following clause has different terms with the same " +
+                "name (term: " + t.name + ")\n" + c.toPrologString + "\n")
+              assert(false)
+            case _ => // should not be possible
+          }
+        }
+      }
+    }
+    if(devMode) // todo: make part of -assert?
+      checkForSameNamedTerms
 
     modelledHeap = modelledHeapRes
 
@@ -382,6 +417,27 @@ class Main (args: Array[String]) {
             println
             //reader.printPredsWithArgNames
             hornconcurrency.VerificationLoop.prettyPrint(cex)
+            if(showFailedAssertions) {
+              import hornconcurrency.VerificationLoop._
+              val cexClauses: Seq[HornClauses.Clause] = cex.last match {
+                case c: CEXLocalStep => Seq(c.clause)
+                case c: CEXInit => Seq(c.clauses.last) // todo: correct?
+                case _ => Nil // todo: others?
+              }
+              val relatedAssertions =
+                (for (c <- cexClauses) yield
+                  reader.getRelatedAssertions(c.head.pred)).flatten
+              println("\nRelated assertions: ")
+              for (assertion <- relatedAssertions) {
+                val assertionSource = assertion.srcInfo match {
+                  case Some(srcInfo) =>
+                    "(assertion source: line " + srcInfo.line + ") "
+                  case None => ""
+                }
+                println(" " + assertion.clause.toPrologString + " " +
+                  assertionSource)
+              }
+            }
           }
         }
         Unsafe
@@ -430,18 +486,16 @@ class Main (args: Array[String]) {
       printError(StackOverflow.toString)
       ExecutionSummary(StackOverflow, Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
-    case e: CCReader.ArrayException =>
-      //e.printStackTrace()
-      printError(ArrayError.toString)
-      ExecutionSummary(ArrayError, Nil, modelledHeap)
     case t: Exception =>
-      //t.printStackTrace
+      if(devMode)
+        t.printStackTrace
       printError(t.getMessage)
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
     case t: AssertionError =>
       printError(t.getMessage)
-      t.printStackTrace
+      if(devMode)
+        t.printStackTrace
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s )
   }

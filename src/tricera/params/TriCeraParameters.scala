@@ -24,7 +24,12 @@ class TriCeraParameters extends GlobalParameters {
   var noPP       : Boolean = false
   var logPPLevel : Int = 0 // 0: quiet, 1: errors only, 2: errors + warnings
 
+  var showVarLineNumbersInTerms : Boolean = false
+
   var shouldTrackMemory : Boolean = false
+
+  var showFailedAssertions : Boolean = false
+  var devMode : Boolean = false
 
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
@@ -162,6 +167,8 @@ class TriCeraParameters extends GlobalParameters {
     case "-eogCEX" :: rest => pngNo = false; eogCEX = true; parseArgs(rest)
     case "-cex" :: rest => plainCEX = true; parseArgs(rest)
     case "-assert" :: rest => TriCeraParameters.get.assertions = true; parseArgs(rest)
+    case "-cexAsserts" :: rest => showFailedAssertions = true; parseArgs(rest)
+    case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +
       "General options:\n" +
       " -h\t\tShow this information\n" +
@@ -173,6 +180,7 @@ class TriCeraParameters extends GlobalParameters {
       " -cex\t\tShow textual counterexamples\n" +
       " -dotCEX\tOutput counterexample in dot format\n" +
       " -eogCEX\tDisplay counterexample using eog\n" +
+      " -cexAsserts\tDisplay related assertions for counterexamples\n" +
       " -m:func\tUse function func as entry point (default: main)\n" +
       "\n" +
       "Horn engine:\n" +
