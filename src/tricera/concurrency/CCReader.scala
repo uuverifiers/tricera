@@ -3008,7 +3008,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ : Address    =>
             topVal.toTerm match {
               case fieldFun: IFunApp
-                if heap.userADTSels exists(_ contains fieldFun.fun) => // an ADT
+                if !(objectGetters contains fieldFun.fun) &&
+                   (heap.userADTSels exists(_ contains fieldFun.fun)) => // an ADT
                 val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
                 rootTerm match {
                   case Left(c) =>
