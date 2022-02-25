@@ -2,7 +2,7 @@
 
 LAZABS=../../tri
 
-TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-bounds-line4.c dynamic-loop1.c simple-dynamic-array.c simple-global-array.c array-single-alloc.c"
+TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-bounds-line4.c dynamic-loop1.c simple-dynamic-array.c simple-global-array.c array-single-alloc.c array-inside-struct-1.c"
 
 for name in $TESTS; do
     echo

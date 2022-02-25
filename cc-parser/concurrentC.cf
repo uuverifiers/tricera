@@ -171,8 +171,10 @@ PointQualPoint. Pointer ::= "*" [Type_qualifier] Pointer ;
 
 
 AllSpec.  Parameter_type ::= [Parameter_declaration] ;
--- More.     Parameter_type ::= [Parameter_declaration] "," "..." ;
+-- The following leads to a shift/reduce error since list Parameter_declaration is separated by ,
+-- More.     Parameter_type ::= Parameter_type "," "..." ;
 
+More.          Parameter_declaration ::= "..." ;
 OnlyType.      Parameter_declaration ::= [Declaration_specifier] ;
 TypeAndParam.  Parameter_declaration ::= [Declaration_specifier] Declarator ;
 TypeHintAndParam.  Parameter_declaration ::= [Declaration_specifier] [Abs_hint] Declarator ;

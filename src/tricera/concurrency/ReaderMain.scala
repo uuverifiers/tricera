@@ -57,8 +57,9 @@ object ReaderMain {
     if (_reader != null) {
       println("System predicates:")
       println("  " + (
-        system.allLocalPreds.map(p =>
-          _reader.predWithArgNamesAndLineNumbers(p))).mkString(", "))
+        system.allLocalPreds.toSeq.sortBy(p =>
+          "\\d+".r.findAllIn(p.name).toSeq.last.toInt).map(p =>
+          _reader.predWithArgNamesAndLineNumbers(p))).mkString("\n  "))
       println
     }
 

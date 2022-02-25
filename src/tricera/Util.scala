@@ -1,5 +1,11 @@
 package tricera
+import ap.parser.{IExpression, IFunApp, ITerm}
+import ap.theories.ExtArray
+import ap.types.MonoSortedIFunction
+import tricera.concurrency.CCReader.TranslationException
 import tricera.concurrency.concurrent_c.Absyn._
+
+import scala.collection.mutable
 
 object Util {
   def warn(msg : String) : Unit =
@@ -52,5 +58,97 @@ object Util {
   def getLineString(exp: Exp): String = {
     val sourceInfo = getSourceInfo(exp)
     "At line " + sourceInfo.line + " (offset " + sourceInfo.offset + "): "
+  }
+
+  /**
+   * Helper function to write to ADT fields. This code was taken almost verbatim
+   * from the similar method in the ap.theories.Heap.
+   * todo: move this to another class, maybe a new one for helper functions
+   *   for IFormulas (or add to Princess)
+   * @param lhs : the ADT field term to be written to. This should be an IFunApp,
+   *            where the outermost function is a selector of the ADT, the
+   *            innermost function is a heap read to the ADT on the heap, the
+   *            innermost+1 function is the getter of the ADT, and any
+   *            intermediate functions are other selectors
+   *            e.g. select(a(s), i) or  (in C: s.a[i])
+   * @param rhs : the new value for the field, e.g. 42
+   * this would return a new term, such as: S(store(a, i, 42))
+   * @return    : the new ADT term
+   */
+  def writeADT (lhs : IFunApp, rhs : ITerm,
+                adtCtors : Seq[MonoSortedIFunction],
+                adtSels : Seq[Seq[MonoSortedIFunction]]) : ITerm = {
+    import IExpression.toFunApplier
+
+    case class ADTFieldPath (ctor : MonoSortedIFunction,
+                                     sels : Seq[MonoSortedIFunction],
+                                     updatedSelInd : Int)
+    def generateADTUpdateStack (termPointingToADTField : IFunApp)
+    : (List[ADTFieldPath], ITerm) = {
+      val ADTUpdateStack = new mutable.Stack[ADTFieldPath]
+
+      def fillParentStack (fieldTerm : IFunApp) : ITerm = {
+        val maybeArrayTheory = ExtArray.Select.unapply(fieldTerm.fun)
+        assert(fieldTerm.args.size == 1 || maybeArrayTheory.nonEmpty)
+        fieldTerm.args.head match {
+          case nested : IFunApp if adtCtors.exists(c =>
+            c.resSort == nested.fun.asInstanceOf[MonoSortedIFunction].resSort) &&
+            ExtArray.Select.unapply(nested.fun).isEmpty =>
+
+            // here two possibilities:
+            // one is that the last level resSort is a getter
+            //   (e.g. getS that has the same resSort as a ctor)
+            // second is that the last level is simply the ctor
+            val ctorInd =
+              if(adtCtors contains nested.fun) { // first case
+                adtCtors indexOf nested.fun
+              } else { // second case
+                adtCtors.indexWhere(c =>
+                  c.resSort == nested.fun.asInstanceOf[MonoSortedIFunction].resSort)
+              }
+
+            val sels = adtSels(ctorInd)
+            val thisSelInd =
+              adtSels(ctorInd).indexWhere(s => s == fieldTerm.fun)
+            ADTUpdateStack.push(
+              ADTFieldPath(adtCtors(ctorInd), sels, thisSelInd))
+            // then move on to nested parents
+            fillParentStack(nested)
+          case _ => fieldTerm
+        }
+      }
+      val rootTerm = fillParentStack (termPointingToADTField)
+      (ADTUpdateStack.toList, rootTerm)
+    }
+
+
+    def updateADT(adtStack : List[ADTFieldPath], parentTerm : ITerm,
+                  newVal : ITerm) : ITerm = {
+      adtStack match {
+        case Nil => // last level
+          newVal
+        case parent :: tl => import IExpression.toFunApplier
+          val newTerm = updateADT(tl, parentTerm, newVal)
+          val args = for (i <- parent.sels.indices) yield {
+            if (i == parent.updatedSelInd) newTerm
+            else parent.sels(i)(parentTerm)
+          }
+          parent.ctor(args : _*)
+      }
+    }
+
+    val (adtStack, rootTerm) = generateADTUpdateStack(lhs)
+    val newTerm = updateADT(adtStack, rootTerm, rhs)
+    rootTerm match {
+      case IFunApp(f, args) =>
+        f match {
+          case ExtArray.Select(arr) => // Object select (select(a, i))
+            arr.store(args(0), args(1), newTerm)
+          case _ => throw new TranslationException("Could not determine write from " +
+            "the lhs: " + lhs)
+        }
+      case _ => throw new TranslationException("Could not determine write from " +
+        "the lhs: " + lhs)
+    }
   }
 }
