@@ -131,6 +131,99 @@ Final:
  main11(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
 ----------------------------------------------------------------------------
 
+pointer-arith-1-safe.c
+Warning: enabling heap model
+SAFE
+
+pointer-arith-1-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+-------------------------------------------------------------------------------------------------------------------
+Init:
+                                   main3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                   
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+-------------------------------------------------------------------------------------------------------------------
+Final:
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+-------------------------------------------------------------------------------------------------------------------
+
+pointer-arith-2-safe.c
+Warning: enabling heap model
+SAFE
+
+pointer-arith-2-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+-------------------------------------------------------------------------------------------------------------------
+Init:
+                                   main3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                   
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+-------------------------------------------------------------------------------------------------------------------
+Final:
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+-------------------------------------------------------------------------------------------------------------------
+
+pointer-arith-3-safe.c
+Warning: enabling heap model
+SAFE
+
+pointer-arith-3-unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+-------------------------------------------------------------------------------------------------------------------
+Init:
+                                   main3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                   
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+               main4(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2)                
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 0) 
+-------------------------------------------------------------------------------------------------------------------
+                                                         |                                                         
+                                                         |                                                         
+                                                         V                                                         
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
+-------------------------------------------------------------------------------------------------------------------
+Final:
+ main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
+-------------------------------------------------------------------------------------------------------------------
+
 simple-dynamic-memsafety1.c
 Warning: enabling heap model
 SAFE

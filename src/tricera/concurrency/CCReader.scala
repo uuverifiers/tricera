@@ -2214,6 +2214,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       //heap.batchAllocAddrRange(initHeapTerm.toTerm, objectTerm, size)
       heap.newAddrRange(newBatchAlloc)
     }
+    def heapArrayRead(arrExpr  : CCExpr,
+                      index    : CCExpr,
+                      arrType  : CCHeapArrayPointer,
+                      assertMemSafety : Boolean = true,
+                      assumeMemSafety : Boolean = true,
+                      assertIndexWithinBounds : Boolean = true) : CCTerm = {
+      import IExpression._
+      val readAddress = CCTerm(heap.nth(arrExpr.toTerm, index.toTerm),
+        CCHeapPointer(heap, arrType.elementType))
+      val readValue = heapRead(readAddress, assertMemSafety, assumeMemSafety)
+      if (assertIndexWithinBounds)
+        assertProperty(heap.within(arrExpr.toTerm, readAddress.toTerm))
+      readValue
+    }
 
     /**
      * updates an Object on the heap, which can also be an ADT
@@ -2818,9 +2832,19 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ : AssignMod =>
             ap.theories.nia.GroebnerMultiplication.tMod(lhs, rhs)
           case _ : AssignAdd =>
-            lhs + rhs
+            (lhsE.typ, rhsE.typ) match {
+              case (_ : CCHeapArrayPointer, _ : CCArithType) =>
+                addToAddressRangeStart(lhs, rhs)
+              case _ => lhs + rhs
+            }
           case _ : AssignSub =>
-            lhs - rhs
+            (lhsE.typ, rhsE.typ) match {
+              case (arrType : CCHeapArrayPointer, _ : CCArithType) =>
+                throw new TranslationException("Only addition is allowed in " +
+                  "array pointer arithmetic.") // due to how AddressRange is defined: <startAddr, size>
+                //addToAddressRangeStart(lhsE, rhsE, arrType, _ - _).toTerm
+              case _ => lhs - rhs
+            }
           case _ : AssignLeft =>
             ModuloArithmetic.bvshl(lhsE.typ cast2Unsigned lhs,
               lhsE.typ cast2Unsigned rhs)
@@ -2839,7 +2863,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }), lhsE.typ)
         pushVal(newVal)
 
-        if(isHeapPointer(exp)) {
+        val updatingPointedValue =
+          isHeapRead(lhsVal) || // *(p) = ... where p is a heap ptr
+            isHeapStructFieldRead(lhsVal) // ps->f = ... where ps is a heap ptr
+
+        if(isHeapPointer(exp) && updatingPointedValue) {
           heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal)
         } else {
           setValue(lookupVar(asLValue(exp.exp_1)),
@@ -2936,7 +2964,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Eright =>
         strictUnsignedBinFun(exp.exp_1, exp.exp_2, ModuloArithmetic.bvashr(_, _))
       case exp : Eplus =>
-        strictBinFun(exp.exp_1, exp.exp_2, _ + _)
+        strictBinFun(exp.exp_1, exp.exp_2, _ + _, opIsAddition = true)
       case exp : Eminus =>
         strictBinFun(exp.exp_1, exp.exp_2, _ - _)
       case exp : Etimes =>
@@ -2979,7 +3007,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         exp.unary_operator_ match {
           case _ : Address    =>
             topVal.toTerm match {
-              case fieldFun: IFunApp => // an ADT
+              case fieldFun: IFunApp
+                if heap.userADTSels exists(_ contains fieldFun.fun) => // an ADT
                 val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
                 rootTerm match {
                   case Left(c) =>
@@ -3000,6 +3029,24 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     maybeOutputClause
                     pushVal(newTerm)
                 }
+              case f : IFunApp if objectGetters contains f.fun => // a heap read (might also be from a heap array)
+                val readFunApp = f.args.head.asInstanceOf[IFunApp] // sth like read(h, ...)
+                val Seq(heapTerm, addrTerm) = readFunApp.args
+                // todo: below type extraction is not safe!
+                val t = addrTerm match {
+                  case IFunApp(heap.nth, args) => // if nthAddrRange(a, i)
+                    val Seq(arrTerm, indTerm) = args
+                    // return the addressRange starting from i
+                    CCTerm(addToAddressRangeStart(arrTerm, indTerm),
+                      getValue(arrTerm.asInstanceOf[IConstant].c.name).typ
+                    )
+                  case _ =>
+                    CCTerm(addrTerm, CCHeapPointer(heap,
+                      getValue(addrTerm.asInstanceOf[IConstant].c.name).typ))
+                }
+                popVal
+                pushVal(t)
+
               case _ =>
                 val t = if (handlingFunContractArgs) {
                   val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
@@ -3020,6 +3067,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               case   _ : CCHeapPointer =>
                 if(evaluatingLhs) pushVal(v)
                 else pushVal(heapRead(v))
+              case  arr : CCHeapArrayPointer =>
+                if(evaluatingLhs) pushVal(v)
+                else pushVal(heapArrayRead(v, CCTerm(IIntLit(0), CCInt), arr))
               case _ => throw new TranslationException("Cannot dereference " +
                   "non-pointer: " + v.typ + " " + v.toTerm)
             }
@@ -3257,14 +3307,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         import IExpression._
         arrayTerm.typ match {
           case array : CCHeapArrayPointer =>
-            val readAddress = CCTerm(heap.nth(arrayTerm.toTerm, index.toTerm),
-              CCHeapPointer(heap, array.elementType))
-            val readValue = heapRead(readAddress)
-            assertProperty(heap.within(arrayTerm.toTerm, readAddress.toTerm))
-            pushVal(readValue)
-          //throw new TranslationException("Expression currently not supported by " +
-          //  "TriCera: " + (printer print exp))
-          case array : CCArray =>
+            pushVal(heapArrayRead(arrayTerm, index, array))
+          case array : CCArray => // todo: move to separate method
             val readValue = CCTerm(array.arraySort.
               select(arrayTerm.toTerm, index.toTerm), array.elementType)
             assertProperty((index.toTerm >= 0) &&&
@@ -3381,12 +3425,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private def checkPointerIntComparison(t1 : CCExpr, t2 : CCExpr) :
       (CCExpr, CCExpr) =
       (t1.typ, t2.typ) match {
-        case (_: CCHeapPointer, CCInt) =>
+        case (_ : CCHeapPointer, _ : CCArithType) =>
           if (t2.toTerm != IIntLit(IdealInt(0)))
             throw new TranslationException("Pointers can only compared with `null` or `0`.")
           else
             (t1, CCTerm(heap.nullAddr(), t1.typ)) // 0 to nullAddr()
-        case (CCInt, _: CCHeapPointer) =>
+        case ( _ : CCArithType, _: CCHeapPointer) =>
           if (t1.toTerm != IIntLit(IdealInt(0)))
             throw new TranslationException("Pointers can only compared with `null` or `0`.")
           else
@@ -3407,14 +3451,32 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     ////////////////////////////////////////////////////////////////////////////
 
+    /* lhs must be an address range term, used for pointer arithmetic
+    *  operations, e.g. when p += 1 rhs is 1 and op is +
+    * */
+    private def addToAddressRangeStart (lhs : ITerm, rhs : ITerm): ITerm = {
+      heap.addressRangeCtor(heap.nth(lhs, rhs), heap.addrRangeSize(lhs) - rhs)
+    }
+
     private def strictBinFun(left : Exp, right : Exp,
-                             op : (ITerm, ITerm) => ITerm) : Unit = {
+                             op : (ITerm, ITerm) => ITerm,
+                             opIsAddition : Boolean = false) : Unit = {
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => {
-                     val (promLhs, promRhs) = unifyTypes(lhs, rhs)
-                     // TODO: correct type promotion
-                     val typ = promLhs.typ
-                     CCTerm(typ cast op(promLhs.toTerm, promRhs.toTerm), typ)
+                    (lhs.typ, rhs.typ) match {
+                      case (arrTyp: CCHeapArrayPointer, _ : CCArithType) =>
+                        if(opIsAddition)
+                          CCTerm(addToAddressRangeStart(lhs.toTerm, rhs.toTerm),
+                                 arrTyp)
+                        else
+                          throw new TranslationException("Pointer arithmetic" +
+                            "over arrays is only supported with addition.")
+                      case _ =>
+                        val (promLhs, promRhs) = unifyTypes(lhs, rhs)
+                        // TODO: correct type promotion
+                        val typ = promLhs.typ
+                        CCTerm(typ cast op(promLhs.toTerm, promRhs.toTerm), typ)
+                    }
                    })
     }
 
@@ -3514,7 +3576,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           (a, convertType(b, CCDuration))
 
         case _ =>
-          throw new TranslationException("incompatible types")
+          throw new TranslationException("incompatible types: " +
+            a.typ + " vs " + b.typ)
       }
     }
 
