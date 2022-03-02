@@ -134,7 +134,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                 )
 
               val (newHeapTerm, sorts) : (ITerm, Seq[Sort]) = 
-                ptrs.foldLeft((ctx.getOldHeapTerm, List[Sort]())) (
+                ptrs.foldLeft((ctx.getHeapTerm, List[Sort]())) (
                   (carry, term) => {
                     val heap  : ITerm = carry._1
                     val sorts : List[Sort] = carry._2
@@ -150,9 +150,26 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                   }
                 )
               val heapConstr : IFormula = 
-                IExpression.ex(sorts, ctx.getHeapTerm === newHeapTerm)
+                IExpression.ex(sorts, ctx.getOldHeapTerm === newHeapTerm)
 
-              heapConstr &&& globConstr
+              if (ptrs.isEmpty) {
+                (ctx.getHeapTerm === ctx.getOldHeapTerm) &&& globConstr
+              } else {
+                val vari : ITerm = new SortedConstantTerm("x", ctx.getHeap.AddressSort)
+                val variNotEqual : IFormula =
+                  ptrs.foldLeft(IBoolLit(true) : IFormula) (
+                    (formula, ptr) => formula &&& vari =/= ptr.toTerm
+                  )
+
+                import ap.parser.IExpression.toFunApplier
+                val readObj  : IFunApp  = ctx.getHeap.read(ctx.getHeapTerm, vari)
+                val readObj2  : IFunApp  = ctx.getHeap.read(ctx.getOldHeapTerm, vari)
+                val readEq : IFormula = readObj === readObj2
+                val impli : IFormula = variNotEqual ==> readEq
+
+                //heapConstr &&& globConstr
+                impli &&& globConstr
+              }
           }
       }
 

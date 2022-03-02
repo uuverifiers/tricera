@@ -419,6 +419,7 @@ class Main (args: Array[String]) {
             hornconcurrency.VerificationLoop.prettyPrint(cex)
             if(showFailedAssertions) {
               import hornconcurrency.VerificationLoop._
+              import lazabs.horn.bottomup.HornClauses
               val cexClauses: Seq[HornClauses.Clause] = cex.last match {
                 case c: CEXLocalStep => Seq(c.clause)
                 case c: CEXInit => Seq(c.clauses.last) // todo: correct?

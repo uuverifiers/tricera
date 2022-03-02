@@ -92,7 +92,7 @@ class Encoder(reader : CCReader) {
             val postAtom : IAtom    = funToPostAtom(name)
             val postCond : IFormula = funToContract(name).post
             val constr   : IFormula = applyArgs(postCond, postAtom, head)
-            val assigns  : IFormula = funToContract(name).assigns
+            val assigns  : IFormula = applyArgs(funToContract(name).assigns, postAtom, head)
             Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
           }
           case c => replacePostPredInBody(c)
@@ -182,7 +182,7 @@ class Encoder(reader : CCReader) {
             val postAtom : IAtom    = funToPostAtom(name)
             val postCond : IFormula = funToContract(name).post
             val constr   : IFormula = applyArgs(postCond, postAtom, head)
-            val assigns  : IFormula = funToContract(name).assigns
+            val assigns  : IFormula = applyArgs(funToContract(name).assigns, postAtom, head)
             Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
           }
         })
