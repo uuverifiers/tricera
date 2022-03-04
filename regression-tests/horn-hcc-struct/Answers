@@ -30,5 +30,9 @@ typedef.hcc
 Warning: entry function "main" not found
 SAFE
 
+emptyStruct.hcc
+Warning: Struct a was declared, but never defined, or it has no fields.
+SAFE
+
 race.hcc
 UNSAFE

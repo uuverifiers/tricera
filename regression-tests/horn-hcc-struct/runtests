@@ -3,7 +3,7 @@
 LAZABS=../../tri
 
 TESTS="anon.hcc assign.hcc assign2.hcc assign-exp-eval-order.hcc assign-illegal.hcc \
-       init.hcc loop.hcc nested.hcc typedef.hcc"
+       init.hcc loop.hcc nested.hcc typedef.hcc emptyStruct.hcc"
 
 for name in $TESTS; do
     echo

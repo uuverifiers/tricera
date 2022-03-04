@@ -95,3 +95,10 @@ settings(
     // exclude java-cup from transitive dependencies, ccParser includes newer version
     ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
 )
+
+// project can also be built by providing dependencies under the lib directory
+// and uncommenting below code to discard clashing transitive dependencies
+//assemblyMergeStrategy in assembly := {
+//  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+//  case x => MergeStrategy.last
+//}

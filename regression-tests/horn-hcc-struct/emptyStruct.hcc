@@ -1,0 +1,14 @@
+struct a {
+};
+
+struct b {
+  struct a f1;
+  int f2;
+};
+
+int main() {
+  struct b s;
+  s.f2 = 42;
+  assert(s.f2 == 42);
+  return s.f2;
+}

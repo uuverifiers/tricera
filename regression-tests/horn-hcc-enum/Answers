@@ -10,6 +10,17 @@ Final:
  main3(3) 
 ----------
 
+enum1-trailing-comma.hcc
+UNSAFE
+
+----------
+Init:
+ main3(3) 
+----------
+Final:
+ main3(3) 
+----------
+
 enum2.hcc
 UNSAFE
 

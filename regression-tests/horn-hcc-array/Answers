@@ -224,6 +224,28 @@ Final:
  main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
 -------------------------------------------------------------------------------------------------------------------
 
+global-struct-array-1.c
+Warning: enabling heap model
+UNSAFE
+
+----------------------------------------------------------------------------------------------------
+Init:
+ main2(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2)) 
+----------------------------------------------------------------------------------------------------
+                                                 |                                                  
+                                                 |                                                  
+                                                 V                                                  
+ main3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2)) 
+----------------------------------------------------------------------------------------------------
+                                                 |                                                  
+                                                 |                                                  
+                                                 V                                                  
+ main4(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(21)))), AddrRange(nthAddr(1), 2)) 
+----------------------------------------------------------------------------------------------------
+Final:
+ main4(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(21)))), AddrRange(nthAddr(1), 2)) 
+----------------------------------------------------------------------------------------------------
+
 simple-dynamic-memsafety1.c
 Warning: enabling heap model
 SAFE
