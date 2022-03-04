@@ -6,10 +6,11 @@ import sys.process._
 import sys.env
 import java.nio.file.{Paths, Files}
 
-class TriCeraPreprocessor(val inputFilePath : String,
-                          val outputFilePath : String,
+class TriCeraPreprocessor(val inputFilePath   : String,
+                          val outputFilePath  : String,
+                          val entryFunction   : String,
                           val displayWarnings : Boolean,
-                          val quiet : Boolean) {
+                          val quiet           : Boolean) {
   val ppPath = sys.env.get("TRI_PP_PATH") match {
     case Some(path) => path + "/tri-pp"
     case _ =>
@@ -26,6 +27,7 @@ class TriCeraPreprocessor(val inputFilePath : String,
     inputFilePath,
     "-o " + outputFilePath,
     if(quiet) "-q" else "",
+    "-m " + entryFunction,
     "--",
     "-xc",
     if(displayWarnings) "" else "-Wno-everything"

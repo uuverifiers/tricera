@@ -137,9 +137,10 @@ class Main (args: Array[String]) {
         }
 
       val pp = new TriCeraPreprocessor(fileName,
-                                      preprocessedFile.getAbsolutePath,
-                                      displayWarnings = logPPLevel == 2,
-                                      quiet = logPPLevel == 0)
+                                 preprocessedFile.getAbsolutePath,
+                                 displayWarnings = logPPLevel == 2,
+                                 quiet = logPPLevel == 0,
+                                 entryFunction = TriCeraParameters.get.funcName)
       if(logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of preprocessor warnings and errors")
         println("=" * 80)
