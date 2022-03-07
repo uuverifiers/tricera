@@ -1,0 +1,16 @@
+int g = 0;
+
+/*@
+  assigns g;
+  ensures g == \old(g) + n;
+*/
+void addToG(int n) {
+  g += n;
+}
+
+int main(void) {
+  addToG(42);
+  assert(g == 42);
+  addToG(1);
+  assert(g == 43);
+}

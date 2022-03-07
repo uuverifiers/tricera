@@ -59,8 +59,7 @@ class Encoder(reader : CCReader) {
       })
 
     val newPreClauses : Seq[Clause] = preClauses.map(buildPreClause)
-    val newPostClauses : Seq[Clause] =
-      if (hasACSLEntryFunction) buildPostAsserts else Seq()
+    val newPostClauses : Seq[Clause] = buildPostAsserts
     others ++ newPreClauses ++ newPostClauses
   }
 
@@ -70,7 +69,7 @@ class Encoder(reader : CCReader) {
       case SomeBackgroundAxioms(preds, clauses) => {
         // FIXME: Delete *_pre/*_post predicates relating to annotated functions from preds?
         //        Not sure what its usage is.
-        val encoded = clauses.map({
+        val encoded = clauses.collect({
           case Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
             // Handles entry clause, e.g: 
             // f0(..) :- f_pre(..) ==> f0(..) :- <pre>
@@ -85,17 +84,8 @@ class Encoder(reader : CCReader) {
             // f_pre(..) :- fN(..) ==> false :- fN(..), !<pre>
             buildPreClause(c)
           }
-          case Clause(head, body, oldConstr) if postPredsToReplace(head.pred) => {
-            // Handles final clause, e.g:
-            // f_post(..) :- f1(..) ==> false :- f1(..), !(<post> & <assigns>)
-            val name     : String   = head.pred.name.stripSuffix(postSuffix)
-            val postAtom : IAtom    = funToPostAtom(name)
-            val postCond : IFormula = funToContract(name).post
-            val constr   : IFormula = applyArgs(postCond, postAtom, head)
-            val assigns  : IFormula = applyArgs(funToContract(name).assigns, postAtom, head)
-            Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
-          }
-          case c => replacePostPredInBody(c)
+          case c@Clause(head, _, _) if !postPredsToReplace(head.pred) => 
+            replacePostPredInBody(c)
         })
         SomeBackgroundAxioms(preds, encoded)
       }
@@ -163,29 +153,34 @@ class Encoder(reader : CCReader) {
     new Clause(falseHead, old.body, constr)
   }
 
-  // Fetches clauses from system.processes implying pre/postcondition and generates
-  // assertion clauses (to be moved into system.assertions).
+  // Fetches clauses from system.processes and system.backgroundAxioms implying
+  // post-condition and generates assertion clauses (to be moved into
+  // system.assertions).
   private def buildPostAsserts : Seq[Clause] = {
-    system.processes.flatMap({
-      case (p, r) =>
-        val (clauses, _) = p.unzip
-        clauses.collect({
-          case Clause(head, body, oldConstr) if prePredsToReplace(head.pred) => {
-            val name     : String   = head.pred.name.stripSuffix(preSuffix)
-            val preAtom  : IAtom    = funToPreAtom(name)
-            val preCond  : IFormula = funToContract(name).pre
-            val constr   : IFormula = applyArgs(preCond, preAtom, head).unary_!
-            Clause(falseHead, body, oldConstr &&& constr)
-          }
-          case Clause(head, body, oldConstr) if postPredsToReplace(head.pred) => {
-            val name     : String   = head.pred.name.stripSuffix(postSuffix)
-            val postAtom : IAtom    = funToPostAtom(name)
-            val postCond : IFormula = funToContract(name).post
-            val constr   : IFormula = applyArgs(postCond, postAtom, head)
-            val assigns  : IFormula = applyArgs(funToContract(name).assigns, postAtom, head)
-            Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
-          }
-        })
+    import ParametricEncoder.{NoBackgroundAxioms, SomeBackgroundAxioms}
+    val clauses1 : Seq[Clause] =
+      system.processes.flatMap({
+        case (p, r) => p.unzip._1
+      })
+    val clauses2 : Seq[Clause] =
+      system.backgroundAxioms match {
+        case SomeBackgroundAxioms(preds, clauses) => clauses
+        case NoBackgroundAxioms => Seq()
+      }
+
+    val clauses : Seq[Clause] = clauses1 ++ clauses2
+
+    clauses.collect({
+      // Handles final clause, e.g:
+      // f_post(..) :- f1(..) ==> false :- f1(..), !(<post> & <assigns>)
+      case Clause(head, body, oldConstr) if postPredsToReplace(head.pred) => {
+        val name     : String   = head.pred.name.stripSuffix(postSuffix)
+        val postAtom : IAtom    = funToPostAtom(name)
+        val postCond : IFormula = funToContract(name).post
+        val constr   : IFormula = applyArgs(postCond, postAtom, head)
+        val assigns  : IFormula = applyArgs(funToContract(name).assigns, postAtom, head)
+        Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!)
+      }
     })
   }
 

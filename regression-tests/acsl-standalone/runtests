@@ -13,7 +13,9 @@ TESTS="inc_safe.c \
        assigns_safe.c \
        assigns_unsafe.c \
        maxptr_safe.c \
-       maxptr_unsafe.c"
+       maxptr_unsafe.c \
+       old_safe.c \
+       old_unsafe.c"
 
 for name in $TESTS; do
     echo

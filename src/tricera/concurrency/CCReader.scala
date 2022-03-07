@@ -1207,7 +1207,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         // FIXME: Naming is misleading (not *_old vars).
         val postOldArgs = allFormalVars
         val postGlobalArgs = oldGlobalVars
-        val postArgs = postOldArgs ++ postGlobalArgs ++ postVar
+        val postArgs =
+          globalVars.vars ++ oldArgsVars ++ postGlobalArgs ++ postVar
         val oldVarInds = postOldArgs.indices.toList
         val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
 
@@ -1220,24 +1221,29 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
 
         import scala.collection.Map
-        class Context(vars : Map[String, CCVar], oldVars : Map[String, CCVar])
+        class Context(oldVars : Map[String, CCVar])
           extends ACSLTranslator.Context {
-          def getVar(ident : String) : Option[CCReader.CCVar] = {
-            vars.get(ident)
-          }
-
           def getOldVar(ident : String) : Option[CCReader.CCVar] = {
             oldVars.get(ident)
+          }
+
+          def getParams : Seq[CCReader.CCVar] = {
+            postOldArgs.diff(getGlobals)
           }
 
           def getGlobals : Seq[CCReader.CCVar] = {
             globalVars.vars
           }
+
           def getResultVar : Option[CCReader.CCVar] = {
             postVar match {
               case (v : CCVar) :: _ => Some(v)
               case _ => None
             }
+          }
+
+          def isHeapEnabled : Boolean = {
+            modelHeap
           }
 
           def getHeap : Heap = {
@@ -1284,12 +1290,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             arithmeticMode
         }
 
-        val varsMap : Map[String, CCVar] =
-          (postOldArgs ++ postGlobalArgs).map(v => (v.name, v)).toMap
         // Old heap gets included. Unsure if desired.
         val oldVarsMap : Map[String, CCVar] =
           oldVars.map(v => (v.name.stripSuffix("_old"), v)).toMap
-        val context = new Context(varsMap, oldVarsMap)
+        val context = new Context(oldVarsMap)
         (fun, new FunctionContext(prePred, postPred, context))
       }).toMap
 
@@ -1377,8 +1381,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
 
       val globalVarTerms : Seq[ITerm] = globalVars.formalVarTerms
-      val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
-                                  globalVarTerms ++ resVar.map(v => IConstant(v.term))
+      val postArgs : Seq[ITerm] =
+        globalVarTerms ++
+        (allFormalVarTerms drop (prePredArgs.size + globalVarTerms.size)) ++
+        ((allFormalVarTerms drop (prePredArgs.size)) take globalVarTerms.size) ++
+        resVar.map(v => IConstant(v.term))
 
       output(postPred(postArgs) :- exitPred(allFormalVarTerms ++
                                    resVar.map(v => IConstant(v.term))))
@@ -3451,14 +3458,15 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             for (v <- globalVars.vars)
             yield IExpression.i(v.sort newConstant (v.name + "_post")) // todo: refactor
 
-          val prePredArgs : Seq[ITerm] =
-            (for (n <- 0 until globalVars.size)
-             yield getValue(n, false).toTerm) ++
-            argTerms
+          val globals : Seq[ITerm] =
+            for (n <- 0 until globalVars.size)
+            yield getValue(n, false).toTerm
+
+          val prePredArgs : Seq[ITerm] = globals ++ argTerms
 
           val resVar : Seq[CCVar] = getResVar(getType(funDef))
           val postPredArgs : Seq[ITerm] =
-            prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
+            postGlobalVars ++ argTerms ++ globals ++ resVar.map(c => IConstant(c.term))
 
           val preAtom  = prePred(prePredArgs)
           val postAtom = postPred(postPredArgs)

@@ -64,3 +64,9 @@ SAFE
 contract20.hcc
 Warning: enabling heap model
 UNSAFE
+
+contract21.hcc
+SAFE
+
+contract22.hcc
+UNSAFE
