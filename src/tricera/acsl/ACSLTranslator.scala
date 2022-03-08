@@ -149,19 +149,64 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                   globConstr
                 }
               } else {
-                val vari : ITerm = new SortedConstantTerm("x", ctx.getHeap.AddressSort)
+
+                // ==== exists a value to write =================================
+               
+                val (newHeapTerm, sorts) : (ITerm, Seq[Sort]) = 
+                  ptrs.foldLeft((ctx.getOldHeapTerm, List[Sort]())) (
+                    (carry, term) => {
+                      val heap  : ITerm = carry._1
+                      val sorts : List[Sort] = carry._2
+
+                      val sort : Sort = term.typ.asInstanceOf[CCHeapPointer].typ.toSort
+                      val obj : IFunction = ctx.sortWrapper(sort).get
+                      val exVar : ISortedVariable = ISortedVariable(0, sort)
+                      import ap.parser.IExpression.toFunApplier
+                      val funApp : IFunApp = obj(exVar)
+                      val write : ITerm = 
+                        ctx.getHeap.write(IExpression.shiftVars(heap, 1), term.toTerm, funApp)
+                      (write, sort :: sorts)
+                    }
+                  )
+                val heapConstr : IFormula = 
+                  IExpression.ex(sorts, ctx.getHeapTerm === newHeapTerm)
+
+
+                // ==== forall other locations they are the same ===============
+                val vari : ITerm = ISortedVariable(0, ctx.getHeap.AddressSort) 
                 val variNotEqual : IFormula =
                   ptrs.foldLeft(IBoolLit(true) : IFormula) (
                     (formula, ptr) => formula &&& vari =/= ptr.toTerm
                   )
+                val quan = ISortedQuantified(IExpression.Quantifier.ALL, ctx.getHeap.AddressSort, variNotEqual)
 
                 import ap.parser.IExpression.toFunApplier
                 val readObj  : IFunApp  = ctx.getHeap.read(ctx.getHeapTerm, vari)
                 val readObj2  : IFunApp  = ctx.getHeap.read(ctx.getOldHeapTerm, vari)
                 val readEq : IFormula = readObj === readObj2
-                val impli : IFormula = variNotEqual ==> readEq
+                val impli : IFormula = quan ==> readEq 
 
-                impli &&& globConstr
+
+
+                // ==== Zafer's version ====================================
+                val heap = ctx.getHeap
+                val f = heap.AddressSort.all(
+                  p =>
+                    ptrs.foldLeft(IBoolLit(true) : IFormula) (
+                      (formula, ptr) => formula &&& p =/= ptr.toTerm
+                    ) ==>
+                      (heap.read(ctx.getHeapTerm, p) === heap.read(ctx.getOldHeapTerm, p))
+                )
+
+                //println(heapConstr)
+                //heapConstr &&& globConstr
+
+                //println(impli)
+                //impli &&& globConstr
+
+                //println(f)
+                f &&& globConstr
+
               }
           }
       }
@@ -173,7 +218,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
   // TODO: Only handles `assigns \nothing`. Return type may want to be changed.
   def translateAssigns(clause : AST.AnAssignsClause) : Set[CCTerm] = {
-    vars = (ctx.getParams.map(v => (v.name, v))
+    vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
     clause.locations_ match {
       case ls : AST.LocationsSome    =>

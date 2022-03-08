@@ -70,3 +70,19 @@ SAFE
 
 contract22.hcc
 UNSAFE
+
+contract23.hcc
+Warning: enabling heap model
+UNSAFE
+
+contract24.hcc
+Warning: enabling heap model
+UNSAFE
+
+contract25.hcc
+Warning: enabling heap model
+SAFE
+
+contract26.hcc
+Warning: enabling heap model
+SAFE

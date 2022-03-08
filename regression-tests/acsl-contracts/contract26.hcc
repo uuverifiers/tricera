@@ -1,0 +1,15 @@
+// SAFE beacuse *q unchanged.
+
+/*@
+  assigns p;
+*/
+void foo(int* p) {
+}
+
+int main(void) {
+  int* p = malloc(sizeof(*p));
+  int* q = malloc(sizeof(*q));
+  *q = 42;
+  foo(p);
+  assert(*q == 42);
+}

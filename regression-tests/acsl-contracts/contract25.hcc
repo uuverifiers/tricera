@@ -1,0 +1,17 @@
+// SAFE because only *p assigned.
+
+/*@
+  requires \valid(p, q);
+  assigns p;
+*/
+void foo(int* p, int* q) {
+  *p = 42;
+}
+
+int main(void) {
+  int* p = malloc(sizeof(*p));
+  int* q = malloc(sizeof(*q));
+  *q = 42;
+  foo(p,q);
+  assert(*q == 42);
+}
