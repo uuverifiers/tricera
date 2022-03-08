@@ -1317,7 +1317,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               warn("Got exception while translating ACSL:\n" + e)
               warn("ACSL Translator Exception, using dummy contract for " +
                 "annotation: " + possibleACSLAnnotation.annot)
-              new FunctionContract(IBoolLit(true), IBoolLit(true), IBoolLit(true))
+              new FunctionContract(IBoolLit(true), IBoolLit(true), IBoolLit(true), IBoolLit(true))
           }
 
         val name = getName(fun.function_def_)

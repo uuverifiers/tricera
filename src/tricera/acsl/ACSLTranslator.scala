@@ -103,21 +103,22 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       val pre  : IFormula = IExpression.and(rcs.map(translate))
       val post : IFormula = IExpression.and(ecs.map(translate))
 
-      val assigns : IFormula = acs match {
-        case Nil => IBoolLit(true)
+      val assigns : (IFormula, IFormula) = acs match {
+        case Nil => (IBoolLit(true), IBoolLit(true))
         case acs =>
           val validSet : Set[CCTerm] = acs.foldLeft(Set[CCTerm]())((set, clause) =>
             set.union(translateAssigns(clause.assignsclause_.asInstanceOf[AST.AnAssignsClause]))
           )
           validSet match {
             case s if s.isEmpty =>
-              ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
+              val x = ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
                 (formula, globVar) => {
                   val glob    : ITerm = globVar.term
                   val globOld : ITerm = ctx.getOldVar(globVar.name).get.term
                   formula &&& glob === globOld
                 }
               )
+              (x,x)
             case s => 
               import scala.collection.mutable.{HashSet}
               import tricera.concurrency.CCReader.{CCHeapPointer}
@@ -144,74 +145,48 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
               if (ptrs.isEmpty) {
                 if (ctx.isHeapEnabled) {
-                  (ctx.getHeapTerm === ctx.getOldHeapTerm) &&& globConstr
+                  ((ctx.getHeapTerm === ctx.getOldHeapTerm) &&& globConstr, (ctx.getHeapTerm === ctx.getOldHeapTerm) &&& globConstr)
                 } else {
-                  globConstr
+                  (globConstr, globConstr)
                 }
               } else {
-
-                // ==== exists a value to write =================================
-               
-                val (newHeapTerm, sorts) : (ITerm, Seq[Sort]) = 
-                  ptrs.foldLeft((ctx.getOldHeapTerm, List[Sort]())) (
-                    (carry, term) => {
-                      val heap  : ITerm = carry._1
-                      val sorts : List[Sort] = carry._2
-
-                      val sort : Sort = term.typ.asInstanceOf[CCHeapPointer].typ.toSort
-                      val obj : IFunction = ctx.sortWrapper(sort).get
-                      val exVar : ISortedVariable = ISortedVariable(0, sort)
-                      import ap.parser.IExpression.toFunApplier
-                      val funApp : IFunApp = obj(exVar)
-                      val write : ITerm = 
-                        ctx.getHeap.write(IExpression.shiftVars(heap, 1), term.toTerm, funApp)
-                      (write, sort :: sorts)
-                    }
-                  )
-                val heapConstr : IFormula = 
-                  IExpression.ex(sorts, ctx.getHeapTerm === newHeapTerm)
-
-
-                // ==== forall other locations they are the same ===============
-                val vari : ITerm = ISortedVariable(0, ctx.getHeap.AddressSort) 
-                val variNotEqual : IFormula =
-                  ptrs.foldLeft(IBoolLit(true) : IFormula) (
-                    (formula, ptr) => formula &&& vari =/= ptr.toTerm
-                  )
-                val quan = ISortedQuantified(IExpression.Quantifier.ALL, ctx.getHeap.AddressSort, variNotEqual)
-
                 import ap.parser.IExpression.toFunApplier
-                val readObj  : IFunApp  = ctx.getHeap.read(ctx.getHeapTerm, vari)
-                val readObj2  : IFunApp  = ctx.getHeap.read(ctx.getOldHeapTerm, vari)
-                val readEq : IFormula = readObj === readObj2
-                val impli : IFormula = quan ==> readEq 
+                val heap : Heap = ctx.getHeap
+                val newHeap : ITerm = ctx.getHeapTerm
+                val oldHeap : ITerm = ctx.getOldHeapTerm
 
+                // Implicit existentional
+                val addrObjPairs : List[(ITerm, ITerm)] =
+                  (for ((ptr, i) <- ptrs zipWithIndex) yield {
+                    val o = new SortedConstantTerm("_o" + i, heap.ObjectSort)
+                    (ptr.toTerm, IConstant(o))
+                  }).toList
 
+                val modifiedHeap : ITerm = 
+                  addrObjPairs.foldLeft(oldHeap) ({
+                    case (h, pair) => heap.write(h, pair._1, pair._2)
+                  })
 
-                // ==== Zafer's version ====================================
-                val heap = ctx.getHeap
-                val f = heap.AddressSort.all(
-                  p =>
-                    ptrs.foldLeft(IBoolLit(true) : IFormula) (
-                      (formula, ptr) => formula &&& p =/= ptr.toTerm
-                    ) ==>
-                      (heap.read(ctx.getHeapTerm, p) === heap.read(ctx.getOldHeapTerm, p))
-                )
+                val assumeConstr : IFormula = newHeap === modifiedHeap
 
-                //println(heapConstr)
-                //heapConstr &&& globConstr
+                // Implicit universal
+                val quantified : ITerm = new SortedConstantTerm("_p", ctx.getHeap.AddressSort)
+                val quantifiedNotEqual : IFormula =
+                  ptrs.foldLeft(IBoolLit(true) : IFormula) (
+                    (formula, ptr) => formula &&& quantified =/= ptr.toTerm
+                  )
 
-                //println(impli)
-                //impli &&& globConstr
+                val readEq : IFormula = 
+                  heap.read(newHeap, quantified) === heap.read(oldHeap, quantified)
+                val assertConstr : IFormula = quantifiedNotEqual ==> readEq
 
-                //println(f)
-                f &&& globConstr
+                (assertConstr &&& globConstr, assumeConstr &&& globConstr)
 
               }
           }
       }
 
-      new FunctionContract(pre, post, assigns)
+      new FunctionContract(pre, post, assigns._1, assigns._2)
 
     case _ => throwNotImpl(contract)
   }
@@ -225,7 +200,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
         val tSets : List[AST.TSet] = 
           ls.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
         val terms : Set[CCTerm] = tSets.map({
-          case t : AST.TSetTerm  => translate(t.term_)
+          case t : AST.TSetTerm => translate(t.term_)
           case t => throwNotImpl(t)
         }).toSet
         terms
