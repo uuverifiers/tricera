@@ -2,7 +2,7 @@
 
 /*@
   requires \valid(p, q);
-  assigns p;
+  assigns *p;
 */
 void foo(int* p, int* q) {
   *q = 43;

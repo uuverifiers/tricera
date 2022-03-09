@@ -106,60 +106,59 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       val assigns : (IFormula, IFormula) = acs match {
         case Nil => (IBoolLit(true), IBoolLit(true))
         case acs =>
-          val validSet : Set[CCTerm] = acs.foldLeft(Set[CCTerm]())((set, clause) =>
-            set.union(translateAssigns(clause.assignsclause_.asInstanceOf[AST.AnAssignsClause]))
+          val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) = 
+            acs.foldLeft(Set[CCTerm](), Set[CCTerm]()) ({(sets, clause) =>
+            val (i, p) = 
+              translateAssigns(clause.assignsclause_.asInstanceOf[AST.AnAssignsClause])
+            (i.union(sets._1), p.union(sets._2))
+            }
           )
-          validSet match {
-            case s if s.isEmpty =>
-              val x = ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
+
+          val globConstraint : IFormula = 
+            if (idents.isEmpty) {
+              ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
                 (formula, globVar) => {
                   val glob    : ITerm = globVar.term
                   val globOld : ITerm = ctx.getOldVar(globVar.name).get.term
                   formula &&& glob === globOld
                 }
               )
-              (x,x)
-            case s => 
-              import scala.collection.mutable.{HashSet}
-              import tricera.concurrency.CCReader.{CCHeapPointer}
+            } else {
               val globals : Seq[ITerm] = ctx.getGlobals.map(_.term)
               val oldGlobals : Seq[ITerm] = 
                 ctx.getGlobals.map(g => ctx.getOldVar(g.name).get.term)
-              val globToOld /*: Map[ITerm, ITerm]*/ =
+              val globToOld : Map[ITerm, ITerm] =
                 globals.zip(oldGlobals).toMap
 
-              val (ptrs, other) /*: (HashSet[CCTerm], HashSet[CCTerm])*/ = 
-                s.partition(t => t.typ.isInstanceOf[CCReader.CCHeapPointer])
+              val nonAssignedGlobals : Set[ITerm] = 
+                globals.toSet.diff(idents.map(_.toTerm))
 
-              val nonAssignedGlobals /*: Set[ITerm]*/ = 
+              nonAssignedGlobals.foldLeft(IBoolLit(true) : IFormula) (
+                (formula, term) => formula &&& term === globToOld(term)
+              )
+            }
+
+          val (heapAssert, heapAssume) : (IFormula, IFormula) =
+            if (ptrDerefs.isEmpty) {
                 if (ctx.isHeapEnabled) {
-                  globals.toSet.diff(other.map(_.toTerm)).diff(Set(ctx.getHeapTerm))
+                  val sameHeap = ctx.getHeapTerm === ctx.getOldHeapTerm
+                  (sameHeap, sameHeap)
                 } else {
-                  globals.toSet.diff(other.map(_.toTerm))
+                  (IBoolLit(true), IBoolLit(true))
                 }
+            } else {
+                val ptrs = ptrDerefs.map(_.toTerm)
 
-              val globConstr : IFormula =
-                nonAssignedGlobals.foldLeft(IBoolLit(true) : IFormula) (
-                  (formula, term) => formula &&& term === globToOld(term)
-                )
-
-              if (ptrs.isEmpty) {
-                if (ctx.isHeapEnabled) {
-                  ((ctx.getHeapTerm === ctx.getOldHeapTerm) &&& globConstr, (ctx.getHeapTerm === ctx.getOldHeapTerm) &&& globConstr)
-                } else {
-                  (globConstr, globConstr)
-                }
-              } else {
                 import ap.parser.IExpression.toFunApplier
                 val heap : Heap = ctx.getHeap
                 val newHeap : ITerm = ctx.getHeapTerm
                 val oldHeap : ITerm = ctx.getOldHeapTerm
 
-                // Implicit existentional
+                // Implicit existensional
                 val addrObjPairs : List[(ITerm, ITerm)] =
                   (for ((ptr, i) <- ptrs zipWithIndex) yield {
                     val o = new SortedConstantTerm("_o" + i, heap.ObjectSort)
-                    (ptr.toTerm, IConstant(o))
+                    (ptr, IConstant(o))
                   }).toList
 
                 val modifiedHeap : ITerm = 
@@ -173,17 +172,16 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                 val quantified : ITerm = new SortedConstantTerm("_p", ctx.getHeap.AddressSort)
                 val quantifiedNotEqual : IFormula =
                   ptrs.foldLeft(IBoolLit(true) : IFormula) (
-                    (formula, ptr) => formula &&& quantified =/= ptr.toTerm
+                    (formula, ptr) => formula &&& quantified =/= ptr
                   )
 
                 val readEq : IFormula = 
                   heap.read(newHeap, quantified) === heap.read(oldHeap, quantified)
                 val assertConstr : IFormula = quantifiedNotEqual ==> readEq
 
-                (assertConstr &&& globConstr, assumeConstr &&& globConstr)
-
-              }
-          }
+                (assertConstr, assumeConstr)
+            }
+          (heapAssert &&& globConstraint, heapAssume &&& globConstraint)
       }
 
       new FunctionContract(pre, post, assigns._1, assigns._2)
@@ -191,22 +189,31 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case _ => throwNotImpl(contract)
   }
 
-  // TODO: Only handles `assigns \nothing`. Return type may want to be changed.
-  def translateAssigns(clause : AST.AnAssignsClause) : Set[CCTerm] = {
+  def translateAssigns(clause : AST.AnAssignsClause) : (Set[CCTerm], Set[CCTerm]) = {
     vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
     clause.locations_ match {
       case ls : AST.LocationsSome    =>
         val tSets : List[AST.TSet] = 
           ls.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
-        val terms : Set[CCTerm] = tSets.map({
-          case t : AST.TSetTerm => translate(t.term_)
+        val nils = (Nil : List[CCTerm], Nil : List[CCTerm])
+        val terms : (List[CCTerm], List[CCTerm]) = tSets.foldRight(nils) ({
+          case (t : AST.TSetTerm, (idents, ptrDerefs)) => 
+            t.term_ match {
+              case i : AST.TermIdent => (translate(i) :: idents, ptrDerefs)
+              case p : AST.TermUnaryOp if p.unaryop_.isInstanceOf[AST.UnaryOpPtrDeref] => {
+                (idents, translate(p.term_) :: ptrDerefs)
+            }
+            case _ => throw new ACSLParseException("Only global identifiers or "
+              + "heap pointer dereferences allowed in assigns-clauses.")
+          }
           case t => throwNotImpl(t)
-        }).toSet
-        terms
-      case _  : AST.LocationsNothing => Set()
+        })
+        (terms._1.toSet, terms._2.toSet)
+      case _  : AST.LocationsNothing => (Set(), Set())
     }
   }
+
 
   // FIXME: Type is specified already.
   def translate(clause : AST.SimpleClause) : IFormula = clause match {

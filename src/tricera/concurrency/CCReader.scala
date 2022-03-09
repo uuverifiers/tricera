@@ -1232,7 +1232,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
 
           def getGlobals : Seq[CCReader.CCVar] = {
-            globalVars.vars
+            globalVars.vars - heapVar
           }
 
           def getResultVar : Option[CCReader.CCVar] = {

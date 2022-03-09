@@ -1,7 +1,7 @@
 // SAFE beacuse *q unchanged.
 
 /*@
-  assigns p;
+  assigns *p;
 */
 void foo(int* p) {
 }

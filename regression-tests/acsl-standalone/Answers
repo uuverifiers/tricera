@@ -159,3 +159,29 @@ Init:
 Final:
   foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), -42, nthAddr(1))  
 --------------------------------------------------------------------------------------------------------------------
+
+dblptr-assigns_safe.c
+Warning: enabling heap model
+SAFE
+
+dblptr-assigns_unsafe.c
+Warning: enabling heap model
+UNSAFE
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+ foo0(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(51))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(51))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3)) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                  |                                                                                                                                   
+                                                                                                                                  |                                                                                                                                   
+                                                                                                                                  V                                                                                                                                   
+ foo3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(42))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(51))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3)) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                  |                                                                                                                                   
+                                                                                                                                  |                                                                                                                                   
+                                                                                                                                  V                                                                                                                                   
+       foo1(newHeap(alloc(newBatchHeap(batchAlloc(emptyHeap, O_Int(42), 2)), O_Addr(nthAddr(1)))), 42, nthAddr(2), nthAddr(3), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(51))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3))        
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+       foo1(newHeap(alloc(newBatchHeap(batchAlloc(emptyHeap, O_Int(42), 2)), O_Addr(nthAddr(1)))), 42, nthAddr(2), nthAddr(3), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(51))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3))        
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
