@@ -1,0 +1,13 @@
+
+pred-hint.c
+Warning: no definition of function "nondet" available
+Warning: no definition of function "nondet" available
+SAFE
+
+pred-hint-loop.c
+Warning: no definition of function "nondet" available
+Warning: no definition of function "nondet" available
+Warning: no definition of function "nondet" available
+Warning: no definition of function "nondet" available
+Warning: no definition of function "nondet" available
+SAFE

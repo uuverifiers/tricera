@@ -841,6 +841,16 @@ class CCReader private (prog : Program,
       res
   }
 
+  private var noSideEffects = false
+
+  private def withoutSideEffects[A](comp : => A) : A = {
+    val oldNoSideEffects = noSideEffects
+    noSideEffects = true
+    val res = comp
+    noSideEffects = oldNoSideEffects
+    res
+  }
+
   private var prefix : String = ""
   private var locationCounter = 0
 
@@ -2327,7 +2337,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private var assignedToStruct : Boolean = false
 
     private def maybeOutputClause : Unit =
-      if ((!atomicMode && touchedGlobalState) || assignedToStruct) outputClause
+      if (!noSideEffects &&
+        ((!atomicMode && touchedGlobalState) || assignedToStruct)) outputClause
 
     private def pushVal(v : CCExpr) = {
       val freshVar = getFreshEvalVar(v.typ)
@@ -2395,10 +2406,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     def outputClause(pred : Predicate,
                      sync : ParametricEncoder.Synchronisation =
                        ParametricEncoder.NoSync) : Unit = {
-      val c = genClause(pred)
-      if (!c.hasUnsatConstraint)
-        output(c, sync)
-      resetFields(pred)
+      if(!noSideEffects) {
+        val c = genClause(pred)
+        if (!c.hasUnsatConstraint)
+          output(c, sync)
+        resetFields(pred)
+      }
     }
 
     def outputClause(headAtom : IAtom) : Unit = {
@@ -2463,13 +2476,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       setValue(lookupVar(name), t, isIndirection)
     private def setValue(ind: Int, t : CCExpr,
                          isIndirection : Boolean) : Unit = {
-
-      val actualInd = getValue(ind, false).typ match {
-        case stackPtr: CCStackPointer => stackPtr.targetInd
-        case _ => ind
-      }
-      values(actualInd) = t
-       /* if(isIndirection) {
+      if(!noSideEffects) {
+        val actualInd = getValue(ind, false).typ match {
+          case stackPtr: CCStackPointer => stackPtr.targetInd
+          case _ => ind
+        }
+        values(actualInd) = t
+        /* if(isIndirection) {
           //val ptrType = getPointerType(ind)
           getValue(ind, false).typ match {
             case stackPtr : CCStackPointer =>
@@ -2493,8 +2506,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           values(ind) = t
           ind
         }*/
-      touchedGlobalState =
-        touchedGlobalState || actualInd < globalVars.size || !freeFromGlobal(t)
+        touchedGlobalState =
+          touchedGlobalState || actualInd < globalVars.size || !freeFromGlobal(t)
+      }
     }
 
     private def getVar (ind : Int) : CCVar = {
@@ -3114,24 +3128,24 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Efunkpar => (printer print exp.exp_) match {
         case "assert" | "static_assert" | "__VERIFIER_assert"
                           if (exp.listexp_.size == 1) => {
-//          eval(exp.listexp_.head) match { // todo: the double evaluation in the second case breaks things...
-//            case f@CCFormula(IAtom(_, _), _) =>
-//              assertProperty(f.toFormula)
-//            case _ =>
-//              assertProperty(atomicEval(exp.listexp_.head).toFormula)
-//          }
-          assertProperty(atomicEval(exp.listexp_.head).toFormula)
+          withoutSideEffects(eval(exp.listexp_.head)) match {
+            case f@CCFormula(IAtom(_, _), _) =>
+              // todo: why atomicEval fails for uninterpreted predicate hints?
+              assertProperty(eval(exp.listexp_.head).toFormula)
+            case f =>
+              assertProperty(atomicEval(exp.listexp_.head).toFormula)
+          }
           pushVal(CCFormula(true, CCInt))
         }
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) => {
-//          eval(exp.listexp_.head) match { // todo: the double evaluation in the second case breaks things...
-//            case f@CCFormula(IAtom(_, _), _) =>
-//              addGuard(f.toFormula)
-//            case _ =>
-//              addGuard(atomicEval(exp.listexp_.head).toFormula)
-//          }
-          addGuard(atomicEval(exp.listexp_.head).toFormula)
+          withoutSideEffects(eval(exp.listexp_.head)) match {
+            case f@CCFormula(IAtom(_, _), _) =>
+              // todo: why atomicEval fails for uninterpreted predicate hints?
+              addGuard(eval(exp.listexp_.head).toFormula)
+            case _ =>
+              addGuard(atomicEval(exp.listexp_.head).toFormula)
+          }
           pushVal(CCFormula(true, CCInt))
         }
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {

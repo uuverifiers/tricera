@@ -67,8 +67,14 @@ class TriCeraParameters extends GlobalParameters {
     case "-memtrack" :: rest => shouldTrackMemory = true; parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
-    case "-abstractPO" :: rest => templateBasedInterpolationPortfolio = true; parseArgs(rest)
-    case "-abstract:manual" :: rest => {
+    case "-abstractPO" :: rest => {
+      portfolio = GlobalParameters.Portfolio.Template
+      parseArgs(rest)
+    }
+    case "-portfolio" :: rest => {
+      portfolio = GlobalParameters.Portfolio.General
+      parseArgs(rest)
+    }    case "-abstract:manual" :: rest => {
       templateBasedInterpolation = true
       templateBasedInterpolationType = AbstractionType.Empty
       parseArgs(rest)
@@ -107,8 +113,10 @@ class TriCeraParameters extends GlobalParameters {
       parseArgs(rest)
     }
 
-    case "-splitClauses" :: rest => splitClauses = true; parseArgs(rest)
-
+    case splitMode :: rest if (splitMode startsWith "-splitClauses:") => {
+      splitClauses = splitMode.drop(14).toInt
+      parseArgs(rest)
+    }
     case aMode :: rest if (aMode startsWith "-arithMode:") => {
       arithMode = aMode match {
         case "-arithMode:math" => CCReader.ArithmeticMode.Mathematical
@@ -200,7 +208,8 @@ class TriCeraParameters extends GlobalParameters {
       "            \t                     relEqs (default), relIneqs\n" +
       " -abstractTO:t\tTimeout (s) for abstraction search (default: 2.0)\n" +
       " -abstractPO\tRun with and w/o interpolation abstraction in parallel\n" +
-      " -splitClauses\tTurn clause constraints into pure inequalities\n" +
+      " -splitClauses:n\tAggressiveness when splitting disjunctions in clauses\n" +
+      "                \t                     (0 <= n <= 2, default: 1)\n" +
 
       "\n" +
       "C/C++/TA front-end:\n" +
