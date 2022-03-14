@@ -25,18 +25,22 @@ StraySemi.     IgnoredDecl ::= ";" ;
 
 separator nonempty External_declaration "";
 
+AnnotatedFunc.  Function_def ::= [Annotation] [Declaration_specifier] Declarator Compound_stm ;
 -- OldFunc.     Function_def ::= [Declaration_specifier] Declarator [Dec] Compound_stm ;
-NewFunc.     Function_def ::= [Declaration_specifier] Declarator Compound_stm ;
-NewHintFunc.     Function_def ::= [Abs_hint] [Declaration_specifier] Declarator Compound_stm ;
 -- OldFuncInt.  Function_def ::= Declarator [Dec] Compound_stm ;
-NewFuncInt.  Function_def ::= [Abs_hint] Declarator Compound_stm ;
+NewFuncInt.  Function_def ::= [Annotation] Declarator Compound_stm ;
+NewFunc.     Function_def ::= [Declaration_specifier] Declarator Compound_stm ;
+
+Annot1. Annotation ::= AnnotationString;
+
+separator nonempty Annotation "";
 
 SingleThread. Thread_def ::= "thread" CIdent Compound_stm ;
 ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
 
-NoDeclarator.   Dec ::= [Declaration_specifier] [Extra_specifier] ";";
-Declarators.    Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
-PredDeclarator. Dec ::= "/*$" [Pred_hint] "$*/";
+NoDeclarator.    Dec ::= [Declaration_specifier] [Extra_specifier] ";";
+Declarators.     Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
+PredDeclarator.  Dec ::= "/*$" [Pred_hint] "$*/";
 
 separator nonempty Dec "";
 
@@ -64,24 +68,24 @@ separator nonempty Attribute ",";
 
 OnlyDecl.     Init_declarator ::= Declarator ;
 InitDecl.     Init_declarator ::= Declarator "=" Initializer;
-HintDecl.     Init_declarator ::= [Abs_hint] Declarator;
-HintInitDecl. Init_declarator ::= [Abs_hint] Declarator "=" Initializer;
+HintDecl.     Init_declarator ::= [Annotation] Declarator;
+HintInitDecl. Init_declarator ::= [Annotation] Declarator "=" Initializer;
 
 separator nonempty Init_declarator ",";
 
-Comment_abs_hint. Abs_hint ::= "/*@" [Abs_hint_clause] "@*/";
+-- Comment_abs_hint. Abs_hint ::= "/*@" [Abs_hint_clause] "@*/";
 
-separator nonempty Abs_hint "";
+-- separator nonempty Abs_hint "";
 
-Predicate_hint. Abs_hint_clause ::= CIdent Maybe_cost Maybe_Exp_Args;
+-- Predicate_hint. Abs_hint_clause ::= CIdent Maybe_cost Maybe_Exp_Args;
 
-separator Abs_hint_clause "";
+-- separator Abs_hint_clause "";
 
-SomeCost.    Maybe_cost ::= "[" UnboundedInteger "]";
-NoCost.      Maybe_cost ::= ;
+-- SomeCost.    Maybe_cost ::= "[" UnboundedInteger "]";
+-- NoCost.      Maybe_cost ::= ;
 
-SomeExpArgs.    Maybe_Exp_Args ::= "{" Exp "}";
-NoExpArgs.      Maybe_Exp_Args ::= ;
+-- SomeExpArgs.    Maybe_Exp_Args ::= "{" Exp "}";
+-- NoExpArgs.      Maybe_Exp_Args ::= ;
 
 
 Tvoid.        Type_specifier ::= "void";
@@ -177,7 +181,7 @@ AllSpec.  Parameter_type ::= [Parameter_declaration] ;
 More.          Parameter_declaration ::= "..." ;
 OnlyType.      Parameter_declaration ::= [Declaration_specifier] ;
 TypeAndParam.  Parameter_declaration ::= [Declaration_specifier] Declarator ;
-TypeHintAndParam.  Parameter_declaration ::= [Declaration_specifier] [Abs_hint] Declarator ;
+TypeHintAndParam.  Parameter_declaration ::= [Declaration_specifier] [Annotation] Declarator ;
 Abstract.      Parameter_declaration ::= [Declaration_specifier] Abstract_declarator ;
 
 separator nonempty Parameter_declaration ",";
@@ -264,6 +268,8 @@ SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
 separator nonempty Stm "";
 
 token CIdent (letter | '_' | '$') (letter | digit | '_' | '$')*;
+
+token AnnotationString   {"■■"} (char - ["■"])* {"■■"};
 
 token UnboundedInteger ["123456789"] digit *;
 

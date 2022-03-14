@@ -243,12 +243,50 @@ class Main (args: Array[String]) {
       case _  => false
     })) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
+
+    // todo: add a switch for this, also benchmark/profile
+    val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
+      new java.io.FileReader(new java.io.File(ppFileName))))
     val (reader, modelledHeapRes) =
-      CCReader(new java.io.BufferedReader(
-        new java.io.FileReader(new java.io.File(ppFileName))),
-        funcName, arithMode, shouldTrackMemory)
+      CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
 
     val system = reader.system
+
+    def checkForSameNamedTerms = {
+      val clausesWithSameNamedTerms =
+        (system.processes.flatMap(_._1).map(_._1) ++ system.assertions).filter(
+          c => c.constants.size != c.constants.map(_.name).size)
+      for (c <- clausesWithSameNamedTerms) {
+        import ap.parser.{IBinJunctor, LineariseVisitor, Transform2NNF}
+        import ap.parser.IExpression._
+        val sameNamedTerms =
+          c.constants.groupBy(_.name).filter(_._2.size > 1)
+        val conjuncts =
+          LineariseVisitor(Transform2NNF(c.constraint), IBinJunctor.And)
+
+        val possibleEqualityFormulas =
+          for ((_, terms) <- sameNamedTerms) yield {
+            val termEqualityFormulas =
+              terms.toSeq.combinations(2).flatMap(ts =>
+                Seq(ts(0) === ts(1), ts(1) === ts(0))).toSeq
+            termEqualityFormulas
+          }
+
+        val sameTermFormulasThatAreNotEqual = possibleEqualityFormulas.filter(f =>
+          f.forall(eq => !conjuncts.contains(eq)))
+
+        for (f <- sameTermFormulasThatAreNotEqual) {
+          f.head match {
+            case Eq(ap.parser.IConstant(t), _) =>
+              Util.warn("The following clause has different terms with the same " +
+                "name (term: " + t.name + ")\n" + c.toPrologString + "\n")
+            case _ => // should not be possible
+          }
+        }
+      }
+    }
+    if(devMode) // todo: make part of -assert?
+      checkForSameNamedTerms
 
     modelledHeap = modelledHeapRes
 
@@ -369,9 +407,37 @@ class Main (args: Array[String]) {
       case Right(cex) => {
         println("UNSAFE")
         if (plainCEX) {
-          println
-          //reader.printPredsWithArgNames
-          hornconcurrency.VerificationLoop.prettyPrint(cex)
+          if (cex == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
+            println("(An assertion has failed in the background clauses, " +
+              "counterexample is not available.)")
+          }
+          else {
+            println
+            //reader.printPredsWithArgNames
+            hornconcurrency.VerificationLoop.prettyPrint(cex)
+            if(showFailedAssertions) {
+              import hornconcurrency.VerificationLoop._
+              import lazabs.horn.bottomup.HornClauses
+              val cexClauses: Seq[HornClauses.Clause] = cex.last match {
+                case c: CEXLocalStep => Seq(c.clause)
+                case c: CEXInit => Seq(c.clauses.last) // todo: correct?
+                case _ => Nil // todo: others?
+              }
+              val relatedAssertions =
+                (for (c <- cexClauses) yield
+                  reader.getRelatedAssertions(c.head.pred)).flatten
+              println("\nRelated assertions: ")
+              for (assertion <- relatedAssertions) {
+                val assertionSource = assertion.srcInfo match {
+                  case Some(srcInfo) =>
+                    "(assertion source: line " + srcInfo.line + ") "
+                  case None => ""
+                }
+                println(" " + assertion.clause.toPrologString + " " +
+                  assertionSource)
+              }
+            }
+          }
         }
         Unsafe
       }
@@ -420,13 +486,15 @@ class Main (args: Array[String]) {
       ExecutionSummary(StackOverflow, Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
     case t: Exception =>
-      //t.printStackTrace
+      if(devMode)
+        t.printStackTrace
       printError(t.getMessage)
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
     case t: AssertionError =>
       printError(t.getMessage)
-      t.printStackTrace
+      if(devMode)
+        t.printStackTrace
       ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
         programTimer.s, preprocessTimer.s )
   }

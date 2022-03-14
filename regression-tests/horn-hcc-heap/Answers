@@ -152,10 +152,12 @@ SAFE
 
 illegal-access-001.c
 Warning: enabling heap model
+tricera.concurrency.CCReader$TranslationException: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
 (error "Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)")
 
 illegal-access-002.c
 Warning: enabling heap model
+tricera.concurrency.CCReader$TranslationException: Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)
 (error "Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)")
 
 postop.c

@@ -5,6 +5,7 @@ SAFE
 
 atomic3f.hcc
 Warning: enabling time
+tricera.concurrency.CCReader$TranslationException: cycles in atomic blocks are not supported yet
 (error "cycles in atomic blocks are not supported yet")
 
 clocks1.hcc
@@ -88,6 +89,7 @@ Final:
 --------------------------
 
 channels-3.hcc
+tricera.concurrency.CCReader$TranslationException: Cannot execute Receive(d) and Send(c) in one step
 (error "Cannot execute Receive(d) and Send(c) in one step")
 
 duration1.hcc

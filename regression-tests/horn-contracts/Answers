@@ -38,6 +38,18 @@ takeuchi.hcc
 SAFE
 
 assert.hcc
+Warning: The following clause has different terms with the same name (term: N2_post)
+main1(N_post, N2_post) :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4).
+
+Warning: The following clause has different terms with the same name (term: N_post)
+main1(N_post, N2_post) :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4).
+
+Warning: The following clause has different terms with the same name (term: N2_post)
+false :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4), __res4 < N/1.
+
+Warning: The following clause has different terms with the same name (term: N_post)
+false :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4), __res4 < N/1.
+
 SAFE
 
 fib.hcc
