@@ -341,7 +341,7 @@ class Main (args: Array[String]) {
         res match {
           case Some(solution) =>
             import ap.parser.ITerm
-            import tricera.concurrency.ACSLLineariser
+            import tricera.postprocessor._
             import reader.CCPredicate
 
             def replaceArgs(p : CCPredicate, f : String) = {
@@ -362,10 +362,23 @@ class Main (args: Array[String]) {
             val contracts = reader.getFunctionContracts
             // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
             for ((fun, (pre, post)) <- contracts) {
-              // ACSLLineariser.asString processes the solution and then returns a string
-              val fPre  = ACSLLineariser asString solution(pre.pred)
-              val fPost = ACSLLineariser asString solution(post.pred)
+              val solutionProcessors = Seq(
+                ADTExploder
+                // add additional solution processors here
+              )
+              var processedSolution : SolutionProcessor.Solution  = solution
+              // iteratively process the solution using all solution processors
+              // this will only process the pre/post predicates' solutions due
+              // to the second argument
+              for (processor <- solutionProcessors) {
+                processedSolution =
+                  processor(processedSolution)(Seq(pre, post).map(_.pred))
+              }
 
+              val fPre  = ACSLLineariser asString processedSolution(pre.pred)
+              val fPost = ACSLLineariser asString processedSolution(post.pred)
+
+              // todo: implement replaceArgs as a solution processor
               // replaceArgs does a simple string replacement (see above def)
               val fPreWithArgs  = replaceArgs(pre,  fPre)
               val fPostWithArgs = replaceArgs(post, fPost)

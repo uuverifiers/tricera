@@ -1,18 +1,13 @@
-package tricera.concurrency
-import ap.parser.IExpression
-import ap.types._
+package tricera.postprocessor
+
 import ap.parser._
 import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
+import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 
-import scala.collection.mutable.{HashMap => MHashMap}
-
-class SolutionPreprocessor { // make object? / parameters?
-  //private val defaultRewritings = List(explodeStructs _)
-  def apply(expr : IExpression) : IExpression = {
-    import Rewriter._
-    rewrite(expr, explodeADTs)
-  }
+object ADTExploder extends SolutionProcessor {
+  def apply(expr : IExpression) : IExpression =
+    Rewriter.rewrite(expr, explodeADTs)
 
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
@@ -62,7 +57,7 @@ class SolutionPreprocessor { // make object? / parameters?
         case t@IFunApp(f,_) =>
           val newApp = t update subres
           (for (theory <- TheoryRegistry lookupSymbol f;
-          res <- theory evalFun newApp) yield res) getOrElse newApp
+                res <- theory evalFun newApp) yield res) getOrElse newApp
         case _ =>
           t update subres
       }
@@ -72,4 +67,5 @@ class SolutionPreprocessor { // make object? / parameters?
   // converts "s = S(a, b)" to "f1(s) = a & f2(s) = b"
   private def explodeADTs(expr : IExpression) : IExpression =
     adtTermExploder.visit(expr, null)
+
 }
