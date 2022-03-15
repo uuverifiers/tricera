@@ -50,7 +50,6 @@ import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 
 object CCReader {
-  var arrTermCounter : Int = 0 // todo: get rid of this, used to initialize terms in getZeroInit
   def apply(input : java.io.Reader, entryFunction : String,
             arithMode : ArithmeticMode.Value = ArithmeticMode.Mathematical,
             trackMemorySafety : Boolean = false)
@@ -58,8 +57,6 @@ object CCReader {
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
 //    println(printer print prog)
-
-    arrTermCounter = 0
 
     var useTime = false
     var modelHeap = false
@@ -236,20 +233,7 @@ object CCReader {
       case CCHeapPointer(heap, _) => heap.nullAddr()
       case CCHeapArrayPointer(heap, _, _) => // todo: start = null, but size 0 or 1?
         heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
-      case CCArray(elemTyp, sizeExpr, arraySize, arrayTheory) =>
-
-        val initialArrayTerm =
-          new SortedConstantTerm("_arr" + arrTermCounter, arrayTheory.objSort)
-        arrTermCounter += 1
-        // todo: merge with struct getInit
-        def arrayBatchStore(arr: ITerm, ind: Int, n: Int): ITerm = {
-          if (ind >= n)
-            arr else {
-            val innerArr = arrayTheory.store(arr, ind, elemTyp.getZeroInit)
-            arrayBatchStore(innerArr, ind + 1, n)
-          }
-        }
-        arrayBatchStore(initialArrayTerm, 0, arraySize)
+      case CCArray(_, _, _, arrayTheory) => arrayTheory.const(0)
       case _ => IIntLit(0)
     }
   }

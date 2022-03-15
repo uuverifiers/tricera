@@ -360,10 +360,13 @@ class Main (args: Array[String]) {
             }
 
             val contracts = reader.getFunctionContracts
+            // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
             for ((fun, (pre, post)) <- contracts) {
+              // ACSLLineariser.asString processes the solution and then returns a string
               val fPre  = ACSLLineariser asString solution(pre.pred)
               val fPost = ACSLLineariser asString solution(post.pred)
 
+              // replaceArgs does a simple string replacement (see above def)
               val fPreWithArgs  = replaceArgs(pre,  fPre)
               val fPostWithArgs = replaceArgs(post, fPost)
 
