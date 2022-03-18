@@ -91,7 +91,7 @@ PredValid.            Predicate ::= "\\valid" "(" [Location] ")" ;
 LiteralTrue.   Literal ::= "\\true" ;
 LiteralFalse.  Literal ::= "\\false" ;
 -- FIXME: Use C-specific literals.
-LiteralInt.    Literal ::= Integer ;
+LiteralInt.    Literal ::= UnboundedInteger ;
 LiteralReal.   Literal ::= Double ;
 LiteralString. Literal ::= String ;
 LiteralChar.   Literal ::= Char ;
@@ -199,4 +199,5 @@ CTypeSpecifierId.       CTypeSpecifier ::= Id ;
 ---- Tokens ------------------------------------------------ 
 -- Taken from concorrentC.cf
 token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
+token UnboundedInteger ('0' | (["123456789"] digit *));
 separator Id "," ;

@@ -185,3 +185,11 @@ Init:
 Final:
        foo1(newHeap(alloc(newBatchHeap(batchAlloc(emptyHeap, O_Int(42), 2)), O_Addr(nthAddr(1)))), 42, nthAddr(2), nthAddr(3), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(51))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3))        
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+swap_safe.c
+Warning: enabling heap model
+SAFE
+
+swap_unsafe.c
+Warning: enabling heap model
+(error "-1")

@@ -1,0 +1,24 @@
+
+
+/*@
+  requires \valid(a) && \valid(b);
+  assigns  *a, *b;
+  ensures  (*a) == \old(*b);
+  ensures  (*b) == \old(*a);
+*/
+void swap(int* a, int* b) {
+  int tmp = *a;
+  *a = *b;
+  *b = tmp;
+}
+
+int main(void) {
+  int* a = (int*) malloc(sizeof(*a));
+  int* b = (int*) malloc(sizeof(*b));
+  int* c = (int*) malloc(sizeof(*c));
+  *a = 1;
+  *c = 3;
+  swap(a, b);
+  assert(*b == 1);
+  assert(*c == 3);
+}

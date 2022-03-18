@@ -17,7 +17,9 @@ TESTS="inc_safe.c \
        old_safe.c \
        old_unsafe.c \
        dblptr-assigns_safe.c \
-       dblptr-assigns_unsafe.c"
+       dblptr-assigns_unsafe.c \
+       swap_safe.c \
+       swap_unsafe.c"
 
 for name in $TESTS; do
     echo

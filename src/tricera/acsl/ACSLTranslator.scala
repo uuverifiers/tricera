@@ -103,16 +103,16 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       val pre  : IFormula = IExpression.and(rcs.map(translate))
       val post : IFormula = IExpression.and(ecs.map(translate))
 
+      // FIXME: Refactor and break out in functions!
       val assigns : (IFormula, IFormula) = acs match {
         case Nil => (IBoolLit(true), IBoolLit(true))
         case acs =>
           val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) = 
             acs.foldLeft(Set[CCTerm](), Set[CCTerm]()) ({(sets, clause) =>
-            val (i, p) = 
-              translateAssigns(clause.assignsclause_.asInstanceOf[AST.AnAssignsClause])
-            (i.union(sets._1), p.union(sets._2))
-            }
-          )
+              val (i, p) = 
+                translateAssigns(clause.assignsclause_.asInstanceOf[AST.AnAssignsClause])
+              (i.union(sets._1), p.union(sets._2))
+            })
 
           val globConstraint : IFormula = 
             if (idents.isEmpty) {
@@ -166,7 +166,18 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                     case (h, pair) => heap.write(h, pair._1, pair._2)
                   })
 
-                val assumeConstr : IFormula = newHeap === modifiedHeap
+                val ptrObjPairs : List[(CCTerm, ITerm)] =
+                  ptrDerefs.zip(addrObjPairs.unzip._2).toList
+
+                val corrSort : IFormula =
+                  ptrObjPairs.foldLeft(IBoolLit(true) : IFormula) (
+                    (formula, pair) => {
+                      val (p, obj) = pair
+                      formula &&& ctx.getHeap.heapADTs.hasCtor(obj, ctx.getCtor(p.typ.asInstanceOf[CCReader.CCHeapPointer].typ.toSort))
+                    }
+                  )
+
+                val assumeConstr : IFormula = newHeap === modifiedHeap &&& corrSort
 
                 // Implicit universal
                 val quantified : ITerm = new SortedConstantTerm("_p", ctx.getHeap.AddressSort)
@@ -178,7 +189,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                 val readEq : IFormula = 
                   heap.read(newHeap, quantified) === heap.read(oldHeap, quantified)
                 val assertConstr : IFormula = quantifiedNotEqual ==> readEq
-
+                
                 (assertConstr, assumeConstr)
             }
           (heapAssert &&& globConstraint, heapAssume &&& globConstraint)
@@ -189,6 +200,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case _ => throwNotImpl(contract)
   }
 
+  // FIXME: Return ITerm directly?
   def translateAssigns(clause : AST.AnAssignsClause) : (Set[CCTerm], Set[CCTerm]) = {
     vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
@@ -479,9 +491,11 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
   def translate(term : AST.TermUnaryOp) : CCTerm = {
     val right : CCTerm = translate(term.term_)
+    // FIXME: Probably needs type conversions.
     term.unaryop_ match {
       case op : AST.UnaryOpPlus            => throwNotImpl(op)
-      case op : AST.UnaryOpMinus           => throwNotImpl(op) // right.unary_-
+      case op : AST.UnaryOpMinus           => 
+        CCTerm(right.toTerm.unary_-, right.typ, right.srcInfo)
       case op : AST.UnaryOpNegation => 
         CCTerm(right.toTerm.unary_-, right.typ, right.srcInfo)
       case op : AST.UnaryOpComplementation => throwNotImpl(op)
@@ -595,7 +609,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     case l : AST.LiteralTrue   => throwNotImpl(l) // IBoolLit(true)
     case l : AST.LiteralFalse  => throwNotImpl(l) // IBoolLit(false)
     case l : AST.LiteralInt    => 
-      CCTerm(IExpression.i(l.integer_), CCReader.CCInt(), None) // todo; line no?
+      import ap.basetypes.IdealInt
+      CCTerm(IExpression.i(IdealInt(l.unboundedinteger_)), CCReader.CCInt(), None) // todo; line no?
     case l : AST.LiteralReal   => throwNotImpl(l)
     case l : AST.LiteralString => throwNotImpl(l) // ap.theories.string.StringTheory?
     case l : AST.LiteralChar   => throwNotImpl(l)
