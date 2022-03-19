@@ -2350,10 +2350,34 @@ structDefs += ((structInfos(i).name, structFieldList)) */
      * @param lhs this must be a read from the location to be updated.
      *            e.g. getInt(read(h,a)) or an ADT selector x(getS(read(h,a)))
      * @param rhs the term to be written to the location pointed by lhs
+     * @param assertMemSafety add memory safety assertion
+     * @param assumeMemSafety assume memory safety after write
      */
-    def heapWrite(lhs : IFunApp, rhs : CCExpr) = {
+    def heapWrite(lhs : IFunApp, rhs : CCExpr,
+                  assertMemSafety : Boolean = false,
+                  assumeMemSafety : Boolean = false) = {
       val newHeap = heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), rhs.srcInfo))
+      if (assertMemSafety) {
+        def getObjAndSort(f : IFunApp) : (IFunApp, Sort) = {
+          if (objectGetters contains f.fun) {
+            val sort = f.fun.asInstanceOf[MonoSortedIFunction].resSort
+            val obj = f.args.head.asInstanceOf[IFunApp]
+            (obj, sort)
+          } else if (f.args.size == 1 && f.args.head.isInstanceOf[IFunApp]) {
+            getObjAndSort(f.args.head.asInstanceOf[IFunApp])
+          } else
+            throw new TranslationException("Cannot determine read" +
+              "object from passed term")
+        }
+        val (writtenObj, sort) = getObjAndSort(lhs)
+
+        assertProperty(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)),
+          rhs.srcInfo) // todo: add tester methods for user ADT sorts?
+        // also add memory safety assumptions to the clause
+        if (assumeMemSafety)
+          addGuard(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)))
+      }
     }
 
     /**
@@ -2889,7 +2913,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           isHeapStructFieldRead(lhsVal) // ps->f = ... where ps is a heap ptr
         if(lhsIsArrayPointer || isHeapPointer(lhsVal) || updatingPointedValue) {
           if (updatingPointedValue)
-            heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
+            heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, true, true)
           else if (lhsIsArrayPointer) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
             lhsIsArrayPointer = false
             val newTerm = CCTerm(
@@ -3001,7 +3025,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             isHeapStructFieldRead(lhsVal) // ps->f = ... where ps is a heap ptr
 
         if(isHeapPointer(exp) && updatingPointedValue) {
-          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal)
+          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, true, true)
         } else {
           setValue(lookupVar(asLValue(exp.exp_1)),
             getActualAssignedTerm(lhsVal, newVal),
@@ -3133,7 +3157,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         maybeOutputClause
         pushVal(popVal mapTerm (_ + op))
         if(isHeapPointer(preExp)) {
-          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal)
+          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, true, true)
         } else {
           setValue(lookupVar(asLValue(preExp)),
             getActualAssignedTerm(lhsVal, topVal),
@@ -3156,7 +3180,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     assert(rootInd > -1 && rootInd < values.size - 1) // todo
                     val ptr = CCStackPointer(rootInd, popVal.typ, structType.getFieldAddress(fieldNames))
                     pushVal(CCTerm(IExpression.Int2ITerm(rootInd), ptr, srcInfo)) //we don't care about the value
-                  case Right(_) =>
+                  case Right(c) =>
                     // newAddr(alloc(h, WrappedAddr(getPtrField(getStruct(read(h, p))))))
                     // here topVal = getPtrField(getStruct(read(h, p))), we construct the rest
                     // this is to allocate memory for expressions like:
@@ -3166,6 +3190,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     //otherwise when we evaluate this we would be pushing two terms instead of one)
                     val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
                     maybeOutputClause
+                    assert(c.args.size == 1)
+                    val readObj = c.args.head
+                    val resSort = c.fun.asInstanceOf[MonoSortedIFunction].resSort
+                    addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(resSort)))
                     pushVal(newTerm)
                 }
               case f : IFunApp if objectGetters contains f.fun => // a heap read (might also be from a heap array)
@@ -3421,7 +3449,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val evalExp = topVal
         maybeOutputClause
         if(isHeapPointer(postExp)) {
-          heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], topVal.mapTerm(_ + op))
+          heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], topVal.mapTerm(_ + op),
+            assertMemSafety = true,
+            assumeMemSafety = true)
         } else {
           setValue(lookupVar(asLValue(postExp)),
             getActualAssignedTerm(evalExp, topVal.mapTerm(_ + op)),
