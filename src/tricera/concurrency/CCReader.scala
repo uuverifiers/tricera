@@ -31,7 +31,7 @@ package tricera.concurrency
 
 import ap.basetypes.IdealInt
 import ap.parser._
-import ap.theories.{ADT, Heap, ModuloArithmetic}
+import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrent_c._
 import concurrent_c.Absyn._
@@ -41,8 +41,9 @@ import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintIn
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
-import scala.collection.mutable.{ArrayBuffer, Buffer, Stack}
-import scala.collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
+import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, 
+                                 HashSet => MHashSet}
+
 import tricera.Util._
 import tricera.acsl.{ACSLTranslator, FunctionContract}
 import tricera.params.TriCeraParameters
@@ -123,14 +124,15 @@ object CCReader {
     def toSort : Sort = arithmeticMode match {
       case ArithmeticMode.Mathematical => this match {
         case typ : CCArithType if typ.isUnsigned => Sort.Nat
-        case _ : CCDuration => Sort.Nat
+        case CCDuration() => Sort.Nat
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCArray(_, _, _, s) => s.sort
         case CCStruct(ctor, _) => ctor.resSort
-        case CCStructField( n, s) => s(n).ctor.resSort
-        case CCIntEnum( _, _) => Sort.Integer
+        case CCStructField(n, s) => s(n).ctor.resSort
+        case CCIntEnum(_, _) => Sort.Integer
         case _ => Sort.Integer
       }
       case ArithmeticMode.ILP32 => this match {
@@ -144,6 +146,7 @@ object CCReader {
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
+        case CCArray(_, _, _, s) => s.sort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
@@ -162,6 +165,7 @@ object CCReader {
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCArray(_, _, _, s) => s.sort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -179,6 +183,7 @@ object CCReader {
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCArray(_, _, _, s) => s.sort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -227,8 +232,9 @@ object CCReader {
             }
         structType.ctor(const: _*)
       case CCHeapPointer(heap, _) => heap.nullAddr()
-      case CCHeapArrayPointer(heap, _, _) =>  // todo: start = null, but size 0 or 1?
+      case CCHeapArrayPointer(heap, _, _) => // todo: start = null, but size 0 or 1?
         heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
+      case CCArray(_, _, _, arrayTheory) => arrayTheory.const(0)
       case _ => IIntLit(0)
     }
   }
@@ -401,9 +407,33 @@ object CCReader {
             case CCHeapPointer(h, _) =>
               if (values.isEmpty) h.nullAddr() else values.pop()
             case CCHeapArrayPointer(h, _, _) =>
+              throw new TranslationException("Heap arrays inside structs are" +
+                "not supported.")
+              ???
               if (values.isEmpty)
                 h.addressRangeCtor(h.nullAddr(), IIntLit(1))
               else values.pop()
+            case CCArray(elemTyp, sizeExpr, arraySize, arrayTheory) =>
+              val initialArrayTerm = new SortedConstantTerm(field._1.name, arrayTheory.objSort)
+              def arrayBatchStore(arr : ITerm, ind : Int, n : Int) : ITerm = {
+                if(ind >= n)
+                  arr else {
+                  val innerArr = arrayTheory.store(arr, Int2ITerm(ind),
+                    if (values.isEmpty) {
+                      if (elemTyp.isInstanceOf[CCArithType]) {
+                        IIntLit(0)
+                        // todo: use actual sorts! need rich types here
+                      } else {
+                        throw new TranslationException("")
+                        // todo: this can be supported if we have access to
+                        //   rich types here
+                      }
+                    }
+                    else values.pop())
+                  arrayBatchStore(innerArr, ind + 1, n)
+                }
+              }
+              arrayBatchStore(initialArrayTerm, 0, arraySize)
             case _ => if (values.isEmpty) Int2ITerm(0) else values.pop()
           }
       ctor(const: _*)
@@ -464,14 +494,20 @@ object CCReader {
     def shortName = "[]"
   }
 
-  /*private class CCArray(val heap : Heap,
-                        val elementType : CCType
-                        ) extends CCType {
+
+  // uses the theory of arrays (and not heaps). this is used for InitArray's
+  // which appear as struct fields (e.g. struct S{int a[4];})
+  private case class CCArray(elementType : CCType, // todo: multidimensional arrays?
+                             sizeExpr    : CCExpr,
+                             sizeInt     : Int,
+                             arraySort   : ap.theories.ExtArray)
+                            (implicit arithmeticMode : ArithmeticMode.Value)
+    extends CCType(arithmeticMode) {
     override def toString : String =
       //typ + "[" + (if (size.nonEmpty) size.get else "") + "]"
       elementType + " array"
     def shortName = elementType + "[]"
-  }*/
+  }
 
   case class CCClock()(implicit arithmeticMode : ArithmeticMode.Value)
     extends CCType(arithmeticMode) {
@@ -573,6 +609,7 @@ class CCReader private (prog : Program,
 
   private val predCCPredMap = new MHashMap[Predicate, CCPredicate]
 
+  // todo: move out to where CCVar is?
   case class CCClause (clause : HornClauses.Clause,
                        srcInfo : Option[SourceInfo]) // todo: what else would be useful?
 
@@ -850,6 +887,16 @@ class CCReader private (prog : Program,
       res
   }
 
+  private var noSideEffects = false
+
+  private def withoutSideEffects[A](comp : => A) : A = {
+    val oldNoSideEffects = noSideEffects
+    noSideEffects = true
+    val res = comp
+    noSideEffects = oldNoSideEffects
+    res
+  }
+
   private var prefix : String = ""
   private var locationCounter = 0
 
@@ -982,7 +1029,8 @@ class CCReader private (prog : Program,
   val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
     (for (i <- structInfos.indices) yield {
       if(structInfos(i).fieldInfos isEmpty) warn(
-        "Struct " + structInfos(i).name + " was declared, but never defined!")
+        "Struct " + structInfos(i).name + " was declared, but never defined, " +
+          "or it has no fields.")
       val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
         for(FieldInfo(fieldName, fieldType, ptrDepth) <-
               structInfos(i).fieldInfos) yield
@@ -990,7 +1038,11 @@ class CCReader private (prog : Program,
             if (ptrDepth > 0) Heap.AddressCtor
             else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
-              case Right(typ) => HeapObj.OtherSort(typ.toSort)
+              case Right(typ) =>
+                typ match {
+                  case _ : CCHeapArrayPointer => HeapObj.AddressRangeCtor
+                  case _ => HeapObj.OtherSort(typ.toSort)
+                }
             }
             })
       (structInfos(i).name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
@@ -1076,7 +1128,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       (sels(j),{
         val actualType = fieldInfos(j).typ match {
         case Left(ind) => CCStructField(structInfos(ind).name, structDefs)
-        case Right(typ) => typ
+        case Right(typ) =>
+          typ match {
+            case t : CCHeapArrayPointer => // replace with initialized heap
+              CCHeapArrayPointer(heap, t.elementType, t.arrayType) // todo: would fail for arrays of arrays inside structs
+            case _ => typ
+          }
       }
       if(fieldInfos(j).ptrDepth > 0) CCHeapPointer(heap, actualType)
       else actualType})}
@@ -1550,9 +1607,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                   case initDecl: InitDecl     => initDecl.declarator_
                   case initDecl: HintInitDecl => initDecl.declarator_
                 }
-                if (isTypeDef(decl.listdeclaration_specifier_))
-                  collectStructInfo(structDec, getName(declarator))
-                else collectStructInfo(structDec)
+                collectStructInfo(structDec)
               case _ => collectStructInfo(structDec) // use X in "struct X"
             }
           case _ => // do nothing
@@ -1574,7 +1629,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ =>
         }
       }
-//todo      case preddecl : PredDeclarator => // nothing // todo: fix this back
+      case preddecl : PredDeclarator => // nothing
     }
   }
 
@@ -1595,63 +1650,164 @@ structDefs += ((structInfos(i).name, structFieldList)) */
   private def collectVarDecls(dec : Dec,
                               global : Boolean,
                               values : Symex) : Unit = dec match {
-    case decl : Declarators if !isTypeDef(decl.listdeclaration_specifier_) => {
+    case decl : Declarators => {
       // todo: fix getType for unique structs using maybe isUniqueStruct?
       val typ = getType(decl.listdeclaration_specifier_)
+
+      case object InitDeclaratorWrapper {
+        def apply(initDecl : Init_declarator) : InitDeclaratorWrapper = {
+          initDecl match {
+            case initDecl : OnlyDecl => InitDeclaratorWrapper(
+              initDecl.declarator_, None, Nil,
+              SourceInfo(initDecl.line_num, initDecl.col_num, initDecl.offset))
+            case initDecl : HintDecl =>
+              InitDeclaratorWrapper(
+                initDecl.declarator_, None, initDecl.listannotation_,
+                SourceInfo(initDecl.line_num, initDecl.col_num, initDecl.offset))
+            case initDecl : InitDecl => InitDeclaratorWrapper(
+              initDecl.declarator_, Some(initDecl.initializer_), Nil,
+              SourceInfo(initDecl.line_num, initDecl.col_num, initDecl.offset))
+            case initDecl : HintInitDecl => InitDeclaratorWrapper(
+              initDecl.declarator_, Some(initDecl.initializer_), initDecl.listannotation_,
+              SourceInfo(initDecl.line_num, initDecl.col_num, initDecl.offset))
+          }
+        }
+      }
+      case class InitDeclaratorWrapper(declarator       : Declarator,
+                                       maybeInitializer : Option[Initializer],
+                                       hints            : Seq[Annotation],
+                                       sourceInfo       : SourceInfo)
+
       for (initDecl <- decl.listinit_declarator_) {
         var isVariable = false
-        initDecl match {
-          case _ : OnlyDecl | _ : HintDecl => {
-            val declarator = initDecl match {
-              case initDecl : OnlyDecl => initDecl.declarator_
-              case initDecl : HintDecl => initDecl.declarator_
+        val initDeclWrapper = InitDeclaratorWrapper(initDecl)
+        val name = getName(initDeclWrapper.declarator)
+
+        val (directDecl, isPointer) =
+          initDeclWrapper.declarator match {
+          case decl : NoPointer => (decl.direct_declarator_, false)
+          case decl : BeginPointer => (decl.direct_declarator_, true)
+        }
+        directDecl match {
+          case _ : NewFuncDec /* | _ : OldFuncDef */ | _ : OldFuncDec =>
+            functionDecls.put(name, (directDecl, typ)) //todo: ptr type?
+          case _ => {
+            isVariable = true
+            val lhsType = { // might be updated later with the type from initializer
+              val typ2 =
+                if(isArrayDeclaration(directDecl)) {
+                  if(!modelHeap)
+                    throw NeedsHeapModelException // all arrays are modeled using haep
+                  val arrayType = directDecl match {
+                    case _ : InitArray if global  => GlobalArray
+                    case _ : InitArray if !global => StackArray
+                    case _                        => HeapArray
+                  }
+                  CCHeapArrayPointer(heap, typ, arrayType)
+                } else typ
+              if(isPointer) CCHeapPointer(heap, typ2)
+              else typ2
             }
-            val name = getName(declarator)
-            val (directDecl, isPointer, sourceInfo) = declarator match {
-              case decl : NoPointer => (decl.direct_declarator_, false,
-                Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
-              case decl : BeginPointer => (decl.direct_declarator_, true,
-                Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
-            }
-            directDecl match {
-              case _ : NewFuncDec /* | _ : OldFuncDef */ | _ : OldFuncDec =>
-                functionDecls.put(name, (directDecl, typ)) //todo: ptr type?
-              case _ => {
-                isVariable = true
-                val actualType = {
-                  val typ2 =
-                    if(isArrayDeclaration(directDecl)) {
-                      if(!modelHeap)
-                        throw NeedsHeapModelException // all arrays are modeled using haep
-                      val arrayType = directDecl match {
-                        case _ : InitArray if global  => GlobalArray
-                        case _ : InitArray if !global => StackArray
-                        case _                        => HeapArray
-                      }
-                      CCHeapArrayPointer(heap, typ, arrayType)
-                    } else typ
-                  if(isPointer) CCHeapPointer(heap, typ2)
-                  else typ2
-                }
-                val declaredVar = new CCVar(name, sourceInfo, actualType)
-                val srcInfo = declaredVar.srcInfo
-                if (global) {
-                  globalVars addVar declaredVar
-                  variableHints += List()
+            val lhsVar = new CCVar(name,
+              Some(initDeclWrapper.sourceInfo), lhsType)
+            val srcInfo = lhsVar.srcInfo
+
+            val (actualLhsVar, initValue, initGuard) =
+              initDeclWrapper.maybeInitializer match {
+              case Some(init : InitExpr) =>
+                if (init.exp_.isInstanceOf[Enondet]) {
+                  (lhsVar, CCTerm(lhsVar.term, typ, srcInfo),
+                    typ rangePred lhsVar.term)
                 } else {
-                  localVars.addVar(declaredVar)
+                  if (isArrayDeclaration(initDeclWrapper.declarator))
+                    values.lhsIsArrayPointer = true // todo: find smarter solution!
+                  val res = values eval init.exp_
+                  values.lhsIsArrayPointer = false
+                  val (actualLhsVar, actualRes) = lhsVar.typ match {
+                    case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
+                      if(res.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
+                        (lhsVar, CCTerm(heap.nullAddr(), lhsType, srcInfo))
+                      else throw new TranslationException("Pointer arithmetic is not " +
+                        "allowed, and the only possible initialization value for " +
+                        "pointers is 0 (NULL)")
+                    case _ : CCHeapPointer if res.typ.isInstanceOf[CCHeapArrayPointer] =>
+                      // lhs is actually a heap array pointer
+                      (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ), res)
+                    case _ : CCHeapPointer if res.typ.isInstanceOf[CCStackPointer] =>
+                      // lhs is actually a stack pointer
+                      (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ), res)
+                    case _ => (lhsVar, res)
+                  }
+                  (actualLhsVar, actualRes, IExpression.i(true))
                 }
-                actualType match {
-                  case typ : CCHeapArrayPointer => {
+              case Some(_ : InitListOne) | Some(_: InitListTwo) => {
+                val initStack =
+                  getInitsStack(initDeclWrapper.maybeInitializer.get, values)
+                lhsType match {
+                  case structType : CCStruct =>
+                    (lhsVar, CCTerm(structType.getInitialized(initStack), lhsType, srcInfo),
+                      lhsType rangePred lhsVar.term)
+                  case arrayPtr : CCHeapArrayPointer =>
+                    val addressRangeValue = directDecl match {
+                      case initArray: InitArray =>
+                        val arraySizeTerm = values eval
+                          initArray.constant_expression_.asInstanceOf[Especial].exp_
+                        val arraySize = arraySizeTerm match {
+                          case CCTerm(IIntLit(IdealInt(n)), actualType, srcInfo)
+                            if actualType.isInstanceOf[CCArithType] => n
+                          case _ => throw new TranslationException(
+                            "Array with non-integer" +
+                            "size specified in an intialized array expression!")
+                        }
+                        import IExpression._
+                        val initHeapTerm =
+                          if (values.getValues.head.toTerm == IConstant(heapTerm)) {
+                            CCTerm(globalVars.inits.head.toTerm, CCHeap(heap), srcInfo)
+                          } else
+                            CCTerm(values.getValues.head.toTerm, CCHeap(heap), srcInfo)
+                        val objTerm = CCTerm(arrayPtr.elementType.getZeroInit,
+                                             arrayPtr.elementType, srcInfo)
+                        val arrayTerm =
+                          values.heapBatchAlloc(objTerm, arraySizeTerm.toTerm, initHeapTerm)
+                        def getInitializedObj = {
+                          if (initStack.nonEmpty) {
+                            arrayPtr.elementType match {
+                              case structType: CCStruct =>
+                                structType.getInitialized(initStack)
+                              case _ => initStack.pop // todo: union types, array types
+                            }
+                          }
+                          else arrayPtr.elementType.getZeroInit
+                        }
+                        for(i <- 0 until arraySize)
+                          values.heapWrite(heap.nth(arrayTerm, i),
+                            getInitializedObj, arrayPtr.elementType.toSort)
+                        arrayTerm
+                      case _: Incomplete =>
+                        throw new TranslationException("Cannot initialize" +
+                          "arrays with unknown size")
+                    }
+                    // initialise using the first address of the range
+                    (lhsVar, CCTerm(addressRangeValue, lhsType, srcInfo), IExpression.i(true))
+                  case s =>
+                    println(s)
+                    throw new TranslationException("Union list " +
+                      "initialization is not yet supported.")
+                }
+              }
+              case Some(_) => throw new TranslationException("Unsupported" +
+                "initializer expression.")
+              case None =>
+                lhsType match {
+                  case typ : CCHeapArrayPointer =>
                     val objValue = if (global) typ.elementType.getZeroInit
                     else typ.elementType.getNonDet
-                    val objTerm =
-                      CCTerm(objValue, typ.elementType, srcInfo)
+                    val objTerm = CCTerm(objValue, typ.elementType, srcInfo)
                     val initHeapTerm =
                       if (values.getValues.head.toTerm == IConstant(heapTerm)) {
-                        CCTerm(globalVars.inits.head.toTerm, CCHeap(heap), None)
+                        CCTerm(globalVars.inits.head.toTerm, CCHeap(heap), srcInfo)
                       } else
-                        CCTerm(values.getValues.head.toTerm, CCHeap(heap), None)
+                        CCTerm(values.getValues.head.toTerm, CCHeap(heap), srcInfo)
                     val addressRangeValue = directDecl match {
                       case initArray: InitArray =>
                         val arraySize = values eval initArray.constant_expression_.asInstanceOf[Especial].exp_
@@ -1660,102 +1816,42 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                         heap.addressRangeCtor(heap.nullAddr(), IIntLit(0))
                     }
                     // initialise using the first address of the range
-                    values addValue
-                      CCTerm(addressRangeValue, typ, srcInfo)
-                  }
+                    (lhsVar, CCTerm(addressRangeValue, typ, srcInfo), IExpression.i(true))
                   case typ : CCArithType if global =>
-                    values addValue CCTerm(0, typ, srcInfo)
-                  case typ : CCStruct if global => {
-                    values addValue CCTerm(typ.getZeroInit, typ, srcInfo)
-                    values addGuard (typ rangePred declaredVar.term)
-                  }
-                  case typ if global => { // todo: remove case? might be unnecessary
-                    values addValue CCTerm(typ.getZeroInit, typ, srcInfo)
-                    values addGuard (typ rangePred declaredVar.term)
-                  }
-                  case typ => {
-                    values addValue CCTerm(declaredVar.term, typ, srcInfo)
-                    values addGuard (typ rangePred declaredVar.term)
-                  }
+                    (lhsVar, CCTerm(0, typ, srcInfo), IExpression.i(true))
+                  case typ : CCStruct if global =>
+                    (lhsVar, CCTerm(typ.getZeroInit, typ, srcInfo),
+                      typ rangePred lhsVar.term)
+                  case typ if global =>
+                    (lhsVar, CCTerm(typ.getZeroInit, typ, srcInfo),
+                      typ rangePred lhsVar.term)
+                  case typ =>
+                    (lhsVar, CCTerm(lhsVar.term, typ, srcInfo),
+                      typ rangePred lhsVar.term)
                 }
-              }
-            }
-          }
-
-          case _ : InitDecl | _ : HintInitDecl => {
-            val (declarator, initializer, sourceInfo) = initDecl match {
-              case d : InitDecl =>
-                (d.declarator_, d.initializer_,
-                  Some(SourceInfo(d.line_num, d.col_num, d.offset)))
-              case d : HintInitDecl =>
-                (d.declarator_, d.initializer_,
-                  Some(SourceInfo(d.line_num, d.col_num, d.offset)))
             }
 
-            isVariable = true
-            val newVar = new CCVar(getName(declarator), sourceInfo, typ)
-            val (initValue, initGuard) = initializer match {
-              case init : InitExpr =>
-                if (init.exp_.isInstanceOf[Enondet])
-                  (CCTerm(newVar.term, typ, sourceInfo), typ rangePred newVar.term)
-                else {
-                  if (isArrayDeclaration(declarator))
-                    values.lhsIsArrayPointer = true // todo: find smarter solution!
-                  val res = (values eval init.exp_, IExpression.i(true))
-                  values.lhsIsArrayPointer = false
-                  res
-                }
-              case _ : InitListOne | _: InitListTwo => {
-                val initStack = getInitsStack(initializer, values)
-                typ match {
-                  case structType : CCStruct => {
-                    (CCTerm(structType.getInitialized(initStack), typ, sourceInfo),
-                      typ rangePred newVar.term)
-                  }
-                  case s =>
-                    println(s)
-                    throw new TranslationException("Union or array list " +
-                    "initialization is not yet supported.")
-                }
-              }
-            }
-            // todo: fix below part
-            val actualVar : CCVar = {
-              if (declarator.isInstanceOf[BeginPointer] &&
-                  !initValue.typ.isInstanceOf[CCStackPointer] &&
-                  !initValue.typ.isInstanceOf[CCHeapArrayPointer]) {
-                if(initValue.typ.isInstanceOf[CCArithType] &&
-                   initValue.toTerm.asInstanceOf[IIntLit].value.intValue != 0)
-                  throw new TranslationException("Pointer arithmetic is not " +
-                    "allowed, and the only possible initialization value for " +
-                    "pointers is 0 (NULL)")
-                val newTyp = CCHeapPointer(heap, typ)
-                new CCVar(getName(declarator), sourceInfo, newTyp)
-              }
-              else if (typ.isInstanceOf[CCClock])
-                new CCVar(newVar.name, newVar.srcInfo, typ)
-              else new CCVar(newVar.name, newVar.srcInfo, initValue.typ)
-            }
+            // do not use actualType below, take from lhsVar
 
             if (global) {
-              globalVars addVar actualVar
+              globalVars addVar actualLhsVar
               variableHints += List()
             } else {
-              localVars addVar actualVar
+              localVars addVar actualLhsVar
             }
 
-            actualVar.typ match {
+            actualLhsVar.typ match {
               case _ : CCClock =>
                 values addValue translateClockValue(initValue)
               case _ : CCDuration =>
                 values addValue translateDurationValue(initValue)
               case _ =>
-                values addValue (actualVar.typ cast initValue)
+                values addValue (actualLhsVar.typ cast initValue)
             }
 
             values addGuard (
-              if(typ == actualVar.typ) initGuard
-              else actualVar.typ rangePred actualVar.term // todo: refactor these by adding to CCVar
+              if(typ == actualLhsVar.typ) initGuard
+              else actualLhsVar.typ rangePred actualLhsVar.term // todo: refactor these by adding to CCVar
               )
           }
         }
@@ -1772,51 +1868,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }
       }
     }
-    case decl : Declarators => { // a typedef
-      val typ = decl.listdeclaration_specifier_(1) match {
-        case spec: Type => spec.type_specifier_
-        case _ => throw new
-            TranslationException("Storage and SpecProp not implemented yet")
+    case predDecl : PredDeclarator =>
+      for (hint <- predDecl.listpred_hint_) {
+        hint match {
+          case predHint : PredicateHint =>
+            val argTypes =
+              for (typ <- predHint.listtype_specifier_) yield getType(typ)
+            val hintPred = MonoSortedPredicate(predHint.cident_, argTypes.map(_ toSort))
+            predDecls += ((predHint.cident_, hintPred))
+            val argCCVars = // needed for adding to predCCPredMap, used in printing
+              argTypes.map(typ => new CCVar(typ.toString, None, typ))
+            predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
+        }
       }
-
-      val types =
-        for (specifier <- decl.listdeclaration_specifier_
-                     if specifier.isInstanceOf[Type])
-          yield specifier.asInstanceOf[Type].type_specifier_
-
-      types.find(_.isInstanceOf[Tenum]) match {
-        case Some(d) =>
-          val enumDec = d.asInstanceOf[Tenum]
-          enumDec.enum_specifier_ match {
-            case dec : EnumDec =>
-              for (initDecl <- decl.listinit_declarator_) {
-                val declarator = initDecl match {
-                  case initDecl: OnlyDecl => initDecl.declarator_
-                  case initDecl: HintDecl => initDecl.declarator_
-                }
-                buildEnumType(dec.listenumerator_,
-                  getName(declarator)) //use typedef name
-              }
-            case _ => buildEnumType(enumDec) // use X in "enum X"
-          }
-        case _ => // nothing required, handled by preprocessor
-          // structs were handled in first pass
-      }
-    }
-// todo: enable this back   case predDecl : PredDeclarator =>
-//      for (hint <- predDecl.listpred_hint_) {
-//        hint match {
-//          case predHint : PredicateHint =>
-//            val argTypes =
-//              for (typ <- predHint.listtype_specifier_) yield getType(typ)
-//            val hintPred = MonoSortedPredicate(predHint.cident_, argTypes.map(_ toSort))
-//            predDecls += ((predHint.cident_, hintPred))
-//            val argCCVars = // needed for adding to predCCPredMap, used in printing
-//              argTypes.map(typ => new CCVar(typ.toString, None, typ))
-//            predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
-//        }
-//      }
-    case decl => //warn("ignoring declaration: " + decl) // todo: proper extraction of name & source info
+    case decl => //warn("ignoring declaration: " + decl)
   }
 
   private def processHints(hintAnnotations : Seq[Annotation]) : Unit = {
@@ -1828,10 +1893,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val hintSymex = Symex(null)
       hintSymex.saveState
 
-      val subst =
-        (for ((v, n) <-
-                (globalVars.iterator ++ localVars.iterator).zipWithIndex)
-          yield (v.term.asInstanceOf[ConstantTerm] -> IExpression.v(n))).toMap
+            val subst =
+              (for ((v, n) <-
+                      (globalVars.iterator ++ localVars.iterator).zipWithIndex)
+               yield (v.term.asInstanceOf[ConstantTerm] -> IExpression.v(n))).toMap
 
       import AnnotationParser._
       val hintEls =
@@ -1883,14 +1948,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     case dec : Incomplete => getName(dec.direct_declarator_)
   }
 
-  private def isTypeDef(specs : Seq[Declaration_specifier]) : Boolean =
-    specs exists {
-      case spec : Storage =>
-        spec.storage_class_specifier_.isInstanceOf[MyType]
-      case _ =>
-        false
-    }
-
   private def getType(specs : Seq[Declaration_specifier]) : CCType =
     getType(for (specifier <- specs.iterator;
                  if (specifier.isInstanceOf[Type]))
@@ -1927,6 +1984,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
   private def getType(exp : Ebytestype) : CCType = getType(exp.type_name_)
 
+  // get type of struct field
   private def getType(fields : Struct_dec) : CCType = {
     val specs =
       (for (qual <- fields.asInstanceOf[Structen].listspec_qual_.iterator;
@@ -1935,7 +1993,50 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     specs.find(s => s.isInstanceOf[Tenum]) match {
       case Some(enum) => buildEnumType(enum.asInstanceOf[Tenum])
       case None =>
-        getType(specs.toIterator)
+        val (maybeDecl, maybeConstExpr) =
+          fields.asInstanceOf[Structen].liststruct_declarator_.head match {
+            case f : Decl =>
+              (Some(f.declarator_), None)
+            case f : Field =>
+              (None, f.constant_expression_)
+            case f : DecField =>
+              (Some(f.declarator_), Some(f.constant_expression_))
+          }
+
+        val typ = getType(specs.toIterator)
+        // todo: unify this with code from collectVarDecl
+        val actualTyp = if (maybeDecl isEmpty) {
+          typ
+        } else {
+          val (directDecl, isPointer, sourceInfo) = maybeDecl.get match {
+            case decl: NoPointer => (decl.direct_declarator_, false,
+              Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
+            case decl: BeginPointer => (decl.direct_declarator_, true,
+              Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
+          }
+          directDecl match {
+            case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
+              throw new TranslationException("Functions as struct fields" +
+                " are not supported.")
+            case _: Incomplete =>
+              if (!modelHeap) throw NeedsHeapModelException
+              CCHeapArrayPointer(heap, typ, HeapArray)
+            case initArray: InitArray =>
+              val arraySizeSymex = Symex(null)
+              val arraySizeExp = arraySizeSymex eval
+                initArray.constant_expression_.asInstanceOf[Especial].exp_
+              val arraySize = arraySizeExp match {
+                case CCTerm(IIntLit(IdealInt(n)), typ, srcInfo)
+                  if typ.isInstanceOf[CCArithType] => n
+                case _ => throw new TranslationException("Array with non-integer" +
+                  "size specified inside struct definition!")
+              }
+              CCArray(typ, arraySizeExp, arraySize,
+                ExtArray(Seq(arraySizeExp.typ.toSort), typ.toSort))
+            case _ => typ
+          }
+        }
+        actualTyp
     }
   }
 
@@ -2036,14 +2137,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ : BeginPointer => 1 //todo:heap find out actual depth
           case _ => 0
         }
-        /*val realFieldType: CCType = decl.declarator_ match {
-          case _ : BeginPointer
-            if !fieldType.isInstanceOf[CCDeclarationOnlyPointer] =>
-            CCHeapPointer(heap, fieldType) //todo:heap
-          case _ => fieldType // todo: does this work for multiple lvl ptrs?
-        }*/
         FieldInfo(fieldName, fieldType, ptrDepth) // todo: deal with pointer fields
-        //(fieldName, realFieldType)
       }
     }).toList.flatten.toIndexedSeq
 
@@ -2373,16 +2467,64 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       //heap.batchAllocAddrRange(initHeapTerm.toTerm, objectTerm, size)
       heap.newAddrRange(newBatchAlloc)
     }
+    def heapArrayRead(arrExpr  : CCExpr,
+                      index    : CCExpr,
+                      arrType  : CCHeapArrayPointer,
+                      assertMemSafety : Boolean = true,
+                      assumeMemSafety : Boolean = true,
+                      assertIndexWithinBounds : Boolean = true) : CCTerm = {
+      import IExpression._
+      val readAddress = CCTerm(heap.nth(arrExpr.toTerm, index.toTerm),
+        CCHeapPointer(heap, arrType.elementType), arrExpr.srcInfo)
+      val readValue = heapRead(readAddress, assertMemSafety, assumeMemSafety)
+      if (assertIndexWithinBounds)
+        assertProperty(heap.within(arrExpr.toTerm, readAddress.toTerm), arrExpr.srcInfo)
+      readValue
+    }
 
     /**
      * updates an Object on the heap, which can also be an ADT
      * @param lhs this must be a read from the location to be updated.
      *            e.g. getInt(read(h,a)) or an ADT selector x(getS(read(h,a)))
      * @param rhs the term to be written to the location pointed by lhs
+     * @param assertMemSafety add memory safety assertion
+     * @param assumeMemSafety assume memory safety after write
      */
-    def heapWrite(lhs : IFunApp, rhs : CCExpr) = {
+    def heapWrite(lhs : IFunApp, rhs : CCExpr,
+                  assertMemSafety : Boolean = false,
+                  assumeMemSafety : Boolean = false) = {
       val newHeap = heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), rhs.srcInfo))
+      if (assertMemSafety) {
+        def getObjAndSort(f : IFunApp) : (IFunApp, Sort) = {
+          if (objectGetters contains f.fun) {
+            val sort = f.fun.asInstanceOf[MonoSortedIFunction].resSort
+            val obj = f.args.head.asInstanceOf[IFunApp]
+            (obj, sort)
+          } else if (f.args.size == 1 && f.args.head.isInstanceOf[IFunApp]) {
+            getObjAndSort(f.args.head.asInstanceOf[IFunApp])
+          } else
+            throw new TranslationException("Cannot determine read" +
+              "object from passed term")
+        }
+        val (writtenObj, sort) = getObjAndSort(lhs)
+
+        assertProperty(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)),
+          rhs.srcInfo) // todo: add tester methods for user ADT sorts?
+        // also add memory safety assumptions to the clause
+        if (assumeMemSafety)
+          addGuard(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)))
+      }
+    }
+
+    /**
+     * Write the passed object to the passed location on the heap
+     */
+      // todo: add mem-/type-safety assertions?
+    def heapWrite(addr : ITerm, obj : ITerm, objSort : Sort) = {
+      val heapVal = getValue(heapTerm.name)
+      val newHeap = heap.write(heapVal.toTerm, addr, sortWrapperMap(objSort)(obj))
+      setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), None)) // todo: src info?
     }
 
     def heapBatchWrite(h : ITerm, r : ITerm, o : ITerm) = {
@@ -2459,7 +2601,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private var assignedToStruct : Boolean = false
 
     private def maybeOutputClause : Unit =
-      if ((!atomicMode && touchedGlobalState) || assignedToStruct) outputClause
+      if (!noSideEffects &&
+        ((!atomicMode && touchedGlobalState) || assignedToStruct)) outputClause
 
     private def pushVal(v : CCExpr) = {
       val freshVar = getFreshEvalVar(v.typ)
@@ -2527,10 +2670,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     def outputClause(pred : Predicate,
                      sync : ParametricEncoder.Synchronisation =
                        ParametricEncoder.NoSync) : Unit = {
-      val c = genClause(pred)
-      if (!c.hasUnsatConstraint)
-        output(c, sync)
-      resetFields(pred)
+      if(!noSideEffects) {
+        val c = genClause(pred)
+        if (!c.hasUnsatConstraint)
+          output(c, sync)
+        resetFields(pred)
+      }
     }
 
     def outputClause(headAtom : IAtom) : Unit = {
@@ -2596,13 +2741,13 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       setValue(lookupVar(name), t, isIndirection)
     private def setValue(ind: Int, t : CCExpr,
                          isIndirection : Boolean) : Unit = {
-
-      val actualInd = getValue(ind, false).typ match {
-        case stackPtr: CCStackPointer => stackPtr.targetInd
-        case _ => ind
-      }
-      values(actualInd) = t
-       /* if(isIndirection) {
+      if (!noSideEffects) {
+        val actualInd = getValue(ind, false).typ match {
+          case stackPtr: CCStackPointer => stackPtr.targetInd
+          case _ => ind
+        }
+        values(actualInd) = t
+        /* if(isIndirection) {
           //val ptrType = getPointerType(ind)
           getValue(ind, false).typ match {
             case stackPtr : CCStackPointer =>
@@ -2626,8 +2771,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           values(ind) = t
           ind
         }*/
-      touchedGlobalState =
-        touchedGlobalState || actualInd < globalVars.size || !freeFromGlobal(t)
+        touchedGlobalState =
+          touchedGlobalState || actualInd < globalVars.size || !freeFromGlobal(t)
+      }
     }
 
     private def getVar (ind : Int) : CCVar = {
@@ -2668,11 +2814,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     def asAtom(pred : Predicate) = atom(pred, getValuesAsTerms)
 
     def asLValue(exp : Exp) : String = exp match {
-      case exp : Evar => exp.cident_
+      case exp : Evar    => exp.cident_
       case exp : Eselect => asLValue(exp.exp_)
-      case exp : Epoint => asLValue(exp.exp_)
-      case exp : Epreop => asLValue(exp.exp_)
+      case exp : Epoint  => asLValue(exp.exp_)
+      case exp : Epreop  => asLValue(exp.exp_)
       case exp : Eassign => asLValue(exp.exp_1)
+      case exp : Earray  => asLValue(exp.exp_1)
       case exp =>
         throw new TranslationException(
                     "Can only handle assignments to variables, not " +
@@ -2895,17 +3042,28 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         // AddressRange even if the allocation size is only 1.
         lhsIsArrayPointer = exp.exp_1.isInstanceOf[Earray] // todo: preprocessor should ensure that lhs is always an instance of Earray...
         evalHelp(exp.exp_2) //first evaluate rhs and push
-        lhsIsArrayPointer = false
         maybeOutputClause
         val rhsVal = popVal
         val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
         val updatingPointedValue =
           isHeapRead(lhsVal) || // *(p) = ... where p is a heap ptr
           isHeapStructFieldRead(lhsVal) // ps->f = ... where ps is a heap ptr
-        if(isHeapPointer(lhsVal) || updatingPointedValue) {
+        if(lhsIsArrayPointer || isHeapPointer(lhsVal) || updatingPointedValue) {
           if (updatingPointedValue)
-            heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal)
-          else {
+            heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, true, true)
+          else if (lhsIsArrayPointer) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
+            lhsIsArrayPointer = false
+            val newTerm = CCTerm(
+              writeADT(lhsVal.toTerm.asInstanceOf[IFunApp],
+                         rhsVal.toTerm, heap.userADTCtors, heap.userADTSels),
+                       lhsVal.typ, rhsVal.srcInfo)
+            val lhsName = asLValue(exp.exp_1)
+            val oldLhsVal = getValue(lhsName)
+            val innerTerm = lhsVal.toTerm.asInstanceOf[IFunApp].args.head
+            val actualLhsTerm = getActualAssignedTerm(
+              CCTerm(innerTerm, oldLhsVal.typ, rhsVal.srcInfo), newTerm)
+            setValue(asLValue(exp.exp_1), actualLhsTerm)
+          } else {
             val lhsName = asLValue(exp.exp_1)
             val actualRhsVal = rhsVal.toTerm match {
               case lit : IIntLit =>
@@ -2913,8 +3071,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                   throw new TranslationException("Pointer arithmetic is not " +
                     "allowed, and the only assignable integer value for " +
                     "pointers is 0 (NULL)")
-                } else CCTerm(heap.nullAddr(),
-                  CCHeapPointer(heap, lhsVal.typ), rhsVal.srcInfo)
+                } else CCTerm(heap.nullAddr(), CCHeapPointer(heap, lhsVal.typ), rhsVal.srcInfo)
               case _ => rhsVal
             }
             val actualLhsTerm = getActualAssignedTerm(lhsVal, actualRhsVal)
@@ -2969,9 +3126,19 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case _ : AssignMod =>
             ap.theories.nia.GroebnerMultiplication.tMod(lhs, rhs)
           case _ : AssignAdd =>
-            lhs + rhs
+            (lhsE.typ, rhsE.typ) match {
+              case (_ : CCHeapArrayPointer, _ : CCArithType) =>
+                addToAddressRangeStart(lhs, rhs)
+              case _ => lhs + rhs
+            }
           case _ : AssignSub =>
-            lhs - rhs
+            (lhsE.typ, rhsE.typ) match {
+              case (arrType : CCHeapArrayPointer, _ : CCArithType) =>
+                throw new TranslationException("Only addition is allowed in " +
+                  "array pointer arithmetic.") // due to how AddressRange is defined: <startAddr, size>
+                //addToAddressRangeStart(lhsE, rhsE, arrType, _ - _).toTerm
+              case _ => lhs - rhs
+            }
           case _ : AssignLeft =>
             ModuloArithmetic.bvshl(lhsE.typ cast2Unsigned lhs,
               lhsE.typ cast2Unsigned rhs)
@@ -2990,8 +3157,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }), lhsE.typ, lhsE.srcInfo)
         pushVal(newVal)
 
-        if(isHeapPointer(exp)) {
-          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal)
+        val updatingPointedValue =
+          isHeapRead(lhsVal) || // *(p) = ... where p is a heap ptr
+            isHeapStructFieldRead(lhsVal) // ps->f = ... where ps is a heap ptr
+
+        if(isHeapPointer(exp) && updatingPointedValue) {
+          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, true, true)
         } else {
           setValue(lookupVar(asLValue(exp.exp_1)),
             getActualAssignedTerm(lhsVal, newVal),
@@ -3091,7 +3262,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       case exp : Eright =>
         strictUnsignedBinFun(exp.exp_1, exp.exp_2, ModuloArithmetic.bvashr(_, _))
       case exp : Eplus =>
-        strictBinFun(exp.exp_1, exp.exp_2, _ + _)
+        strictBinFun(exp.exp_1, exp.exp_2, _ + _, opIsAddition = true)
       case exp : Eminus =>
         strictBinFun(exp.exp_1, exp.exp_2, _ - _)
       case exp : Etimes =>
@@ -3123,7 +3294,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         maybeOutputClause
         pushVal(popVal mapTerm (_ + op))
         if(isHeapPointer(preExp)) {
-          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal)
+          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, true, true)
         } else {
           setValue(lookupVar(asLValue(preExp)),
             getActualAssignedTerm(lhsVal, topVal),
@@ -3135,7 +3306,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         exp.unary_operator_ match {
           case _ : Address    =>
             topVal.toTerm match {
-              case fieldFun: IFunApp => // an ADT
+              case fieldFun: IFunApp
+                if !(objectGetters contains fieldFun.fun) &&
+                   (heap.userADTSels exists(_ contains fieldFun.fun)) => // an ADT
                 val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
                 rootTerm match {
                   case Left(c) =>
@@ -3144,7 +3317,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     assert(rootInd > -1 && rootInd < values.size - 1) // todo
                     val ptr = CCStackPointer(rootInd, popVal.typ, structType.getFieldAddress(fieldNames))
                     pushVal(CCTerm(IExpression.Int2ITerm(rootInd), ptr, srcInfo)) //we don't care about the value
-                  case Right(_) =>
+                  case Right(c) =>
                     // newAddr(alloc(h, WrappedAddr(getPtrField(getStruct(read(h, p))))))
                     // here topVal = getPtrField(getStruct(read(h, p))), we construct the rest
                     // this is to allocate memory for expressions like:
@@ -3154,8 +3327,30 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     //otherwise when we evaluate this we would be pushing two terms instead of one)
                     val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
                     maybeOutputClause
+                    assert(c.args.size == 1)
+                    val readObj = c.args.head
+                    val resSort = c.fun.asInstanceOf[MonoSortedIFunction].resSort
+                    addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(resSort)))
                     pushVal(newTerm)
                 }
+              case f : IFunApp if objectGetters contains f.fun => // a heap read (might also be from a heap array)
+                val readFunApp = f.args.head.asInstanceOf[IFunApp] // sth like read(h, ...)
+                val Seq(heapTerm, addrTerm) = readFunApp.args
+                // todo: below type extraction is not safe!
+                val t = addrTerm match {
+                  case IFunApp(heap.nth, args) => // if nthAddrRange(a, i)
+                    val Seq(arrTerm, indTerm) = args
+                    // return the addressRange starting from i
+                    CCTerm(addToAddressRangeStart(arrTerm, indTerm),
+                      getValue(arrTerm.asInstanceOf[IConstant].c.name).typ, srcInfo
+                    )
+                  case _ =>
+                    CCTerm(addrTerm, CCHeapPointer(heap,
+                      getValue(addrTerm.asInstanceOf[IConstant].c.name).typ), srcInfo)
+                }
+                popVal
+                pushVal(t)
+
               case _ =>
                 val t = if (handlingFunContractArgs) {
                   val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
@@ -3176,6 +3371,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               case   _ : CCHeapPointer =>
                 if(evaluatingLhs) pushVal(v)
                 else pushVal(heapRead(v))
+              case  arr : CCHeapArrayPointer =>
+                if(evaluatingLhs) pushVal(v)
+                else pushVal(heapArrayRead(v, CCTerm(IIntLit(0), CCInt(), srcInfo), arr))
               case _ => throw new TranslationException("Cannot dereference " +
                   "non-pointer: " + v.typ + " " + v.toTerm)
             }
@@ -3207,118 +3405,118 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         }
       }
 
-      case exp : Efunkpar => {
+      case exp : Efunkpar => 
         val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
         (printer print exp.exp_) match {
           case "assert" | "static_assert" | "__VERIFIER_assert"
-            if (exp.listexp_.size == 1) => {
-            //          eval(exp.listexp_.head) match { // todo: the double evaluation in the second case breaks things...
-            //            case f@CCFormula(IAtom(_, _), _) =>
-            //              assertProperty(f.toFormula)
-            //            case _ =>
-            //              assertProperty(atomicEval(exp.listexp_.head).toFormula)
-            //          }
-            assertProperty(atomicEval(exp.listexp_.head).toFormula, srcInfo)
+                          if (exp.listexp_.size == 1) => {
+            withoutSideEffects(eval(exp.listexp_.head)) match {
+              case f@CCFormula(IAtom(_, _), _, srcInfo) =>
+                // todo: why atomicEval fails for uninterpreted predicate hints?
+                assertProperty(eval(exp.listexp_.head).toFormula, srcInfo)
+              case f =>
+                assertProperty(atomicEval(exp.listexp_.head).toFormula, srcInfo)
+            }
             pushVal(CCFormula(true, CCInt(), srcInfo))
           }
-          case "assume" | "__VERIFIER_assume"
-            if (exp.listexp_.size == 1) => {
-            //          eval(exp.listexp_.head) match { // todo: the double evaluation in the second case breaks things...
-            //            case f@CCFormula(IAtom(_, _), _) =>
-            //              addGuard(f.toFormula)
-            //            case _ =>
-            //              addGuard(atomicEval(exp.listexp_.head).toFormula)
-            //          }
-            addGuard(atomicEval(exp.listexp_.head).toFormula)
+        case "assume" | "__VERIFIER_assume"
+                          if (exp.listexp_.size == 1) => {
+            withoutSideEffects(eval(exp.listexp_.head)) match {
+              case f@CCFormula(IAtom(_, _), _, _) =>
+                // todo: why atomicEval fails for uninterpreted predicate hints?
+                addGuard(eval(exp.listexp_.head).toFormula)
+              case f =>
+                addGuard(atomicEval(exp.listexp_.head).toFormula)
+            }
             pushVal(CCFormula(true, CCInt(), srcInfo))
-          }
-          case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {
-            val name = printer print exp.listexp_.head
-            (channels get name) match {
-              case Some(chan) => {
-                val sync = cmd match {
-                  case "chan_send" => ParametricEncoder.Send(chan)
-                  case "chan_receive" => ParametricEncoder.Receive(chan)
-                }
-                outputClause(newPred.pred, sync)
-                pushVal(CCFormula(true, CCInt(), srcInfo))
+        }
+        case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {
+          val name = printer print exp.listexp_.head
+          (channels get name) match {
+            case Some(chan) => {
+              val sync = cmd match {
+                case "chan_send"    => ParametricEncoder.Send(chan)
+                case "chan_receive" => ParametricEncoder.Receive(chan)
               }
-              case None =>
-                throw new TranslationException(
-                  name + " is not a declared channel")
+              outputClause(newPred.pred, sync)
+              pushVal(CCFormula(true, CCInt(), srcInfo))
             }
+            case None =>
+              throw new TranslationException(
+                name + " is not a declared channel")
           }
-          case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca") => { // todo: proper alloca and calloc
-            if (!modelHeap)
-              throw NeedsHeapModelException
-            val (typ, allocSize) = exp.listexp_(0) match {
-              case exp: Ebytestype =>
-                (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt(), srcInfo))
-              //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
-              case exp: Etimes =>
-                exp.exp_1 match {
-                  case e: Ebytestype =>
-                    (getType(e), eval(exp.exp_2))
-                  case e if exp.exp_2.isInstanceOf[Ebytestype] =>
-                    (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
-                  case _ =>
-                    throw new TranslationException(
-                      "Unsupported alloc expression: " + (printer print exp))
-                }
-              case _ => throw new TranslationException(
-                "Unsupported alloc expression: " + (printer print exp))
-            }
+        }
+        case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca") => { // todo: proper alloca and calloc
+          if (!modelHeap)
+            throw NeedsHeapModelException
+          val (typ, allocSize) = exp.listexp_(0) match {
+            case exp : Ebytestype =>
+              (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt(), srcInfo))
+            //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
+            case exp : Etimes =>
+              exp.exp_1 match {
+                case e : Ebytestype =>
+                  (getType(e), eval(exp.exp_2))
+                case e if exp.exp_2.isInstanceOf[Ebytestype] =>
+                  (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
+                case _ =>
+                  throw new TranslationException(
+                    "Unsupported alloc expression: " + (printer print exp))
+              }
+            //case exp : Evar => // allocation in bytes
 
-            val arrayType = name match {
-              case "malloc" | "calloc" => HeapArray
-              case "alloca" | "__builtin_alloca" => StackArray
-            }
-            val objectTerm = CCTerm(name match {
-              case "calloc" => typ.getZeroInit
-              case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
-            }, typ, srcInfo)
-
-            allocSize match {
-              case CCTerm(IIntLit(IdealInt(1)), typ, srcInfo)
-                if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer =>
-                pushVal(heapAlloc(objectTerm))
-              case CCTerm(sizeExp, typ, _) if typ.isInstanceOf[CCArithType] =>
-                val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
-                //              localVars.incrementLastFrame
-                // todo: values addGuard ?
-                pushVal(CCTerm(addressRangeValue,
-                  CCHeapArrayPointer(heap, typ, arrayType), srcInfo))
-              // case CCTerm(IIntLit(IdealInt(n)), _ : CCInt) =>
-              // todo: optimise constant size allocations > 1?
-            }
+            case _ => throw new TranslationException(
+              "Unsupported alloc expression: " + (printer print exp))
           }
-          case "realloc" =>
-            if (!modelHeap)
-              throw NeedsHeapModelException
-            throw new TranslationException("realloc is not supported.")
-          case "free" => // todo: what about trying to free unallocated or already freed addresses?
-            if (!modelHeap)
-              throw NeedsHeapModelException
-            val t = atomicEval(exp.listexp_.head)
-            heapFree(t)
-            pushVal(CCTerm(0, CCVoid(), srcInfo)) // free returns no value, pushing dummy
-          case name => {
-            // then we inline the called function
 
-            // evaluate the arguments
-            // todo: if we are to handle a function contract, arguments are handled
-            // as heap pointers. if the function is to be inlined, then arguments
-            // are handled as stack pointers. here we set a flag to notify this
-            handlingFunContractArgs = functionContracts.contains(name)
-            for (e <- exp.listexp_)
-              evalHelp(e)
-            if (!handlingFunContractArgs) outputClause
-            handlingFunContractArgs = false
-
-            val functionEntry = initPred
-
-            handleFunction(name, functionEntry, exp.listexp_.size)
+          val arrayType = name match {
+            case "malloc" | "calloc"           => HeapArray
+            case "alloca" | "__builtin_alloca" => StackArray
           }
+          val objectTerm = CCTerm(name match {
+            case "calloc"                                 => typ.getZeroInit
+            case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
+          }, typ, srcInfo)
+
+          allocSize match {
+            case CCTerm(IIntLit(IdealInt(1)), typ, srcInfo)
+              if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer =>
+              pushVal(heapAlloc(objectTerm))
+            case CCTerm(sizeExp, typ, srcInfo) if typ.isInstanceOf[CCArithType] =>
+              val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
+//              localVars.incrementLastFrame
+              // todo: values addGuard ?
+              pushVal(CCTerm(addressRangeValue, CCHeapArrayPointer(heap, typ, arrayType), srcInfo))
+            // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
+                // todo: optimise constant size allocations > 1?
+          }
+        }
+        case "realloc" =>
+          if (!modelHeap)
+            throw NeedsHeapModelException
+          throw new TranslationException("realloc is not supported.")
+        case "free" => // todo: what about trying to free unallocated or already freed addresses?
+          if (!modelHeap)
+            throw NeedsHeapModelException
+          val t = atomicEval(exp.listexp_.head)
+          heapFree(t)
+          pushVal(CCTerm(0, CCVoid(), srcInfo)) // free returns no value, pushing dummy
+        case name => {
+          // then we inline the called function
+
+          // evaluate the arguments
+          // todo: if we are to handle a function contract, arguments are handled
+          // as heap pointers. if the function is to be inlined, then arguments
+          // are handled as stack pointers. here we set a flag to notify this
+          handlingFunContractArgs = functionContracts.contains(name)
+          for (e <- exp.listexp_)
+            evalHelp(e)
+          if(!handlingFunContractArgs) outputClause
+          handlingFunContractArgs = false
+
+          val functionEntry = initPred
+
+          handleFunction(name, functionEntry, exp.listexp_.size)
         }
       }
 
@@ -3388,7 +3586,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val evalExp = topVal
         maybeOutputClause
         if(isHeapPointer(postExp)) {
-          heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], topVal.mapTerm(_ + op))
+          heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], topVal.mapTerm(_ + op),
+            assertMemSafety = true,
+            assumeMemSafety = true)
         } else {
           setValue(lookupVar(asLValue(postExp)),
             getActualAssignedTerm(evalExp, topVal.mapTerm(_ + op)),
@@ -3410,28 +3610,30 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       }
 
       case exp : Econst => evalHelp(exp.constant_)
-//      case exp : Estring.     Exp17 ::= String;
+      case exp : Estring => // todo: implement this properly
+        warn("ignoring string argument")
+        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+        pushVal(CCTerm(IIntLit(IdealInt(1)), CCInt(), srcInfo))
 
       case exp : Earray =>
         val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
-        val addressRangeValue : CCExpr = eval(exp.exp_1)
+        val arrayTerm : CCExpr = eval(exp.exp_1)
         val index : CCExpr = eval(exp.exp_2)
 
-        val arrayPtr : CCHeapArrayPointer = addressRangeValue.typ match {
-          case typ : CCHeapArrayPointer => typ
-          case _ => throw new TranslationException(
-            "Cannot determine the array term for " +
-              addressRangeValue + "[" + index + "]")
-        }
-
-        val readAddress = CCTerm(heap.nth(addressRangeValue.toTerm, index.toTerm),
-                             CCHeapPointer(heap, arrayPtr.elementType), srcInfo)
-        val readValue = heapRead(readAddress)
         import IExpression._
-        assertProperty(heap.within(addressRangeValue.toTerm, readAddress.toTerm), srcInfo) // todo: mark implicit assertions
-        pushVal(readValue)
-        //throw new TranslationException("Expression currently not supported by " +
-        //  "TriCera: " + (printer print exp))
+        arrayTerm.typ match {
+          case array : CCHeapArrayPointer =>
+            pushVal(heapArrayRead(arrayTerm, index, array))
+          case array : CCArray => // todo: move to separate method
+            val readValue = CCTerm(array.arraySort.
+              select(arrayTerm.toTerm, index.toTerm), array.elementType, srcInfo)
+            assertProperty((index.toTerm >= 0) &&&
+              (index.toTerm < array.sizeExpr.toTerm), srcInfo)
+            pushVal(readValue)
+          case _ =>
+            throw new TranslationException(getLineString(exp) +
+              arrayTerm + " is not an array type!")
+        }
 
       case _ =>
         throw new TranslationException(getLineString(exp) +
@@ -3540,12 +3742,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private def checkPointerIntComparison(t1 : CCExpr, t2 : CCExpr) :
       (CCExpr, CCExpr) =
       (t1.typ, t2.typ) match {
-        case (_: CCHeapPointer, _: CCInt) =>
+        case (_ : CCHeapPointer, _ : CCArithType) =>
           if (t2.toTerm != IIntLit(IdealInt(0)))
             throw new TranslationException("Pointers can only compared with `null` or `0`.")
           else
             (t1, CCTerm(heap.nullAddr(), t1.typ, t1.srcInfo)) // 0 to nullAddr()
-        case (_: CCInt, _: CCHeapPointer) =>
+        case (_: CCArithType, _: CCHeapPointer) =>
           if (t1.toTerm != IIntLit(IdealInt(0)))
             throw new TranslationException("Pointers can only compared with `null` or `0`.")
           else
@@ -3560,21 +3762,38 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val lhs = popVal
       evalHelp(right)
       val rhs = popVal
-      val (actualLhs, actualRhs) =  checkPointerIntComparison(lhs, rhs)
-      pushVal(op(actualLhs, actualRhs))
+      pushVal(op(lhs, rhs))
     }
 
     ////////////////////////////////////////////////////////////////////////////
 
+    /* lhs must be an address range term, used for pointer arithmetic
+    *  operations, e.g. when p += 1 rhs is 1 and op is +
+    * */
+    private def addToAddressRangeStart (lhs : ITerm, rhs : ITerm): ITerm = {
+      heap.addressRangeCtor(heap.nth(lhs, rhs), heap.addrRangeSize(lhs) - rhs)
+    }
+
     private def strictBinFun(left : Exp, right : Exp,
-                             op : (ITerm, ITerm) => ITerm) : Unit = {
+                             op : (ITerm, ITerm) => ITerm,
+                             opIsAddition : Boolean = false) : Unit = {
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => {
-                     val (promLhs, promRhs) = unifyTypes(lhs, rhs)
-                     // TODO: correct type promotion
-                     val typ = promLhs.typ
-                     CCTerm(typ cast op(promLhs.toTerm, promRhs.toTerm), typ,
-                       lhs.srcInfo)
+                    (lhs.typ, rhs.typ) match {
+                      case (arrTyp: CCHeapArrayPointer, _ : CCArithType) =>
+                        if(opIsAddition)
+                          CCTerm(addToAddressRangeStart(lhs.toTerm, rhs.toTerm),
+                                 arrTyp, lhs.srcInfo)
+                        else
+                          throw new TranslationException("Pointer arithmetic" +
+                            "over arrays is only supported with addition.")
+                      case _ =>
+                        val (promLhs, promRhs) = unifyTypes(lhs, rhs)
+                        // TODO: correct type promotion
+                        val typ = promLhs.typ
+                        CCTerm(typ cast op(promLhs.toTerm, promRhs.toTerm), typ,
+                               lhs.srcInfo)
+                    }
                    })
     }
 
@@ -3673,7 +3892,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           (a, convertType(b, CCDuration()))
 
         case _ =>
-          throw new TranslationException("incompatible types")
+          throw new TranslationException("incompatible types: " +
+            a.typ + " vs " + b.typ)
       }
     }
 

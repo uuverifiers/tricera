@@ -41,7 +41,7 @@ lazy val acslParser = (project in file("acsl-parser")).
 
 lazy val pp = taskKey[Unit]("")
 pp := {
-  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.0/tri-pp")
+  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.1/tri-pp")
   f #> file("tri-pp") !
 }
 def addExecutePermissions(file : File) {
@@ -98,5 +98,13 @@ settings(
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   excludeDependencies ++= Seq(
+    // exclude java-cup from transitive dependencies, ccParser includes newer version
     ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
 )
+
+// project can also be built by providing dependencies under the lib directory
+// and uncommenting below code to discard clashing transitive dependencies
+//assemblyMergeStrategy in assembly := {
+//  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+//  case x => MergeStrategy.last
+//}

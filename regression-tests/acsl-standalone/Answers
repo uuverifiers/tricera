@@ -144,20 +144,20 @@ UNSAFE
 
 --------------------------------------------------------------------------------------------------------------------
 Init:
- foo0(newHeap(alloc(emptyHeap, O_Int(45))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), -42, nthAddr(1)) 
+ foo0(newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1)) 
 --------------------------------------------------------------------------------------------------------------------
                                                          |                                                          
                                                          |                                                          
                                                          V                                                          
- foo3(newHeap(alloc(emptyHeap, O_Int(42))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), -42, nthAddr(1)) 
+ foo3(newHeap(alloc(emptyHeap, O_Int(42))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1)) 
 --------------------------------------------------------------------------------------------------------------------
                                                          |                                                          
                                                          |                                                          
                                                          V                                                          
-  foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), -42, nthAddr(1))  
+  foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))  
 --------------------------------------------------------------------------------------------------------------------
 Final:
-  foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), -42, nthAddr(1))  
+  foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))  
 --------------------------------------------------------------------------------------------------------------------
 
 dblptr-assigns_safe.c
@@ -192,4 +192,27 @@ SAFE
 
 swap_unsafe.c
 Warning: enabling heap model
-(error "-1")
+UNSAFE
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+  foo0(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), nthAddr(1), nthAddr(2))   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                           |                                                                                           
+                                                                                           |                                                                                           
+                                                                                           V                                                                                           
+ foo3(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), nthAddr(1), nthAddr(2), 7) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                           |                                                                                           
+                                                                                           |                                                                                           
+                                                                                           V                                                                                           
+       foo4(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 2)), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), nthAddr(1), nthAddr(2), 7)        
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                           |                                                                                           
+                                                                                           |                                                                                           
+                                                                                           V                                                                                           
+  foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(9))), O_Int(7))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), nthAddr(1), nthAddr(2))   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+  foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(9))), O_Int(7))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), nthAddr(1), nthAddr(2))   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

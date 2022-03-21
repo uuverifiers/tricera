@@ -56,9 +56,16 @@ object ReaderMain {
   def printClauses(system : ParametricEncoder.System) = {
     if (_reader != null) {
       println("System predicates:")
-      println("  " + (
-        system.allLocalPreds.map(p =>
-          _reader.predWithArgNamesAndLineNumbers(p))).mkString(", "))
+      try {
+        println("  " + (
+          system.allLocalPreds.toSeq.sortBy(p =>
+            "\\d+".r.findAllIn(p.name).toSeq.last.toInt).map(p =>
+            _reader.predWithArgNamesAndLineNumbers(p))).mkString("\n  "))
+      } catch { // do not sort if there exist preds without a number at the end
+        case _ : Exception =>
+          println(system.allLocalPreds.map(p =>
+            _reader.predWithArgNamesAndLineNumbers(p)).mkString("\n  "))
+      }
       println
     }
 

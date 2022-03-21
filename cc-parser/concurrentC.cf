@@ -32,7 +32,6 @@ NewFuncInt.  Function_def ::= [Annotation] Declarator Compound_stm ;
 NewFunc.     Function_def ::= [Declaration_specifier] Declarator Compound_stm ;
 
 Annot1. Annotation ::= AnnotationString;
--- "//@" -> currently unsupported
 
 separator nonempty Annotation "";
 
@@ -41,13 +40,14 @@ ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
 
 NoDeclarator.    Dec ::= [Declaration_specifier] [Extra_specifier] ";";
 Declarators.     Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
--- PredDeclarator.  Dec ::= "/*@" [Pred_hint] "@*/";
+PredDeclarator.  Dec ::= "/*$" [Pred_hint] "$*/";
+
 
 separator nonempty Dec "";
 
--- separator Pred_hint ",";
--- PredicateHint. Pred_hint ::= CIdent "(" [Type_specifier] ")";
--- separator nonempty Type_specifier ",";
+separator Pred_hint ",";
+PredicateHint. Pred_hint ::= CIdent "(" [Type_specifier] ")";
+separator nonempty Type_specifier ",";
 
 AChan. Chan_def ::= "chan" [CIdent] ";" ;
 
@@ -107,7 +107,7 @@ Tclock.       Type_specifier ::= "clock";
 Tduration.    Type_specifier ::= "duration";
 
 
-MyType.         Storage_class_specifier ::= "typedef";
+-- MyType.         Storage_class_specifier ::= "typedef"; -- handled by the preprocessor
 GlobalPrograms. Storage_class_specifier ::= "extern" ;
 LocalProgram.   Storage_class_specifier ::= "static" ;
 LocalBlock.     Storage_class_specifier ::= "auto" ;
@@ -134,7 +134,7 @@ Union.    Struct_or_union ::= "union";
 
 Structen. Struct_dec ::= [Spec_qual] [Struct_declarator] ";" ;
 
-separator nonempty Struct_dec "";
+separator Struct_dec "";
 
 TypeSpec.  Spec_qual ::= Type_specifier;
 QualSpec.  Spec_qual ::= Type_qualifier;
@@ -176,8 +176,10 @@ PointQualPoint. Pointer ::= "*" [Type_qualifier] Pointer ;
 
 
 AllSpec.  Parameter_type ::= [Parameter_declaration] ;
+-- The following leads to a shift/reduce error since list Parameter_declaration is separated by ,
 -- More.     Parameter_type ::= [Parameter_declaration] "," "..." ;
 
+More.          Parameter_declaration ::= "..." ;
 OnlyType.      Parameter_declaration ::= [Declaration_specifier] ;
 TypeAndParam.  Parameter_declaration ::= [Declaration_specifier] Declarator ;
 TypeHintAndParam.  Parameter_declaration ::= [Declaration_specifier] [Annotation] Declarator ;

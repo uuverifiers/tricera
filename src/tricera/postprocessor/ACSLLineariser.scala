@@ -18,7 +18,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with Princess.  If not, see <http://www.gnu.org/licenses/>.
  */
-package tricera.concurrency
+package tricera.postprocessor
 
 import ap.Signature
 import ap.theories.{ADT, ModuloArithmetic, MulTheory}
@@ -68,9 +68,7 @@ object ACSLLineariser {
   }
 
   def printExpression(e : IExpression) = {
-    val solutionPreprocessor = new SolutionPreprocessor
-    val simplified = solutionPreprocessor(e)
-    val enriched = EnrichingVisitor.visit(simplified, ())
+    val enriched = EnrichingVisitor.visit(e, ())
     AbsyPrinter.visit(enriched, PrintContext(List(), "", 0))
   }
 

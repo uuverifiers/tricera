@@ -3,6 +3,7 @@
 LAZABS=../../tri
 
 TESTS="enum1.hcc \
+       enum1-trailing-comma.hcc \
        enum2.hcc \
        enum3.hcc \
        enum4.hcc \

@@ -1,7 +1,5 @@
 package tricera.parsers
 
-import tricera.acsl.{ACSLTranslator, FunctionContract}
-
 import scala.util.parsing.combinator._
 import tricera.concurrency.concurrent_c.Absyn._
 

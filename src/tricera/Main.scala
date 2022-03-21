@@ -137,9 +137,10 @@ class Main (args: Array[String]) {
         }
 
       val pp = new TriCeraPreprocessor(fileName,
-                                      preprocessedFile.getAbsolutePath,
-                                      displayWarnings = logPPLevel == 2,
-                                      quiet = logPPLevel == 0)
+                                 preprocessedFile.getAbsolutePath,
+                                 displayWarnings = logPPLevel == 2,
+                                 quiet = logPPLevel == 0,
+                                 entryFunction = TriCeraParameters.get.funcName)
       if(logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of preprocessor warnings and errors")
         println("=" * 80)
@@ -281,7 +282,6 @@ class Main (args: Array[String]) {
             case Eq(ap.parser.IConstant(t), _) =>
               Util.warn("The following clause has different terms with the same " +
                 "name (term: " + t.name + ")\n" + c.toPrologString + "\n")
-              assert(false)
             case _ => // should not be possible
           }
         }
@@ -293,7 +293,7 @@ class Main (args: Array[String]) {
     modelledHeap = modelledHeapRes
 
     if (prettyPrint) {
-      tricera.concurrency.ReaderMain.printClauses(system)
+      tricera.concurrency.ReaderMain.printClauses(reader)
     }
 
     val smallSystem = system.mergeLocalTransitions
@@ -343,7 +343,7 @@ class Main (args: Array[String]) {
         res match {
           case Some(solution) =>
             import ap.parser.ITerm
-            import tricera.concurrency.ACSLLineariser
+            import tricera.postprocessor._
             import reader.CCPredicate
 
             def replaceArgs(p : CCPredicate, f : String) = {
@@ -362,10 +362,26 @@ class Main (args: Array[String]) {
             }
 
             val contracts = reader.getFunctionContracts
+            // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
             for ((fun, (pre, post)) <- contracts) {
-              val fPre  = ACSLLineariser asString solution(pre.pred)
-              val fPost = ACSLLineariser asString solution(post.pred)
+              val solutionProcessors = Seq(
+                ADTExploder
+                // add additional solution processors here
+              )
+              var processedSolution : SolutionProcessor.Solution  = solution
+              // iteratively process the solution using all solution processors
+              // this will only process the pre/post predicates' solutions due
+              // to the second argument
+              for (processor <- solutionProcessors) {
+                processedSolution =
+                  processor(processedSolution)(Seq(pre, post).map(_.pred))
+              }
 
+              val fPre  = ACSLLineariser asString processedSolution(pre.pred)
+              val fPost = ACSLLineariser asString processedSolution(post.pred)
+
+              // todo: implement replaceArgs as a solution processor
+              // replaceArgs does a simple string replacement (see above def)
               val fPreWithArgs  = replaceArgs(pre,  fPre)
               val fPostWithArgs = replaceArgs(post, fPost)
 
