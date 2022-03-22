@@ -293,7 +293,7 @@ class Main (args: Array[String]) {
     modelledHeap = modelledHeapRes
 
     if (prettyPrint) {
-      tricera.concurrency.ReaderMain.printClauses(reader)
+      tricera.concurrency.ReaderMain.printClauses(system)
     }
 
     val smallSystem = system.mergeLocalTransitions
