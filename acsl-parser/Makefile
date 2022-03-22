@@ -15,7 +15,7 @@ PARSER_BINDIR=$(PARSER_BASEDIR)/bin
 
 
 JLEX_PATH:=/usr/share/java/JLex.jar
-CLASSPATH:=$(CLASSPATH):$(PARSER_BASEDIR)/lib/java-cup-11b.jar:$(PARSER_BASEDIR):$(JLEX_PATH)
+CLASSPATH:=$(CLASSPATH):$(PARSER_BASEDIR)/../cc-parser/lib/java-cup-11b.jar:$(PARSER_BASEDIR):$(JLEX_PATH)
 
 JAVAC:=javac
 #JAVAC_FLAGS:=-target 1.5
