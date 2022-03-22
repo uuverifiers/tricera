@@ -1,0 +1,27 @@
+// ACSL used alongside contract gen. and inlining.
+
+/*@
+  requires n >= 0;
+  ensures \result >= 1;
+*/
+int foo(int n) {
+  return n+1;
+}
+
+/*@ contract */
+int bar(int n) {
+  return n+2;
+}
+
+int baz(int n) {
+  return n+3;
+}
+
+
+void main()
+{
+  int a = foo(0);
+  int b = bar(a);
+  int c = baz(b);
+  assert((a + b + c) >= (1 + 3 + 6));
+}

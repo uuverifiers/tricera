@@ -1,0 +1,16 @@
+/*@
+  requires n >= 0; 
+  ensures n >= 0;
+@*/
+int f(int n) {
+  if(n == 0)
+    return 0;
+  else if (n == 1)
+    return 1;
+  else return 42;
+}
+
+void main()
+{
+  assert(f(0) + f(2) == 42);
+}

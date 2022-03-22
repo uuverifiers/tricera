@@ -1,0 +1,203 @@
+-- Parser for (subset of) ACSL.
+-- Figure references are to ACSL Manual:
+-- https://frama-c.com/download/acsl.pdf
+
+--- Annotation ---------------------------------------------
+AnnotContract. Annotation ::= "/*@" FunctionContract "*/";
+
+---- Contracts (2.6) ---------------------------------------
+Contract. FunctionContract ::= [RequiresClause] MaybeTerminatesClause MaybeDecreasesClause [SimpleClause] [NamedBehavior] [CompletenessClause] ;
+
+
+NoClauseKind.   MaybeClauseKind ::= ;
+SomeClauseKind. MaybeClauseKind ::= ClauseKind ;
+ClauseKindCheck. ClauseKind ::= "check" ;
+ClauseKindAdmit. ClauseKind ::= "admit" ;
+
+ARequiresClause. RequiresClause ::= MaybeClauseKind "requires" Predicate ;
+terminator RequiresClause ";" ;
+
+NoTerminatesClause.   MaybeTerminatesClause ::= ;
+SomeTerminatesClause. MaybeTerminatesClause ::= TerminatesClause ;
+ATerminatesClause. TerminatesClause ::= "terminates" Predicate ";" ;
+
+NoDecreasesClause.   MaybeDecreasesClause ::= ;
+SomeDecreasesClause. MaybeDecreasesClause ::= DecreasesClause ;
+ADecreasesClause. DecreasesClause ::= "decreases" Term ";" ; -- TODO: ("for" ident)? 
+
+SimpleClauseAssigns. SimpleClause ::= AssignsClause ;
+SimpleClauseEnsures. SimpleClause ::= EnsuresClause ;
+-- FIXME: AllocationClause and AbruptClause are referenced but not defined in
+--        the BNF of 2.6 (but later on). Skipping for now.
+-- SimpleClauseAllocation. SimpleClause ::= AllocationClause ;
+-- SimpleClauseAbrupt.     SimpleClause ::= AbruptClause ;
+separator SimpleClause "" ;
+
+AnAssignsClause. AssignsClause ::= "assigns" Locations ";" ;
+
+LocationsSome.    Locations ::= [Location] ;
+LocationsNothing. Locations ::= "\\nothing" ;
+
+ALocation. Location ::= TSet ;
+separator nonempty Location "," ;
+
+AnEnsuresClause. EnsuresClause ::= MaybeClauseKind "ensures" Predicate ";" ;
+
+ANamedBehavior. NamedBehavior ::= "behavior" Id ":" BehaviorBody ;
+terminator NamedBehavior "" ;
+
+ABehaviorBody. BehaviorBody ::= [AssumesClause] [RequiresClause] [SimpleClause] ;
+
+AnAssumesClause. AssumesClause ::= "assumes" Predicate ;
+separator AssumesClause ";" ;
+
+CompletenessClauseComplete. CompletenessClause ::= "complete" "behaviors" [Id] ;
+CompletenessClauseDisjoint. CompletenessClause ::= "disjoint" "behaviors" [Id] ;
+terminator CompletenessClause ";" ;
+
+---- Predicates (2.2) --------------------------------------
+RelOpEQ.  RelOp ::= "==" ;
+RelOpNEQ. RelOp ::= "!=" ;
+RelOpLEQ. RelOp ::= "<=" ;
+RelOpGEQ. RelOp ::= ">=" ;
+RelOpGT.  RelOp ::= ">" ;
+RelOpLT.  RelOp ::= "<" ;
+
+PredTrue.             Predicate ::= "\\true" ;
+PredFalse.            Predicate ::= "\\false" ;
+PredRelOp.            Predicate ::= Term RelOp Term; -- FIXME: Chained relops allowed.
+PredApplication.      Predicate ::= Id "(" [Term] ")" ;
+PredParentheses.      Predicate ::= "(" Predicate ")" ;
+PredConjunction.      Predicate ::= Predicate "&&" Predicate ;
+PredDisjunction.      Predicate ::= Predicate "||" Predicate ;
+PredImplication.      Predicate ::= Predicate "==>" Predicate ;
+PredEquivalence.      Predicate ::= Predicate "<==>" Predicate ;
+PredNegation.         Predicate ::= "!" Predicate ;
+PredXOr.              Predicate ::= Predicate "^^" Predicate ;
+PredTernaryCond.      Predicate ::= Term "?" Predicate ":" Predicate ;
+PredTernaryCond2.     Predicate ::= Predicate "?" Predicate ":" Predicate ;
+PredLocalBinding.     Predicate ::= "\\let" Id "=" Term ";" Predicate ;
+PredLocalBinding2.    Predicate ::= "\\let" Id "=" Predicate ";" Predicate ;
+PredForAll.           Predicate ::= "\\forall" [Binder] ";" Predicate ;
+PredExists.           Predicate ::= "\\exists" [Binder] ";" Predicate ;
+PredSyntacticNaming.  Predicate ::= Id ":" Predicate ;
+PredSyntacticNaming2. Predicate ::= String ":" Predicate ;
+-- PredicateOld is extension for contracts.
+-- Maybe want separate `ContractPredicate` for this?
+PredOld.              Predicate ::= "\\old" "(" Predicate ")" ;
+PredValid.            Predicate ::= "\\valid" "(" [Location] ")" ;
+
+---- Terms (2.1) -------------------------------------------
+LiteralTrue.   Literal ::= "\\true" ;
+LiteralFalse.  Literal ::= "\\false" ;
+-- FIXME: Use C-specific literals.
+LiteralInt.    Literal ::= UnboundedInteger ;
+LiteralReal.   Literal ::= Double ;
+LiteralString. Literal ::= String ;
+LiteralChar.   Literal ::= Char ;
+
+BinOpPlus.         BinOp ::= "+" ;
+BinOpMinus.        BinOp ::= "-" ;
+BinOpMult.         BinOp ::= "*" ;
+BinOpDiv.          BinOp ::= "/" ;
+BinOpMod.          BinOp ::= "%" ;
+BinOpEQ.           BinOp ::= "==" ;
+BinOpNEQ.          BinOp ::= "!=" ;
+BinOpLEQ.          BinOp ::= "<=" ;
+BinOpGEQ.          BinOp ::= ">=" ;
+BinOpGT.           BinOp ::= ">" ;
+BinOpLT.           BinOp ::= "<" ;
+BinOpAnd.          BinOp ::= "&&" ;
+BinOpOr.           BinOp ::= "||" ;
+BinOpXOr.          BinOp ::= "^^" ;
+BinOpLShift.       BinOp ::= "<<" ;
+BinOpRShift.       BinOp ::= ">>" ;
+BinOpBitwiseAnd.   BinOp ::= "&" ;
+BinOpBitwiseOr.    BinOp ::= "|" ;
+BinOpBitwiseImpl.  BinOp ::= "-->" ;
+BinOpBitwiseEquiv. BinOp ::= "<-->" ;
+BinOpBitwiseXOr.   BinOp ::= "^" ;
+
+UnaryOpPlus.            UnaryOp ::= "+" ;
+UnaryOpMinus.           UnaryOp ::= "-" ;
+UnaryOpNegation.        UnaryOp ::= "!" ;
+UnaryOpComplementation. UnaryOp ::= "~" ;
+UnaryOpPtrDeref.        UnaryOp ::= "*" ;
+UnaryOpAddressOf.       UnaryOp ::= "&" ;
+
+TermLiteral.                 Term ::= Literal ;
+TermIdent.                   Term ::= Id ;
+TermUnaryOp.                 Term ::= UnaryOp Term ;
+TermBinOp.                   Term ::= Term BinOp Term ;
+TermArrayAccess.             Term ::= Term "[" Term "]" ;
+TermArrayFunctionalModifier. Term ::= "{" Term "\\with" "[" Term "]" "=" Term "}" ;
+TermStructFieldAccess.       Term ::= Term "." Id ;
+TermFieldFunctionalModifier. Term ::= "{" Term "\\with" "." Id "=" Term "}" ;
+TermStructPtrFieldAccess.    Term ::= Term "->" Id ;
+TermTypeCast.                Term ::= "(" TypeExpr ")" Term ;
+TermFuncAppl.                Term ::= Id "(" [Term] ")" ;
+TermParentheses.             Term ::= "(" Term ")" ;
+TermTernaryCond.             Term ::= Term "?" Term ":" Term ;
+TermLocalBinding.            Term ::= "\\let" Id "=" Term ";" Term ;
+TermSizeOfTerm.              Term ::= "sizeof" "(" Term ")" ;
+TermSizeOfType.              Term ::= "sizeof" "(" CTypeSpecifier ")" ; -- FIXME: Should be CTypeExpr
+TermSyntacticNaming.         Term ::= Id ":" Term ;
+TermSyntacticNaming2.        Term ::= String ":" Term ;
+-- TermOld and TermResult are extensions for contracts.
+-- Maybe want separate `ContractTerm` for this?
+TermOld.                     Term ::= "\\old" "(" Term ")" ;
+TermResult.                  Term ::= "\\result" ;
+separator nonempty Term "," ;
+
+-- Binders (2.4) -------------------------------------------
+ABinder. Binder ::= TypeName [VariableIdent] ;
+separator nonempty Binder "," ;
+
+TypeNameLogic. TypeName ::= LogicTypeName ;
+TypeNameC.     TypeName ::= CTypeSpecifier ; -- FIXME: Should be CTypeName
+
+-- NOTE: Referenced but not used in 2.4
+TypeExprLogic. TypeExpr ::= LogicTypeName ;
+TypeExprC.     TypeExpr ::= CTypeSpecifier ; -- FIXME: Should be CTypeExpr
+
+LogicTypeNameBuiltIn. LogicTypeName ::= BuiltInLogicType ;
+LogicTypeNameId.      LogicTypeName ::= Id ;
+
+BuiltInLogicTypeBoolean. BuiltInLogicType ::= "boolean" ;
+BuiltInLogicTypeInteger. BuiltInLogicType ::= "integer" ;
+BuiltInLogicTypeReal.    BuiltInLogicType ::= "real" ;
+
+VariableIdentId.          VariableIdent ::= Id ;
+VariableIdentPtrDeref.    VariableIdent ::= "*" VariableIdent ;
+VariableIdentArray.       VariableIdent ::= VariableIdent "[]";
+VariableIdentParentheses. VariableIdent ::= "(" VariableIdent ")";
+
+separator nonempty VariableIdent "," ;
+
+-- Memory Location Sets (2.8) ------------------------------
+-- TODO: Missing a lot.
+TSetEmpty. TSet ::= "\\empty" ;
+TSetTerm. TSet ::= Term ;
+
+-- C Type Expressions (A.1) --------------------------------
+-- TODO: Missing a lot. 
+CTypeSpecifierVoid.     CTypeSpecifier ::= "void" ;
+CTypeSpecifierChar.     CTypeSpecifier ::= "char" ;
+CTypeSpecifierShort.    CTypeSpecifier ::= "short" ;
+CTypeSpecifierInt.      CTypeSpecifier ::= "int" ;
+CTypeSpecifierLong.     CTypeSpecifier ::= "long" ;
+CTypeSpecifierFloat.    CTypeSpecifier ::= "float" ;
+CTypeSpecifierDouble.   CTypeSpecifier ::= "double" ;
+CTypeSpecifierSigned.   CTypeSpecifier ::= "signed" ;
+CTypeSpecifierUnsigned. CTypeSpecifier ::= "unsigned" ;
+CTypeSpecifierStruct.   CTypeSpecifier ::= "struct" Id ;
+CTypeSpecifierUnion.    CTypeSpecifier ::= "union" Id ;
+CTypeSpecifierEnum.     CTypeSpecifier ::= "enum" Id ;
+CTypeSpecifierId.       CTypeSpecifier ::= Id ;
+
+
+---- Tokens ------------------------------------------------ 
+-- Taken from concorrentC.cf
+token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
+token UnboundedInteger ('0' | (["123456789"] digit *));
+separator Id "," ;

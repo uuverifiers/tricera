@@ -1,0 +1,29 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="inc_safe.c \
+       inc_unsafe.c \
+       mc91_safe.c \
+       mc91_unsafe.c \
+       incdec_safe.c \
+       incdec_unsafe.c \
+       getptr_safe.c \
+       getptr_unsafe.c \
+       assigns_safe.c \
+       assigns_unsafe.c \
+       maxptr_safe.c \
+       maxptr_unsafe.c \
+       old_safe.c \
+       old_unsafe.c \
+       dblptr-assigns_safe.c \
+       dblptr-assigns_unsafe.c \
+       swap_safe.c \
+       swap_unsafe.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS "$@" $name 2>&1 | grep -v 'at '
+done
+

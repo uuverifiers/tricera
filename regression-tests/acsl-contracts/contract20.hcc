@@ -1,0 +1,16 @@
+// UNSAFE as *p might have changed.
+
+/*@
+  requires \valid(p);
+  ensures \result == *p;
+*/
+int get(int* p) {
+  return *p;
+}
+
+void main() {
+  int* p = malloc(sizeof(*p));
+  *p = 13;
+  get(p);
+  assert(*p == 13);
+}

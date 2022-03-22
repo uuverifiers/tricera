@@ -1,0 +1,16 @@
+// SAFE because no assign to g.
+
+int g = 1;
+
+/*@ 
+  assigns \nothing;
+  ensures \result == 13;
+*/
+int get() {
+  return 13;
+}
+
+void main(void) {
+  get();
+  assert(g == 1);
+}

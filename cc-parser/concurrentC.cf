@@ -42,6 +42,7 @@ NoDeclarator.    Dec ::= [Declaration_specifier] [Extra_specifier] ";";
 Declarators.     Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
 PredDeclarator.  Dec ::= "/*$" [Pred_hint] "$*/";
 
+
 separator nonempty Dec "";
 
 separator Pred_hint ",";

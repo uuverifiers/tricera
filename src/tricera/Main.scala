@@ -250,7 +250,9 @@ class Main (args: Array[String]) {
     val (reader, modelledHeapRes) =
       CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
 
-    val system = reader.system
+    import tricera.acsl.Encoder
+    val enc : Encoder = new Encoder(reader)
+    val system = enc.encode
 
     def checkForSameNamedTerms = {
       val clausesWithSameNamedTerms =

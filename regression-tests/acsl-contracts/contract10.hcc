@@ -1,0 +1,19 @@
+// Recursive function
+
+/*@
+  ensures ((n <= 100) ==> (\result == 91));
+  ensures ((n > 100) ==> (\result == (n-10)));
+*/
+int mc91(int n) {
+  if (n > 100) {
+    return n - 10;
+  } else {
+    return mc91(mc91(n + 11));
+  }
+}
+
+void main()
+{
+  int a;
+  mc91(a);
+}

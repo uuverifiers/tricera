@@ -1,0 +1,33 @@
+// (SAFE) Nested calls
+
+/*@
+  assigns \nothing;
+  ensures \result == n+1;
+*/
+int incr(int n) {
+  return n+1;
+}
+
+/*@
+  requires \valid(p);
+  assigns \nothing;
+  ensures \result == *p;
+*/
+int get(int* p) {
+  return *p;
+}
+
+/*@
+  requires \valid(p);
+  assigns \nothing;
+  ensures \result == ((*p) + 1);
+*/
+int getIncr(int* p) {
+  return incr(get(p));
+}
+
+void main() {
+  int *p = malloc(sizeof(*p));
+  int res = getIncr(p);
+  assert(res == *p + 1);
+}

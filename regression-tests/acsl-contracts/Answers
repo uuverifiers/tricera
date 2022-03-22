@@ -1,0 +1,92 @@
+
+contract1.hcc
+SAFE
+
+contract2.hcc
+SAFE
+
+contract3.hcc
+UNSAFE
+
+contract4.hcc
+UNSAFE
+
+contract5.hcc
+SAFE
+
+contract6.hcc
+SAFE
+
+contract7.hcc
+SAFE
+
+contract8.hcc
+UNSAFE
+
+contract9.hcc
+SAFE
+
+contract10.hcc
+SAFE
+
+contract11.hcc
+Warning: enabling heap model
+SAFE
+
+contract12.hcc
+Warning: enabling heap model
+SAFE
+
+contract13.hcc
+Warning: enabling heap model
+UNSAFE
+
+contract14.hcc
+SAFE
+
+contract15.hcc
+SAFE
+
+contract16.hcc
+Warning: enabling heap model
+SAFE
+
+contract17.hcc
+UNSAFE
+
+contract18.hcc
+UNSAFE
+
+contract19.hcc
+Warning: enabling heap model
+SAFE
+
+contract20.hcc
+Warning: enabling heap model
+UNSAFE
+
+contract21.hcc
+SAFE
+
+contract22.hcc
+UNSAFE
+
+contract23.hcc
+Warning: enabling heap model
+UNSAFE
+
+contract24.hcc
+Warning: enabling heap model
+UNSAFE
+
+contract25.hcc
+Warning: enabling heap model
+SAFE
+
+contract26.hcc
+Warning: enabling heap model
+SAFE
+
+contract27.hcc
+Warning: enabling heap model
+SAFE

@@ -1,0 +1,10 @@
+/*@ 
+  ensures \forall int i; (i >= 0) ==> (i > \result);
+*/
+int getNeg() {
+  return -1;
+}
+
+void main(void) {
+  getNeg();
+}

@@ -1,0 +1,12 @@
+/*@
+  requires n == 2;
+  ensures \result == 12;
+*/
+int foo(int n) {
+  return n+10;
+}
+
+void main()
+{
+  foo(2);
+}

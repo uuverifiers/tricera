@@ -9,6 +9,10 @@ CMakeFiles
 cc-parser/bin
 cc-parser/target
 cc-parser/tricera
+acsl-parser/bin
+acsl-parser/target
+acsl-parser/tricera
+acsl-parser/acsl-parser.jar
 project/project
 project/target
 Makefile

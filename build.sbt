@@ -31,8 +31,13 @@ lazy val ccParser = (project in file("cc-parser")).
     packageBin in Compile := baseDirectory.value / "cc-parser.jar"
   ).disablePlugins(AssemblyPlugin)
 
-// horn-concurrency dependency
-//lazy val hornConcurrency = RootProject(uri("git://github.com/zafer-esen/horn-concurrency-test.git"))
+lazy val acslParser = (project in file("acsl-parser")).
+  settings(commonSettings: _*).
+  settings(parserSettings: _*).
+  settings(
+    name := "TriCera-ACSL-parser",
+    packageBin in Compile := baseDirectory.value / "acsl-parser.jar"
+  ).disablePlugins(AssemblyPlugin)
 
 lazy val pp = taskKey[Unit]("")
 pp := {
@@ -71,7 +76,8 @@ ppWithErrorHandling := {
 lazy val root = (project in file(".")).
   aggregate(ccParser).
   dependsOn(ccParser).
-  // dependsOn(hornConcurrency).
+  aggregate(acslParser).
+  dependsOn(acslParser).
   settings(commonSettings: _*).
 
 //

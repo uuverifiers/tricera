@@ -1,0 +1,16 @@
+// UNSAFE because modifies g.
+
+int g = 1;
+
+/*@ 
+  assigns \nothing;
+  ensures \result == 13;
+*/
+int get() {
+  g = 42;
+  return 13;
+}
+
+void main(void) {
+  get();
+}

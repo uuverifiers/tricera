@@ -1,0 +1,12 @@
+/*@ 
+  requires n >= 0; 
+  ensures n >= 0; 
+*/
+int foo(int n) {
+  return 42;
+}
+
+void main()
+{
+  foo(2);
+}

@@ -45,6 +45,7 @@ import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap
                                  HashSet => MHashSet}
 
 import tricera.Util._
+import tricera.acsl.{ACSLTranslator, FunctionContract}
 import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
@@ -785,6 +786,16 @@ class CCReader private (prog : Program,
   private val predDecls     = new MHashMap[String, Predicate]
 
   def getFunctionContracts = functionContracts.toMap
+
+  // NOTE: Used by ACSL encoder.
+  var hasACSLEntryFunction : Boolean = false
+  val funToPreAtom  : MHashMap[String, IAtom] = new MHashMap()
+  val funToPostAtom : MHashMap[String, IAtom] = new MHashMap()
+  val funToContract : MHashMap[String, FunctionContract] = new MHashMap()
+  val funsWithAnnot : MHashSet[String] = new MHashSet()
+  val prePredsToReplace : MHashSet[Predicate] = new MHashSet()
+  val postPredsToReplace : MHashSet[Predicate] = new MHashSet()
+
   //////////////////////////////////////////////////////////////////////////////
 
   private val processes =
@@ -1218,7 +1229,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
     // todo: this is again not clean, but should fix the issue
     class FunctionContext (val prePred  : CCPredicate,
-                           val postPred : CCPredicate)
+                           val postPred : CCPredicate,
+                           val acslContext : ACSLTranslator.Context)
 
     val functionContexts : Map[Afunc, FunctionContext] =
       (for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) yield {
@@ -1264,20 +1276,134 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         functionContracts.put(name, (prePred, postPred))
         localVars.popFrame
 
+
+        import scala.collection.Map
+        class Context(oldVars : Map[String, CCVar])
+          extends ACSLTranslator.Context {
+          def getOldVar(ident : String) : Option[CCReader.CCVar] = {
+            oldVars.get(ident)
+          }
+
+          def getParams : Seq[CCReader.CCVar] = {
+            postOldArgs.diff(getGlobals)
+          }
+
+          def getGlobals : Seq[CCReader.CCVar] = {
+            globalVars.vars - heapVar
+          }
+
+          def getResultVar : Option[CCReader.CCVar] = {
+            postVar match {
+              case (v : CCVar) :: _ => Some(v)
+              case _ => None
+            }
+          }
+
+          def isHeapEnabled : Boolean = {
+            modelHeap
+          }
+
+          def getHeap : Heap = {
+            // FIXME: This doesn't work..
+            // if (modelHeap) heap else throw NeedsHeapModelException
+            if (modelHeap)
+              heap
+            else
+              throw NeedsHeapModelException
+          }
+
+          def getHeapTerm : ITerm = {
+            if (modelHeap)
+              heapTerm
+            else
+              throw NeedsHeapModelException
+          }
+
+          def getOldHeapTerm : ITerm = {
+            if (modelHeap)
+              getOldVar(heapTermName).get.term
+            else
+              throw NeedsHeapModelException
+          }
+
+          def sortWrapper(s : Sort) : Option[MonoSortedIFunction] = {
+            sortWrapperMap.get(s)
+          }
+
+          def sortGetter(s : Sort) : Option[MonoSortedIFunction] = {
+            sortGetterMap.get(s)
+          }
+
+          def getTypOfPointer(t : CCType) : CCType = t match {
+            case p : CCHeapPointer => p.typ
+            case t => t
+          }
+
+          def getCtor(s : Sort) : Int = {
+            sortCtorIdMap(s)
+          }
+
+          override implicit val arithMode: CCReader.ArithmeticMode.Value =
+            arithmeticMode
+        }
+
         // Old heap gets included. Unsure if desired.
         val oldVarsMap : Map[String, CCVar] =
           oldVars.map(v => (v.name.stripSuffix("_old"), v)).toMap
-        (fun, new FunctionContext(prePred, postPred))
+        val context = new Context(oldVarsMap)
+        (fun, new FunctionContext(prePred, postPred, context))
       }).toMap
 
-    for (f <- contractFuns) {
+    val annotatedFuns : Map[Afunc, FunctionContract] = // todo: naming is ambiguous
+      for ((fun, annots) <- funsThatMightHaveACSLContracts;
+           annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
+
+        val funContext = functionContexts(fun)
+        val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
+        // todo: try / catch and print msg?
+        val contract =
+          try {
+            ACSLTranslator.translateContract(
+                "/*@" + possibleACSLAnnotation.annot + "*/",
+                funContext.acslContext)
+          }
+          catch {
+            case NeedsHeapModelException =>
+              throw NeedsHeapModelException
+            case e : Exception =>
+              warn("Got exception while translating ACSL:\n" + e)
+              warn("ACSL Translator Exception, using dummy contract for " +
+                "annotation: " + possibleACSLAnnotation.annot)
+              new FunctionContract(IBoolLit(true), IBoolLit(true), IBoolLit(true), IBoolLit(true))
+          }
+
+        val name = getName(fun.function_def_)
+        // NOTE: Put stuff for encoder.
+        prePredsToReplace.add(funContext.prePred.pred)
+        postPredsToReplace.add(funContext.postPred.pred)
+        funToPreAtom.put(name, atom(funContext.prePred))
+        funToPostAtom.put(name, atom(funContext.postPred))
+        funsWithAnnot.add(name)
+        funToContract.put(name, contract)
+
+        (fun, contract)
+      }
+
+    // TODO: If we want printing add as switch.
+    //if (annotatedFuns.nonEmpty)
+    //  println("Contract annotations\n" + "-"*80)
+    //for ((fun, contract) <- annotatedFuns) {
+    //  println(getName(fun.function_def_) + ":\n" + contract)
+    //}
+
+    for (f <- contractFuns if !annotatedFuns.isDefinedAt(f)) {
       val name = getName(f.function_def_)
       val funContext = functionContexts(f)
       functionContracts.put(name, (funContext.prePred, funContext.postPred))
     }
 
     // ... and generate clauses for those functions
-    for (f <- contractFuns) {
+    for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
       import HornClauses._
 
       val name = getName(FuncDef(f.function_def_).decl) // todo clean up
@@ -1321,7 +1447,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       output(postPred(postArgs) :- exitPred(allFormalVarTerms ++
                                    resVar.map(v => IConstant(v.term))))
 
-      if (timeInvariants.nonEmpty)
+      if (!timeInvariants.isEmpty)
         throw new TranslationException(
           "Contracts cannot be used for functions with time invariants")
       if (clauses exists (_._2 != ParametricEncoder.NoSync))
@@ -1372,12 +1498,22 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           // nothing
       }
 
-    // is there a global entry point in the program?
-    (functionDefs get entryFunction) match {
-      case Some(funDef) => {
-        setPrefix(entryFunction)
+    if (functionClauses contains entryFunction) {
+      hasACSLEntryFunction = true
+      // do not encode entry function clauses if they are already generated
+      processes +=
+        ((functionClauses(entryFunction), ParametricEncoder.Singleton))
+      assertionClauses ++= functionAssertionClauses(entryFunction)
+      functionClauses remove entryFunction
+      functionAssertionClauses remove entryFunction
+    }
+    else {
+      // is there a global entry point in the program?
+      (functionDefs get entryFunction) match {
+        case Some(funDef) => {
+          setPrefix(entryFunction)
 
-        localVars pushFrame
+          localVars pushFrame
 
           val returnType = {
             FuncDef(funDef).declSpecs match {
@@ -1386,54 +1522,55 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             }
           }
 
-        val exitVar = getResVar(returnType)
+          val exitVar = getResVar(returnType)
 
-        val exitPred = newPred(exitVar)
+          val exitPred = newPred(exitVar)
 
-        val stm = pushArguments(funDef)
+          val stm = pushArguments(funDef)
 
-        val translator = FunctionTranslator(exitPred)
-        val finalPred =
-          if (!returnType.isInstanceOf[CCVoid]) {
-            translator.translateWithReturn(stm)
-            exitPred
+          val translator = FunctionTranslator(exitPred)
+          val finalPred =
+            if (!returnType.isInstanceOf[CCVoid]) {
+              translator.translateWithReturn(stm)
+              exitPred
+            }
+            else
+              translator.translateNoReturn(stm)
+
+          // add an assertion to track memory safety (i.e., no memory leaks)
+          // currently this is only added to the exit point of the entry function,
+          if (modelHeap && trackMemorySafety) {
+            import HornClauses._
+            import IExpression._
+            finalPred match {
+              case CCPredicate(_, args, _, _) if args.head.sort == heap.HeapSort =>
+                // passing sort as CCVoid as it is not important
+                val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid()))
+                val resVar = getResVar(args.last.typ)
+                var excludedAddresses = i(true)
+                for (arg <- args) arg.typ match {
+                  case arr: CCHeapArrayPointer if arr.arrayType == GlobalArray =>
+                    excludedAddresses = excludedAddresses &&&
+                      !heap.within(arg.term, addrVar.term)
+                  case _ => // nothing
+                }
+                assertionClauses += CCClause(
+                  ((heap.read(args.head.term, addrVar.term) === defObj()) :- (atom(finalPred.pred, allFormalVarTerms.toList ++
+                  resVar.map(v => IConstant(v.term))) &&& excludedAddresses)),
+                  None) // todo: add proper line numbers for auto-added free assertions
+              case _ => throw new TranslationException("Tried to add -memtrack" +
+                "assertion but could not find the heap term!")
+            }
           }
-          else
-            translator.translateNoReturn(stm)
 
-        // add an assertion to track memory safety (i.e., no memory leaks)
-        // currently this is only added to the exit point of the entry function,
-        if (modelHeap && trackMemorySafety) {
-          import HornClauses._
-          import IExpression._
-          finalPred match {
-            case CCPredicate(_, args, _, _) if args.head.sort == heap.HeapSort =>
-              // passing sort as CCVoid as it is not important
-              val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid()))
-              val resVar = getResVar(args.last.typ)
-              var excludedAddresses = i(true)
-              for (arg <- args) arg.typ match {
-                case arr : CCHeapArrayPointer if arr.arrayType == GlobalArray =>
-                  excludedAddresses = excludedAddresses &&&
-                  !heap.within(arg.term, addrVar.term)
-                case _ => // nothing
-              }
-              assertionClauses += CCClause(
-                ((heap.read(args.head.term, addrVar.term) === defObj()) :- (atom(finalPred.pred, allFormalVarTerms.toList ++
-                resVar.map(v => IConstant(v.term))) &&& excludedAddresses)),
-                None) // todo: add proper line numbers for auto-added free assertions
-            case _ => throw new TranslationException("Tried to add -memtrack" +
-              "assertion but could not find the heap term!")
-          }
+          processes += ((clauses.toList, ParametricEncoder.Singleton))
+          clauses.clear
+
+          localVars popFrame
         }
-
-        processes += ((clauses.toList, ParametricEncoder.Singleton))
-        clauses.clear
-
-        localVars popFrame
+        case None =>
+          warn("entry function \"" + entryFunction + "\" not found")
       }
-      case None =>
-        warn("entry function \"" + entryFunction + "\" not found")
     }
 
     // remove assertions that are no longer connected to predicates
