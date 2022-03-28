@@ -6,15 +6,15 @@
   * modification, are permitted provided that the following conditions are met:
   *
   * * Redistributions of source code must retain the above copyright notice, this
-  * list of conditions and the following disclaimer.
+  *   list of conditions and the following disclaimer.
   *
   * * Redistributions in binary form must reproduce the above copyright notice,
-  * this list of conditions and the following disclaimer in the documentation
-  * and/or other materials provided with the distribution.
+  *   this list of conditions and the following disclaimer in the documentation
+  *   and/or other materials provided with the distribution.
   *
   * * Neither the name of the authors nor the names of their
-  * contributors may be used to endorse or promote products derived from
-  * this software without specific prior written permission.
+  *   contributors may be used to endorse or promote products derived from
+  *   this software without specific prior written permission.
   *
   * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
   * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -342,7 +342,6 @@ class Main (args: Array[String]) {
         println("SAFE")
         res match {
           case Some(solution) =>
-            import ap.parser.ITerm
             import tricera.postprocessor._
             import reader.CCPredicate
 
@@ -363,7 +362,9 @@ class Main (args: Array[String]) {
 
             val contracts = reader.getFunctionContracts
             // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
-            for ((fun, (pre, post)) <- contracts) {
+            for ((fun, (pre, post)) <- contracts
+                 if !enc.prePredsToReplace.contains(pre.pred) &&
+                    !enc.postPredsToReplace.contains(post.pred)) {
               val solutionProcessors = Seq(
                 ADTExploder
                 // add additional solution processors here
