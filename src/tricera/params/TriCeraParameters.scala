@@ -1,3 +1,32 @@
+/**
+ * Copyright (c) 2015-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * * Neither the name of the authors nor the names of their
+ *   contributors may be used to endorse or promote products derived from
+ *   this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package tricera.params
 
 import java.io.FileInputStream
@@ -31,6 +60,11 @@ class TriCeraParameters extends GlobalParameters {
   var showFailedAssertions : Boolean = false
   var devMode : Boolean = false
 
+  var displayACSL = false
+
+  override def needFullSolution: Boolean =
+    super.needFullSolution || displayACSL || log
+
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
     that.arithMode = this.arithMode
@@ -46,7 +80,8 @@ class TriCeraParameters extends GlobalParameters {
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
   private val greeting =
-    "TriCera v0.2.\n(C) Copyright 2012-2021 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer"
+    "TriCera v0.3.\n(C) Copyright 2012-2022 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer\n" +
+    "Contributors: Pontus Ernstedt."
 
   private def parseArgs(args: List[String]): Boolean = args match {
     case Nil => true
@@ -68,6 +103,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-disj" :: rest => disjunctive = true; parseArgs(rest)
     case "-sol" :: rest => displaySolutionProlog = true; parseArgs(rest)
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
+    case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
     case "-memtrack" :: rest => shouldTrackMemory = true; parseArgs(rest)
 
@@ -177,6 +213,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-assert" :: rest => TriCeraParameters.get.assertions = true; parseArgs(rest)
     case "-cexAsserts" :: rest => showFailedAssertions = true; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
+    case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +
       "General options:\n" +
       " -h\t\tShow this information\n" +
@@ -202,6 +239,8 @@ class TriCeraParameters extends GlobalParameters {
       " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
       " -sol\t\tShow solution in Prolog format\n" +
       " -ssol\t\tShow solution in SMT-LIB format\n" +
+      " -acsl\t\tPrint inferred ACSL annotations\n" +
+      " -varLines\t\tPrint program variables together with their line numbers (e.g., x:42)\n" +
       " -memtrack\t\tCheck that there are no memory leaks in the input program \n" +
       " -disj\t\tUse disjunctive interpolation\n" +
       " -stac\t\tStatic acceleration of loops\n" +

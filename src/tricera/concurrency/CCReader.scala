@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2019 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -557,7 +557,7 @@ object CCReader {
                val typ  : CCType) {
     val nameWithLineNumber = name +
       (srcInfo match {
-        case Some(info) if info.line >= 0 => "/" + info.line
+        case Some(info) if info.line >= 0 => ":" + info.line
         case _ => ""
       } )
     val sort = typ.toSort
@@ -567,7 +567,9 @@ object CCReader {
         nameWithLineNumber else name
       new SortedConstantTerm(termName, sort)
     }
-    override def toString: String = nameWithLineNumber
+    override def toString: String =
+      if (TriCeraParameters.get.showVarLineNumbersInTerms)
+        nameWithLineNumber else name
     def toStringWithLineNumbers: String = name + {
       srcInfo match {
         case Some(info) if info.line >= 0 => ":" + info.line

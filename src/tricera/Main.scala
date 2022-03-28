@@ -31,12 +31,8 @@
 package tricera
 
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
-import java.io.{FileInputStream, FileNotFoundException}
 
 import lazabs.prover._
-import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
-import lazabs.GlobalParameters
-import net.jcazevedo.moultingyaml.YF
 import tricera.benchmarking.Benchmarking._
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +72,7 @@ class Main (args: Array[String]) {
 
   val params = TriCeraParameters.get
   params(args.toList)
-  GlobalParameters.parameters.value = params
+  lazabs.GlobalParameters.parameters.value = params
   import params._
 
   if (in == null) {
@@ -321,7 +317,7 @@ class Main (args: Array[String]) {
       Console.withOut(outStream) {
         new hornconcurrency.VerificationLoop(smallSystem, null,
           printIntermediateClauseSets, fileName + ".smt2",
-          expectedStatus = expectedStatus, log = log,
+          expectedStatus = expectedStatus, log = needFullSolution,
           templateBasedInterpolation =  templateBasedInterpolation,
           templateBasedInterpolationTimeout = templateBasedInterpolationTimeout)
           .result
@@ -344,6 +340,46 @@ class Main (args: Array[String]) {
           case Some(solution) =>
             import tricera.postprocessor._
             import reader.CCPredicate
+            import lazabs.horn.global._
+            import lazabs.horn.bottomup.HornPredAbs
+            import lazabs.ast.ASTree.Parameter
+
+            if(displaySolutionProlog) {
+              // todo: replace args with actual ones from the clauses
+              println("\nSolution (Prolog)")
+              println("="*80)
+              val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
+              for((pred,sol) <- sortedSol) {
+                val cl = HornClause(RelVar(pred.name,
+                  (0 until pred.arity).map(p =>
+                    Parameter("_" + p,lazabs.types.IntegerType())).toList),
+                  List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
+                    Map[ap.terfor.ConstantTerm,String]().empty,false))))
+                println(lazabs.viewer.HornPrinter.print(cl))
+              }
+              println("="*80 + "\n")
+            }
+            if (lazabs.GlobalParameters.get.displaySolutionSMT) {
+              // TODO: this should probably just use the function for printing
+              // models in SMTLineariser. But will change the syntax a bit
+              // and require tests to be updated
+
+              // todo: replace args with actual ones from the clauses
+              println("\nSolution (SMT-LIB)")
+              println("="*80)
+              val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
+              for((pred,sol) <- sortedSol) {
+                val cl = HornClause(RelVar(pred.name,
+                  (0 until pred.arity).zip(HornPredAbs.predArgumentSorts(pred).map(
+                    lazabs.prover.PrincessWrapper.sort2Type(_))).map(p =>
+                    Parameter("_" + p._1,p._2)
+                  ).toList),
+                  List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
+                    Map[ap.terfor.ConstantTerm,String]().empty,false))))
+                println(lazabs.viewer.HornSMTPrinter.printFull(cl, true))
+              }
+              println("="*80 + "\n")
+            }
 
             def replaceArgs(p : CCPredicate, f : String) = {
               var s = f
@@ -360,37 +396,42 @@ class Main (args: Array[String]) {
               s
             }
 
-            val contracts = reader.getFunctionContracts
-            // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
-            for ((fun, (pre, post)) <- contracts
-                 if !enc.prePredsToReplace.contains(pre.pred) &&
-                    !enc.postPredsToReplace.contains(post.pred)) {
-              val solutionProcessors = Seq(
-                ADTExploder
-                // add additional solution processors here
-              )
-              var processedSolution : SolutionProcessor.Solution  = solution
-              // iteratively process the solution using all solution processors
-              // this will only process the pre/post predicates' solutions due
-              // to the second argument
-              for (processor <- solutionProcessors) {
-                processedSolution =
-                  processor(processedSolution)(Seq(pre, post).map(_.pred))
+            if (displayACSL) {
+              println("\nInferred ACSL annotations")
+              println("="*80)
+              val contracts = reader.getFunctionContracts
+              // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
+              for ((fun, (pre, post)) <- contracts
+                   if !enc.prePredsToReplace.contains(pre.pred) &&
+                     !enc.postPredsToReplace.contains(post.pred)) {
+                val solutionProcessors = Seq(
+                  ADTExploder
+                  // add additional solution processors here
+                )
+                var processedSolution: SolutionProcessor.Solution = solution
+                // iteratively process the solution using all solution processors
+                // this will only process the pre/post predicates' solutions due
+                // to the second argument
+                for (processor <- solutionProcessors) {
+                  processedSolution =
+                    processor(processedSolution)(Seq(pre, post).map(_.pred))
+                }
+
+                val fPre = ACSLLineariser asString processedSolution(pre.pred)
+                val fPost = ACSLLineariser asString processedSolution(post.pred)
+
+                // todo: implement replaceArgs as a solution processor
+                // replaceArgs does a simple string replacement (see above def)
+                val fPreWithArgs = replaceArgs(pre, fPre)
+                val fPostWithArgs = replaceArgs(post, fPost)
+
+                println("/* contracts for " + fun + " */")
+                println("/*@")
+                print("  requires "); println(fPreWithArgs + ";")
+                print("  ensures "); println(fPostWithArgs + ";")
+                println("*/")
               }
-
-              val fPre  = ACSLLineariser asString processedSolution(pre.pred)
-              val fPost = ACSLLineariser asString processedSolution(post.pred)
-
-              // todo: implement replaceArgs as a solution processor
-              // replaceArgs does a simple string replacement (see above def)
-              val fPreWithArgs  = replaceArgs(pre,  fPre)
-              val fPostWithArgs = replaceArgs(post, fPost)
-
-              println("/* contracts for " + fun + " */")
-              println("/*@")
-              print  ("  requires ") ; println(fPreWithArgs + ";")
-              print  ("  ensures ")  ; println(fPostWithArgs + ";")
-              println("*/")
+              println("="*80 + "\n")
             }
 
             /*if(system.backgroundPreds.exists(p => p.name.contains("_pre"))) {
