@@ -552,12 +552,16 @@ object CCReader {
       SymbolCollector constantsSorted f
   }
 
+  object CCVar{
+    val lineNumberPrefix  = ":"
+  }
   class CCVar (val name : String,
                val srcInfo : Option[SourceInfo],
                val typ  : CCType) {
+    import CCVar._
     val nameWithLineNumber = name +
       (srcInfo match {
-        case Some(info) if info.line >= 0 => ":" + info.line
+        case Some(info) if info.line >= 0 => lineNumberPrefix + info.line
         case _ => ""
       } )
     val sort = typ.toSort
@@ -572,11 +576,34 @@ object CCReader {
         nameWithLineNumber else name
     def toStringWithLineNumbers: String = name + {
       srcInfo match {
-        case Some(info) if info.line >= 0 => ":" + info.line
+        case Some(info) if info.line >= 0 => lineNumberPrefix + info.line
         case _ => ""
       }
     }
   }
+
+  case class CCClause (clause : HornClauses.Clause,
+                       srcInfo : Option[SourceInfo]) // todo: what else would be useful?
+
+  // a wrapper for IExpression.Predicate that keeps more info about arguments
+  case class CCPredicate(pred : Predicate, argVars : Seq[CCVar]) {
+    import ap.parser.ITerm
+    import IExpression._
+    def apply(terms : Seq[ITerm]) = pred(terms: _*)
+    def arity : Int = pred.arity
+    override def toString: String =
+      pred.name + (if(argVars.nonEmpty) "(" + argVars.mkString(", ") + ")" else "")
+    def toStringWithLineNumbers: String =
+      pred.name + (if(argVars.nonEmpty) "(" +
+        argVars.map(_.toStringWithLineNumbers).mkString(", ") + ")" else "")
+    assert(pred.arity == argVars.size)
+  }
+
+  class FunctionContext (val prePred  : CCPredicate,
+                         val postPred : CCPredicate,
+                         val acslContext : ACSLTranslator.Context,
+                         val prePredACSLArgNames : Seq[String],
+                         val postPredACSLArgNames : Seq[String])
 
 }
 
@@ -610,31 +637,6 @@ class CCReader private (prog : Program,
   import HornClauses.Clause
 
   private val predCCPredMap = new MHashMap[Predicate, CCPredicate]
-
-  // todo: move out to where CCVar is?
-  case class CCClause (clause : HornClauses.Clause,
-                       srcInfo : Option[SourceInfo]) // todo: what else would be useful?
-
-  // a wrapper for IExpression.Predicate that keeps more info about arguments
-  case class CCPredicate(pred : Predicate, argVars : Seq[CCVar],
-                         resVarInd : Int = -1,
-                         oldVars : Seq[Int] = Nil) {
-    // resVarInd is used in function contracts, if the post-condition has a
-    // return variable, its index is given here
-    // oldVars is used in function contracts, an index is given for a var
-    // if that var refers to an old arg in post conditions. e.g. f_post(x, x_old)
-    import ap.parser.ITerm
-    import IExpression._
-    def apply(terms : Seq[ITerm]) = pred(terms: _*)
-    def arity : Int = pred.arity
-    override def toString: String =
-      pred.name + (if(argVars.nonEmpty) "(" + argVars.mkString(", ") + ")" else "")
-    def toStringWithLineNumbers: String =
-      pred.name + (if(argVars.nonEmpty) "(" +
-        argVars.map(_.toStringWithLineNumbers).mkString(", ") + ")" else "")
-    predCCPredMap.put(pred, this)
-    assert(pred.arity == argVars.size)
-  }
 
   private sealed class CCVars {
     val vars = new ArrayBuffer[CCVar]
@@ -699,7 +701,7 @@ class CCReader private (prog : Program,
   }
 
   private var globalPreconditions : IFormula = true
-  private val globalExitPred = CCPredicate(MonoSortedPredicate("exit", Nil), Nil)
+  private val globalExitPred = newPred("exit", Nil)
 
   private def lookupVarNoException(name : String) : Int =
     localVars lastIndexWhere name match {
@@ -710,7 +712,7 @@ class CCReader private (prog : Program,
   private def lookupVar(name : String) : Int = {
     val actualName =
       if (TriCeraParameters.get.showVarLineNumbersInTerms) {
-        name.lastIndexOf("/") match { // `/` comes from CCVar added line numbers
+        name.lastIndexOf(CCVar.lineNumberPrefix) match {
             case -1 => name
             case i => name.take(i)
           }
@@ -774,8 +776,8 @@ class CCReader private (prog : Program,
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
-  private val functionContracts = new MHashMap[String, (CCPredicate, CCPredicate)]
-  private val functionOldVars = new MHashMap[String, Seq[CCVar]]
+  private val functionContexts = new MHashMap[String, FunctionContext]
+  private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
   private val functionClauses =
     new MHashMap[String, Seq[(Clause, ParametricEncoder.Synchronisation)]]
   private val functionAssertionClauses = new MHashMap[String, Seq[CCClause]]
@@ -785,9 +787,9 @@ class CCReader private (prog : Program,
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
 
-  private val predDecls     = new MHashMap[String, Predicate]
+  private val uninterpPredDecls     = new MHashMap[String, CCPredicate]
 
-  def getFunctionContracts = functionContracts.toMap
+  def getFunctionContexts = functionContexts.toMap
 
   // NOTE: Used by ACSL encoder.
   var hasACSLEntryFunction : Boolean = false
@@ -907,15 +909,19 @@ class CCReader private (prog : Program,
     locationCounter = 0
   }
 
+
+  def newPred(name : String,
+              args : Seq[CCVar]) : CCPredicate = {
+    val pred = MonoSortedPredicate(name, args map (_ sort))
+    val ccPred = CCPredicate(pred, args)
+    predCCPredMap.put(pred, ccPred)
+    ccPred
+  }
+
   private def newPred : CCPredicate = newPred(Nil)
 
   private def newPred(extraArgs : Seq[CCVar]) : CCPredicate = {
-    val res = CCPredicate(
-      MonoSortedPredicate(prefix + locationCounter,
-                          (allFormalVarTypes map (_.toSort)) ++
-                           extraArgs.map(_.sort)),
-      allFormalVars ++ extraArgs
-    )
+    val res = newPred(prefix + locationCounter, allFormalVars ++ extraArgs)
     locationCounter = locationCounter + 1
 
     val hints = for (s <- variableHints; p <- s) yield p
@@ -1002,6 +1008,7 @@ class CCReader private (prog : Program,
                      sourceInfo : SourceInfo,
                      declSpecs : Option[ListDeclaration_specifier] = None,
                      annotations : Seq[Annotation]) {
+    val name : String = getName(decl)
   }
 
   for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
@@ -1229,138 +1236,104 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     val funsThatMightHaveACSLContracts : Map[Afunc, Seq[AnnotationInfo]] =
       functionAnnotations.filter(_._2.exists(_.isInstanceOf[InvalidAnnotation]))
 
-    // todo: this is again not clean, but should fix the issue
-    class FunctionContext (val prePred  : CCPredicate,
-                           val postPred : CCPredicate,
-                           val acslContext : ACSLTranslator.Context)
+    for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
+      val funDef = FuncDef(fun.function_def_)
+      localVars.pushFrame
+      pushArguments(fun.function_def_)
+      val functionParams = localVars getVarsInTopFrame
 
-    val functionContexts : Map[Afunc, FunctionContext] =
-      (for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) yield {
-        val funDef = FuncDef(fun.function_def_)
-        val name = getName(fun.function_def_)
-        localVars.pushFrame
-        pushArguments(fun.function_def_)
-        val prePred = CCPredicate(
-          MonoSortedPredicate(name + "_pre", allFormalVars map (_.sort)),
-          allFormalVars
-        )
+      val oldVars = allFormalVars map (v =>
+        new CCVar(v.name + "_old", v.srcInfo, v.typ))
+      // the pre-condition: f_pre(preOldVars)
+      val prePred = newPred(funDef.name + "_pre", oldVars)
 
-        val postVar = getType(fun.function_def_) match {
-          case _ : CCVoid => Nil
-          case t          => List(new CCVar(name + "_res",
-            Some(funDef.sourceInfo), getType(fun.function_def_))) // todo: clean this (and similar code) up a bit
+      // the post-condition: f_post(oldVars, postGlobalVars, postResVar)
+      // we first pass all current vars in context as old vars (oldVars)
+      // then we pass all effected output vars (which are globals + resVar)
+      val postGlobalVars = globalVars.vars map (v =>
+        new CCVar(v.name + "_post", v.srcInfo, v.typ))
+      val postResVar = getType(fun.function_def_) match {
+        case _: CCVoid => None
+        case _ => Some(new CCVar(funDef.name + "_res",
+          Some(funDef.sourceInfo), getType(fun.function_def_))) // todo: clean this (and similar code) up a bit
+      }
+      val postVars = oldVars ++ postGlobalVars ++ postResVar
+      functionPostOldArgs.put(funDef.name, oldVars)
+
+      val prePredArgACSLNames = allFormalVars map (_.name)
+      val postPredACSLArgNames =
+        allFormalVars.map(v => "\\old(" + v.name + ")") ++
+        globalVars.vars.map(v => v.name) ++ Seq("\\result")
+
+      // all old vars (includes globals) + global vars + return var (if it exists)
+      // val postOldArgs = oldGlobalVars ++ oldArgsVars
+      // val postGlobalArgs = globalVars.formalVars //oldGlobalVars
+      //val postVars = oldVars ++ postGlobalVars ++ postResVar
+      //val oldVarInds = postOldArgs.indices.toList
+      //        val resVarInd = if (postResVar.nonEmpty) postVars.length-1 else -1
+      val postOldVarsMap: Map[String, CCVar] =
+      (allFormalVars.map(_ name) zip oldVars).toMap
+      val postGlobalVarsMap: Map[String, CCVar] =
+        (globalVars.vars.map(_ name) zip postGlobalVars).toMap
+
+      val postPred = newPred(funDef.name + "_post", postVars)
+
+      localVars.popFrame
+
+      class Context extends ACSLTranslator.Context {
+        def getOldVar(ident: String): Option[CCVar] =
+          postOldVarsMap get ident
+
+        def getPostGlobalVar(ident: String): Option[CCVar] =
+          postGlobalVarsMap get ident
+
+        def getParams: Seq[CCReader.CCVar] = functionParams
+
+        def getGlobals: Seq[CCReader.CCVar] = globalVars.vars - heapVar
+
+        def getResultVar: Option[CCReader.CCVar] = postResVar
+
+        def isHeapEnabled: Boolean = modelHeap
+
+        def getHeap: Heap =
+          if (modelHeap) heap else throw NeedsHeapModelException
+
+        def getHeapTerm: ITerm =
+          if (modelHeap) getPostGlobalVar(heapTermName).get.term
+          else throw NeedsHeapModelException
+
+        def getOldHeapTerm: ITerm =
+          if (modelHeap) getOldVar(heapTermName).get.term
+          else throw NeedsHeapModelException
+
+        def sortWrapper(s: Sort): Option[MonoSortedIFunction] =
+          sortWrapperMap.get(s)
+
+        def sortGetter(s: Sort): Option[MonoSortedIFunction] =
+          sortGetterMap.get(s)
+
+        def getTypOfPointer(t: CCType): CCType = t match {
+          case p: CCHeapPointer => p.typ
+          case t => t
         }
 
-        // Generate old vars
-        // NOTE: Heap is included in globalVars.vars.
-        val oldGlobalVars =
-          for (v <- globalVars.vars)
-          yield new CCVar(v.name + "_old", v.srcInfo, v.typ)
-        val oldArgsVars =
-          for (v <- localVars.vars)
-          yield new CCVar(v.name + "_old", v.srcInfo, v.typ)
-        val oldVars = oldGlobalVars ++ oldArgsVars
-        functionOldVars.put(name, oldVars)
+        def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        // all old vars (includes globals) + global vars + return var (if it exists)
-        // FIXME: Naming is misleading (not *_old vars).
-        val postOldArgs = allFormalVars
-        val postGlobalArgs = oldGlobalVars
-        val postArgs =
-          globalVars.vars ++ oldArgsVars ++ postGlobalArgs ++ postVar
-        val oldVarInds = postOldArgs.indices.toList
-        val resVarInd = if (postVar.nonEmpty) postArgs.length-1 else -1
+        override implicit val arithMode: CCReader.ArithmeticMode.Value =
+          arithmeticMode
+      }
 
-        val postPred = CCPredicate(
-          MonoSortedPredicate(name + "_post", postArgs.map(_.sort)),
-          postArgs, resVarInd, oldVarInds)
-
-        functionContracts.put(name, (prePred, postPred))
-        localVars.popFrame
-
-
-        import scala.collection.Map
-        class Context(oldVars : Map[String, CCVar])
-          extends ACSLTranslator.Context {
-          def getOldVar(ident : String) : Option[CCReader.CCVar] = {
-            oldVars.get(ident)
-          }
-
-          def getParams : Seq[CCReader.CCVar] = {
-            postOldArgs.diff(getGlobals)
-          }
-
-          def getGlobals : Seq[CCReader.CCVar] = {
-            globalVars.vars - heapVar
-          }
-
-          def getResultVar : Option[CCReader.CCVar] = {
-            postVar match {
-              case (v : CCVar) :: _ => Some(v)
-              case _ => None
-            }
-          }
-
-          def isHeapEnabled : Boolean = {
-            modelHeap
-          }
-
-          def getHeap : Heap = {
-            // FIXME: This doesn't work..
-            // if (modelHeap) heap else throw NeedsHeapModelException
-            if (modelHeap)
-              heap
-            else
-              throw NeedsHeapModelException
-          }
-
-          def getHeapTerm : ITerm = {
-            if (modelHeap)
-              heapTerm
-            else
-              throw NeedsHeapModelException
-          }
-
-          def getOldHeapTerm : ITerm = {
-            if (modelHeap)
-              getOldVar(heapTermName).get.term
-            else
-              throw NeedsHeapModelException
-          }
-
-          def sortWrapper(s : Sort) : Option[MonoSortedIFunction] = {
-            sortWrapperMap.get(s)
-          }
-
-          def sortGetter(s : Sort) : Option[MonoSortedIFunction] = {
-            sortGetterMap.get(s)
-          }
-
-          def getTypOfPointer(t : CCType) : CCType = t match {
-            case p : CCHeapPointer => p.typ
-            case t => t
-          }
-
-          def getCtor(s : Sort) : Int = {
-            sortCtorIdMap(s)
-          }
-
-          override implicit val arithMode: CCReader.ArithmeticMode.Value =
-            arithmeticMode
-        }
-
-        // Old heap gets included. Unsure if desired.
-        val oldVarsMap : Map[String, CCVar] =
-          oldVars.map(v => (v.name.stripSuffix("_old"), v)).toMap
-        val context = new Context(oldVarsMap)
-        (fun, new FunctionContext(prePred, postPred, context))
-      }).toMap
+      val funContext = new FunctionContext(prePred, postPred,
+        new Context, prePredArgACSLNames, postPredACSLArgNames)
+      functionContexts += ((funDef.name, funContext))
+    }
 
     val annotatedFuns : Map[Afunc, FunctionContract] = // todo: naming is ambiguous
       for ((fun, annots) <- funsThatMightHaveACSLContracts;
            annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
 
-        val funContext = functionContexts(fun)
+        val name = getName(fun.function_def_)
+        val funContext = functionContexts(name)
         val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
         // todo: try / catch and print msg?
         val contract =
@@ -1379,7 +1352,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               new FunctionContract(IBoolLit(true), IBoolLit(true), IBoolLit(true), IBoolLit(true))
           }
 
-        val name = getName(fun.function_def_)
         // NOTE: Put stuff for encoder.
         prePredsToReplace.add(funContext.prePred.pred)
         postPredsToReplace.add(funContext.postPred.pred)
@@ -1398,11 +1370,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     //  println(getName(fun.function_def_) + ":\n" + contract)
     //}
 
-    for (f <- contractFuns if !annotatedFuns.isDefinedAt(f)) {
-      val name = getName(f.function_def_)
-      val funContext = functionContexts(f)
-      functionContracts.put(name, (funContext.prePred, funContext.postPred))
-    }
+//    for (f <- contractFuns if !annotatedFuns.contains(f)) {
+//      val name = getName(f.function_def_)
+//      val funContext = functionContexts(f)
+//      functionContexts += ((name, (funContext.prePred, funContext.postPred)))
+//    }
 
     // ... and generate clauses for those functions
     for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
@@ -1410,8 +1382,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       val name = getName(FuncDef(f.function_def_).decl) // todo clean up
       val typ = getType(f.function_def_)
-      val (prePred, postPred) = functionContracts(name)
-      val oldVars = functionOldVars(name)
+      val funContext = functionContexts(name)
+      val (prePred, postPred) = (funContext.prePred, funContext.postPred)
       setPrefix(name)
 
       localVars.pushFrame
@@ -1419,9 +1391,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       val prePredArgs = allFormalVarTerms.toList
 
-      for (v <- oldVars) {
+      for (v <- functionPostOldArgs(name))
         localVars addVar v
-      }
 
       val entryPred = newPred
 
@@ -1440,11 +1411,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
 
       val globalVarTerms : Seq[ITerm] = globalVars.formalVarTerms
-      val postArgs : Seq[ITerm] =
-        globalVarTerms ++
-        (allFormalVarTerms drop (prePredArgs.size + globalVarTerms.size)) ++
-        ((allFormalVarTerms drop (prePredArgs.size)) take globalVarTerms.size) ++
-        resVar.map(v => IConstant(v.term))
+      val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
+        globalVarTerms ++ resVar.map(v => IConstant(v.term))
 
       output(postPred(postArgs) :- exitPred(allFormalVarTerms ++
                                    resVar.map(v => IConstant(v.term))))
@@ -1545,7 +1513,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
             import HornClauses._
             import IExpression._
             finalPred match {
-              case CCPredicate(_, args, _, _) if args.head.sort == heap.HeapSort =>
+              case CCPredicate(_, args) if args.head.sort == heap.HeapSort =>
                 // passing sort as CCVoid as it is not important
                 val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid()))
                 val resVar = getResVar(args.last.typ)
@@ -1876,11 +1844,10 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           case predHint : PredicateHint =>
             val argTypes =
               for (typ <- predHint.listtype_specifier_) yield getType(typ)
-            val hintPred = MonoSortedPredicate(predHint.cident_, argTypes.map(_ toSort))
-            predDecls += ((predHint.cident_, hintPred))
             val argCCVars = // needed for adding to predCCPredMap, used in printing
               argTypes.map(typ => new CCVar(typ.toString, None, typ))
-            predCCPredMap += ((hintPred, CCPredicate(hintPred, argCCVars)))
+            val hintPred = newPred(predHint.cident_, argCCVars)
+            uninterpPredDecls += ((predHint.cident_, hintPred))
         }
       }
     case decl => //warn("ignoring declaration: " + decl)
@@ -3510,7 +3477,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           // todo: if we are to handle a function contract, arguments are handled
           // as heap pointers. if the function is to be inlined, then arguments
           // are handled as stack pointers. here we set a flag to notify this
-          handlingFunContractArgs = functionContracts.contains(name)
+          handlingFunContractArgs = functionContexts.contains(name)
           for (e <- exp.listexp_)
             evalHelp(e)
           if(!handlingFunContractArgs) outputClause
@@ -3646,8 +3613,8 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     private def handleFunction(name : String,
                                functionEntry : CCPredicate,
                                argNum : Int) =
-      functionContracts get name match {
-        case Some((prePred, postPred)) => {
+      functionContexts get name match {
+        case Some(ctx) => {
           // use the contract of the function
 //          assert(!(pointerArgs exists (_.isInstanceOf[CCStackPointer])),
 //                 "function contracts do not support pointer arguments yet")
@@ -3658,7 +3625,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           for (_ <- 0 until argNum)
             argTerms = popVal.toTerm :: argTerms
 
-          val postGlobalVars : Seq[ITerm] =
+          val postGlobalVars : Seq[ITerm] = // todo : use ctx postglobal?
             for (v <- globalVars.vars)
             yield IExpression.i(v.sort newConstant (v.name + "_post")) // todo: refactor
 
@@ -3670,10 +3637,11 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
           val resVar : Seq[CCVar] = getResVar(getType(funDef))
           val postPredArgs : Seq[ITerm] =
-            postGlobalVars ++ argTerms ++ globals ++ resVar.map(c => IConstant(c.term))
+            prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
+            //postGlobalVars ++ argTerms ++ globals ++ resVar.map(c => IConstant(c.term))
 
-          val preAtom  = prePred(prePredArgs)
-          val postAtom = postPred(postPredArgs)
+          val preAtom  = ctx.prePred(prePredArgs)
+          val postAtom = ctx.postPred(postPredArgs)
 
           assertProperty(preAtom, None) // todo: mark pre atom assertions
 
@@ -3689,12 +3657,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
           }
         }
         case None => {
-          predDecls get name match {
+          uninterpPredDecls get name match {
             case Some(predDecl) =>
               var argTerms : List[ITerm] = List()
               for (_ <- 0 until argNum)
                 argTerms = popVal.toTerm :: argTerms
-              pushVal(CCFormula(IAtom(predDecl, argTerms), CCInt(), None)) // todo:srcInfo
+              pushVal(CCFormula(predDecl(argTerms), CCInt(), None)) // todo:srcInfo
             case None =>
               val args =
                 (for (_ <- 0 until argNum) yield popVal.typ).toList.reverse
@@ -4688,7 +4656,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       (for (c <- backgroundClauses;
            p <- c.predicates.toSeq.sortBy(_.name);
            if p != HornClauses.FALSE)
-      yield p) ++ predDecls.values
+      yield p) ++ uninterpPredDecls.values.map(_.pred)
 
     val backgroundAxioms =
       if (backgroundPreds.isEmpty && backgroundClauses.isEmpty)

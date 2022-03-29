@@ -61,9 +61,11 @@ class TriCeraParameters extends GlobalParameters {
   var devMode : Boolean = false
 
   var displayACSL = false
+  var fullSolutionOnAssert = true
 
   override def needFullSolution: Boolean =
-    super.needFullSolution || displayACSL || log
+    (assertions && fullSolutionOnAssert) ||
+      displaySolutionProlog || displaySolutionSMT || displayACSL || log
 
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
@@ -211,6 +213,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-eogCEX" :: rest => pngNo = false; eogCEX = true; parseArgs(rest)
     case "-cex" :: rest => plainCEX = true; parseArgs(rest)
     case "-assert" :: rest => TriCeraParameters.get.assertions = true; parseArgs(rest)
+    case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
     case "-cexAsserts" :: rest => showFailedAssertions = true; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
@@ -218,6 +221,7 @@ class TriCeraParameters extends GlobalParameters {
       "General options:\n" +
       " -h\t\tShow this information\n" +
       " -assert\tEnable assertions in TriCera\n" +
+      " -assertNoVerify\t\tEnable assertions, but do not verify solutions \n" +
       " -log\t\tDisplay progress and found invariants\n" +
       " -log:n\t\tDisplay progress with verbosity n (currently 0 <= n <= 3)\n" +
       " -statistics\tDisplay statistics (implied by -log)\n" +

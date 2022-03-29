@@ -1,6 +1,6 @@
 /**
-  * Copyright (c) 2011-2019 Hossein Hojjat, Filip Konecny, Philipp Ruemmer,
-  * Pavle Subotic. All rights reserved.
+  * Copyright (c) 2011-2022 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
+  * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without
   * modification, are permitted provided that the following conditions are met:
@@ -339,7 +339,7 @@ class Main (args: Array[String]) {
         res match {
           case Some(solution) =>
             import tricera.postprocessor._
-            import reader.CCPredicate
+            import CCReader.CCPredicate
             import lazabs.horn.global._
             import lazabs.horn.bottomup.HornPredAbs
             import lazabs.ast.ASTree.Parameter
@@ -381,29 +381,22 @@ class Main (args: Array[String]) {
               println("="*80 + "\n")
             }
 
-            def replaceArgs(p : CCPredicate, f : String) = {
+            def replaceArgs(p : CCPredicate, f : String,
+                            acslArgNames : Seq[String]) = {
               var s = f
-              for (ind <- (p.arity - 1) to 0 by - 1) {
-                val actualArg : String = {
-                  if (p.oldVars contains ind)
-                    "\\old(" + p.argVars(ind) + ")"
-                  else if (p.resVarInd == ind)
-                    "\\result"
-                  else p.argVars(ind).toString
-                }
-                s = s.replace("_" + ind, actualArg)
-              }
+              for ((acslArg, ind)<- acslArgNames zipWithIndex)
+                s = s.replace("_" + ind, acslArg)
               s
             }
 
-            if (displayACSL) {
+            val contexts = reader.getFunctionContexts
+            if ((displayACSL || log) && contexts.nonEmpty) {
               println("\nInferred ACSL annotations")
               println("="*80)
-              val contracts = reader.getFunctionContracts
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
-              for ((fun, (pre, post)) <- contracts
-                   if !enc.prePredsToReplace.contains(pre.pred) &&
-                     !enc.postPredsToReplace.contains(post.pred)) {
+              for ((fun, ctx) <- contexts
+                   if !enc.prePredsToReplace.contains(ctx.prePred.pred) &&
+                     !enc.postPredsToReplace.contains(ctx.postPred.pred)) {
                 val solutionProcessors = Seq(
                   ADTExploder
                   // add additional solution processors here
@@ -414,16 +407,18 @@ class Main (args: Array[String]) {
                 // to the second argument
                 for (processor <- solutionProcessors) {
                   processedSolution =
-                    processor(processedSolution)(Seq(pre, post).map(_.pred))
+                    processor(processedSolution)(Seq(ctx.prePred, ctx.postPred).map(_.pred))
                 }
 
-                val fPre = ACSLLineariser asString processedSolution(pre.pred)
-                val fPost = ACSLLineariser asString processedSolution(post.pred)
+                val fPre = ACSLLineariser asString processedSolution(ctx.prePred.pred)
+                val fPost = ACSLLineariser asString processedSolution(ctx.postPred.pred)
 
                 // todo: implement replaceArgs as a solution processor
                 // replaceArgs does a simple string replacement (see above def)
-                val fPreWithArgs = replaceArgs(pre, fPre)
-                val fPostWithArgs = replaceArgs(post, fPost)
+                val fPreWithArgs =
+                  replaceArgs(ctx.prePred, fPre, ctx.prePredACSLArgNames)
+                val fPostWithArgs =
+                  replaceArgs(ctx.postPred, fPost, ctx.postPredACSLArgNames)
 
                 println("/* contracts for " + fun + " */")
                 println("/*@")
@@ -541,7 +536,9 @@ class Main (args: Array[String]) {
       printError(OutOfMemory.toString)
       ExecutionSummary(OutOfMemory, Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)
-    case _: java.lang.StackOverflowError =>
+    case t: java.lang.StackOverflowError =>
+      if(devMode)
+        t.printStackTrace
       printError(StackOverflow.toString)
       ExecutionSummary(StackOverflow, Nil, modelledHeap,
         programTimer.s, preprocessTimer.s)

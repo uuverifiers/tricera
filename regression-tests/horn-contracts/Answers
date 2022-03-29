@@ -2,8 +2,28 @@
 contract1.hcc
 SAFE
 
+Inferred ACSL annotations
+================================================================================
+/* contracts for f */
+/*@
+  requires 10 >= x && x >= 0;
+  ensures \result == \old(x) && 10 >= \old(x) && \old(x) >= 0;
+*/
+================================================================================
+
+
 contract2.hcc
 SAFE
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for f */
+/*@
+  requires g >= 0 && x >= 0;
+  ensures \result >= \old(x) && g >= 1 && \old(x) >= 0 && \old(g) >= 0;
+*/
+================================================================================
+
 
 contract2b.hcc
 UNSAFE
@@ -34,23 +54,53 @@ Final:
 contract3.hcc
 SAFE
 
+Inferred ACSL annotations
+================================================================================
+/* contracts for f */
+/*@
+  requires g == 0 || (g - x >= 1 && g >= 1);
+  ensures g >= 0 && \old(g) >= 0 && (g != \old(g) || ((\old(x) >= 2*\old(g) || \old(g) - \old(x) >= 1) && (2*\old(g) - \old(x) >= 1 || 0 >= \old(g)))) && (\old(g) != 0 || ((g != 0 || 0 >= \old(x)) && (g >= \old(x) || 0 >= g))) && (g == \old(g) || g - \old(x) >= 1 || 0 >= \old(g)) && (g >= \old(g) || \old(x) >= g || 0 >= \old(g));
+*/
+================================================================================
+
+
 takeuchi.hcc
 SAFE
 
+Inferred ACSL annotations
+================================================================================
+/* contracts for tak */
+/*@
+  requires \true;
+  ensures (\result != \old(z) || \old(y) >= \old(z) || \old(x) - \old(y) >= 1) && (\result != \old(y) || \old(y) >= \old(z) || \old(y) >= \old(x)) && (\result == \old(z) || \result == \old(y) || \old(y) - \old(z) >= 1) && (\result == \old(y) || \old(z) >= \old(y) || \old(x) - \old(y) >= 1);
+*/
+================================================================================
+
+
 assert.hcc
 Warning: The following clause has different terms with the same name (term: N2_post)
-main1(N_post, N2_post) :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4).
+main1(N_post, N2_post) :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4).
 
 Warning: The following clause has different terms with the same name (term: N_post)
-main1(N_post, N2_post) :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4).
+main1(N_post, N2_post) :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4).
 
 Warning: The following clause has different terms with the same name (term: N2_post)
-false :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4), __res4 < N/1.
+false :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4), __res4 < N:1.
 
 Warning: The following clause has different terms with the same name (term: N_post)
-false :- main3(N/1, N2/2), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res3), mult_post(N_post, N2_post, N/1, N/1, N/1, N2/2, __res4), __res4 < N/1.
+false :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4), __res4 < N:1.
 
 SAFE
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for mult */
+/*@
+  requires x == N && N >= 0 && y >= 0;
+  ensures N2 == \old(N2) && N == \old(N) && \old(x) == \old(N) && \result >= 0 && \old(y) >= 0 && \old(N) >= 0 && (\result >= \old(N) || 0 >= \old(y));
+*/
+================================================================================
+
 
 fib.hcc
 UNSAFE

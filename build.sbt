@@ -3,13 +3,16 @@ import java.nio.file.{Paths, Files}
 import java.nio.file.attribute.PosixFilePermission._
 
 lazy val commonSettings = Seq(
-    name := "TriCera",
-    organization := "uuverifiers",
-    version := "0.2",
-    scalaVersion := "2.11.12",
-    crossScalaVersions := Seq("2.11.12", "2.12.8"),
-    publishTo := Some(Resolver.file("file",  new File( "/home/wv/public_html/maven/" )) ),
-    useCoursier := false
+    name                 := "TriCera",
+    organization         := "uuverifiers",
+    version              := "0.3",
+    homepage             := Some(url("https://github.com/uuverifiers/tricera")),
+    licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
+    description          := "TriCera is a model checker for C programs.",
+    scalaVersion         := "2.11.12",
+    crossScalaVersions   := Seq("2.11.12", "2.12.8"),
+    publishTo            := Some(Resolver.file("file",  new File( "/home/wv/public_html/maven/" )) ),
+    useCoursier          := false
 )
 
 // Jar files for the parsers

@@ -13,6 +13,6 @@ TESTS="contract1.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex "$@" $name 2>&1 | grep -v 'at '
+    $LAZABS -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
 

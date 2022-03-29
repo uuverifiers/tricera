@@ -1,6 +1,34 @@
+/**
+ * Copyright (c) 2021-2022 Pontus Ernstedt. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * * Neither the name of the authors nor the names of their
+ *   contributors may be used to endorse or promote products derived from
+ *   this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package tricera.acsl
 
-import tricera.acsl._
 import tricera.acsl.{Absyn => AST};
 
 import collection.JavaConverters._
@@ -22,6 +50,7 @@ object ACSLTranslator {
 
   trait Context {
     def getOldVar(ident : String) : Option[CCVar]
+    def getPostGlobalVar(ident : String) : Option[CCVar]
     def getParams  : Seq[CCVar]
     def getGlobals : Seq[CCVar]
     def getResultVar : Option[CCVar]
@@ -53,6 +82,7 @@ object ACSLTranslator {
       case CCReader.NeedsHeapModelException =>
         throw CCReader.NeedsHeapModelException
       case e : Exception =>
+        e.printStackTrace()
         throw new ACSLParseException(
           "At line " + String.valueOf(l.line_num()) +
           ", near \"" + l.buff() + "\" :" +
@@ -97,7 +127,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
         }
 
       // NOTE: `pre` and `post` defaults to true given usage of `and`.
+      useOldHeap = true
       val pre  : IFormula = IExpression.and(rcs.map(translate))
+      useOldHeap = false
       val post : IFormula = IExpression.and(ecs.map(translate))
 
       // FIXME: Refactor and break out in functions!
@@ -116,7 +148,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
             if (idents.isEmpty) {
               ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
                 (formula, globVar) => {
-                  val glob    : ITerm = globVar.term
+                  val glob    : ITerm = ctx.getPostGlobalVar(globVar.name).get.term//globVar.term
                   val globOld : ITerm = ctx.getOldVar(globVar.name).get.term
                   formula &&& glob === globOld
                 }
@@ -220,7 +252,10 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
               case i : AST.TermIdent => (translate(i) :: idents, ptrDerefs)
               case p : AST.TermUnaryOp
                 if p.unaryop_.isInstanceOf[AST.UnaryOpPtrDeref] => {
-                (idents, translate(p.term_) :: ptrDerefs)
+                useOldHeap = true
+                val res = (idents, translate(p.term_) :: ptrDerefs)
+                useOldHeap = false
+                res
               }
             case _ => throw new ACSLParseException("Only global identifiers or "
               + "heap pointer dereferences allowed in assigns-clauses.")
@@ -250,8 +285,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   }
 
   def translate(clause : AST.RequiresClause) : IFormula = {
-    vars = (ctx.getParams.map(v => (v.name, v))
-        ++ ctx.getGlobals.map(v => (v.name, v))).toMap
+    vars = (ctx.getParams ++ ctx.getGlobals).map(v =>
+      (v.name, ctx.getOldVar(v.name).get)).toMap
     translate(clause.asInstanceOf[AST.ARequiresClause].predicate_)
   }
 
@@ -446,8 +481,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
         case p : CCReader.CCHeapPointer =>
           import ap.parser.IExpression.{toFunApplier, toPredApplier}
           val sort : Sort = p.typ.toSort
-          val heap : ITerm =
-            if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
+          val heap : ITerm = ctx.getOldHeapTerm
           val valid    : IFormula = ctx.getHeap.isAlloc(heap, term.toTerm)
           val readObj  : IFunApp  = ctx.getHeap.read(heap, term.toTerm)
           val corrSort : IFormula =
