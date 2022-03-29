@@ -395,7 +395,6 @@ object CCReader {
     // The fields are initialized left to right depth-first.
     // If there are not enough values to initialize all the fields, then the
     // remaining fields are initialized to 0.
-    // todo: make this part of "toRichType"?
     def getInitialized(values: Stack[ITerm]): ITerm = {
       import IExpression._
       val const: IndexedSeq[ITerm] =
@@ -571,6 +570,7 @@ object CCReader {
         nameWithLineNumber else name
       new SortedConstantTerm(termName, sort)
     }
+    def rangePred : IFormula = typ rangePred term
     override def toString: String =
       if (TriCeraParameters.get.showVarLineNumbersInTerms)
         nameWithLineNumber else name
@@ -645,9 +645,7 @@ class CCReader private (prog : Program,
       size - 1
     }
     def size : Int = vars.size
-    // todo : refactor for CCVar
     def lastIndexWhere(name : String) = vars lastIndexWhere(_.name == name)
-    //def contains (c : ConstantTerm) = vars contains c
     def contains (c : ConstantTerm) = vars exists (_.term == c)
     def iterator = vars.iterator
     def formalVars = vars.toList
@@ -989,7 +987,7 @@ class CCReader private (prog : Program,
         case f : NewFunc =>
           FuncDef(f.compound_stm_, f.declarator_,
                   SourceInfo(f.line_num, f.col_num, f.offset),
-                  Some(f.listdeclaration_specifier_), // todo: why optional?
+                  Some(f.listdeclaration_specifier_),
                   Nil)
         case f : NewFuncInt =>
           FuncDef(f.compound_stm_, f.declarator_,
@@ -1057,11 +1055,13 @@ class CCReader private (prog : Program,
       (structInfos(i).name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
     }).toList
 
+  // todo: only add types that exist in the program - should also add machine arithmetic types
   val predefSignatures =
     List(("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
          ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(Sort.Nat))), ObjSort)),
-         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort)))
-  // todo: extend the theory and add O_AddrRange
+         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort)),
+         ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddressRangeCtor)), ObjSort))
+    )
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
     predefSignatures ++
@@ -1078,23 +1078,11 @@ class CCReader private (prog : Program,
 
   private val heapVar = new CCVar(heapTermName, None, CCHeap(heap))
   val heapTerm = heapVar.term
-  /*if (arraySizes.nonEmpty) {
-    warn("Currently all arrays are modelled using the heap.")
-    throw NeedsHeapModelException
-  }*/
+
   if (modelHeap) {
     globalVars addVar heapVar
 
-    /*var currentHeapTerm = heap.emptyHeap()
-    for ((array, Some(arraySize)) <- arraySizes) {
-      val args = Seq(currentHeapTerm, getZeroInit(array.typ), arraySize.toTerm)
-      currentHeapTerm = heap.batchAllocHeap(args:_*)
-      val addrRange = heap.batchAllocAddrRange(args:_*)
-      arrayAddrRanges.put(array, addrRange)
-    }
-    globalVars.inits += CCTerm(currentHeapTerm, CCHeap(heap))*/
-
-    globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None) // todo: maybe refactor to create inits automatically from a CCVar
+    globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None)
     variableHints += List()
   }
 
@@ -1117,18 +1105,6 @@ class CCReader private (prog : Program,
     objectSorts.zip(objectWrappers).toMap
   val sortCtorIdMap : Map[Sort, Int] =
     objectSorts.zip(0 until structCount+structCtorsOffset).toMap
-
-  /*val structFieldList : Seq[(String, CCType)] =
-  for(FieldInfo(fieldName, fieldType, ptrDepth) <-
-        structInfos(i).fieldInfos) yield
-    (fieldName, {
-      val actualType = fieldType match { // here ptr does not matter
-        case Left(ind) =>
-        case Right(typ) => typ
-      }
-      if (ptrDepth > 0) CCHeapPointer(heap, actualType) else actualType
-    })
-structDefs += ((structInfos(i).name, structFieldList)) */
 
   for (((ctor, sels), i) <- structCtors zip structSels zipWithIndex) {
     val fieldInfos = structInfos(i).fieldInfos
@@ -1154,7 +1130,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     case _ : CCVoid => Nil
     case t          =>
       funRetCounter += 1
-      List(new CCVar("__res" + funRetCounter, None, typ)) // todo: line no?
+      List(new CCVar("_res" + funRetCounter, None, typ)) // todo: line no?
   }
 
   private def translateProgram : Unit = {
@@ -1164,14 +1140,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
     import IExpression._
     atomicMode = true
     val globalVarSymex = Symex(null)
-    /*if(modelHeap) { // initialises the initial heap to the empty heap (needed for global arrays allocated on the heap)
-      import IExpression._
-      var guard : IFormula = IBoolLit(true)
-      for ((init, ind) <- globalVars.inits.zipWithIndex) {
-        guard = guard &&& globalVars.vars(ind).term === init.toTerm
-      }
-      globalVarSymex addGuard guard
-    }*/
 
     for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
       decl match {
@@ -1265,12 +1233,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         allFormalVars.map(v => "\\old(" + v.name + ")") ++
         globalVars.vars.map(v => v.name) ++ Seq("\\result")
 
-      // all old vars (includes globals) + global vars + return var (if it exists)
-      // val postOldArgs = oldGlobalVars ++ oldArgsVars
-      // val postGlobalArgs = globalVars.formalVars //oldGlobalVars
-      //val postVars = oldVars ++ postGlobalVars ++ postResVar
-      //val oldVarInds = postOldArgs.indices.toList
-      //        val resVarInd = if (postResVar.nonEmpty) postVars.length-1 else -1
       val postOldVarsMap: Map[String, CCVar] =
       (allFormalVars.map(_ name) zip oldVars).toMap
       val postGlobalVarsMap: Map[String, CCVar] =
@@ -1328,7 +1290,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       functionContexts += ((funDef.name, funContext))
     }
 
-    val annotatedFuns : Map[Afunc, FunctionContract] = // todo: naming is ambiguous
+    val annotatedFuns : Map[Afunc, FunctionContract] =
       for ((fun, annots) <- funsThatMightHaveACSLContracts;
            annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
 
@@ -1336,23 +1298,9 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         val funContext = functionContexts(name)
         val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
         // todo: try / catch and print msg?
-        val contract =
-          try {
-            ACSLTranslator.translateContract(
-                "/*@" + possibleACSLAnnotation.annot + "*/",
-                funContext.acslContext)
-          }
-          catch {
-            case NeedsHeapModelException =>
-              throw NeedsHeapModelException
-            case e : Exception =>
-              warn("Got exception while translating ACSL:\n" + e)
-              warn("ACSL Translator Exception, using dummy contract for " +
-                "annotation: " + possibleACSLAnnotation.annot)
-              new FunctionContract(IBoolLit(true), IBoolLit(true), IBoolLit(true), IBoolLit(true))
-          }
+        val contract = ACSLTranslator.translateContract(
+          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
 
-        // NOTE: Put stuff for encoder.
         prePredsToReplace.add(funContext.prePred.pred)
         postPredsToReplace.add(funContext.postPred.pred)
         funToPreAtom.put(name, atom(funContext.prePred))
@@ -1363,24 +1311,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         (fun, contract)
       }
 
-    // TODO: If we want printing add as switch.
-    //if (annotatedFuns.nonEmpty)
-    //  println("Contract annotations\n" + "-"*80)
-    //for ((fun, contract) <- annotatedFuns) {
-    //  println(getName(fun.function_def_) + ":\n" + contract)
-    //}
-
-//    for (f <- contractFuns if !annotatedFuns.contains(f)) {
-//      val name = getName(f.function_def_)
-//      val funContext = functionContexts(f)
-//      functionContexts += ((name, (funContext.prePred, funContext.postPred)))
-//    }
-
     // ... and generate clauses for those functions
     for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
       import HornClauses._
 
-      val name = getName(FuncDef(f.function_def_).decl) // todo clean up
+      val funDef = FuncDef(f.function_def_)
+      val name = funDef.name
       val typ = getType(f.function_def_)
       val funContext = functionContexts(name)
       val (prePred, postPred) = (funContext.prePred, funContext.postPred)
@@ -1391,24 +1327,20 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
       val prePredArgs = allFormalVarTerms.toList
 
-      for (v <- functionPostOldArgs(name))
-        localVars addVar v
+      for (v <- functionPostOldArgs(name)) localVars addVar v
 
       val entryPred = newPred
 
       val resVar = getResVar(typ)
       val exitPred = newPred(resVar)
 
-      output(entryPred(prePredArgs ++ prePredArgs) :-
-               prePred(prePredArgs))
+      output(entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs))
 
       val translator = FunctionTranslator(exitPred)
       typ match {
         case _ : CCVoid => translator.translateNoReturn(stm, entryPred)
         case _          => translator.translateWithReturn(stm, entryPred)
       }
-
-
 
       val globalVarTerms : Seq[ITerm] = globalVars.formalVarTerms
       val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
@@ -1417,15 +1349,14 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       output(postPred(postArgs) :- exitPred(allFormalVarTerms ++
                                    resVar.map(v => IConstant(v.term))))
 
-      if (!timeInvariants.isEmpty)
+      if (timeInvariants nonEmpty)
         throw new TranslationException(
           "Contracts cannot be used for functions with time invariants")
       if (clauses exists (_._2 != ParametricEncoder.NoSync))
         throw new TranslationException(
           "Contracts cannot be used for functions using communication channels")
 
-      functionClauses.put(name,
-        functionClauses.getOrElse(name, Nil) ++ clauses)
+      functionClauses.put(name, functionClauses.getOrElse(name, Nil) ++ clauses)
       functionAssertionClauses.put(name,
         functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
 
@@ -1610,11 +1541,6 @@ structDefs += ((structInfos(i).name, structFieldList)) */
         listDec.head.asInstanceOf[Type].type_specifier_.asInstanceOf[Tstruct].
           struct_or_union_spec_.isInstanceOf[Unique]
     } else false
-    /*if(decList.nonEmpty){
-      val decl = decList.head.asInstanceOf[InitDecl].declarator_
-      decl.isInstanceOf[NoPointer] && decl.asInstanceOf[NoPointer].direct_declarator_.asInstanceOf[Name].cident_
-    }
-    else false*/
   }
 
   private def collectVarDecls(dec : Dec,
@@ -1687,7 +1613,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
               case Some(init : InitExpr) =>
                 if (init.exp_.isInstanceOf[Enondet]) {
                   (lhsVar, CCTerm(lhsVar.term, typ, srcInfo),
-                    typ rangePred lhsVar.term)
+                    lhsVar rangePred)
                 } else {
                   if (isArrayDeclaration(initDeclWrapper.declarator))
                     values.lhsIsArrayPointer = true // todo: find smarter solution!
@@ -1716,7 +1642,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                 lhsType match {
                   case structType : CCStruct =>
                     (lhsVar, CCTerm(structType.getInitialized(initStack), lhsType, srcInfo),
-                      lhsType rangePred lhsVar.term)
+                      lhsVar rangePred)
                   case arrayPtr : CCHeapArrayPointer =>
                     val addressRangeValue = directDecl match {
                       case initArray: InitArray =>
@@ -1787,17 +1713,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
                     }
                     // initialise using the first address of the range
                     (lhsVar, CCTerm(addressRangeValue, typ, srcInfo), IExpression.i(true))
-                  case typ : CCArithType if global =>
-                    (lhsVar, CCTerm(0, typ, srcInfo), IExpression.i(true))
-                  case typ : CCStruct if global =>
-                    (lhsVar, CCTerm(typ.getZeroInit, typ, srcInfo),
-                      typ rangePred lhsVar.term)
-                  case typ if global =>
-                    (lhsVar, CCTerm(typ.getZeroInit, typ, srcInfo),
-                      typ rangePred lhsVar.term)
-                  case typ =>
-                    (lhsVar, CCTerm(lhsVar.term, typ, srcInfo),
-                      typ rangePred lhsVar.term)
+                  case _ if global =>
+                    (lhsVar, CCTerm(typ.getZeroInit, lhsType, srcInfo),
+                      lhsVar rangePred)
+                  case _ =>
+                    (lhsVar, CCTerm(lhsVar.term, lhsType, srcInfo),
+                      lhsVar rangePred)
                 }
             }
 
@@ -1821,7 +1742,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
 
             values addGuard (
               if(typ == actualLhsVar.typ) initGuard
-              else actualLhsVar.typ rangePred actualLhsVar.term // todo: refactor these by adding to CCVar
+              else actualLhsVar rangePred
               )
           }
         }
@@ -2610,7 +2531,7 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       val freshVar = getFreshEvalVar(typ)
       localVars addVar freshVar
       addValue(CCTerm(freshVar.term, typ, None)) // todo: srcInfo?
-      addGuard(typ rangePred freshVar.term)
+      addGuard(freshVar rangePred)
     }
 
     private def popVal = {
