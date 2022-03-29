@@ -4375,11 +4375,11 @@ class CCReader private (prog : Program,
 
         condSymex.outputITEClauses(cond, third.pred, exit.pred)
 
+        import HornClauses._
         withinLoop(fourth, exit) {
           translate(body, third, fourth)
         }
 
-        import HornClauses._
         stm match {
           case stm : SiterThree =>
             output(first(allFormalVars) :- fourth(allFormalVarTerms))
@@ -4395,6 +4395,11 @@ class CCReader private (prog : Program,
               incSymex assertProperty(invariant(allFormalVars), srcInfo)
             }
           }
+        }
+        for(invariant <- maybeInvariant) {
+          clauses += ((CCClause(
+              first(allFormalVars) :- invariant(allFormalVars), srcInfo).clause,
+              ParametricEncoder.NoSync))
         }
       }
     }
