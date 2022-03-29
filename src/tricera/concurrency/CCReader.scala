@@ -4688,17 +4688,12 @@ structDefs += ((structInfos(i).name, structFieldList)) */
       _.clause.body.exists(_.pred == pred))
   }
 
-  def printPredsWithArgNames = {
-    println("System predicates:")
-    print("  ")
-    println((system.allLocalPreds ++ system.backgroundPreds).toList.
-      sortBy(p => p.name).map(predWithArgNamesAndLineNumbers).mkString(", "))
-    println
+  object PredPrintContext extends ReaderMain.PredPrintContext {
+    def predWithArgNames (pred : Predicate) : String =
+      predCCPredMap(pred).toString
+    def predWithArgNamesAndLineNumbers (pred : Predicate) : String =
+      predCCPredMap(pred).toStringWithLineNumbers
+    def predArgNames (pred : Predicate) : Seq[String] =
+      predCCPredMap(pred).argVars.map(_.toString)
   }
-  def predWithArgNames (pred : Predicate) : String =
-    predCCPredMap(pred).toString
-  def predWithArgNamesAndLineNumbers (pred : Predicate) : String =
-    predCCPredMap(pred).toStringWithLineNumbers
-  def predArgNames (pred : Predicate) : Seq[String] =
-    predCCPredMap(pred).argVars.map(_.toString)
 }

@@ -29,7 +29,8 @@
 
 package tricera.concurrency
 
-import ap.parser.{IBoolLit, IFunApp, ITerm, PrincessLineariser}
+import ap.parser.{IBoolLit, ITerm, PrincessLineariser, IExpression}
+import IExpression.Predicate
 import lazabs.horn.bottomup.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
@@ -44,29 +45,26 @@ object ReaderMain {
   var falseNodeId = 0
   val oneNodeForEachFalse = true // separates "FALSE" nodes when outputting dot
 
-  // todo: quick ugly solution, maybe refactor ParametricEncoder and make pred arg info available there
-  private var _reader : CCReader = null
-
-  def printClauses(reader : CCReader) : Unit = {
-    _reader = reader
-    printClauses(reader.system)
+  trait PredPrintContext {
+    def predWithArgNames (pred : Predicate) : String
+    def predWithArgNamesAndLineNumbers (pred : Predicate) : String
+    def predArgNames (pred : Predicate) : Seq[String]
   }
 
-  def printClauses(system : ParametricEncoder.System) = {
-    if (_reader != null) {
-      println("System predicates:")
-      try {
-        println("  " + (
-          system.allLocalPreds.toSeq.sortBy(p =>
-            "\\d+".r.findAllIn(p.name).toSeq.last.toInt).map(p =>
-            _reader.predWithArgNamesAndLineNumbers(p))).mkString("\n  "))
-      } catch { // do not sort if there exist preds without a number at the end
-        case _ : Exception =>
-          println(system.allLocalPreds.map(p =>
-            _reader.predWithArgNamesAndLineNumbers(p)).mkString("\n  "))
-      }
-      println
+  def printClauses(system : ParametricEncoder.System,
+                   printContext : PredPrintContext) = {
+    println("System predicates:")
+    try {
+      println("  " + (
+        system.allLocalPreds.toSeq.sortBy(p =>
+          "\\d+".r.findAllIn(p.name).toSeq.last.toInt).map(p =>
+          printContext.predWithArgNamesAndLineNumbers(p))).mkString("\n  "))
+    } catch { // do not sort if there exist preds without a number at the end
+      case _ : Exception =>
+        println(system.allLocalPreds.map(p =>
+          printContext.predWithArgNamesAndLineNumbers(p)).mkString("\n  "))
     }
+    println
 
     println("System transitions:")
     for ((p, r) <- system.processes) {
@@ -101,13 +99,11 @@ object ReaderMain {
     system.backgroundAxioms match {
       case ParametricEncoder.SomeBackgroundAxioms(preds, clauses) => {
         println
-        if (_reader != null) { // todo: ugly solution
           println("Background predicates:")
           println("  " + (
             preds.map(p =>
-              _reader.predWithArgNamesAndLineNumbers(p)).toSet).mkString(", "))
+              printContext.predWithArgNamesAndLineNumbers(p)).toSet).mkString(", "))
           println
-        }
         println("Background axioms:")
         for (c <- clauses)
           println("  " + c.toPrologString)
@@ -220,11 +216,11 @@ object ReaderMain {
       def atomIsFalse(a : IAtom) = a.pred.name.toLowerCase == "false"
       def toCanonicalString (a : IAtom) : String = {
         if (atomIsFalse(a)) a.pred.name
-        else _reader.predWithArgNames(a.pred)
+        else printContext.predWithArgNames(a.pred)
       }
       def getCanonicalArgNames (a : IAtom) : Seq[String] = {
         if(atomIsFalse(a)) Nil
-        else _reader.predArgNames(a.pred)
+        else printContext.predArgNames(a.pred)
       }
       def atomIsCanonical(a : IAtom) : Boolean = {
         atomIsFalse(a) ||
@@ -273,6 +269,7 @@ object ReaderMain {
       timeInvariantClauses ++ assertions ++ bgAxiomClauses)))
   }
 
+  // todo: remove below entry?
   def main(args: Array[String]) : Unit = {
     ap.util.Debug enableAllAssertions false
     TriCeraParameters.get.assertions = false
@@ -284,7 +281,7 @@ object ReaderMain {
                  "main")._1.system
 
       val smallSystem = system.mergeLocalTransitions
-      printClauses(smallSystem)
+      // printClauses(smallSystem, ...)
 
       println
       new VerificationLoop(smallSystem)

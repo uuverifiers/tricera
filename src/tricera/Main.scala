@@ -289,7 +289,7 @@ class Main (args: Array[String]) {
     modelledHeap = modelledHeapRes
 
     if (prettyPrint) {
-      tricera.concurrency.ReaderMain.printClauses(system)
+      tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext)
     }
 
     val smallSystem = system.mergeLocalTransitions
@@ -297,7 +297,7 @@ class Main (args: Array[String]) {
     if (prettyPrint) {
       println
       println("After simplification:")
-      tricera.concurrency.ReaderMain.printClauses(smallSystem)
+      tricera.concurrency.ReaderMain.printClauses(smallSystem, reader.PredPrintContext)
       return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
     }
 
