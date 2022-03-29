@@ -590,6 +590,8 @@ object CCReader {
     import ap.parser.ITerm
     import IExpression._
     def apply(terms : Seq[ITerm]) = pred(terms: _*)
+    def apply[X: scala.reflect.ClassTag](ccVars : Seq[CCVar]) =
+      pred(ccVars.map(_.term): _*)
     def arity : Int = pred.arity
     override def toString: String =
       pred.name + (if(argVars.nonEmpty) "(" + argVars.mkString(", ") + ")" else "")
@@ -786,7 +788,10 @@ class CCReader private (prog : Program,
   private val enumeratorDefs= new MHashMap[String, CCExpr]
 
   private val uninterpPredDecls     = new MHashMap[String, CCPredicate]
+  private val loopInvariants        =
+    new MHashMap[String, (CCPredicate, SourceInfo)]
 
+  def getLoopInvariants = loopInvariants.toMap
   def getFunctionContexts = functionContexts.toMap
 
   // NOTE: Used by ACSL encoder.
@@ -907,6 +912,13 @@ class CCReader private (prog : Program,
     locationCounter = 0
   }
 
+  def newLoopInvariant(args : Seq[CCVar],
+                       srcInfo : SourceInfo) : CCPredicate = {
+    val name = "P:" + srcInfo.line
+    val pred = newPred(name, args)
+    loopInvariants += ((name, (pred, srcInfo)))
+    pred
+  }
 
   def newPred(name : String,
               args : Seq[CCVar]) : CCPredicate = {
@@ -915,8 +927,6 @@ class CCReader private (prog : Program,
     predCCPredMap.put(pred, ccPred)
     ccPred
   }
-
-  private def newPred : CCPredicate = newPred(Nil)
 
   private def newPred(extraArgs : Seq[CCVar]) : CCPredicate = {
     val res = newPred(prefix + locationCounter, allFormalVars ++ extraArgs)
@@ -1329,7 +1339,7 @@ class CCReader private (prog : Program,
 
       for (v <- functionPostOldArgs(name)) localVars addVar v
 
-      val entryPred = newPred
+      val entryPred = newPred(Nil)
 
       val resVar = getResVar(typ)
       val exitPred = newPred(resVar)
@@ -2546,7 +2556,7 @@ class CCReader private (prog : Program,
       localVars.remove(ind - globalVars.size)
     }
 
-    private def outputClause : Unit = outputClause(newPred.pred)
+    private def outputClause : Unit = outputClause(newPred(Nil).pred)
     private def outputClause(ccPred : CCPredicate) : Unit =
       outputClause(ccPred.pred)
 
@@ -3328,7 +3338,7 @@ class CCReader private (prog : Program,
                 case "chan_send"    => ParametricEncoder.Send(chan)
                 case "chan_receive" => ParametricEncoder.Receive(chan)
               }
-              outputClause(newPred.pred, sync)
+              outputClause(newPred(Nil).pred, sync)
               pushVal(CCFormula(true, CCInt(), srcInfo))
             }
             case None =>
@@ -3955,7 +3965,7 @@ class CCReader private (prog : Program,
     }
 
     def translateNoReturn(compound : Compound_stm) : CCPredicate = {
-      val finalPred = newPred
+      val finalPred = newPred(Nil)
       translateWithEntryClause(compound, finalPred)
       postProcessClauses
       finalPred
@@ -3963,7 +3973,7 @@ class CCReader private (prog : Program,
 
     def translateNoReturn(compound : Compound_stm,
                           entry : CCPredicate) : Unit = {
-      val finalPred = newPred
+      val finalPred = newPred(Nil)
       translate(compound, entry, finalPred)
       // add a default return edge
       val rp = returnPred.get
@@ -3974,7 +3984,7 @@ class CCReader private (prog : Program,
     }
 
     def translateWithReturn(compound : Compound_stm) : Unit = {
-      val finalPred = newPred
+      val finalPred = newPred(Nil)
       translateWithEntryClause(compound, finalPred)
       // add a default return edge
       //val rp = returnPred.get
@@ -3987,7 +3997,7 @@ class CCReader private (prog : Program,
 
     def translateWithReturn(compound : Compound_stm,
                             entry : CCPredicate) : CCPredicate = {
-      val finalPred = newPred
+      val finalPred = newPred(Nil)
       translate(compound, entry, finalPred)
       // add a default return edge
       //val rp = returnPred.get
@@ -4099,7 +4109,7 @@ class CCReader private (prog : Program,
     private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {
       val decSymex = Symex(entry)
       collectVarDecls(dec, false, decSymex)
-      val exit = newPred
+      val exit = newPred(Nil)
       decSymex outputClause exit.pred
       exit
     }
@@ -4136,7 +4146,7 @@ class CCReader private (prog : Program,
 
         // merge simple side-effect-free declarations with
         // the entry clause
-        var entryPred = newPred
+        var entryPred = newPred(Nil)
         var entryClause =
           Clause(atom(entryPred, allVarInits), List(), globalPreconditions)
 
@@ -4144,7 +4154,7 @@ class CCReader private (prog : Program,
           val decSymex = Symex(entryPred)
           collectVarDecls(stmsIt.next.asInstanceOf[DecS].dec_,
                           false, decSymex)
-          entryPred = newPred
+          entryPred = newPred(Nil)
           entryClause = merge(decSymex genClause entryPred.pred, entryClause)
         }
         output(entryClause)
@@ -4228,7 +4238,7 @@ class CCReader private (prog : Program,
                 for (v <- localVars.getVarsInTopFrame) v.typ match {
                   case a : CCHeapArrayPointer if a.arrayType == StackArray =>
                     freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo))
-                    prevPred = newPred
+                    prevPred = newPred(Nil)
                     freeSymex.outputClause(prevPred.pred)
                   case _ => // nothing
                 }
@@ -4241,7 +4251,7 @@ class CCReader private (prog : Program,
             }
           }
           case stm => {
-            var nextPred = if (stmsIt.hasNext || freeArraysOnStack) newPred
+            var nextPred = if (stmsIt.hasNext || freeArraysOnStack) newPred(Nil)
                            else exit
             translate(stm, prevPred, nextPred)
             if (freeArraysOnStack && !stmsIt.hasNext) {
@@ -4250,7 +4260,7 @@ class CCReader private (prog : Program,
               for (v <- localVars.getVarsInTopFrame) v.typ match {
                 case a : CCHeapArrayPointer if a.arrayType == StackArray =>
                   freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // todo: line no probably incorrect
-                  nextPred = newPred
+                  nextPred = newPred(Nil)
                   freeSymex.outputClause(nextPred.pred)
                 case _ => // nothing
               }
@@ -4304,7 +4314,7 @@ class CCReader private (prog : Program,
       case stm : SiterOne => {
         // while loop
 
-        val first = newPred
+        val first = newPred(Nil)
         val condSymex = Symex(entry)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, first.pred, exit.pred)
@@ -4316,7 +4326,7 @@ class CCReader private (prog : Program,
       case stm : SiterTwo => {
         // do ... while loop
 
-        val first = newPred
+        val first = newPred(Nil)
         withinLoop(first, exit) {
           translate(stm.stm_, entry, first)
         }
@@ -4329,37 +4339,61 @@ class CCReader private (prog : Program,
       case _ : SiterThree | _ : SiterFour => {
         // for loop
 
-        val first, second, third = newPred
 
-        val (initStm, condStm, body) = stm match {
+        val first, second, third, fourth = newPred(Nil)
+
+        val (initStm, condStm, body, srcInfo) = stm match {
           case stm : SiterThree =>
-            (stm.expression_stm_1, stm.expression_stm_2, stm.stm_)
+            (stm.expression_stm_1, stm.expression_stm_2, stm.stm_,
+              Some(SourceInfo(stm.line_num, stm.col_num, stm.offset)))
           case stm : SiterFour  =>
-            (stm.expression_stm_1, stm.expression_stm_2, stm.stm_)
+            (stm.expression_stm_1, stm.expression_stm_2, stm.stm_,
+              Some(SourceInfo(stm.line_num, stm.col_num, stm.offset)))
         }
 
-        symexFor(entry, initStm)._1 outputClause first.pred
+        val sym = symexFor(entry, initStm)._1
+        val maybeInvariant =
+          if (TriCeraParameters.get.inferLoopInvariants)
+            Some(newLoopInvariant(allFormalVars, srcInfo.get))
+          else None
 
-        val (condSymex, condExpr) = symexFor(first, condStm)
+        // assert the invariant before loop entry, but after first init
+        sym outputClause first.pred
+        for(invariant <- maybeInvariant) {
+          sym assertProperty(invariant(allFormalVars), srcInfo)
+          sym addGuard invariant(allFormalVars)
+        }
+        sym outputClause second.pred
+
+        //symexFor(entry, initStm)._1 outputClause first.pred
+
+        val (condSymex, condExpr) = symexFor(second, condStm)
         val cond : IFormula = condExpr match {
           case Some(expr) => expr.toFormula
           case None       => true
         }
 
-        condSymex.outputITEClauses(cond, second.pred, exit.pred)
+        condSymex.outputITEClauses(cond, third.pred, exit.pred)
 
-        withinLoop(third, exit) {
-          translate(body, second, third)
+        withinLoop(fourth, exit) {
+          translate(body, third, fourth)
         }
 
+        import HornClauses._
         stm match {
           case stm : SiterThree =>
-            output(Clause(atom(first, allFormalVarTerms),
-                          List(atom(third, allFormalVarTerms)), true))
+            output(first(allFormalVars) :- fourth(allFormalVarTerms))
+            for(invariant <- maybeInvariant) {
+              assertionClauses +=
+                CCClause(invariant(allFormalVars) :- fourth(allFormalVars), srcInfo)
+            }
           case stm : SiterFour  => {
-            val incSymex = Symex(third)
+            val incSymex = Symex(fourth)
             incSymex eval stm.exp_
             incSymex outputClause first.pred
+            for(invariant <- maybeInvariant) {
+              incSymex assertProperty(invariant(allFormalVars), srcInfo)
+            }
           }
         }
       }
@@ -4369,7 +4403,7 @@ class CCReader private (prog : Program,
                           entry : CCPredicate,
                           exit : CCPredicate) : Unit = stm match {
       case _ : SselOne | _ : SselTwo => { // if
-        val first, second = newPred
+        val first, second = newPred(Nil)
         val vars = allFormalVarTerms
         val condSymex = Symex(entry)
         val cond = stm match {
@@ -4394,7 +4428,7 @@ class CCReader private (prog : Program,
         val selectorSymex = Symex(entry)
         val selector = (selectorSymex eval stm.exp_).toTerm
 
-        val newEntry = newPred
+        val newEntry = newPred(Nil)
         val collector = new SwitchCaseCollector
 
         withinSwitch(exit, collector) {
@@ -4460,7 +4494,7 @@ class CCReader private (prog : Program,
               for (v <- localVars.getVarsInTopFrame) v.typ match {
                 case a : CCHeapArrayPointer if a.arrayType == StackArray =>
                   freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // line no probably incorrect
-                  nextPred = newPred
+                  nextPred = newPred(Nil)
                   freeSymex.outputClause(nextPred.pred)
                 case _ => // nothing
               }
@@ -4482,7 +4516,7 @@ class CCReader private (prog : Program,
             if (modelHeap && trackMemorySafety) {
               localVars.pushFrame
               localVars.addVar(rp.argVars.last)
-              var nextPred = newPred//(List(rp.argVars.last))
+              var nextPred = newPred(Nil)
               val args = symex.getValuesAsTerms ++ List(retValue.toTerm)
               symex outputClause atom(nextPred, args) //output one clause in case return expr modifies heap
               val freeSymex = Symex(nextPred) // reinitialise init atom
@@ -4490,7 +4524,7 @@ class CCReader private (prog : Program,
               for (v <- localVars.getVarsInTopFrame) v.typ match {
                 case a : CCHeapArrayPointer if a.arrayType == StackArray =>
                   freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // todo: line no probably incorrect
-                  nextPred = newPred
+                  nextPred = newPred(Nil)
                   freeSymex.outputClause(nextPred.pred)
                 case _ => // nothing
               }
@@ -4525,7 +4559,7 @@ class CCReader private (prog : Program,
           // add a further state inside the block, to correctly
           // distinguish between loops within the block, and a loop
           // around the block
-          val first = newPred
+          val first = newPred(Nil)
           val entrySymex = Symex(entry)
           entrySymex outputClause first.pred
           translate(stm.stm_, first, exit)
@@ -4535,7 +4569,7 @@ class CCReader private (prog : Program,
       case stm : SatomicTwo => {
         val currentClauseNum = clauses.size
         inAtomicMode {
-          val first = newPred
+          val first = newPred(Nil)
           val condSymex = Symex(entry)
           condSymex.saveState
           val cond = (condSymex eval stm.exp_).toFormula
@@ -4577,7 +4611,8 @@ class CCReader private (prog : Program,
       (for (c <- backgroundClauses;
            p <- c.predicates.toSeq.sortBy(_.name);
            if p != HornClauses.FALSE)
-      yield p) ++ uninterpPredDecls.values.map(_.pred)
+      yield p) ++ uninterpPredDecls.values.map(_.pred) ++
+                  loopInvariants.map(_._2._1.pred)
 
     val backgroundAxioms =
       if (backgroundPreds.isEmpty && backgroundClauses.isEmpty)
@@ -4610,11 +4645,22 @@ class CCReader private (prog : Program,
   }
 
   object PredPrintContext extends ReaderMain.PredPrintContext {
+    private def getPred (pred : Predicate) : CCPredicate = {
+      predCCPredMap get pred match {
+        case Some(ccPred) => ccPred
+        case None => predCCPredMap find
+          (p => "inv_" + p._1.name == pred.name) match {
+          case Some(v) => v._2
+          case None => throw new TranslationException("Could not find pred: " +
+            pred)
+        }
+      }
+    }
     def predWithArgNames (pred : Predicate) : String =
-      predCCPredMap(pred).toString
+      getPred(pred).toString
     def predWithArgNamesAndLineNumbers (pred : Predicate) : String =
-      predCCPredMap(pred).toStringWithLineNumbers
+      getPred(pred).toStringWithLineNumbers
     def predArgNames (pred : Predicate) : Seq[String] =
-      predCCPredMap(pred).argVars.map(_.toString)
+      getPred(pred).argVars.map(_.toString)
   }
 }

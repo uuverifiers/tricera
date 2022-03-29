@@ -344,18 +344,34 @@ class Main (args: Array[String]) {
             import lazabs.horn.bottomup.HornPredAbs
             import lazabs.ast.ASTree.Parameter
 
+            def replaceArgs(f : String,
+                            acslArgNames : Seq[String],
+                            replaceAlphabetic : Boolean = false) = {
+              var s = f
+              for ((acslArg, ind)<- acslArgNames zipWithIndex) {
+                val replaceArg =
+                  if (replaceAlphabetic)
+                    lazabs.viewer.HornPrinter.getAlphabeticChar(ind)
+                  else "_" + ind
+                s = s.replace(replaceArg, acslArg)
+              }
+              s
+            }
+
             if(displaySolutionProlog) {
               // todo: replace args with actual ones from the clauses
               println("\nSolution (Prolog)")
               println("="*80)
               val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
               for((pred,sol) <- sortedSol) {
-                val cl = HornClause(RelVar(pred.name,
+                val cl = HornClause(RelVar(pred.name.stripPrefix("inv_"),
                   (0 until pred.arity).map(p =>
                     Parameter("_" + p,lazabs.types.IntegerType())).toList),
                   List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
                     Map[ap.terfor.ConstantTerm,String]().empty,false))))
-                println(lazabs.viewer.HornPrinter.print(cl))
+                println(replaceArgs(lazabs.viewer.HornPrinter.print(cl),
+                                    reader.PredPrintContext.predArgNames(pred),
+                                    replaceAlphabetic = true))
               }
               println("="*80 + "\n")
             }
@@ -381,81 +397,61 @@ class Main (args: Array[String]) {
               println("="*80 + "\n")
             }
 
-            def replaceArgs(p : CCPredicate, f : String,
-                            acslArgNames : Seq[String]) = {
-              var s = f
-              for ((acslArg, ind)<- acslArgNames zipWithIndex)
-                s = s.replace("_" + ind, acslArg)
-              s
-            }
-
             val contexts = reader.getFunctionContexts
-            if ((displayACSL || log) && contexts.nonEmpty) {
+            val loopInvariants = reader.getLoopInvariants
+            if ((displayACSL || log) &&
+              (contexts.nonEmpty || loopInvariants.nonEmpty)) {
+
+              val solutionProcessors = Seq(
+                ADTExploder
+                // add additional solution processors here
+              )
+              var processedSolution: SolutionProcessor.Solution = solution
+              // iteratively process the solution using all solution processors
+              // this will only process the pre/post predicates' solutions due
+              // to the second argument
+              for (processor <- solutionProcessors) {
+                processedSolution =
+                  processor(processedSolution)() // will process all predicates
+              }
+
               println("\nInferred ACSL annotations")
               println("="*80)
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
               for ((fun, ctx) <- contexts
                    if !enc.prePredsToReplace.contains(ctx.prePred.pred) &&
                      !enc.postPredsToReplace.contains(ctx.postPred.pred)) {
-                val solutionProcessors = Seq(
-                  ADTExploder
-                  // add additional solution processors here
-                )
-                var processedSolution: SolutionProcessor.Solution = solution
-                // iteratively process the solution using all solution processors
-                // this will only process the pre/post predicates' solutions due
-                // to the second argument
-                for (processor <- solutionProcessors) {
-                  processedSolution =
-                    processor(processedSolution)(Seq(ctx.prePred, ctx.postPred).map(_.pred))
-                }
-
                 val fPre = ACSLLineariser asString processedSolution(ctx.prePred.pred)
                 val fPost = ACSLLineariser asString processedSolution(ctx.postPred.pred)
 
                 // todo: implement replaceArgs as a solution processor
                 // replaceArgs does a simple string replacement (see above def)
                 val fPreWithArgs =
-                  replaceArgs(ctx.prePred, fPre, ctx.prePredACSLArgNames)
+                  replaceArgs(fPre, ctx.prePredACSLArgNames)
                 val fPostWithArgs =
-                  replaceArgs(ctx.postPred, fPost, ctx.postPredACSLArgNames)
+                  replaceArgs(fPost, ctx.postPredACSLArgNames)
 
                 println("/* contracts for " + fun + " */")
                 println("/*@")
-                print("  requires "); println(fPreWithArgs + ";")
-                print("  ensures "); println(fPostWithArgs + ";")
+                print(  "  requires "); println(fPreWithArgs + ";")
+                print(  "  ensures "); println(fPostWithArgs + ";")
                 println("*/")
+              }
+              if(loopInvariants nonEmpty) {
+                println("/* loop invariants */")
+                for ((name, (inv, srcInfo)) <- loopInvariants) {
+                  val fInv = ACSLLineariser asString processedSolution(inv.pred)
+                  val fInvWithArgs =
+                    replaceArgs(fInv, inv.argVars.map(_.name))
+                  println("\n/* loop invariant for the loop at line " +
+                          srcInfo.line + " */")
+                  println("/*@")
+                  print(  "  loop invariant "); println(fInvWithArgs + ";")
+                  println("*/")
+                }
               }
               println("="*80 + "\n")
             }
-
-            /*if(system.backgroundPreds.exists(p => p.name.contains("_pre"))) {
-              println("Contracts:")
-              for (p <- system.backgroundPreds) if (p.name.contains("_pre") ||
-                p.name.contains("_post")) {
-
-                if(p.name.contains("_pre")){
-                  system.backgroundAxioms.clauses.find(c =>
-                    c.body.exists(a => a.pred == p)) match {
-                    case None =>
-                    case Some(pre) =>
-                      val args =
-                        pre.body.find(c => c.pred == p) match {
-                          case Some(a) => a.args
-                          case None => throw new Exception("cannot find f_pre")
-                        }
-                      printFun(args)
-                  }
-                } else { //post
-                  system.backgroundAxioms.clauses.find(c => c.head.pred == p)
-                  match {
-                    case None =>
-                    case Some(post) => printFun(post.head.args)
-                  }
-                }
-              }
-              println
-            }*/
           case None =>
         }
         Safe

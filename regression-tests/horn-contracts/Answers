@@ -79,16 +79,16 @@ Inferred ACSL annotations
 
 assert.hcc
 Warning: The following clause has different terms with the same name (term: N2_post)
-main1(N_post, N2_post) :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4).
+main1(N_post, N2_post) :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res4).
 
 Warning: The following clause has different terms with the same name (term: N_post)
-main1(N_post, N2_post) :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4).
+main1(N_post, N2_post) :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res4).
 
 Warning: The following clause has different terms with the same name (term: N2_post)
-false :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4), __res4 < N:1.
+false :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res4), _res4 < N:1.
 
 Warning: The following clause has different terms with the same name (term: N_post)
-false :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, __res4), __res4 < N:1.
+false :- main3(N:1, N2:2), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res3), mult_post(N:1, N2:2, N:1, N:1, N_post, N2_post, _res4), _res4 < N:1.
 
 SAFE
 

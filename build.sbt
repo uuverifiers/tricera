@@ -5,7 +5,7 @@ import java.nio.file.attribute.PosixFilePermission._
 lazy val commonSettings = Seq(
     name                 := "TriCera",
     organization         := "uuverifiers",
-    version              := "0.3",
+    version              := "0.2",
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
@@ -97,7 +97,7 @@ settings(
                                         case "2.12.8" => "-opt:_"
                                       }}).value,
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
-  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.8",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   excludeDependencies ++= Seq(

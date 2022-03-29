@@ -276,10 +276,10 @@ Init:
                      |                      
                      |                      
                      V                      
- main1(newHeap(alloc(emptyHeap, O_Int(8)))) 
+ main1(newHeap(alloc(emptyHeap, O_Int(9)))) 
 --------------------------------------------
 Final:
- main1(newHeap(alloc(emptyHeap, O_Int(8)))) 
+ main1(newHeap(alloc(emptyHeap, O_Int(9)))) 
 --------------------------------------------
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
@@ -301,10 +301,10 @@ Init:
                        |                       
                        |                       
                        V                       
- main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+ main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
 -----------------------------------------------
 Final:
- main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+ main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
 -----------------------------------------------
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
@@ -325,10 +325,10 @@ Init:
                        |                       
                        |                       
                        V                       
- main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+ main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
 -----------------------------------------------
 Final:
- main0(newHeap(alloc(emptyHeap, O_Int(8))), 0) 
+ main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
 -----------------------------------------------
 valid-memsafety/valid-memtrack
   expected verdict matches the result!

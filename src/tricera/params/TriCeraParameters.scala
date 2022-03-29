@@ -61,11 +61,13 @@ class TriCeraParameters extends GlobalParameters {
   var devMode : Boolean = false
 
   var displayACSL = false
+  var inferLoopInvariants = false
   var fullSolutionOnAssert = true
 
   override def needFullSolution: Boolean =
     (assertions && fullSolutionOnAssert) ||
-      displaySolutionProlog || displaySolutionSMT || displayACSL || log
+      displaySolutionProlog || displaySolutionSMT || displayACSL || log ||
+      inferLoopInvariants
 
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
@@ -82,7 +84,7 @@ class TriCeraParameters extends GlobalParameters {
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
   private val greeting =
-    "TriCera v0.3.\n(C) Copyright 2012-2022 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer\n" +
+    "TriCera v0.2.\n(C) Copyright 2012-2022 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer\n" +
     "Contributors: Pontus Ernstedt."
 
   private def parseArgs(args: List[String]): Boolean = args match {
@@ -105,6 +107,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-disj" :: rest => disjunctive = true; parseArgs(rest)
     case "-sol" :: rest => displaySolutionProlog = true; parseArgs(rest)
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
+    case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
     case "-memtrack" :: rest => shouldTrackMemory = true; parseArgs(rest)
@@ -243,6 +246,7 @@ class TriCeraParameters extends GlobalParameters {
       " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
       " -sol\t\tShow solution in Prolog format\n" +
       " -ssol\t\tShow solution in SMT-LIB format\n" +
+      " -inv\t\tTry to infer loop invariants\n" +
       " -acsl\t\tPrint inferred ACSL annotations\n" +
       " -varLines\t\tPrint program variables together with their line numbers (e.g., x:42)\n" +
       " -memtrack\t\tCheck that there are no memory leaks in the input program \n" +
