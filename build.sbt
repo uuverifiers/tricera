@@ -98,7 +98,7 @@ settings(
                                       }}).value,
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.8",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "1.1.1",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   excludeDependencies ++= Seq(
     // exclude java-cup from transitive dependencies, ccParser includes newer version

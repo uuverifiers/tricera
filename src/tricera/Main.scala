@@ -440,7 +440,8 @@ class Main (args: Array[String]) {
               if(loopInvariants nonEmpty) {
                 println("/* loop invariants */")
                 for ((name, (inv, srcInfo)) <- loopInvariants) {
-                  val fInv = ACSLLineariser asString processedSolution(inv.pred)
+                  val fInv = ACSLLineariser asString processedSolution.find(p =>
+                    p._1.name.stripPrefix("inv_") == inv.pred.name).get._2
                   val fInvWithArgs =
                     replaceArgs(fInv, inv.argVars.map(_.name))
                   println("\n/* loop invariant for the loop at line " +

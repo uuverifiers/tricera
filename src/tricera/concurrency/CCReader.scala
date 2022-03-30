@@ -912,12 +912,8 @@ class CCReader private (prog : Program,
     locationCounter = 0
   }
 
-  def newLoopInvariant(args : Seq[CCVar],
-                       srcInfo : SourceInfo) : CCPredicate = {
-    val name = "P:" + srcInfo.line
-    val pred = newPred(name, args)
-    loopInvariants += ((name, (pred, srcInfo)))
-    pred
+  def addLoopInvariant(pred : CCPredicate, srcInfo : SourceInfo) : Unit = {
+    loopInvariants += ((pred.pred.name, (pred, srcInfo)))
   }
 
   def newPred(name : String,
@@ -4315,6 +4311,11 @@ class CCReader private (prog : Program,
         // while loop
 
         val first = newPred(Nil)
+
+        if (TriCeraParameters.get.inferLoopInvariants)
+          addLoopInvariant(entry,
+            SourceInfo(stm.line_num, stm.col_num, stm.offset)) // todo: expand util for extracting srcInfo from stmt
+
         val condSymex = Symex(entry)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, first.pred, exit.pred)
@@ -4327,6 +4328,11 @@ class CCReader private (prog : Program,
         // do ... while loop
 
         val first = newPred(Nil)
+
+        if (TriCeraParameters.get.inferLoopInvariants)
+          addLoopInvariant(first,
+            SourceInfo(stm.line_num, stm.col_num, stm.offset)) // todo: expand util for extracting srcInfo from stmt
+
         withinLoop(first, exit) {
           translate(stm.stm_, entry, first)
         }
@@ -4339,67 +4345,43 @@ class CCReader private (prog : Program,
       case _ : SiterThree | _ : SiterFour => {
         // for loop
 
-
-        val first, second, third, fourth = newPred(Nil)
+        val first, second, third = newPred(Nil)
 
         val (initStm, condStm, body, srcInfo) = stm match {
           case stm : SiterThree =>
             (stm.expression_stm_1, stm.expression_stm_2, stm.stm_,
-              Some(SourceInfo(stm.line_num, stm.col_num, stm.offset)))
+              SourceInfo(stm.line_num, stm.col_num, stm.offset))
           case stm : SiterFour  =>
             (stm.expression_stm_1, stm.expression_stm_2, stm.stm_,
-              Some(SourceInfo(stm.line_num, stm.col_num, stm.offset)))
+              SourceInfo(stm.line_num, stm.col_num, stm.offset))
         }
 
-        val sym = symexFor(entry, initStm)._1
-        val maybeInvariant =
-          if (TriCeraParameters.get.inferLoopInvariants)
-            Some(newLoopInvariant(allFormalVars, srcInfo.get))
-          else None
+        if (TriCeraParameters.get.inferLoopInvariants)
+          addLoopInvariant(first, srcInfo) // todo: expand util for extracting srcInfo from stmt
 
-        // assert the invariant before loop entry, but after first init
-        sym outputClause first.pred
-        for(invariant <- maybeInvariant) {
-          sym assertProperty(invariant(allFormalVars), srcInfo)
-          sym addGuard invariant(allFormalVars)
-        }
-        sym outputClause second.pred
+        symexFor(entry, initStm)._1 outputClause first.pred
 
-        //symexFor(entry, initStm)._1 outputClause first.pred
-
-        val (condSymex, condExpr) = symexFor(second, condStm)
+        val (condSymex, condExpr) = symexFor(first, condStm)
         val cond : IFormula = condExpr match {
           case Some(expr) => expr.toFormula
           case None       => true
         }
 
-        condSymex.outputITEClauses(cond, third.pred, exit.pred)
+        condSymex.outputITEClauses(cond, second.pred, exit.pred)
 
         import HornClauses._
-        withinLoop(fourth, exit) {
-          translate(body, third, fourth)
+        withinLoop(third, exit) {
+          translate(body, second, third)
         }
 
         stm match {
           case stm : SiterThree =>
-            output(first(allFormalVars) :- fourth(allFormalVarTerms))
-            for(invariant <- maybeInvariant) {
-              assertionClauses +=
-                CCClause(invariant(allFormalVars) :- fourth(allFormalVars), srcInfo)
-            }
+            output(first(allFormalVars) :- third(allFormalVarTerms))
           case stm : SiterFour  => {
-            val incSymex = Symex(fourth)
+            val incSymex = Symex(third)
             incSymex eval stm.exp_
             incSymex outputClause first.pred
-            for(invariant <- maybeInvariant) {
-              incSymex assertProperty(invariant(allFormalVars), srcInfo)
-            }
           }
-        }
-        for(invariant <- maybeInvariant) {
-          clauses += ((CCClause(
-              first(allFormalVars) :- invariant(allFormalVars), srcInfo).clause,
-              ParametricEncoder.NoSync))
         }
       }
     }
@@ -4616,8 +4598,7 @@ class CCReader private (prog : Program,
       (for (c <- backgroundClauses;
            p <- c.predicates.toSeq.sortBy(_.name);
            if p != HornClauses.FALSE)
-      yield p) ++ uninterpPredDecls.values.map(_.pred) ++
-                  loopInvariants.map(_._2._1.pred)
+      yield p) ++ uninterpPredDecls.values.map(_.pred)
 
     val backgroundAxioms =
       if (backgroundPreds.isEmpty && backgroundClauses.isEmpty)
@@ -4640,7 +4621,9 @@ class CCReader private (prog : Program,
                              timeInvariants,
                              (assertionClauses).map(_.clause).toList,
                              VerificationHints(predHints),
-                             backgroundAxioms)
+                             backgroundAxioms,
+                             otherPredsToKeep =
+                               loopInvariants.map(_._2._1.pred).toList)
   }
 
   // todo: return fun name if inside function assertions?
