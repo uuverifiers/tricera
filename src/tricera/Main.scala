@@ -339,7 +339,6 @@ class Main (args: Array[String]) {
         res match {
           case Some(solution) =>
             import tricera.postprocessor._
-            import CCReader.CCPredicate
             import lazabs.horn.global._
             import lazabs.horn.bottomup.HornPredAbs
             import lazabs.ast.ASTree.Parameter

@@ -1772,7 +1772,7 @@ class CCReader private (prog : Program,
             val argTypes =
               for (typ <- predHint.listtype_specifier_) yield getType(typ)
             val argCCVars = // needed for adding to predCCPredMap, used in printing
-              argTypes.map(typ => new CCVar(typ.toString, None, typ))
+              argTypes.zipWithIndex.map(t => new CCVar("_" + t._2, None, t._1))
             val hintPred = newPred(predHint.cident_, argCCVars)
             uninterpPredDecls += ((predHint.cident_, hintPred))
         }
