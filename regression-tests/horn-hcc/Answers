@@ -114,6 +114,22 @@ SAFE
 down_true-unreach-call.i.c
 SAFE
 
+ternary-bug.c
+UNSAFE
+
+----------------
+Init:
+  main3(1, 0)   
+----------------
+       |        
+       |        
+       V        
+ main5(1, 0, 0) 
+----------------
+Final:
+ main5(1, 0, 0) 
+----------------
+
 test2b.hcc
 Warning: entry function "main" not found
 UNSAFE

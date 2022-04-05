@@ -2319,9 +2319,11 @@ class CCReader private (prog : Program,
     private var guard : IFormula = true
 
     def addGuard(f : IFormula) : Unit = {
-      guard = guard &&& f
-      touchedGlobalState =
-        touchedGlobalState || !freeFromGlobal(f)
+      if(!noSideEffects) {
+        guard = guard &&& f
+        touchedGlobalState =
+          touchedGlobalState || !freeFromGlobal(f)
+      }
     }
 
     def getGuard = guard

@@ -11,7 +11,8 @@ TESTS="test1.hcc test2.hcc test3.hcc test4.hcc \
        atomic1.hcc atomic2.hcc atomic3.hcc atomic3b.hcc atomic3c.hcc \
        atomic3d.hcc \
        diamond_true-unreach-call1.c unsigned1.hcc \
-       literals.c predicates.hcc predicates2.hcc down_true-unreach-call.i.c"
+       literals.c predicates.hcc predicates2.hcc down_true-unreach-call.i.c \
+       ternary-bug.c"
 
 for name in $TESTS; do
     echo
