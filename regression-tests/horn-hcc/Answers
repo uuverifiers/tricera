@@ -130,6 +130,12 @@ Final:
  main5(1, 0, 0) 
 ----------------
 
+assert-ite-1.c
+SAFE
+
+assert-ite-2.c
+SAFE
+
 test2b.hcc
 Warning: entry function "main" not found
 UNSAFE

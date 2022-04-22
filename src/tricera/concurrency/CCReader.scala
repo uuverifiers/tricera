@@ -3658,9 +3658,9 @@ class CCReader private (prog : Program,
                             op : (CCExpr, CCExpr) => CCExpr) : Unit = {
       evalHelp(left)
       maybeOutputClause
-      val lhs = popVal
       evalHelp(right)
       val rhs = popVal
+      val lhs = popVal
       pushVal(op(lhs, rhs))
     }
 
