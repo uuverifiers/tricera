@@ -68,6 +68,9 @@ Final:
  main3(1, 0) 
 -------------
 
+Related assertions: 
+ false :- main3(g:3, h:4), g:3 != 0. (assertion source: line 8) 
+
 shadowing.hcc
 SAFE
 
@@ -129,6 +132,9 @@ Init:
 Final:
  main5(1, 0, 0) 
 ----------------
+
+Related assertions: 
+ false :- main5(x:2, y:2, z:3). (assertion source: line 5) 
 
 assert-ite-1.c
 SAFE

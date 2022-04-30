@@ -57,7 +57,6 @@ class TriCeraParameters extends GlobalParameters {
 
   var shouldTrackMemory : Boolean = false
 
-  var showFailedAssertions : Boolean = false
   var devMode : Boolean = false
 
   var displayACSL = false
@@ -217,7 +216,6 @@ class TriCeraParameters extends GlobalParameters {
     case "-cex" :: rest => plainCEX = true; parseArgs(rest)
     case "-assert" :: rest => TriCeraParameters.get.assertions = true; parseArgs(rest)
     case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
-    case "-cexAsserts" :: rest => showFailedAssertions = true; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +

@@ -25,6 +25,9 @@ Final:
  main4(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
 ------------------------------------------------------------------
 
+Related assertions: 
+ false :- main4(@h, list:11, y:12), y:12 = 0. (assertion source: line 13) 
+
 list-002-fail.c
 Warning: enabling heap model
 Warning: no definition of function "nondet_bool" available
@@ -52,6 +55,9 @@ Init:
 Final:
  main7(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
 ------------------------------------------------------------------------------------------------
+
+Related assertions: 
+ false :- main7(@h, list:14, tail:17), list:14 = tail:17. (assertion source: line 29) 
 
 mutually-referential-structs.c
 Warning: enabling heap model
@@ -92,6 +98,17 @@ Init:
 Final:
        main7(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1))       
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Related assertions: 
+ false :- main7(@h, list:14), !is_O_parent(read(@h, list:14)). (assertion source: line 14) 
+ false :- main7(@h, list:14), !is_O_child(read(@h, child1(getparent(read(@h, list:14))))). (assertion source: line 20) 
+ false :- main7(@h, list:14), !is_O_parent(read(@h, list:14)). (assertion source: line 14) 
+ false :- main7(@h, list:14), !is_O_child(read(@h, child2(getparent(read(@h, list:14))))). (assertion source: line 20) 
+ false :- main7(@h, list:14), !is_O_parent(read(@h, list:14)). (assertion source: line 14) 
+ false :- main7(@h, list:14), is_O_parent(read(@h, list:14)) & !is_O_child(read(@h, child1(getparent(read(@h, list:14))))). (assertion source: line 20) 
+ false :- main7(@h, list:14), is_O_parent(read(@h, list:14)) & is_O_child(read(@h, child1(getparent(read(@h, list:14))))) & !is_O_parent(read(@h, list:14)). (assertion source: line 14) 
+ false :- main7(@h, list:14), is_O_parent(read(@h, list:14)) & is_O_child(read(@h, child1(getparent(read(@h, list:14))))) & is_O_parent(read(@h, list:14)) & !is_O_child(read(@h, child2(getparent(read(@h, list:14))))). (assertion source: line 20) 
+ false :- main7(@h, list:14), is_O_parent(read(@h, list:14)) & is_O_child(read(@h, child1(getparent(read(@h, list:14))))) & is_O_parent(read(@h, list:14)) & is_O_child(read(@h, child2(getparent(read(@h, list:14))))) & p(getchild(read(@h, child1(getparent(read(@h, list:14)))))) != p(getchild(read(@h, child2(getparent(read(@h, list:14)))))). (assertion source: line 20) 
 
 simple-struct.c
 Warning: enabling heap model
@@ -145,6 +162,10 @@ Init:
 Final:
  main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(1)) 
 --------------------------------------------------------------------
+
+Related assertions: 
+ false :- main4(@h, x:6, y:7), !is_O_S(read(@h, y:7)). (assertion source: line 7) 
+ false :- main4(@h, x:6, y:7), is_O_S(read(@h, y:7)) & !is_O_S(read(@h, y:7)). (assertion source: line 8) 
 
 typecastSafe-001.c
 Warning: enabling heap model
@@ -201,6 +222,10 @@ Final:
  main4(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(0)) 
 --------------------------------------------------------------------
 
+Related assertions: 
+ false :- main4(@h, x:2, y:3), !is_O_Int(read(@h, y:3)). (assertion source: line 3) 
+ false :- main4(@h, x:2, y:3), is_O_Int(read(@h, y:3)) & !is_O_Int(read(@h, y:3)). (assertion source: line 2) 
+
 stackptr-to-heapptr.c
 Warning: enabling heap model
 SAFE
@@ -222,6 +247,10 @@ Final:
  main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
 ------------------------------------------------------
 
+Related assertions: 
+ false :- main4(@h, a:2), !is_O_Int(read(@h, a:2)). (assertion source: line 2) 
+ false :- main4(@h, a:2), is_O_Int(read(@h, a:2)) & !is_O_Int(read(@h, a:2)). (assertion source: line 4) 
+
 free-2-nondet-unsafe.c
 Warning: enabling heap model
 Warning: no definition of function "nondet" available
@@ -239,6 +268,10 @@ Init:
 Final:
  main4(newHeap(alloc(emptyHeap, defObj)), nthAddr(1)) 
 ------------------------------------------------------
+
+Related assertions: 
+ false :- main4(@h, a:4), !is_O_Int(read(@h, a:4)). (assertion source: line 4) 
+ false :- main4(@h, a:4), is_O_Int(read(@h, a:4)) & !is_O_Int(read(@h, a:4)). (assertion source: line 7) 
 
 free-3-safe.c
 Warning: enabling heap model
@@ -261,6 +294,10 @@ Final:
  main5(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
 ------------------------------------------------------------------
 
+Related assertions: 
+ false :- main5(@h, a:4, b:6), !is_O_Int(read(@h, b:6)). (assertion source: line 6) 
+ false :- main5(@h, a:4, b:6), is_O_Int(read(@h, b:6)) & !is_O_Int(read(@h, b:6)). (assertion source: line 7) 
+
 struct-ptrfield-1.c
 Warning: enabling heap model
 SAFE
@@ -281,6 +318,9 @@ Init:
 Final:
  main1(newHeap(alloc(emptyHeap, O_Int(9)))) 
 --------------------------------------------
+
+Related assertions: 
+ false :- main1(@h), read(@h, __eval1) != defObj. 
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
@@ -306,6 +346,9 @@ Init:
 Final:
  main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
 -----------------------------------------------
+
+Related assertions: 
+ false :- main0(@h, _res2), read(@h, __eval3) != defObj. 
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
@@ -330,6 +373,9 @@ Init:
 Final:
  main0(newHeap(alloc(emptyHeap, O_Int(9))), 0) 
 -----------------------------------------------
+
+Related assertions: 
+ false :- main0(@h, _res2), read(@h, __eval8) != defObj. 
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
 

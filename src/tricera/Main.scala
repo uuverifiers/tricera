@@ -313,25 +313,27 @@ class Main (args: Array[String]) {
         else "unsat"
       } else "unknown"
 
-    val result = try {
-      Console.withOut(outStream) {
-        new hornconcurrency.VerificationLoop(smallSystem, null,
-          printIntermediateClauseSets, fileName + ".smt2",
-          expectedStatus = expectedStatus, log = needFullSolution,
-          templateBasedInterpolation =  templateBasedInterpolation,
-          templateBasedInterpolationTimeout = templateBasedInterpolationTimeout)
-          .result
+    val verificationLoop =
+      try {
+        Console.withOut(outStream) {
+          new hornconcurrency.VerificationLoop(smallSystem, null,
+            printIntermediateClauseSets, fileName + ".smt2",
+            expectedStatus = expectedStatus, log = needFullSolution,
+            templateBasedInterpolation = templateBasedInterpolation,
+            templateBasedInterpolationTimeout = templateBasedInterpolationTimeout)
+        }
+      } catch {
+        case TimeoutException => {
+          println("timeout")
+          throw TimeoutException
+        }
+        case StoppedException => {
+          println("stopped")
+          throw StoppedException
+        }
       }
-    } catch {
-      case TimeoutException => {
-        println("timeout")
-        throw TimeoutException
-      }
-      case StoppedException => {
-        println("stopped")
-        throw StoppedException
-      }
-    }
+
+    val result = verificationLoop.result
 
     val executionResult = result match {
       case Left(res) =>
@@ -457,8 +459,20 @@ class Main (args: Array[String]) {
         Safe
       case Right(cex) => {
         println("UNSAFE")
+
+        import hornconcurrency.VerificationLoop._
+        import lazabs.horn.bottomup.HornClauses
+        val cexClauses: Seq[HornClauses.Clause] = cex._1.last match {
+          case c: CEXLocalStep => Seq(c.clause)
+          case c: CEXInit => Seq(c.clauses.last) // todo: correct?
+          case _ => Nil // todo: others?
+        }
+        val relatedAssertions =
+          (for (c <- cexClauses) yield
+            reader.getRelatedAssertions(c.head.pred)).flatten
+
         if (plainCEX) {
-          if (cex == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
+          if (cex._1 == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
             println("(An assertion has failed in the background clauses, " +
               "counterexample is not available.)")
           }
@@ -466,29 +480,23 @@ class Main (args: Array[String]) {
             println
             //reader.printPredsWithArgNames
             hornconcurrency.VerificationLoop.prettyPrint(cex)
-            if(showFailedAssertions) {
-              import hornconcurrency.VerificationLoop._
-              import lazabs.horn.bottomup.HornClauses
-              val cexClauses: Seq[HornClauses.Clause] = cex.last match {
-                case c: CEXLocalStep => Seq(c.clause)
-                case c: CEXInit => Seq(c.clauses.last) // todo: correct?
-                case _ => Nil // todo: others?
+            println("\nRelated assertions: ")
+            for (assertion <- relatedAssertions) {
+              val assertionSource = assertion.srcInfo match {
+                case Some(srcInfo) =>
+                  "(assertion source: line " + srcInfo.line + ") "
+                case None => ""
               }
-              val relatedAssertions =
-                (for (c <- cexClauses) yield
-                  reader.getRelatedAssertions(c.head.pred)).flatten
-              println("\nRelated assertions: ")
-              for (assertion <- relatedAssertions) {
-                val assertionSource = assertion.srcInfo match {
-                  case Some(srcInfo) =>
-                    "(assertion source: line " + srcInfo.line + ") "
-                  case None => ""
-                }
-                println(" " + assertion.clause.toPrologString + " " +
-                  assertionSource)
-              }
+              println(" " + assertion.clause.toPrologString + " " +
+                assertionSource)
             }
           }
+        }
+        if (!pngNo) { // dotCEX and maybe eogCEX
+          Util.show(cex._2, "cex",
+            relatedAssertions.filter(c => c.srcInfo.nonEmpty).map(_.srcInfo.get),
+            reader.PredPrintContext.predArgNames,
+            reader.PredPrintContext.predSrcInfo)
         }
         Unsafe
       }

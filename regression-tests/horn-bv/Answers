@@ -66,6 +66,9 @@ Final:
  main5((-447365120).\as[signed bv[32]], 11.\as[signed bv[32]]) 
 ---------------------------------------------------------------
 
+Related assertions: 
+ false :- main5(f:5, i:6), f:5 < 1 | i:6 < 1. (assertion source: line 13) 
+
 ../horn-hcc/loop1.hcc
 Warning: entry function "main" not found
 SAFE

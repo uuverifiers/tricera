@@ -10,6 +10,9 @@ Final:
  main3(3) 
 ----------
 
+Related assertions: 
+ false :- main3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (assertion source: line 9) 
+
 enum1-trailing-comma.hcc
 UNSAFE
 
@@ -21,6 +24,9 @@ Final:
  main3(3) 
 ----------
 
+Related assertions: 
+ false :- main3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (assertion source: line 9) 
+
 enum2.hcc
 UNSAFE
 
@@ -31,6 +37,9 @@ Init:
 Final:
  main3(2) 
 ----------
+
+Related assertions: 
+ false :- main3(x:8), x:8 != 0 & x:8 != 1. (assertion source: line 9) 
 
 enum3.hcc
 SAFE

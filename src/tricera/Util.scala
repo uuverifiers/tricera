@@ -28,13 +28,17 @@
  */
 
 package tricera
-import ap.parser.{IExpression, IFunApp, ITerm}
+import ap.parser.{ConstantSubstVisitor, IAtom, IBinJunctor, IConstant, IExpression, IFormula, IFormulaITE, IFunApp, INot, ITerm, LineariseVisitor, SymbolCollector, Transform2NNF}
+import ap.terfor.substitutions.ConstantSubst
 import ap.theories.ExtArray
 import ap.types.MonoSortedIFunction
+import lazabs.ast.ASTree.IfThenElse
+import lazabs.horn.bottomup.HornClauses
 import tricera.concurrency.CCReader.TranslationException
 import tricera.concurrency.concurrent_c.Absyn._
+import tricera.params.TriCeraParameters
 
-import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer => MArray, HashMap => MHashMap, Stack => MStack}
 
 object Util {
   def warn(msg : String) : Unit =
@@ -42,46 +46,20 @@ object Util {
 
   case class SourceInfo (line : Int, col : Int, offset : Int)
 
-  // todo: is below really the only way to get line numbers?
-  def getSourceInfo(exp: Exp): SourceInfo = exp match {
-    case exp: Ecomma => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eassign => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Econdition => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Elor => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eland => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ebitor => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ebitexor => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ebitand => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eeq => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eneq => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Elthen => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Egrthen => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ele => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ege => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eleft => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eright => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eplus => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eminus => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Etimes => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ediv => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Emod => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Etypeconv => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Epreinc => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Epredec => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Epreop => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ebytesexpr => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Ebytestype => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Earray => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Efunk => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Efunkpar => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Eselect => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Epoint => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Epostinc => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Epostdec => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Evar => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Econst => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Estring => SourceInfo(exp.line_num, exp.col_num, exp.offset)
-    case exp: Enondet => SourceInfo(exp.line_num, exp.col_num, exp.offset)
+  private def getIntegerField(obj: Any, fieldName: String): Int = {
+    val field =obj.getClass.getDeclaredField(fieldName)
+    field.getInt(obj)
+  }
+  def getSourceInfo(obj : Any) : SourceInfo = {
+    try {
+      val line = getIntegerField(obj, "line_num")
+      val col = getIntegerField(obj, "col_num")
+      val offset = getIntegerField(obj, "offset")
+      SourceInfo(line, col, offset)
+    } catch {
+      case _ => throw new Exception("Could not extract line number from " +
+        obj.getClass)
+    }
   }
 
   def getLineString(exp: Exp): String = {
@@ -114,7 +92,7 @@ object Util {
                                      updatedSelInd : Int)
     def generateADTUpdateStack (termPointingToADTField : IFunApp)
     : (List[ADTFieldPath], ITerm) = {
-      val ADTUpdateStack = new mutable.Stack[ADTFieldPath]
+      val ADTUpdateStack = new MStack[ADTFieldPath]
 
       def fillParentStack (fieldTerm : IFunApp) : ITerm = {
         val maybeArrayTheory = ExtArray.Select.unapply(fieldTerm.fun)
@@ -180,4 +158,197 @@ object Util {
         "the lhs: " + lhs)
     }
   }
+
+////////////////////////////////////////////////////////////////////////////////
+  import lazabs.horn.bottomup.Util.{Dag, DagNode, DagEmpty}
+
+  /**
+   *  Methods to print lazabs.horn.bottomup.Util.Dag
+   *  The raw counterexamples from VerificationLoop are Dags.
+  * */
+
+  def show[D](d : Dag[D], name : String,
+              relatedAssertionSourceInfos : Seq[SourceInfo],
+              predArgNames : IExpression.Predicate => Seq[String],
+              predSrcInfos : IExpression.Predicate => Option[SourceInfo]) : Unit = {
+    if (!TriCeraParameters.get.pngNo) {
+      val runTime = Runtime.getRuntime
+      val filename = if (TriCeraParameters.get.dotSpec)
+        TriCeraParameters.get.dotFile
+      else
+        "dag-graph-" + name + ".dot"
+      val dotOutput = new java.io.FileOutputStream(filename)
+      Console.withOut(dotOutput) {
+        dotPrint(d, relatedAssertionSourceInfos,
+                 predArgNames, predSrcInfos)
+      }
+      dotOutput.close
+
+      if (TriCeraParameters.get.eogCEX) {
+        var proc = runTime.exec( "dot -Tpng " + filename + " -o " + filename + ".png" )
+        proc.waitFor
+        proc = runTime.exec( "eog " + filename + ".png")
+        //    proc.waitFor
+      }
+    }
+  }
+
+  val colors = Seq( // K Kelly, Color Eng., 3 (6) (1965), colors of max contrast
+    "FFB300", // Vivid Yellow
+    "803E75", // Strong Purple
+    "FF6800", // Vivid Orange
+    "A6BDD7", // Very Light Blue
+    "C10020", // Vivid Red
+    "CEA262", // Grayish Yellow
+    "817066", // Medium Gray
+    "007D34", // Vivid Green
+    "F6768E", // Strong Purplish Pink
+    "00538A", // Strong Blue
+    "FF7A5C", // Strong Yellowish Pink
+    "53377A", // Strong Violet
+    "FF8E00", // Vivid Orange Yellow
+    "B32851", // Strong Purplish Red
+    "F4C800", // Vivid Greenish Yellow
+    "7F180D", // Strong Reddish Brown
+    "93AA00", // Vivid Yellowish Green
+    "593315", // Deep Yellowish Brown
+    "F13A13", // Vivid Reddish Orange
+    "232C16"  // Dark Olive Green
+  )
+  var curColor : Int = 0
+  def getNextColor : String = {
+    if (curColor >= colors.size-1)
+      curColor = 0
+    val res = colors(curColor)
+    curColor += 1
+    res
+  }
+
+  def dotPrint[D](dag : Dag[D],
+                  relatedAssertionSourceInfos : Seq[SourceInfo],
+                  predArgNames : IExpression.Predicate => Seq[String],
+                  predSrcInfos : IExpression.Predicate => Option[SourceInfo]) : Unit = {
+
+    val argColorMap = new MHashMap[String, String]
+
+      // new Color((int)(Math.random() * 0x1000000))
+
+    def updateColors (argNames : Seq[String]) : Unit =
+      for (arg <- argNames if !(argColorMap contains arg)) {
+        argColorMap += ((arg, getNextColor))
+      }
+
+    def getGraphVizColored(arg : String) : String = {
+      if(argColorMap contains arg)
+        "<FONT COLOR=\"#" + argColorMap(arg) + "\"" + ">" + arg + "</FONT>"
+      else arg
+    }
+
+    println("digraph dag {")
+
+    for ((DagNode(d, children, next), i) <- dag.subdagIterator.zipWithIndex) {
+      d match {
+        case pair : (IAtom, HornClauses.Clause) =>
+          val (atom : IAtom, clause : HornClauses.Clause) = pair
+          atom.pred match {
+            case HornClauses.FALSE =>
+              //println("" + i + "[label=\"" + clause.toPrologString + "\"];")
+              println("" + i + "[shape=box, color=\"red\", label=\"" + "false" +
+                (if(relatedAssertionSourceInfos.nonEmpty) {
+                  "\n(related assertion(s) at line(s): " +
+                    relatedAssertionSourceInfos.map(_.line).mkString(",") + ")"
+                } else {
+                  ""
+                }) + "\"];")
+            case _ =>
+              // atom.args contains values, clause.head.args contains names
+              val curArgs = predArgNames(clause.head.pred) //clause.head.args.map(_ toString)
+              val curArgValues = curArgs.zip(atom.args.map(_ toString)).toMap
+
+              val prevArgs      = new MArray[String]
+              val prevArgValues = new MHashMap[String, String]
+              next match {
+                case DagNode((IAtom(pred, args), HornClauses.Clause(headAtom, _, _)), _, _) =>
+                  prevArgs ++= predArgNames(headAtom.pred)
+                  prevArgValues ++= prevArgs zip args.map(_ toString)
+                case _ =>
+              }
+
+              updateColors(curArgs ++ prevArgs)
+
+              val expiredArgs = prevArgs diff curArgs
+              val expiredArgStrings = expiredArgs.map(a => getGraphVizColored(a))
+              val newArgs = curArgs diff prevArgs
+              val newArgStrings =
+                newArgs.map(arg => getGraphVizColored(arg) + " = " + curArgValues(arg))
+              val changedArgs = (curArgs diff expiredArgs).filter( arg =>
+                prevArgValues.contains(arg) &&
+                  prevArgValues(arg) != curArgValues(arg))
+              val changedArgStrings =
+                changedArgs.map(arg => getGraphVizColored(arg) + " = " + curArgValues(arg))
+
+              def getString(s : Seq[String], seqName : String,
+                            newLine : Boolean = false) : String = {
+                if(s.nonEmpty) {
+                  (if (newLine) "<BR/>" else "") +
+                  "(" + seqName + ": " + s.mkString(", ") + ")"
+                }
+                else ""
+              }
+
+              println("" + i + "[shape=box, label=<" + atom.pred +
+                (predSrcInfos(atom.pred) match {
+                  case Some(srcInfo) => " (near line " + srcInfo.line + ")"
+                  case None => ""
+                }) + "<BR/>" +
+                getString(changedArgStrings, "changed args") +
+                getString(newArgStrings, "new args",
+                  newLine=changedArgStrings.nonEmpty) +
+                getString(expiredArgStrings, "expired args",
+                  newLine=changedArgStrings.nonEmpty || newArgStrings.nonEmpty) + ">];")
+          }
+        case _ =>
+          // should not trigger unless DAG contents are changed from Eldarica
+          println("" + i + "[label=\"" + d + "\"];")
+      }
+
+      case class ConstantTermExt(_name : String)
+        extends IExpression.ConstantTerm(_name) {
+        override def toString : String =
+          getGraphVizColored(name)
+      }
+      def getColoredConstraint(constr : IFormula) : IFormula = {
+        val constants = SymbolCollector.constants(constr)
+        val substMap : Map[IExpression.ConstantTerm, ITerm] =
+          constants.map(c => (c, IConstant(ConstantTermExt(c.name)))).toMap
+        ConstantSubstVisitor(constr, substMap)
+      }
+
+      def getConstrString(ind : Int) : String =
+        dag(ind) match {
+          case (_, HornClauses.Clause(_, _, constraint)) =>
+            val c = constraint.andSimplify(true)
+            val conjuncts =
+              LineariseVisitor(Transform2NNF(getColoredConstraint(constraint)), IBinJunctor.And)
+            val constrString = (for (conjunct <- conjuncts) yield {
+              conjunct match {
+                case IExpression.Eq(IConstant(left), IConstant(right))
+                  if left.name == right.name => "" // nothing
+                case INot(IExpression.Eq(left, right)) => left + " != " + right
+                case _ => conjunct.toString
+              }
+            }).filter(_.nonEmpty).mkString(" /\\ ")
+            if (constrString == "true") "" else constrString
+          case _ => ""
+        }
+
+      for (c <- children) {
+        println("" + (i + c) + "->" + i +
+          "[ label=<" + getConstrString(i) + ">]" + ";")
+      }
+    }
+    println("}")
+  }
+////////////////////////////////////////////////////////////////////////////////
+
 }

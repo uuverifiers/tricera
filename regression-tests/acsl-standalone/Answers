@@ -18,6 +18,8 @@ Final:
  foo1(0, 0, 0) 
 ---------------
 
+Related assertions: 
+
 mc91_safe.c
 SAFE
 
@@ -47,6 +49,8 @@ Final:
  foo1(90, 90, 92)  
 -------------------
 
+Related assertions: 
+
 incdec_safe.c
 SAFE
 
@@ -71,6 +75,8 @@ Final:
  foo1(0, 0, 1)  
 ----------------
 
+Related assertions: 
+
 getptr_safe.c
 Warning: enabling heap model
 SAFE
@@ -86,6 +92,9 @@ Init:
 Final:
  foo0(emptyHeap, nthAddr(0), emptyHeap, nthAddr(0)) 
 ----------------------------------------------------
+
+Related assertions: 
+ false :- foo0(@h, p, @h_old, p_old), !is_O_Int(read(@h, p)). (assertion source: line 4) 
 
 assigns_safe.c
 Warning: enabling heap model
@@ -107,6 +116,8 @@ Init:
 Final:
  foo1(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), 42) 
 --------------------------------------------------------------------------------------------------------------
+
+Related assertions: 
 
 maxptr_safe.c
 Warning: enabling heap model
@@ -134,6 +145,8 @@ Final:
  foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), 5) 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+Related assertions: 
+
 old_safe.c
 Warning: enabling heap model
 SAFE
@@ -160,6 +173,8 @@ Final:
   foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))  
 --------------------------------------------------------------------------------------------------------------------
 
+Related assertions: 
+
 dblptr-assigns_safe.c
 Warning: enabling heap model
 SAFE
@@ -185,6 +200,8 @@ Init:
 Final:
        foo1(newHeap(alloc(newBatchHeap(batchAlloc(emptyHeap, O_Int(42), 2)), O_Addr(nthAddr(1)))), 42, nthAddr(2), nthAddr(3), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Int(51))), O_Addr(nthAddr(1)))), 0, nthAddr(2), nthAddr(3))        
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Related assertions: 
 
 swap_safe.c
 Warning: enabling heap model
@@ -216,3 +233,5 @@ Init:
 Final:
   foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(10))), O_Int(8))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(8))), O_Int(10))), nthAddr(1), nthAddr(2))   
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Related assertions: 

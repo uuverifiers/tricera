@@ -26,6 +26,9 @@ Final:
  main12(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
 -----------------------------------------------------------------
 
+Related assertions: 
+ false :- main12(s1:9, s2:9, x1:21), a(b(s1:9)) != a(b(s1:9)) | a(b(s1:9)) != 2 | a(b(s2:9)) != 5. (assertion source: line 23) 
+
 struct-pointer.hcc
 SAFE
 
