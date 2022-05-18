@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021-2022 Zafer Esen. All rights reserved.
+ * Copyright (c) 2021-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,11 +28,10 @@
  */
 
 package tricera
-import ap.parser.{ConstantSubstVisitor, IAtom, IBinJunctor, IConstant, IExpression, IFormula, IFormulaITE, IFunApp, INot, ITerm, LineariseVisitor, SymbolCollector, Transform2NNF}
-import ap.terfor.substitutions.ConstantSubst
+import ap.parser.{CollectingVisitor, ConstantSubstVisitor, ExpressionReplacingVisitor, IAtom, IBinJunctor, IConstant, IEquation, IExpression, IFormula, IFormulaITE, IFunApp, IFunction, IIntFormula, IIntRelation, INot, ITerm, IVariableBinder, LineariseVisitor, SymbolCollector, Transform2NNF}
+import ap.terfor.preds.Predicate
 import ap.theories.ExtArray
 import ap.types.MonoSortedIFunction
-import lazabs.ast.ASTree.IfThenElse
 import lazabs.horn.bottomup.HornClauses
 import tricera.concurrency.CCReader.TranslationException
 import tricera.concurrency.concurrent_c.Absyn._
@@ -194,10 +193,10 @@ object Util {
   }
 
   val colors = Seq( // K Kelly, Color Eng., 3 (6) (1965), colors of max contrast
-    "FFB300", // Vivid Yellow
+    //"FFB300", // Vivid Yellow
     "803E75", // Strong Purple
     "FF6800", // Vivid Orange
-    "A6BDD7", // Very Light Blue
+    //"A6BDD7", // Very Light Blue
     "C10020", // Vivid Red
     "CEA262", // Grayish Yellow
     "817066", // Medium Gray
@@ -208,7 +207,7 @@ object Util {
     "53377A", // Strong Violet
     "FF8E00", // Vivid Orange Yellow
     "B32851", // Strong Purplish Red
-    "F4C800", // Vivid Greenish Yellow
+    //"F4C800", // Vivid Greenish Yellow
     "7F180D", // Strong Reddish Brown
     "93AA00", // Vivid Yellowish Green
     "593315", // Deep Yellowish Brown
@@ -331,13 +330,44 @@ object Util {
             val conjuncts =
               LineariseVisitor(Transform2NNF(getColoredConstraint(constraint)), IBinJunctor.And)
             val constrString = (for (conjunct <- conjuncts) yield {
-              conjunct match {
-                case IExpression.Eq(IConstant(left), IConstant(right))
-                  if left.name == right.name => "" // nothing
-                case INot(IExpression.Eq(left, right)) => left + " != " + right
-                case _ => conjunct.toString
+              class GeqAtom(left : ITerm, right : ITerm)
+                extends IAtom(new Predicate(" &ge; ", 2), Seq(left, right)) {
+                override def toString: String =
+                  args(0) + pred.name + args(1)
               }
-            }).filter(_.nonEmpty).mkString(" /\\ ")
+              class LtAtom(left : ITerm, right : ITerm)
+                extends IAtom(new Predicate(" &lt; ", 2), Seq(left, right)) {
+                override def toString: String =
+                  args(0) + pred.name + args(1)
+              }
+              object EmptyAtom extends IAtom(new Predicate("", 0), Nil) {
+                override def toString: String = ""
+              }
+              /**
+               * Visitor to introduce some operations purely used for pretty-printing
+               * purposes.
+               */
+              object EnrichingVisitor extends CollectingVisitor[Unit, IExpression] {
+                override def preVisit(t : IExpression, noArg : Unit) : PreVisitResult = t match {
+                  case IExpression.Geq(s, t) =>
+                    TryAgain(new GeqAtom(s, t), ())
+                  case INot(IExpression.Geq(s, t)) =>
+                    TryAgain(new LtAtom(s, t), ())
+                  case IExpression.Eq(IConstant(left), IConstant(right))
+                    if left.name == right.name =>
+                    ShortCutResult(EmptyAtom)
+                  case _ =>
+                    KeepArg
+                }
+                def postVisit(t : IExpression,
+                              ctxt : Unit, subres : Seq[IExpression]) : IExpression =
+                  t update subres
+              }
+
+              val enriched = EnrichingVisitor.visit(conjunct, ())
+
+              enriched
+            }).filter(_.toString.nonEmpty).mkString(" /\\ ")
             if (constrString == "true") "" else constrString
           case _ => ""
         }
