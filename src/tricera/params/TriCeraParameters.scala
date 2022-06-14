@@ -53,6 +53,8 @@ class TriCeraParameters extends GlobalParameters {
   var noPP       : Boolean = false
   var logPPLevel : Int = 0 // 0: quiet, 1: errors only, 2: errors + warnings
 
+  var cPreprocessor : Boolean = false
+
   var showVarLineNumbersInTerms : Boolean = false
 
   var shouldTrackMemory : Boolean = false
@@ -98,6 +100,7 @@ class TriCeraParameters extends GlobalParameters {
     case ppLogOption :: rest if (ppLogOption startsWith "-logPP:") =>
       logPPLevel = (ppLogOption drop 7).toInt; parseArgs(rest)
     case "-noPP" :: rest => noPP = true; parseArgs(rest)
+    case "-cpp"  :: rest => cPreprocessor = true; parseArgs(rest)
     case "-dumpClauses" :: rest => printIntermediateClauseSets = true; parseArgs(rest)
     case "-sp" :: rest => smtPrettyPrint = true; parseArgs(rest)
     //      case "-pnts" :: rest => ntsPrint = true; arguments(rest)
@@ -237,11 +240,13 @@ class TriCeraParameters extends GlobalParameters {
       " -horn\t\tEnable this engine\n" +
       " -p\t\tPretty Print Horn clauses\n" +
       " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
-      " -printPP\t\tPrint the output of C preprocessor to stdout\n" +
-      " -dumpPP\t\tDump the output of C preprocessor to file (input file name + .tri) \n" +
-      " -logPP:n\t\tDisplay preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +
-      " -noPP\t\tTurn off C preprocessor (typedefs are not allowed in this mode) \n" +
+      " -printPP\t\tPrint the output of the TriCera preprocessor to stdout\n" +
+      " -dumpPP\t\tDump the output of the TriCera preprocessor to file (input file name + .tri) \n" +
+      " -logPP:n\t\tDisplay TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +
+      " -noPP\t\tTurn off the TriCera preprocessor (typedefs are not allowed in this mode) \n" +
+      " -cpp\t\tExecute the C preprocessor (cpp) on the input file first, this will produce filename.i" +
       " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
+      " -dumpClauses\tWrite the Horn clauses in SMT-LIB format to input filename.smt2\n" +
       " -sol\t\tShow solution in Prolog format\n" +
       " -ssol\t\tShow solution in SMT-LIB format\n" +
       " -inv\t\tTry to infer loop invariants\n" +

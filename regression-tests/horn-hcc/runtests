@@ -38,3 +38,11 @@ for name in $TESTS; do
     echo $name
     $LAZABS -cex -abstract "$@" $name
 done
+
+TESTS="preprocess-1.c "
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cpp "$@" $name
+done

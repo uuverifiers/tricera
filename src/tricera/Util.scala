@@ -56,7 +56,7 @@ object Util {
       val offset = getIntegerField(obj, "offset")
       SourceInfo(line, col, offset)
     } catch {
-      case _ => throw new Exception("Could not extract line number from " +
+      case _ : Throwable => throw new Exception("Could not extract line number from " +
         obj.getClass)
     }
   }

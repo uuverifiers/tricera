@@ -15,6 +15,7 @@ SAFE
 assign-illegal.hcc
 tricera.concurrency.CCReader$TranslationException: Cannot assign struct S1: ((x/1p,int)) to struct S2: ((x/1p,int))!
 (error "Cannot assign struct S1: ((x/1p,int)) to struct S2: ((x/1p,int))!")
+Other Error: Cannot assign struct S1: ((x/1p,int)) to struct S2: ((x/1p,int))!
 
 init.hcc
 Warning: entry function "main" not found

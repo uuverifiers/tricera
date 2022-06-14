@@ -32,7 +32,6 @@ package tricera.concurrency
 import tricera.Main
 
 import sys.process._
-import sys.env
 import java.nio.file.{Paths, Files}
 
 class TriCeraPreprocessor(val inputFilePath   : String,

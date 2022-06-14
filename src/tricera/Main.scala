@@ -30,10 +30,14 @@
 
 package tricera
 
-import tricera.concurrency.{CCReader, TriCeraPreprocessor}
+import java.io.{FileOutputStream, PrintStream}
 
+import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.benchmarking.Benchmarking._
+import tricera.concurrency.CCReader.{ParseException, TranslationException}
+
+import sys.process._
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -55,7 +59,13 @@ object Main {
 
   def doMain(args: Array[String], stoppingCond: => Boolean) : ExecutionSummary = {
     val triMain = new Main(args)
-    triMain.run(stoppingCond)
+    val res = triMain.run(stoppingCond)
+    res.executionResult match {
+      case Safe   => // nothing, already printed
+      case Unsafe => // nothing, already printed
+      case other  => println(other)
+    }
+    res
   }
 
   private def printError(message: String): Unit =
@@ -118,11 +128,29 @@ class Main (args: Array[String]) {
     }
     import java.io.File
 
+    val cppFileName = if (cPreprocessor) {
+      val preprocessedFile = File.createTempFile("tri-", ".i")
+      System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
+      val cmdLine = "cpp " + fileName + " -E -P"
+      try {cmdLine !}
+      catch {
+        case _: Throwable =>
+          throw new Main.MainException("The preprocessor could not" +
+            " be executed. This might be due to TriCera preprocessor binary " +
+            "not being in the current directory. Alternatively, use the " +
+            "-noPP switch to disable the preprocessor.\n" +
+            "Preprocessor command: " + cmdLine
+          )
+      }
+      preprocessedFile.deleteOnExit()
+      preprocessedFile.getAbsolutePath
+    } else fileName
+
     preprocessTimer.start()
     val ppFileName : String = if (noPP) {
       if(printPP || dumpPP)
         Util.warn("Cannot print or dump preprocessor output due to -noPP")
-      fileName // no preprocessing
+      cppFileName // no preprocessing
     } else {
       val preprocessedFile = File.createTempFile("tri-", ".tmp")
       preprocessedFile.deleteOnExit()
@@ -132,7 +160,7 @@ class Main (args: Array[String]) {
           println("=" * 80 + "\nPreprocessor warnings and errors\n")
         }
 
-      val pp = new TriCeraPreprocessor(fileName,
+      val pp = new TriCeraPreprocessor(cppFileName,
                                  preprocessedFile.getAbsolutePath,
                                  displayWarnings = logPPLevel == 2,
                                  quiet = logPPLevel == 0,
@@ -244,7 +272,15 @@ class Main (args: Array[String]) {
     val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
       new java.io.FileReader(new java.io.File(ppFileName))))
     val (reader, modelledHeapRes) =
-      CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
+      try {
+        CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
+      } catch {
+        case e : ParseException if !devMode =>
+          return ExecutionSummary(ParseError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
+        case e : TranslationException if !devMode =>
+          return ExecutionSummary(TranslationError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
+        case e : Throwable => throw e
+      }
 
     import tricera.acsl.Encoder
     val enc : Encoder = new Encoder(reader)
@@ -334,6 +370,9 @@ class Main (args: Array[String]) {
       }
 
     val result = verificationLoop.result
+
+    if (printIntermediateClauseSets)
+      return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
 
     val executionResult = result match {
       case Left(res) =>

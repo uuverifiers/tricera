@@ -102,7 +102,6 @@ object CCReader {
 
   class ParseException(msg : String) extends Exception(msg)
   class TranslationException(msg : String) extends Exception(msg)
-  object UndefinedEnumException extends Exception
   object NeedsTimeException extends Exception
 
   val heapTermName = "@h"
@@ -1726,7 +1725,7 @@ class CCReader private (prog : Program,
                     // initialise using the first address of the range
                     (lhsVar, CCTerm(addressRangeValue, typ, srcInfo), IExpression.i(true))
                   case _ if global =>
-                    (lhsVar, CCTerm(typ.getZeroInit, lhsType, srcInfo),
+                    (lhsVar, CCTerm(lhsType.getZeroInit, lhsType, srcInfo),
                       lhsVar rangePred)
                   case _ =>
                     (lhsVar, CCTerm(lhsVar.term, lhsType, srcInfo),
@@ -3668,7 +3667,8 @@ class CCReader private (prog : Program,
       evalHelp(right)
       val rhs = popVal
       val lhs = popVal
-      pushVal(op(lhs, rhs))
+      val (actualLhs, actualRhs) = checkPointerIntComparison(lhs, rhs) // todo: not correct for ops except === and =/=, refactor or add check
+      pushVal(op(actualLhs, actualRhs))
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -3854,6 +3854,8 @@ class CCReader private (prog : Program,
       case constant : Eint =>
         pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt(),
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
+      case constant => throw new TranslationException("Unimplemented type: " +
+        constant.getClass)
     }
   }
 

@@ -35,37 +35,41 @@ object Benchmarking {
   sealed abstract class ExecutionResult {
     def toString : String
   }
-  case object ParseError extends ExecutionResult with ExecutionError {
+  case class ParseError (e : String) extends ExecutionResult with ExecutionError {
     override def toString : String =
-      "input could not be parsed"
+      "Parse Error: " + e
+  }
+  case class TranslationError (e : String) extends ExecutionResult with ExecutionError {
+    override def toString : String =
+      "Horn Translation Error: " + e
   }
   case object OutOfMemory extends ExecutionResult with ExecutionError  {
     override def toString : String =
-      "ran out of memory"
+      "Out of Memory"
   }
   case object StackOverflow extends ExecutionResult with ExecutionError  {
     override def toString : String =
-      "stack overflow"
+      "Stack Overflow"
   }
   case class OtherError (e : String) extends ExecutionResult with ExecutionError {
     override def toString : String =
-      "other error: " + e
+      "Other Error: " + e
   }
   case object Timeout extends ExecutionResult with ExecutionError {
     override def toString : String =
-      "timeout"
+      "TIMEOUT"
   }
   case object Safe extends ExecutionResult {
     override def toString : String =
-      "safe"
+      "SAFE"
   }
   case object Unsafe extends ExecutionResult {
     override def toString : String =
-      "unsafe"
+      "UNSAFE"
   }
   case object DidNotExecute extends ExecutionResult {
     override def toString : String =
-      "did not execute"
+      "DID NOT EXECUTE"
   }
 
   // SV-COMP related, should probably move somewhere else...

@@ -1,0 +1,9 @@
+struct list{
+  int k;
+}
+
+struct list *LIST;
+
+void main(){
+  assert(LIST == 0); // should be safe
+}

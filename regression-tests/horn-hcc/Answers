@@ -87,10 +87,12 @@ SAFE
 atomic3.hcc
 tricera.concurrency.CCReader$TranslationException: cycles in atomic blocks are not supported yet
 (error "cycles in atomic blocks are not supported yet")
+Other Error: cycles in atomic blocks are not supported yet
 
 atomic3b.hcc
 tricera.concurrency.CCReader$TranslationException: cycles in atomic blocks are not supported yet
 (error "cycles in atomic blocks are not supported yet")
+Other Error: cycles in atomic blocks are not supported yet
 
 atomic3c.hcc
 SAFE
@@ -184,4 +186,7 @@ SAFE
 
 locking.hcc
 Warning: entry function "main" not found
+SAFE
+
+preprocess-1.c
 SAFE
