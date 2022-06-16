@@ -225,8 +225,8 @@ Final:
 --------------------------------------------------------------------
 
 Related assertions: 
- false :- main4(@h, x:2, y:3), !is_O_Int(read(@h, y:3)). (assertion source: line 3) 
- false :- main4(@h, x:2, y:3), is_O_Int(read(@h, y:3)) & !is_O_Int(read(@h, y:3)). (assertion source: line 2) 
+ false :- main4(@h, x:2, y:3), !is_O_Addr(read(@h, y:3)). (assertion source: line 3) 
+ false :- main4(@h, x:2, y:3), is_O_Addr(read(@h, y:3)) & !is_O_Addr(read(@h, y:3)). (assertion source: line 2) 
 
 stackptr-to-heapptr.c
 Warning: enabling heap model
