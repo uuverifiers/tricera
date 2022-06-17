@@ -302,6 +302,10 @@ Related assertions:
  false :- main4(@h, sArr:5), is_O_S(read(@h, nthAddrRange(sArr:5, 1))) & !within(sArr:5, nthAddrRange(sArr:5, 1)). (assertion source: line 5) 
  false :- main4(@h, sArr:5), is_O_S(read(@h, nthAddrRange(sArr:5, 1))) & f(getS(read(@h, nthAddrRange(sArr:5, 1)))) != 1. (assertion source: line 10) 
 
+array-of-ptr-1.c
+Warning: enabling heap model
+SAFE
+
 simple-dynamic-memsafety1.c
 Warning: enabling heap model
 SAFE

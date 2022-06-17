@@ -47,3 +47,6 @@ SAFE
 
 list-init.hcc
 SAFE
+
+cast-stack-heap-01.c
+SAFE

@@ -87,6 +87,8 @@ lazy val root = (project in file(".")).
 settings(
   scalaSource in Compile := baseDirectory.value / "src",
   //
+  scalaSource in Test := baseDirectory.value / "unit-tests",
+  //
   mainClass in Compile := Some("tricera.Main"),
   //
   scalacOptions in Compile ++=
@@ -100,6 +102,8 @@ settings(
   libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
+  libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
+  libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",
   excludeDependencies ++= Seq(
     // exclude java-cup from transitive dependencies, ccParser includes newer version
     ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
