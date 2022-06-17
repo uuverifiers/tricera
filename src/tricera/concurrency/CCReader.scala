@@ -1674,9 +1674,17 @@ class CCReader private (prog : Program,
                 (lhsVar, CCTerm(lhsVar.term, varDec.typ, srcInfo),
                   lhsVar rangePred)
               } else {
+                // discard useless type conversions
+                val actualInitExp = init.exp_ match {
+                  case typeConv : Etypeconv
+                    if getType(typeConv.type_name_) == lhsVar.typ =>
+                    typeConv.exp_
+                  case _ => init.exp_
+                }
+
                 if (varDec.typ.isInstanceOf[CCHeapArrayPointer])
                   values.lhsIsArrayPointer = true // todo: find smarter solution!
-                val res = values eval init.exp_
+                val res = values eval actualInitExp
                 values.lhsIsArrayPointer = false
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
                   case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
@@ -2967,7 +2975,6 @@ class CCReader private (prog : Program,
       case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => {
         // if lhs is array pointer, an alloc rhs evaluation should produce an
         // AddressRange even if the allocation size is only 1.
-        lhsIsArrayPointer = exp.exp_1.isInstanceOf[Earray] // todo: preprocessor should ensure that lhs is always an instance of Earray...
         evalHelp(exp.exp_2) //first evaluate rhs and push
         maybeOutputClause
         val rhsVal = popVal
@@ -2975,11 +2982,16 @@ class CCReader private (prog : Program,
         val updatingPointedValue =
           isHeapRead(lhsVal) || // *(p) = ... where p is a heap ptr
           isHeapStructFieldRead(lhsVal) // ps->f = ... where ps is a heap ptr
-        if(lhsIsArrayPointer || isHeapPointer(lhsVal) || updatingPointedValue) {
+        val lhsIsArraySelect =
+          lhsVal.toTerm match {
+            case IFunApp(ExtArray.Select(_), _) => true
+            case _ => false
+          }
+        if(lhsIsArrayPointer || isHeapPointer(lhsVal) || updatingPointedValue ||
+          lhsIsArraySelect) {
           if (updatingPointedValue)
             heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, true, true)
-          else if (lhsIsArrayPointer) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
-            lhsIsArrayPointer = false
+          else if (lhsIsArraySelect) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
             val newTerm = CCTerm(
               writeADT(lhsVal.toTerm.asInstanceOf[IFunApp],
                          rhsVal.toTerm, heap.userADTCtors, heap.userADTSels),
@@ -3801,7 +3813,8 @@ class CCReader private (prog : Program,
           newType cast t
         case _ =>
           throw new TranslationException(
-            "do not know how to convert " + t + " to " + newType)
+            "do not know how to convert " + t.typ + " to " + newType +
+              " for term: " + t.toTerm + " (srcInfo: " + t.srcInfo + ")")
       }
 
     private def unifyTypes(a : CCExpr, b : CCExpr) : (CCExpr, CCExpr) = {
