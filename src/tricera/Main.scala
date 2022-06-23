@@ -32,6 +32,7 @@ package tricera
 
 import java.io.{FileOutputStream, PrintStream}
 
+import hornconcurrency.ParametricEncoder
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.benchmarking.Benchmarking._
@@ -132,7 +133,9 @@ class Main (args: Array[String]) {
       val preprocessedFile = File.createTempFile("tri-", ".i")
       System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
       val cmdLine = "cpp " + fileName + " -E -P"
-      try {cmdLine !}
+      try {
+        cmdLine !
+      }
       catch {
         case _: Throwable =>
           throw new Main.MainException("The preprocessor could not" +
@@ -147,30 +150,30 @@ class Main (args: Array[String]) {
     } else fileName
 
     preprocessTimer.start()
-    val ppFileName : String = if (noPP) {
-      if(printPP || dumpPP)
+    val ppFileName: String = if (noPP) {
+      if (printPP || dumpPP)
         Util.warn("Cannot print or dump preprocessor output due to -noPP")
       cppFileName // no preprocessing
     } else {
       val preprocessedFile = File.createTempFile("tri-", ".tmp")
       preprocessedFile.deleteOnExit()
 
-      if(logPPLevel > 0)
+      if (logPPLevel > 0)
         Console.withOut(outStream) {
           println("=" * 80 + "\nPreprocessor warnings and errors\n")
         }
 
       val pp = new TriCeraPreprocessor(cppFileName,
-                                 preprocessedFile.getAbsolutePath,
-                                 displayWarnings = logPPLevel == 2,
-                                 quiet = logPPLevel == 0,
-                                 entryFunction = TriCeraParameters.get.funcName)
-      if(logPPLevel > 0) Console.withOut(outStream) {
+        preprocessedFile.getAbsolutePath,
+        displayWarnings = logPPLevel == 2,
+        quiet = logPPLevel == 0,
+        entryFunction = TriCeraParameters.get.funcName)
+      if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of preprocessor warnings and errors")
         println("=" * 80)
       }
 
-      if(pp.hasError && logPPLevel > 0)
+      if (pp.hasError && logPPLevel > 0)
         Util.warn("The preprocessor (LLVM) reported an error in the" +
           " input file, This might be due to TriCera accepting a non-standard" +
           " subset of the C language, or due to an actual error in the " +
@@ -191,30 +194,31 @@ class Main (args: Array[String]) {
       }
       //if (res.usesArrays)
       //  return ExecutionSummary(ArrayError, Nil, false, 0, preprocessTimer.s)
-        //throw new MainException("C arrays are not supported (yet)")
-//      /*else*/ if (res.isUnsupported)
-//        return ExecutionSummary(
-//          OtherError("Unsupported - detected by preprocessor"),
-//            Nil, false,  0, preprocessTimer.s)
-        //throw new MainException("Input file has unsupported C features " +
-        //  "(e.g. varargs)") // todo: more detail
+      //throw new MainException("C arrays are not supported (yet)")
+      //      /*else*/ if (res.isUnsupported)
+      //        return ExecutionSummary(
+      //          OtherError("Unsupported - detected by preprocessor"),
+      //            Nil, false,  0, preprocessTimer.s)
+      //throw new MainException("Input file has unsupported C features " +
+      //  "(e.g. varargs)") // todo: more detail
       preprocessedFile.getAbsolutePath
     }
     preprocessTimer.stop()
 
     // check if an accompanying .yml file exists (SV-COMP style)
-    case class BMOption (language : String, data_model : String)
-    case class BMPropertyFile(property_file : String,
-                              expected_verdict : Option[Boolean] = None,
-                              subproperty : Option[String] = None) {
+    case class BMOption(language: String, data_model: String)
+    case class BMPropertyFile(property_file: String,
+                              expected_verdict: Option[Boolean] = None,
+                              subproperty: Option[String] = None) {
       def isReachSafety = property_file.contains("unreach-call")
+
       def isMemSafety = property_file.contains("valid-memsafety")
     }
-    case class BenchmarkInfo(format_version : String,
-                             input_files : String,
-                             properties : List[BMPropertyFile],
-                             options : BMOption)
-    val bmInfo : Option[BenchmarkInfo] = try {
+    case class BenchmarkInfo(format_version: String,
+                             input_files: String,
+                             properties: List[BMPropertyFile],
+                             options: BMOption)
+    val bmInfo: Option[BenchmarkInfo] = try {
       import java.nio.file.{Paths, Files}
       val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
       if (Files.exists(Paths.get(yamlFileName))) {
@@ -237,7 +241,7 @@ class Main (args: Array[String]) {
         None
     }
 
-    val bmTracks : List[(BenchmarkTrack, Option[Boolean])]  = bmInfo match {
+    val bmTracks: List[(BenchmarkTrack, Option[Boolean])] = bmInfo match {
       case Some(info) =>
         for (p <- info.properties if p.isMemSafety || p.isReachSafety) yield {
           val track =
@@ -264,7 +268,7 @@ class Main (args: Array[String]) {
 
     if (bmTracks.exists(t => t._1 match {
       case MemSafety(Some(MemTrack)) => true
-      case _  => false
+      case _ => false
     })) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
 
@@ -275,12 +279,78 @@ class Main (args: Array[String]) {
       try {
         CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
       } catch {
-        case e : ParseException if !devMode =>
+        case e: ParseException if !devMode =>
           return ExecutionSummary(ParseError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
-        case e : TranslationException if !devMode =>
+        case e: TranslationException if !devMode =>
           return ExecutionSummary(TranslationError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
-        case e : Throwable => throw e
+        case e: Throwable => throw e
       }
+
+    if (printPathConstraints) {
+      // todo: refactor the following to its own file
+      import lazabs.horn.bottomup.HornClauses._
+      import ap.parser.IExpression._
+      import ap.parser.IFormula
+      // val assertions : Seq[Clause] = reader.system.assertions
+      val clauses : Seq[Clause] = reader.system.processes.flatMap(_._1.map(_._1))
+      val preds : Set[Predicate] = reader.system.allLocalPreds
+
+
+      // we will generate the path condition for each predicate until
+      // a fixed point is reached
+      val predsToProcess = new scala.collection.mutable.HashSet[Predicate]
+      // initially, all predicates must be processed
+      preds.foreach(predsToProcess add)
+
+      // predicate path constraints will be collected in this map
+      val predPathConstraints =
+        new scala.collection.mutable.HashMap[Predicate, IFormula]
+      // initially, all predicate have the path constraint "true"
+      preds.foreach(p => predPathConstraints += ((p, i(true))))
+
+      // a map from a pred p to preds that have p in their bodies
+      // i.e., if the path constraint of p is updated, this map points to
+      // predicates that will get immediately effected
+      val predsThisPredAffects : Map[Predicate, Seq[Predicate]] =
+        (for (p <- preds) yield {
+          (p, clauses.filter(clause =>
+            clause.bodyPredicates.contains(p)).map(_.head.pred))
+        }).toMap
+
+      while(predsToProcess nonEmpty){
+        val p = predsToProcess.head
+        predsToProcess -= p
+        val incomingClauses =
+          clauses.filter(clause => clause.head.pred == p)
+
+        val incomingPathConstraints = for (clause <- incomingClauses) yield {
+          clause.bodyPredicates.map(bodyPred =>
+            predPathConstraints(bodyPred)).reduceOption(_ &&& _).
+            getOrElse(i(true)) &&& clause.constraint
+        }
+        val pathConstraint = incomingPathConstraints.reduceOption(_ ||| _).
+          getOrElse(i(true))
+        if(pathConstraint != predPathConstraints(p)) {
+          predPathConstraints += ((p, pathConstraint))
+          predsThisPredAffects(p).foreach(predsToProcess add)
+        } else {
+          // nothing, the path constraint for p reached a fixpoint
+        }
+      }
+
+      println
+      println("Path constraints")
+      println("-"*80)
+      for ((pred, constraint) <- predPathConstraints if !constraint.isTrue) {
+        val srcString = reader.PredPrintContext.predSrcInfo(pred) match {
+          case Some(srcInfo) => " (at line " + srcInfo.line + ")"
+          case None => ""
+        }
+        println(pred + srcString + ": " +
+          ap.parser.PrincessLineariser.asString(constraint))
+      }
+      println("-"*80)
+    }
 
     import tricera.acsl.Encoder
     val enc : Encoder = new Encoder(reader)
@@ -334,13 +404,13 @@ class Main (args: Array[String]) {
       println
       println("After simplification:")
       tricera.concurrency.ReaderMain.printClauses(smallSystem, reader.PredPrintContext)
-      return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
     }
 
-    if(smtPrettyPrint) {
+    if(smtPrettyPrint)
       tricera.concurrency.ReaderMain.printSMTClauses(smallSystem)
+
+    if(prettyPrint || smtPrettyPrint || printPathConstraints)
       return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
-    }
 
     val expectedStatus =
       // sat if no tracks are false, unsat otherwise

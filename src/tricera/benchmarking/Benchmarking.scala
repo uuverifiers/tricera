@@ -69,7 +69,8 @@ object Benchmarking {
   }
   case object DidNotExecute extends ExecutionResult {
     override def toString : String =
-      "DID NOT EXECUTE"
+      //"DID NOT EXECUTE"
+    ""
   }
 
   // SV-COMP related, should probably move somewhere else...

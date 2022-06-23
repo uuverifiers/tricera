@@ -4008,8 +4008,10 @@ class CCReader private (prog : Program,
       (exprSymex, res)
     }
 
+
+
     def translateNoReturn(compound : Compound_stm) : CCPredicate = {
-      val finalPred = newPred(Nil, None) // todo: extract last stmt line
+      val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translateWithEntryClause(compound, finalPred)
       postProcessClauses
       finalPred
@@ -4017,7 +4019,7 @@ class CCReader private (prog : Program,
 
     def translateNoReturn(compound : Compound_stm,
                           entry : CCPredicate) : Unit = {
-      val finalPred = newPred(Nil, None)  // todo: extract last stmt line
+      val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translate(compound, entry, finalPred)
       // add a default return edge
       val rp = returnPred.get
@@ -4028,7 +4030,7 @@ class CCReader private (prog : Program,
     }
 
     def translateWithReturn(compound : Compound_stm) : Unit = {
-      val finalPred = newPred(Nil, None) // todo: line no
+      val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translateWithEntryClause(compound, finalPred)
       // add a default return edge
       //val rp = returnPred.get
@@ -4041,7 +4043,7 @@ class CCReader private (prog : Program,
 
     def translateWithReturn(compound : Compound_stm,
                             entry : CCPredicate) : CCPredicate = {
-      val finalPred = newPred(Nil, None)  // todo: extract last stmt line
+      val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translate(compound, entry, finalPred)
       // add a default return edge
       //val rp = returnPred.get
@@ -4439,13 +4441,19 @@ class CCReader private (prog : Program,
                           entry : CCPredicate,
                           exit : CCPredicate) : Unit = stm match {
       case _ : SselOne | _ : SselTwo => { // if
-        val first, second = newPred(Nil, entry.srcInfo) // todo: correct line no?
-        val vars = allFormalVarTerms
         val condSymex = Symex(entry)
-        val cond = stm match {
-          case stm : SselOne => (condSymex eval stm.exp_).toFormula
-          case stm : SselTwo => (condSymex eval stm.exp_).toFormula
+        val (cond, srcInfo1, srcInfo2) = stm match {
+          case stm : SselOne =>
+            ((condSymex eval stm.exp_).toFormula,
+              getSourceInfo(stm), getSourceInfo(stm))
+          case stm : SselTwo =>
+            ((condSymex eval stm.exp_).toFormula,
+              getSourceInfo(stm.stm_1), getSourceInfo(stm.stm_2))
         }
+        val first = newPred(Nil, Some(srcInfo1))
+        val second = newPred(Nil, Some(srcInfo2))
+        val vars = allFormalVarTerms
+
         condSymex.outputITEClauses(cond, first.pred, second.pred)
         stm match {
           case stm : SselOne => {

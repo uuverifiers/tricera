@@ -48,6 +48,8 @@ class TriCeraParameters extends GlobalParameters {
 
   var prettyPrintDot : Boolean = false
 
+  var printPathConstraints : Boolean = false
+
   var printPP    : Boolean = false
   var dumpPP     : Boolean = false
   var noPP       : Boolean = false
@@ -95,6 +97,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-f" :: rest => absInFile = true; parseArgs(rest)
     case "-p" :: rest => prettyPrint = true; parseArgs(rest)
     case "-pDot" :: rest => prettyPrint = true; prettyPrintDot = true; parseArgs(rest)
+    case "-pc" :: rest => printPathConstraints = true; parseArgs(rest)
     case "-printPP" :: rest => printPP = true; parseArgs(rest)
     case "-dumpPP" :: rest => dumpPP = true; parseArgs(rest)
     case ppLogOption :: rest if (ppLogOption startsWith "-logPP:") =>
@@ -240,6 +243,7 @@ class TriCeraParameters extends GlobalParameters {
       " -horn\t\tEnable this engine\n" +
       " -p\t\tPretty Print Horn clauses\n" +
       " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
+      " -pc\t\tPrint path constraints\n" +
       " -printPP\t\tPrint the output of the TriCera preprocessor to stdout\n" +
       " -dumpPP\t\tDump the output of the TriCera preprocessor to file (input file name + .tri) \n" +
       " -logPP:n\t\tDisplay TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +

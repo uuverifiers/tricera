@@ -61,6 +61,57 @@ object Util {
     }
   }
 
+  // extract the line number of the last statement
+  // todo: this might be missing cases
+  def getLastSourceInfo (obj : Any) : SourceInfo = {
+    obj match {
+      case s : LabelS => getLastSourceInfo(s.labeled_stm_)
+      case s : CompS => getLastSourceInfo(s.compound_stm_)
+      case s : ExprS => getLastSourceInfo(s.expression_stm_)
+      case s : SelS => getLastSourceInfo(s.selection_stm_)
+      case s : IterS => getLastSourceInfo(s.iter_stm_)
+      case s : JumpS => getLastSourceInfo(s.jump_stm_)
+      case s : DecS => getLastSourceInfo(s.dec_)
+      case s : AtomicS => getLastSourceInfo(s.atomic_stm_)
+      case s : ScompTwo => getLastSourceInfo(s.liststm_.getLast)
+      case s : SselOne => getLastSourceInfo(s.stm_)
+      case s : SselTwo => getLastSourceInfo(s.stm_2)
+      case s : SselThree => getLastSourceInfo(s.stm_)
+      case s : SiterOne =>  getLastSourceInfo(s.stm_)
+      case s : SiterTwo =>  getLastSourceInfo(s.exp_)
+      case s : SiterThree =>  getLastSourceInfo(s.stm_)
+      case s : SiterFour =>  getLastSourceInfo(s.stm_)
+      case s : SatomicTwo =>  getLastSourceInfo(s.stm_)
+      case s : SlabelOne => getLastSourceInfo(s.stm_)
+      case s : SlabelTwo => getLastSourceInfo(s.stm_)
+      case s : SexprTwo => getLastSourceInfo(s.exp_)
+      case e : Ecomma => getLastSourceInfo(e.exp_2)
+      case e : Eassign => getLastSourceInfo(e.exp_2)
+      case e : Econdition => getLastSourceInfo(e.exp_2)
+      case e : Elor => getLastSourceInfo(e.exp_2)
+      case e : Eland => getLastSourceInfo(e.exp_2)
+      case e : Ebitor => getLastSourceInfo(e.exp_2)
+      case e : Ebitexor => getLastSourceInfo(e.exp_2)
+      case e : Ebitand => getLastSourceInfo(e.exp_2)
+      case e : Eeq => getLastSourceInfo(e.exp_2)
+      case e : Eneq => getLastSourceInfo(e.exp_2)
+      case e : Elthen => getLastSourceInfo(e.exp_2)
+      case e : Egrthen => getLastSourceInfo(e.exp_2)
+      case e : Ele => getLastSourceInfo(e.exp_2)
+      case e : Ege => getLastSourceInfo(e.exp_2)
+      case e : Eleft => getLastSourceInfo(e.exp_2)
+      case e : Eright => getLastSourceInfo(e.exp_2)
+      case e : Eplus => getLastSourceInfo(e.exp_2)
+      case e : Eminus => getLastSourceInfo(e.exp_2)
+      case e : Etimes => getLastSourceInfo(e.exp_2)
+      case e : Ediv => getLastSourceInfo(e.exp_2)
+      case e : Emod => getLastSourceInfo(e.exp_2)
+      case e : Earray => getLastSourceInfo(e.exp_2)
+      case e : Efunkpar => getLastSourceInfo(e.listexp_.getLast)
+      case _ => getSourceInfo(obj)
+    }
+  }
+
   def getLineString(exp: Exp): String = {
     val sourceInfo = getSourceInfo(exp)
     "At line " + sourceInfo.line + " (offset " + sourceInfo.offset + "): "
