@@ -32,7 +32,6 @@ package tricera
 
 import java.io.{FileOutputStream, PrintStream}
 
-import hornconcurrency.ParametricEncoder
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.benchmarking.Benchmarking._
@@ -287,69 +286,18 @@ class Main (args: Array[String]) {
       }
 
     if (printPathConstraints) {
-      // todo: refactor the following to its own file
       import lazabs.horn.bottomup.HornClauses._
-      import ap.parser.IExpression._
-      import ap.parser.IFormula
-      // val assertions : Seq[Clause] = reader.system.assertions
+
       val clauses : Seq[Clause] = reader.system.processes.flatMap(_._1.map(_._1))
-      val preds : Set[Predicate] = reader.system.allLocalPreds
 
-
-      // we will generate the path condition for each predicate until
-      // a fixed point is reached
-      val predsToProcess = new scala.collection.mutable.HashSet[Predicate]
-      // initially, all predicates must be processed
-      preds.foreach(predsToProcess add)
-
-      // predicate path constraints will be collected in this map
-      val predPathConstraints =
-        new scala.collection.mutable.HashMap[Predicate, IFormula]
-      // initially, all predicate have the path constraint "true"
-      preds.foreach(p => predPathConstraints += ((p, i(true))))
-
-      // a map from a pred p to preds that have p in their bodies
-      // i.e., if the path constraint of p is updated, this map points to
-      // predicates that will get immediately effected
-      val predsThisPredAffects : Map[Predicate, Seq[Predicate]] =
-        (for (p <- preds) yield {
-          (p, clauses.filter(clause =>
-            clause.bodyPredicates.contains(p)).map(_.head.pred))
-        }).toMap
-
-      while(predsToProcess nonEmpty){
-        val p = predsToProcess.head
-        predsToProcess -= p
-        val incomingClauses =
-          clauses.filter(clause => clause.head.pred == p)
-
-        val incomingPathConstraints = for (clause <- incomingClauses) yield {
-          clause.bodyPredicates.map(bodyPred =>
-            predPathConstraints(bodyPred)).reduceOption(_ &&& _).
-            getOrElse(i(true)) &&& clause.constraint
-        }
-        val pathConstraint = incomingPathConstraints.reduceOption(_ ||| _).
-          getOrElse(i(true))
-        if(pathConstraint != predPathConstraints(p)) {
-          predPathConstraints += ((p, pathConstraint))
-          predsThisPredAffects(p).foreach(predsToProcess add)
-        } else {
-          // nothing, the path constraint for p reached a fixpoint
-        }
-      }
-
+      val predPathConstraints = symex.PathConstraints(clauses)
+      val entryFun = TriCeraParameters.get.funcName
       println
-      println("Path constraints")
-      println("-"*80)
-      for ((pred, constraint) <- predPathConstraints if !constraint.isTrue) {
-        val srcString = reader.PredPrintContext.predSrcInfo(pred) match {
-          case Some(srcInfo) => " (at line " + srcInfo.line + ")"
-          case None => ""
-        }
-        println(pred + srcString + ": " +
-          ap.parser.PrincessLineariser.asString(constraint))
-      }
-      println("-"*80)
+      println("Path constraint formula at return from " + entryFun)
+      val exitPred =
+        reader.PredPrintContext.getFunctionExitPred(entryFun).get.pred
+      println(ap.parser.PrincessLineariser.asString(
+        predPathConstraints(exitPred)))
     }
 
     import tricera.acsl.Encoder

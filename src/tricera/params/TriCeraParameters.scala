@@ -243,7 +243,7 @@ class TriCeraParameters extends GlobalParameters {
       " -horn\t\tEnable this engine\n" +
       " -p\t\tPretty Print Horn clauses\n" +
       " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
-      " -pc\t\tPrint path constraints\n" +
+      " -pc\t\tPrint path constraint formula at return from entry function\n" +
       " -printPP\t\tPrint the output of the TriCera preprocessor to stdout\n" +
       " -dumpPP\t\tDump the output of the TriCera preprocessor to file (input file name + .tri) \n" +
       " -logPP:n\t\tDisplay TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +
