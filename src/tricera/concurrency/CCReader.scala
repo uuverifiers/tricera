@@ -1348,10 +1348,15 @@ class CCReader private (prog : Program,
       output(entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs))
 
       val translator = FunctionTranslator(exitPred)
-      typ match {
-        case _ : CCVoid => translator.translateNoReturn(stm, entryPred, Some(name))
-        case _          => translator.translateWithReturn(stm, entryPred, Some(name))
+      val finalPred = typ match {
+        case _ : CCVoid =>
+          translator.translateNoReturn(stm, entryPred)
+          exitPred
+        case _          =>
+          translator.translateWithReturn(stm, entryPred)
       }
+
+      functionExitPreds += ((name, finalPred))
 
       val globalVarTerms : Seq[ITerm] = globalVars.formalVarTerms
       val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
@@ -1387,7 +1392,8 @@ class CCReader private (prog : Program,
             case thread : SingleThread => {
               setPrefix(thread.cident_)
               val translator = FunctionTranslator.apply
-              translator translateNoReturn(thread.compound_stm_, Some(thread.cident_))
+              val finalPred = translator translateNoReturn(thread.compound_stm_)
+              functionExitPreds += ((thread.cident_, finalPred))
               processes += ((clauses.toList, ParametricEncoder.Singleton))
               clauses.clear
             }
@@ -1399,7 +1405,8 @@ class CCReader private (prog : Program,
                 CCInt())
               localVars addVar threadVar
               val translator = FunctionTranslator.apply
-              translator translateNoReturn(thread.compound_stm_, Some(thread.cident_2))
+              val finalPred = translator translateNoReturn(thread.compound_stm_)
+              functionExitPreds += ((thread.cident_2, finalPred))
               processes += ((clauses.toList, ParametricEncoder.Infinite))
               clauses.clear
               localVars popFrame
@@ -1438,18 +1445,19 @@ class CCReader private (prog : Program,
 
           val exitVar = getResVar(returnType)
           val exitPred = newPred(exitVar, Some(getLastSourceInfo(f.body)))
-          functionExitPreds += ((f.name, exitPred))
 
           val stm = pushArguments(funDef)
 
           val translator = FunctionTranslator(exitPred)
           val finalPred =
             if (!returnType.isInstanceOf[CCVoid]) {
-              translator.translateWithReturn(stm, Some(f.name))
+              translator.translateWithReturn(stm)
               exitPred
             }
             else
-              translator.translateNoReturn(stm, Some(f.name))
+              translator.translateNoReturn(stm)
+
+          functionExitPreds += ((f.name, finalPred))
 
           // add an assertion to track memory safety (i.e., no memory leaks)
           // currently this is only added to the exit point of the entry function,
@@ -3909,8 +3917,13 @@ class CCReader private (prog : Program,
     assert(entry.arity == allFormalVars.size)
 
     val translator = FunctionTranslator(exit)
-    if (isNoReturn) translator.translateNoReturn(stm, entry, None)
-    else translator.translateWithReturn(stm, entry, None)
+    val finalPred =
+      if (isNoReturn) {
+        translator.translateNoReturn(stm, entry)
+        exit
+      } else
+        translator.translateWithReturn(stm, entry)
+    functionExitPreds += ((FuncDef(functionDef).name, finalPred))
     localVars popFrame
   }
 
@@ -4010,21 +4023,15 @@ class CCReader private (prog : Program,
 
 
 
-    def translateNoReturn(compound : Compound_stm,
-                          funName : Option[String]) : CCPredicate = {
+    def translateNoReturn(compound : Compound_stm) : CCPredicate = {
       val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translateWithEntryClause(compound, finalPred)
       postProcessClauses
-      funName match {
-        case Some(name) => functionExitPreds += ((name, finalPred))
-        case None => // nothing
-      }
       finalPred
     }
 
     def translateNoReturn(compound : Compound_stm,
-                          entry : CCPredicate,
-                          funName : Option[String]) : Unit = {
+                          entry : CCPredicate) : Unit = {
       val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translate(compound, entry, finalPred)
       // add a default return edge
@@ -4033,14 +4040,9 @@ class CCReader private (prog : Program,
                     List(atom(finalPred, allFormalVarTerms)),
                     true))
       postProcessClauses
-      funName match {
-        case Some(name) => functionExitPreds += ((name, rp))
-        case None => // nothing
-      }
     }
 
-    def translateWithReturn(compound : Compound_stm,
-                            funName : Option[String]) : Unit = {
+    def translateWithReturn(compound : Compound_stm) : Unit = {
       val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translateWithEntryClause(compound, finalPred)
       // add a default return edge
@@ -4050,15 +4052,10 @@ class CCReader private (prog : Program,
       //              List(atom(finalPred, allFormalVars)),
       //              true))
       postProcessClauses
-      funName match {
-        case Some(name) => functionExitPreds += ((name, finalPred))
-        case None => // nothing
-      }
     }
 
     def translateWithReturn(compound : Compound_stm,
-                            entry : CCPredicate,
-                            funName : Option[String]) : CCPredicate = {
+                            entry : CCPredicate) : CCPredicate = {
       val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translate(compound, entry, finalPred)
       // add a default return edge
@@ -4068,10 +4065,6 @@ class CCReader private (prog : Program,
       //              List(atom(finalPred, allFormalVars)),
       //              true))
       postProcessClauses
-      funName match {
-        case Some(name) => functionExitPreds += ((name, finalPred))
-        case None => // nothing
-      }
       finalPred
     }
 
