@@ -165,6 +165,7 @@ Name.        Direct_declarator ::= CIdent ;
 ParenDecl.   Direct_declarator ::= "(" Declarator ")" ;
 InitArray.   Direct_declarator ::= Direct_declarator "[" Constant_expression "]" ;
 Incomplete.  Direct_declarator ::= Direct_declarator "[" "]" ;
+MathArray.   Direct_declarator ::= Direct_declarator "[" "_" "]" ;
 NewFuncDec.  Direct_declarator ::= Direct_declarator "(" Parameter_type ")" ;
 -- OldFuncDef.  Direct_declarator ::= Direct_declarator "(" [CIdent] ")" ;
 OldFuncDec.  Direct_declarator ::= Direct_declarator "(" ")" ;
@@ -268,7 +269,7 @@ SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
 
 separator nonempty Stm "";
 
-token CIdent (letter | '_' | '$') (letter | digit | '_' | '$')*;
+token CIdent (letter | '_' | '$' | '\\') (letter | digit | '_' | '$')*;
 
 token AnnotationString   {"■■"} (char - ["■"])* {"■■"};
 

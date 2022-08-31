@@ -40,6 +40,7 @@ import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
+import lazabs.horn.preprocessor.ExtendedQuantifier
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, 
                                  HashSet => MHashSet}
@@ -411,7 +412,7 @@ object CCReader {
               if (values.isEmpty)
                 h.addressRangeCtor(h.nullAddr(), IIntLit(1))
               else values.pop()
-            case CCArray(elemTyp, sizeExpr, arraySize, arrayTheory) =>
+            case CCArray(elemTyp, sizeExpr, Some(arraySize), arrayTheory) =>
               val initialArrayTerm = new SortedConstantTerm(field._1.name, arrayTheory.objSort)
               def arrayBatchStore(arr : ITerm, ind : Int, n : Int) : ITerm = {
                 if(ind >= n)
@@ -495,9 +496,10 @@ object CCReader {
 
   // uses the theory of arrays (and not heaps). this is used for InitArray's
   // which appear as struct fields (e.g. struct S{int a[4];})
+  // and for mathematical arrays (then sizeExpr and sizeInt can be None).
   private case class CCArray(elementType : CCType, // todo: multidimensional arrays?
-                             sizeExpr    : CCExpr,
-                             sizeInt     : Int,
+                             sizeExpr    : Option[CCExpr],
+                             sizeInt     : Option[Int],
                              arraySort   : ap.theories.ExtArray)
                             (implicit arithmeticMode : ArithmeticMode.Value)
     extends CCType(arithmeticMode) {
@@ -1647,6 +1649,12 @@ class CCReader private (prog : Program,
               CCVarDeclaration(name, arrayType, initDeclWrapper.maybeInitializer,
                 initDeclWrapper.hints, isArray = true, needsHeap = true,
                 initArrayExpr = initArrayExpr, srcInfo = initDeclWrapper.sourceInfo)
+            case _ : MathArray =>
+              CCVarDeclaration(name, CCArray(typeWithPtrs, None, None,
+                ExtArray(Seq(CCInt().toSort), typeWithPtrs.toSort)),
+                initDeclWrapper.maybeInitializer,
+                initDeclWrapper.hints, isArray = true, needsHeap = false,
+                initArrayExpr = None, srcInfo = initDeclWrapper.sourceInfo)
             case _: Name =>
               CCVarDeclaration(name, typeWithPtrs, initDeclWrapper.maybeInitializer,
                 initDeclWrapper.hints, isArray = false, needsHeap = false,
@@ -1901,6 +1909,7 @@ class CCReader private (prog : Program,
     case dec : OldFuncDec => getName(dec.direct_declarator_)
     case dec : InitArray => getName(dec.direct_declarator_)
     case dec : Incomplete => getName(dec.direct_declarator_)
+    case dec : MathArray => getName(dec.direct_declarator_)
   }
 
   private def getType(specs : Seq[Declaration_specifier]) : CCType =
@@ -1986,7 +1995,7 @@ class CCReader private (prog : Program,
                 case _ => throw new TranslationException("Array with non-integer" +
                   "size specified inside struct definition!")
               }
-              CCArray(typ, arraySizeExp, arraySize,
+              CCArray(typ, Some(arraySizeExp), Some(arraySize),
                 ExtArray(Seq(arraySizeExp.typ.toSort), typ.toSort))
             case _ => typ
           }
@@ -3448,6 +3457,26 @@ class CCReader private (prog : Program,
           val t = atomicEval(exp.listexp_.head)
           heapFree(t)
           pushVal(CCTerm(0, CCVoid(), srcInfo)) // free returns no value, pushing dummy
+        case """\sum""" =>
+          // \sum(a, lo, hi)
+          // todo: naive fragile implementation without any checks
+          val arrayTerm = eval(exp.listexp_(0))
+          val loTerm = eval(exp.listexp_(1))
+          val hiTerm = eval(exp.listexp_(2))
+          def f (a : ITerm, b : ITerm) : ITerm = a + b
+          def fInv (a : ITerm, b : ITerm) : ITerm = a - b
+
+          val arrayType = arrayTerm.typ.asInstanceOf[CCArray]
+          val objSort = arrayType.elementType.toSort
+
+          val extQuan = new ExtendedQuantifier("sum", objSort, f, Some(fInv))
+
+          ap.theories.TheoryRegistry.register(extQuan) // todo: can we avoid this?
+
+          pushVal(CCTerm(extQuan.fun(
+            arrayTerm.toTerm, loTerm.toTerm, hiTerm.toTerm),
+            arrayType.elementType, srcInfo))
+
         case name => {
           // then we inline the called function
 
@@ -3574,8 +3603,12 @@ class CCReader private (prog : Program,
           case array : CCArray => // todo: move to separate method
             val readValue = CCTerm(array.arraySort.
               select(arrayTerm.toTerm, index.toTerm), array.elementType, srcInfo)
-            assertProperty((index.toTerm >= 0) &&&
-              (index.toTerm < array.sizeExpr.toTerm), srcInfo)
+            array.sizeExpr match {
+              case Some(expr) =>
+                assertProperty((index.toTerm >= 0) &&&
+                  (index.toTerm < expr.toTerm), srcInfo)
+              case _ => // no safety assertion needed for mathematical arrays
+            }
             pushVal(readValue)
           case _ =>
             throw new TranslationException(getLineString(exp) +
