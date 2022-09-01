@@ -3457,19 +3457,28 @@ class CCReader private (prog : Program,
           val t = atomicEval(exp.listexp_.head)
           heapFree(t)
           pushVal(CCTerm(0, CCVoid(), srcInfo)) // free returns no value, pushing dummy
-        case """\sum""" =>
+        case fun@("\\sum" | "\\max" | "\\min") =>
           // \sum(a, lo, hi)
           // todo: naive fragile implementation without any checks
           val arrayTerm = eval(exp.listexp_(0))
           val loTerm = eval(exp.listexp_(1))
           val hiTerm = eval(exp.listexp_(2))
-          def f (a : ITerm, b : ITerm) : ITerm = a + b
-          def fInv (a : ITerm, b : ITerm) : ITerm = a - b
+          val f: (ITerm, ITerm) => ITerm =
+            (a : ITerm, b : ITerm) => fun match {
+            case "\\sum" => a + b
+            case "\\max" => IExpression.ite(a >= b, a, b)
+            case "\\min" => IExpression.ite(a <= b, a, b)
+          }
+          val fInv: Option[(ITerm, ITerm) => ITerm] = fun match {
+            case "\\sum" => Some((a : ITerm, b : ITerm) => a - b)
+            case "\\max" => None
+            case "\\min" => None
+          }
 
           val arrayType = arrayTerm.typ.asInstanceOf[CCArray]
           val objSort = arrayType.elementType.toSort
 
-          val extQuan = new ExtendedQuantifier("sum", objSort, f, Some(fInv))
+          val extQuan = new ExtendedQuantifier(fun, objSort, f, fInv)
 
           ap.theories.TheoryRegistry.register(extQuan) // todo: can we avoid this?
 
