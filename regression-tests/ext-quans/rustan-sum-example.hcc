@@ -1,0 +1,38 @@
+/*
+public static int SegSum(int[ ] a, int i, int j )
+    requires 0 <= i && i <= j && j <= a.Length;
+    ensures result == sum{int k in (i : j ); a[k ]};
+*/
+/*
+int SegSum(int a[_], int i, int j) {
+    int s = 0;
+    for (int n = i; n < j ; n++)
+    /*
+    invariant i 6 n && n 6 j ;
+    invariant s == sum{int k in (i : n); a[k ]};
+
+    {
+        s += a[n];
+    }
+    return s;
+}
+*/
+void main() {
+    int a[_];
+    int i; int j;
+    assume(0 <= i && i <= j);
+    int res;
+
+    int s = 0;
+        for (int n = i; n < j ; n++)
+        /*
+        invariant i 6 n && n 6 j ;
+        invariant s == sum{int k in (i : n); a[k ]};
+        */
+        {
+            s += a[n];
+        }
+
+    res = s;
+    assert(\sum(a, i, j) == 2);
+}
