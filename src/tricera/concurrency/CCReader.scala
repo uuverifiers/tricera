@@ -3457,10 +3457,10 @@ class CCReader private (prog : Program,
           val t = atomicEval(exp.listexp_.head)
           heapFree(t)
           pushVal(CCTerm(0, CCVoid(), srcInfo)) // free returns no value, pushing dummy
-        case fun@("\\sum" | "\\max" | "\\min") =>
+        case fun@("\\sum" | "\\max" | "\\min" | "\\numof" | "\\product") =>
           // \sum(a, lo, hi)
           // todo: naive fragile implementation without any checks
-          val arrayTerm = eval(exp.listexp_(0))
+          val arrayTerm = eval(exp.listexp_(0)) // todo: make the order the same as in ACSL? e.g., \max(lo, hi, a)
           val loTerm = eval(exp.listexp_(1))
           val hiTerm = eval(exp.listexp_(2))
           val f: (ITerm, ITerm) => ITerm =
@@ -3468,11 +3468,16 @@ class CCReader private (prog : Program,
             case "\\sum" => a + b
             case "\\max" => IExpression.ite(a >= b, a, b)
             case "\\min" => IExpression.ite(a <= b, a, b)
+            case "\\numof" => ???
+            case "\\product" =>
+              ap.theories.nia.GroebnerMultiplication.multSimplify(a, b)
           }
           val fInv: Option[(ITerm, ITerm) => ITerm] = fun match {
             case "\\sum" => Some((a : ITerm, b : ITerm) => a - b)
             case "\\max" => None
             case "\\min" => None
+            case "\\numof" => Some(???)
+            case "\\product" => None
           }
 
           val arrayType = arrayTerm.typ.asInstanceOf[CCArray]
