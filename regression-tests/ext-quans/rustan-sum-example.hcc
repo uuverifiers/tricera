@@ -20,19 +20,18 @@ int SegSum(int a[_], int i, int j) {
 void main() {
     int a[_];
     int i; int j;
-    assume(0 <= i && i <= j);
-    int res;
+    assume(0 < i && i < j && j < 10);
 
     int s = 0;
-        for (int n = i; n < j ; n++)
+    for (int n = i; n < j ; n++)
         /*
         invariant i 6 n && n 6 j ;
         invariant s == sum{int k in (i : n); a[k ]};
         */
-        {
-            s += a[n];
-        }
+    {
 
-    res = s;
-    assert(\sum(a, i, j) == 2);
+      a[n] = a[n]+1;
+    }
+    //int res = s;
+    assert(\sum(a, i, j) == s);
 }
