@@ -40,7 +40,7 @@ import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
-import lazabs.horn.preprocessor.ExtendedQuantifier
+import lazabs.horn.extendedquantifiers.ExtendedQuantifier
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, 
                                  HashSet => MHashSet}
@@ -500,7 +500,7 @@ object CCReader {
   private case class CCArray(elementType : CCType, // todo: multidimensional arrays?
                              sizeExpr    : Option[CCExpr],
                              sizeInt     : Option[Int],
-                             arraySort   : ap.theories.ExtArray)
+                             arrayTheory : ap.theories.ExtArray)
                             (implicit arithmeticMode : ArithmeticMode.Value)
     extends CCType(arithmeticMode) {
     override def toString : String =
@@ -3480,10 +3480,17 @@ class CCReader private (prog : Program,
             case "\\product" => None
           }
 
-          val arrayType = arrayTerm.typ.asInstanceOf[CCArray]
-          val objSort = arrayType.elementType.toSort
+          val identity: ITerm = fun match {
+            case "\\sum" => IExpression.i(0)
+            case "\\max" => IExpression.i(-CCLongLong().UNSIGNED_RANGE) // todo: fix!
+            case "\\min" => IExpression.i(CCLongLong().UNSIGNED_RANGE)
+            case "\\numof" => ???
+            case "\\product" => IExpression.i(1)
+          }
 
-          val extQuan = new ExtendedQuantifier(fun, objSort, f, fInv)
+          val arrayType = arrayTerm.typ.asInstanceOf[CCArray]
+
+          val extQuan = new ExtendedQuantifier(fun, arrayType.arrayTheory, identity, f, fInv)
 
           ap.theories.TheoryRegistry.register(extQuan) // todo: can we avoid this?
 
@@ -3615,7 +3622,7 @@ class CCReader private (prog : Program,
           case array : CCHeapArrayPointer =>
             pushVal(heapArrayRead(arrayTerm, index, array))
           case array : CCArray => // todo: move to separate method
-            val readValue = CCTerm(array.arraySort.
+            val readValue = CCTerm(array.arrayTheory.
               select(arrayTerm.toTerm, index.toTerm), array.elementType, srcInfo)
             array.sizeExpr match {
               case Some(expr) =>

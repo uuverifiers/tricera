@@ -522,9 +522,9 @@ class Main (args: Array[String]) {
 
         import hornconcurrency.VerificationLoop._
         import lazabs.horn.bottomup.HornClauses
-        val cexClauses: Seq[HornClauses.Clause] = cex._1.last match {
-          case c: CEXLocalStep => Seq(c.clause)
-          case c: CEXInit => Seq(c.clauses.last) // todo: correct?
+        val cexClauses: Seq[HornClauses.Clause] = cex._1.lastOption match {
+          case Some(c: CEXLocalStep) => Seq(c.clause)
+          case Some(c: CEXInit) => Seq(c.clauses.last) // todo: correct?
           case _ => Nil // todo: others?
         }
         val relatedAssertions =

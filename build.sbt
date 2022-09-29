@@ -101,7 +101,7 @@ settings(
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
 //  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
   libraryDependencies += "uuverifiers" %% "eldarica" % "10.0.0",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "10.0.0",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",
