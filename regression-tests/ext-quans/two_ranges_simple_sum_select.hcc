@@ -1,0 +1,20 @@
+void main() {
+  int a[_];
+
+  int n = _; // must be even
+  assume(n > 0);
+  assume(n%2 == 0);
+
+  int i = 0;
+  int j = n - 1;
+
+  int s = 0;
+
+  while(i < j) {
+    s += a[i] + a[j];
+    i += 1;
+    j -= 1;
+  }
+
+  assert(\sum(a, 0, n) == s);
+}

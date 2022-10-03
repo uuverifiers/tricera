@@ -1,0 +1,22 @@
+void main() {
+  int a[_];
+
+  int n = 4; // must be even
+
+  int i = 0;
+  int j = n - 1;
+
+  int s = 0;
+
+  while(i < j) {
+    a[i] = i;
+    a[j] = j;
+    s += i + j;
+    i += 1;
+    j -= 1;
+  }
+
+  // this one currently fails since the stores change the array contents
+  // and this fails the assertion that the ghost arrays must be the same
+  assert(\sum(a, 0, 4) == 6);
+}
