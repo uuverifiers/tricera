@@ -2,15 +2,14 @@
 
 
 typedef struct {
-    int cells[10]; //Voltage value for each cell
+    int cells[_]; //Voltage value for each cell
     int max_value;//Maximum voltage value in battery
     int min_value;
 } BATTERY;
 
 
 void main() {
-BATTERY batt;
-
+  BATTERY batt;
   batt.max_value = batt.cells[0];
   int i = 0;
   while(i < 10) {
