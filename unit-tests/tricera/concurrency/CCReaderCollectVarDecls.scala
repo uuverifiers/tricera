@@ -57,50 +57,50 @@ class CCReaderCollectVarDecls extends AnyFlatSpec {
   "The type of global int a[10]" should "be global array of ints" in {
     assert(testCollectVarDeclsNoInit("int a[10];",isGlobal = true,
       expected = CCHeapArrayPointer(reader.heap, CCInt(),
-        HeapArrayType.GlobalArray)))
+        ArrayLocation.GlobalArray)))
   }
 
   "The type of local int a[10]" should "be stack array of ints" in {
     assert(testCollectVarDeclsNoInit("int a[10];",isGlobal = false,
       expected = CCHeapArrayPointer(reader.heap, CCInt(),
-        HeapArrayType.StackArray)))
+        ArrayLocation.StackArray)))
   }
 
   "The type of local int a[]" should "be heap array of ints" in {
     assert(testCollectVarDeclsNoInit("int a[];",isGlobal = false,
       expected = CCHeapArrayPointer(reader.heap, CCInt(),
-        HeapArrayType.HeapArray)))
+        ArrayLocation.HeapArray)))
   }
 
   "The type of global int a[]" should "be heap array of ints" in {
     assert(testCollectVarDeclsNoInit("int a[];",isGlobal = true,
       expected = CCHeapArrayPointer(reader.heap, CCInt(),
-        HeapArrayType.HeapArray)))
+        ArrayLocation.HeapArray)))
   }
 
   "The type of global int *a[10]" should "be global array of int pointers" in {
     assert(testCollectVarDeclsNoInit("int *a[10];",isGlobal = true,
       expected = CCHeapArrayPointer(reader.heap,
-        CCHeapPointer(reader.heap, CCInt()), HeapArrayType.GlobalArray)))
+        CCHeapPointer(reader.heap, CCInt()), ArrayLocation.GlobalArray)))
   }
 
   "The type of local int *a[10]" should "be stack array of int pointers" in {
     assert(testCollectVarDeclsNoInit("int *a[10];",isGlobal = false,
       expected = CCHeapArrayPointer(reader.heap,
-        CCHeapPointer(reader.heap, CCInt()), HeapArrayType.StackArray)))
+        CCHeapPointer(reader.heap, CCInt()), ArrayLocation.StackArray)))
   }
 
   "The type of local int *a[]" should "be heap array of int pointers" in {
     assert(testCollectVarDeclsNoInit("int *a[];",isGlobal = false,
       expected = CCHeapArrayPointer(reader.heap,
-        CCHeapPointer(reader.heap, CCInt()), HeapArrayType.HeapArray)))
+        CCHeapPointer(reader.heap, CCInt()), ArrayLocation.HeapArray)))
   }
 
   "The type of global int **a[10]" should "be global array of int**" in {
     assert(testCollectVarDeclsNoInit("int **a[10];",isGlobal = true,
       expected = CCHeapArrayPointer(reader.heap,
         CCHeapPointer(reader.heap, CCHeapPointer(reader.heap, CCInt())),
-          HeapArrayType.GlobalArray)))
+          ArrayLocation.GlobalArray)))
   }
 
 }

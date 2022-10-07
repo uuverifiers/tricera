@@ -129,7 +129,7 @@ object CCReader {
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
-        case CCArray(_, _, _, s) => s.sort
+        case CCArray(_, _, _, s, _) => s.sort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -146,7 +146,7 @@ object CCReader {
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
-        case CCArray(_, _, _, s) => s.sort
+        case CCArray(_, _, _, s, _) => s.sort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
@@ -165,7 +165,7 @@ object CCReader {
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
-        case CCArray(_, _, _, s) => s.sort
+        case CCArray(_, _, _, s, _) => s.sort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -183,7 +183,7 @@ object CCReader {
         case CCStackPointer(_, _, _) => Sort.Integer
         case CCHeapPointer(heap, _) => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
-        case CCArray(_, _, _, s) => s.sort
+        case CCArray(_, _, _, s, _) => s.sort
         case CCStruct(ctor, _) => ctor.resSort
         case CCStructField(n, s) => s(n).ctor.resSort
         case CCIntEnum(_, _) => Sort.Integer
@@ -234,7 +234,7 @@ object CCReader {
       case CCHeapPointer(heap, _) => heap.nullAddr()
       case CCHeapArrayPointer(heap, _, _) => // todo: start = null, but size 0 or 1?
         heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
-      case CCArray(_, _, _, arrayTheory) => arrayTheory.const(0)
+      case CCArray(_, _, _, arrayTheory, _) => arrayTheory.const(0)
       case _ => IIntLit(0)
     }
   }
@@ -412,7 +412,7 @@ object CCReader {
               if (values.isEmpty)
                 h.addressRangeCtor(h.nullAddr(), IIntLit(1))
               else values.pop()
-            case CCArray(elemTyp, sizeExpr, Some(arraySize), arrayTheory) =>
+            case CCArray(elemTyp, sizeExpr, Some(arraySize), arrayTheory, arrayLocation) => // todo: use arrLoc?
               val initialArrayTerm = new SortedConstantTerm(field._1.name, arrayTheory.objSort)
               def arrayBatchStore(arr : ITerm, ind : Int, n : Int) : ITerm = {
                 if(ind >= n)
@@ -480,14 +480,14 @@ object CCReader {
   // global arrays get automatically freed (as they are not really on the heap)
   //   when the main function returns.
   // "alloca" and stack arrays get automatically freed when the calling function returns.
-  object HeapArrayType extends Enumeration {
-    type HeapArrayType = Value
+  object ArrayLocation extends Enumeration {
+    type ArrayLocation = Value
     val GlobalArray, StackArray, HeapArray = Value
   }
-  import HeapArrayType._
+  import ArrayLocation._
   case class CCHeapArrayPointer(heap : Heap,
-                                elementType : CCType,
-                                arrayType   : HeapArrayType)
+                                elementType   : CCType,
+                                arrayLocation : ArrayLocation)
                                (implicit arithmeticMode : ArithmeticMode.Value)
     extends CCType(arithmeticMode) {
     def shortName = "[]"
@@ -500,7 +500,8 @@ object CCReader {
   private case class CCArray(elementType : CCType, // todo: multidimensional arrays?
                              sizeExpr    : Option[CCExpr],
                              sizeInt     : Option[Int],
-                             arrayTheory : ap.theories.ExtArray)
+                             arrayTheory : ap.theories.ExtArray,
+                             arrayLocation : ArrayLocation)
                             (implicit arithmeticMode : ArithmeticMode.Value)
     extends CCType(arithmeticMode) {
     override def toString : String =
@@ -621,7 +622,7 @@ class CCReader private (prog : Program,
                         arithmeticMode : CCReader.ArithmeticMode.Value) {
 
   import CCReader._
-  import CCReader.HeapArrayType._
+  import CCReader.ArrayLocation._
 
   private val printer = new PrettyPrinterNonStatic
 
@@ -1127,7 +1128,7 @@ class CCReader private (prog : Program,
         case Right(typ) =>
           typ match {
             case t : CCHeapArrayPointer => // replace with initialized heap
-              CCHeapArrayPointer(heap, t.elementType, t.arrayType) // todo: would fail for arrays of arrays inside structs
+              CCHeapArrayPointer(heap, t.elementType, t.arrayLocation) // todo: would fail for arrays of arrays inside structs
             case _ => typ
           }
       }
@@ -1473,7 +1474,7 @@ class CCReader private (prog : Program,
                 val resVar = getResVar(args.last.typ)
                 var excludedAddresses = i(true)
                 for (arg <- args) arg.typ match {
-                  case arr: CCHeapArrayPointer if arr.arrayType == GlobalArray =>
+                  case arr: CCHeapArrayPointer if arr.arrayLocation == GlobalArray =>
                     excludedAddresses = excludedAddresses &&&
                       !heap.within(arg.term, addrVar.term)
                   case _ => // nothing
@@ -1633,7 +1634,7 @@ class CCReader private (prog : Program,
               CCFunctionDeclaration(name, typeWithPtrs, directDecl,
                 initDeclWrapper.sourceInfo) // todo: check that typeWithPtrs is correct here
             // array declaration
-            case _: InitArray | _: Incomplete =>
+            case _: InitArray | _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
               val (arrayType, initArrayExpr) = {
                 val (arrayLocation, initArrayExpr) = directDecl match {
                   case a: InitArray if isGlobal =>
@@ -1649,9 +1650,25 @@ class CCReader private (prog : Program,
               CCVarDeclaration(name, arrayType, initDeclWrapper.maybeInitializer,
                 initDeclWrapper.hints, isArray = true, needsHeap = true,
                 initArrayExpr = initArrayExpr, srcInfo = initDeclWrapper.sourceInfo)
+            case _: InitArray | _: Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
+              val (arrayType, initArrayExpr) = {
+                val (arrayLocation, initArrayExpr) = directDecl match {
+                  case a: InitArray if isGlobal =>
+                    (GlobalArray, Some(a.constant_expression_))
+                  case a: InitArray if !isGlobal =>
+                    (StackArray, Some(a.constant_expression_))
+                  case _ => (HeapArray, None)
+                }
+                (CCArray(typeWithPtrs, None, None, ExtArray(Seq(CCInt().toSort), typeWithPtrs.toSort), arrayLocation), initArrayExpr)
+              }
+              // todo: adjust needsHeap below if an array type does not require heap
+              // for instance if we model arrays using the theory of arrays or unroll
+              CCVarDeclaration(name, arrayType, initDeclWrapper.maybeInitializer,
+                initDeclWrapper.hints, isArray = true, needsHeap = false,
+                initArrayExpr = initArrayExpr, srcInfo = initDeclWrapper.sourceInfo)
             case _ : MathArray =>
               CCVarDeclaration(name, CCArray(typeWithPtrs, None, None,
-                ExtArray(Seq(CCInt().toSort), typeWithPtrs.toSort)),
+                ExtArray(Seq(CCInt().toSort), typeWithPtrs.toSort), if(isGlobal) GlobalArray else HeapArray),
                 initDeclWrapper.maybeInitializer,
                 initDeclWrapper.hints, isArray = true, needsHeap = false,
                 initArrayExpr = None, srcInfo = initDeclWrapper.sourceInfo)
@@ -1982,9 +1999,12 @@ class CCReader private (prog : Program,
             case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
               throw new TranslationException("Functions as struct fields" +
                 " are not supported.")
-            case _: Incomplete =>
+            case _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
               if (!modelHeap) throw NeedsHeapModelException
               CCHeapArrayPointer(heap, typ, HeapArray)
+            case _: Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
+              CCArray(typ, None, None,
+                ExtArray(Seq(CCInt().toSort), typ.toSort), HeapArray) // todo: only int indexed arrays
             case initArray: InitArray =>
               val arraySizeSymex = Symex(null)
               val arraySizeExp = arraySizeSymex eval
@@ -1996,7 +2016,7 @@ class CCReader private (prog : Program,
                   "size specified inside struct definition!")
               }
               CCArray(typ, Some(arraySizeExp), Some(arraySize),
-                ExtArray(Seq(arraySizeExp.typ.toSort), typ.toSort))
+                ExtArray(Seq(arraySizeExp.typ.toSort), typ.toSort), HeapArray)
             case _ => typ
           }
         }
@@ -3041,8 +3061,8 @@ class CCReader private (prog : Program,
                       "solve this issue.")
                   case arrayPtr2 : CCHeapArrayPointer =>
                     if (arrayPtr1 != arrayPtr2) {
-                      if (arrayPtr1.arrayType == StackArray &&
-                          arrayPtr2.arrayType == HeapArray) // -> alloca
+                      if (arrayPtr1.arrayLocation == StackArray &&
+                          arrayPtr2.arrayLocation == HeapArray) // -> alloca
                         updateVarType(lhsName, arrayPtr1) // todo: replace with a static analysis? we should detect arrays on stack beforehand maybe?
                       else throw new TranslationException(getLineString(exp) +
                         "Unsupported operation: pointer " + lhsName +
@@ -3361,7 +3381,7 @@ class CCReader private (prog : Program,
         }
       }
 
-      case exp : Efunkpar => 
+      case exp : Efunkpar =>
         val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
         (printer print exp.exp_) match {
           case "assert" | "static_assert" | "__VERIFIER_assert"
@@ -3402,7 +3422,8 @@ class CCReader private (prog : Program,
                 name + " is not a declared channel")
           }
         }
-        case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca") => { // todo: proper alloca and calloc
+        case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
+          if !TriCeraParameters.parameters.value.useArraysForHeap => { // todo: proper alloca and calloc
           if (!modelHeap)
             throw NeedsHeapModelException
           val (typ, allocSize) = exp.listexp_(0) match {
@@ -3446,6 +3467,50 @@ class CCReader private (prog : Program,
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
                 // todo: optimise constant size allocations > 1?
           }
+        }
+        case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
+          if TriCeraParameters.parameters.value.useArraysForHeap => {
+          val (typ, allocSize) = exp.listexp_(0) match {
+            case exp : Ebytestype =>
+              (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt(), srcInfo))
+            //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
+            case exp : Etimes =>
+              exp.exp_1 match {
+                case e : Ebytestype =>
+                  (getType(e), eval(exp.exp_2))
+                case e if exp.exp_2.isInstanceOf[Ebytestype] =>
+                  (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
+                case _ =>
+                  throw new TranslationException(
+                    "Unsupported alloc expression: " + (printer print exp))
+              }
+            //case exp : Evar => // allocation in bytes
+
+            case _ => throw new TranslationException(
+              "Unsupported alloc expression: " + (printer print exp))
+          }
+
+          val (sizeExpr, sizeInt) = allocSize match {
+            case CCTerm(IIntLit(IdealInt(n)), typ, srcInfo)
+              if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer =>
+              (Some(allocSize), Some(n))
+            case _ =>
+              (Some(allocSize), None)
+          }
+          val arrayLocation = name match {
+            case "malloc" | "calloc"           => HeapArray
+            case "alloca" | "__builtin_alloca" => StackArray
+          }
+
+          val theory = ExtArray(Seq(CCInt().toSort), typ.toSort) // todo: only 1-d int arrays...
+          val arrType = CCArray(typ, sizeExpr, sizeInt, theory, arrayLocation)
+
+          val arrayTerm = CCTerm(name match {
+            case "calloc"                                 => arrType.getZeroInit
+            case "malloc" | "alloca" | "__builtin_alloca" => arrType.getNonDet
+          }, arrType, srcInfo)
+
+          pushVal(arrayTerm)
         }
         case "realloc" =>
           if (!modelHeap)
@@ -4018,8 +4083,10 @@ class CCReader private (prog : Program,
                   createHeapPointer(p, typ)
                 case np : NoPointer =>
                   np.direct_declarator_ match {
-                    case _ : Incomplete =>
+                    case _ : Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
                       CCHeapArrayPointer(heap, typ, HeapArray)
+                    case _ : Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
+                      CCArray(typ, None, None, ExtArray(Seq(CCInt().toSort), typ.toSort), HeapArray)
                     case _ => typ
                   }
                 case _ => typ
@@ -4351,7 +4418,7 @@ class CCReader private (prog : Program,
                 // free stack allocated arrays that use the theory of heap
                 val freeSymex = Symex(prevPred)
                 for (v <- localVars.getVarsInTopFrame) v.typ match {
-                  case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                  case a : CCHeapArrayPointer if a.arrayLocation == StackArray =>
                     freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo))
                     prevPred = newPred(Nil, None) // todo: line no?
                     freeSymex.outputClause(prevPred.pred)
@@ -4373,7 +4440,7 @@ class CCReader private (prog : Program,
               // free stack allocated arrays that use the theory of heap
               val freeSymex = Symex(nextPred)
               for (v <- localVars.getVarsInTopFrame) v.typ match {
-                case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                case a : CCHeapArrayPointer if a.arrayLocation == StackArray =>
                   freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // todo: line no probably incorrect
                   nextPred = newPred(Nil, v.srcInfo)  // todo: line no probably incorrect
                   freeSymex.outputClause(nextPred.pred)
@@ -4603,7 +4670,7 @@ class CCReader private (prog : Program,
               // free stack allocated arrays that use the theory of heap
               val freeSymex = Symex(entry)
               for (v <- localVars.getVarsInTopFrame) v.typ match {
-                case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                case a : CCHeapArrayPointer if a.arrayLocation == StackArray =>
                   freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // line no probably incorrect
                   nextPred = newPred(Nil, Some(getSourceInfo(jump)))
                   freeSymex.outputClause(nextPred.pred)
@@ -4634,7 +4701,7 @@ class CCReader private (prog : Program,
               val freeSymex = Symex(nextPred) // reinitialise init atom
               // free stack allocated arrays that use the theory of heap
               for (v <- localVars.getVarsInTopFrame) v.typ match {
-                case a : CCHeapArrayPointer if a.arrayType == StackArray =>
+                case a : CCHeapArrayPointer if a.arrayLocation == StackArray =>
                   freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // todo: line no probably incorrect
                   nextPred = newPred(Nil, Some(srcInfo))
                   freeSymex.outputClause(nextPred.pred)
