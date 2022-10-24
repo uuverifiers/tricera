@@ -85,7 +85,7 @@ class Main (args: Array[String]) {
   lazabs.GlobalParameters.parameters.value = params
   import params._
 
-  if (in == null) {
+  if (in == null && !params.doNotExecute) {
     showHelp
     printError("no input file given")
   }
@@ -95,7 +95,7 @@ class Main (args: Array[String]) {
   private val preprocessTimer = new Timer
 
   def run(stoppingCond: => Boolean) : ExecutionSummary = try {
-    if (params.showedHelp) // Exit early if we showed the help
+    if (params.doNotExecute) // Exit early if we showed the help
       return ExecutionSummary(DidNotExecute)
     programTimer.start()
 
