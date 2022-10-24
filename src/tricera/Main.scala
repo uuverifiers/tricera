@@ -267,6 +267,7 @@ class Main (args: Array[String]) {
 
     if (bmTracks.exists(t => t._1 match {
       case MemSafety(Some(MemTrack)) => true
+      case MemSafety(Some(ValidFree)) => true
       case _ => false
     })) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
