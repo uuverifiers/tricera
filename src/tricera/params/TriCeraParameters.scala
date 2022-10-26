@@ -235,7 +235,7 @@ class TriCeraParameters extends GlobalParameters {
       " -t:time\tSet timeout (in seconds)\n" +
       " -cex\t\tShow textual counterexamples\n" +
       " -dotCEX\tOutput counterexample in dot format\n" +
-      " -eogCEX\tDisplay counterexample using eog\n" +
+      " -eogCEX\tDisplay counterexample using eog on Linux and Preview on macOS\n" +
       " -sol\t\tShow solution in Prolog format\n" +
       " -ssol\t\tShow solution in SMT-LIB format\n" +
       " -inv\t\tTry to infer loop invariants\n" +
