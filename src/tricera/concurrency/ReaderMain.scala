@@ -250,7 +250,8 @@ object ReaderMain {
       val runTime = Runtime.getRuntime
       var proc = runTime.exec( "dot -Tpng " + "DotOutput" + currentId + ".dot" + " -o graph" + currentId + ".png" )
       proc.waitFor
-      proc = runTime.exec( "eog graph" + currentId + ".png")
+      val imageViewer = if (System.getProperty("os.name") == "Mac OS X") "open -a Preview" else "eog"
+      proc = runTime.exec( imageViewer + " graph" + currentId + ".png")
       proc.waitFor
       currentId = currentId + 1
     }

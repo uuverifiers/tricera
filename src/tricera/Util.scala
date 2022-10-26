@@ -237,7 +237,8 @@ object Util {
       if (TriCeraParameters.get.eogCEX) {
         var proc = runTime.exec( "dot -Tpng " + filename + " -o " + filename + ".png" )
         proc.waitFor
-        proc = runTime.exec( "eog " + filename + ".png")
+        val imageViewer = if (System.getProperty("os.name") == "Mac OS X") "open -a Preview" else "eog"
+        proc = runTime.exec( imageViewer + " " + filename + ".png")
         //    proc.waitFor
       }
     }
