@@ -200,6 +200,18 @@ object CCReader {
         case _ => true // includes Integer, HeapAddress, ADTs
       }
 
+    def range : (Option[IdealInt], Option[IdealInt]) = {
+      toSort match {
+        case Sort.Nat => (Some(IdealInt(0)), None)
+        case Sort.Integer => (None, None)
+        case ModSort(lower, upper) =>
+          (Some(lower), Some(upper))
+        case otherSort =>
+          throw new TranslationException("Do not know how to get range for " +
+            " sort " + otherSort)
+      }
+    }
+
     def newConstant(name : String) : ConstantTerm = toSort newConstant name
 
     def cast(t : ITerm) : ITerm = toSort match {
@@ -3545,15 +3557,30 @@ class CCReader private (prog : Program,
             case "\\product" => None
           }
 
+          val arrayType = arrayTerm.typ.asInstanceOf[CCArray]
+
           val identity: ITerm = fun match {
             case "\\sum" => IExpression.i(0)
-            case "\\max" => IExpression.i(-CCLongLong().UNSIGNED_RANGE) // todo: fix!
-            case "\\min" => IExpression.i(CCLongLong().UNSIGNED_RANGE)
+            case "\\max" =>
+              arrayType.elementType.range._1 match {
+                case Some(v) => v
+                case None =>
+                  val v = IdealInt("-9223372036854775808")
+                  warn(s"Using $v for empty ranges for \\max.")
+                  IExpression.i(v)
+              }
+            case "\\min" =>
+              arrayType.elementType.range._2 match {
+                case Some(v) => v
+                case None =>
+                  val v = IdealInt("9223372036854775807")
+                  warn(s"Using $v for empty ranges for \\min.")
+                  IExpression.i(v)
+              }
             case "\\numof" => ???
             case "\\product" => IExpression.i(1)
           }
 
-          val arrayType = arrayTerm.typ.asInstanceOf[CCArray]
 
           val extQuan = new ExtendedQuantifier(fun, arrayType.arrayTheory, identity, f, fInv)
 
