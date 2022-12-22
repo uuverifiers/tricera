@@ -405,10 +405,20 @@ class Main (args: Array[String]) {
             import lazabs.horn.bottomup.HornPredAbs
             import lazabs.ast.ASTree.Parameter
 
+            // todo: refactor this method not to use string replacement
+            //  it should replace terms in formulas instead for pretty printing, like in ACSLLineariser
             def replaceArgs(f : String,
                             acslArgNames : Seq[String],
                             replaceAlphabetic : Boolean = false) = {
               var s = f
+
+              if (replaceAlphabetic) {
+                val numQuans = s.sliding(2).count(_ == "EX") + s.sliding(3).count(_ == "ALL")
+                for (i <- 0 until numQuans) {
+                  s = s.replace("VAR" + i, "v" + i)
+                }
+              }
+
               for ((acslArg, ind)<- acslArgNames zipWithIndex) {
                 val replaceArg =
                   if (replaceAlphabetic)
