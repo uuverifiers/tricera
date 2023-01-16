@@ -42,9 +42,7 @@ import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 import lazabs.horn.extendedquantifiers.ExtendedQuantifier
 
-import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, 
-                                 HashSet => MHashSet}
-
+import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, HashSet => MHashSet}
 import tricera.Util._
 import tricera.acsl.{ACSLTranslator, FunctionContract}
 import tricera.params.TriCeraParameters
@@ -509,12 +507,12 @@ object CCReader {
   // uses the theory of arrays (and not heaps). this is used for InitArray's
   // which appear as struct fields (e.g. struct S{int a[4];})
   // and for mathematical arrays (then sizeExpr and sizeInt can be None).
-  private case class CCArray(elementType : CCType, // todo: multidimensional arrays?
-                             sizeExpr    : Option[CCExpr],
-                             sizeInt     : Option[Int],
-                             arrayTheory : ap.theories.ExtArray,
-                             arrayLocation : ArrayLocation)
-                            (implicit arithmeticMode : ArithmeticMode.Value)
+  case class CCArray(elementType : CCType, // todo: multidimensional arrays?
+                     sizeExpr    : Option[CCExpr],
+                     sizeInt     : Option[Int],
+                     arrayTheory : ap.theories.ExtArray,
+                     arrayLocation : ArrayLocation)
+                    (implicit arithmeticMode : ArithmeticMode.Value)
     extends CCType(arithmeticMode) {
     override def toString : String =
       //typ + "[" + (if (size.nonEmpty) size.get else "") + "]"
@@ -618,7 +616,7 @@ object CCReader {
 
   class FunctionContext (val prePred  : CCPredicate,
                          val postPred : CCPredicate,
-                         val acslContext : ACSLTranslator.Context,
+                         val acslContext : ACSLTranslator.FunctionContext,
                          val prePredACSLArgNames : Seq[String],
                          val postPredACSLArgNames : Seq[String])
 
@@ -1226,7 +1224,7 @@ class CCReader private (prog : Program,
       functionAnnotations.filter(_._2.exists(_ == ContractGen)).keys.toSeq
 
     val funsThatMightHaveACSLContracts : Map[Afunc, Seq[AnnotationInfo]] =
-      functionAnnotations.filter(_._2.exists(_.isInstanceOf[InvalidAnnotation]))
+      functionAnnotations.filter(_._2.exists(_.isInstanceOf[MaybeACSLAnnotation]))
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
       val funDef = FuncDef(fun.function_def_)
@@ -1268,7 +1266,7 @@ class CCReader private (prog : Program,
 
       localVars.popFrame
 
-      class Context extends ACSLTranslator.Context {
+      class Context extends ACSLTranslator.FunctionContext {
         def getOldVar(ident: String): Option[CCVar] =
           postOldVarsMap get ident
 
@@ -1318,13 +1316,13 @@ class CCReader private (prog : Program,
 
     val annotatedFuns : Map[Afunc, FunctionContract] =
       for ((fun, annots) <- funsThatMightHaveACSLContracts;
-           annot <- annots if annot.isInstanceOf[InvalidAnnotation]) yield {
+           annot <- annots if annot.isInstanceOf[MaybeACSLAnnotation]) yield {
 
         val name = getName(fun.function_def_)
         val funContext = functionContexts(name)
-        val possibleACSLAnnotation = annot.asInstanceOf[InvalidAnnotation]
+        val possibleACSLAnnotation = annot.asInstanceOf[MaybeACSLAnnotation]
         // todo: try / catch and print msg?
-        val contract = ACSLTranslator.translateContract(
+        val contract = ACSLTranslator.translateACSL(
           "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
 
         prePredsToReplace.add(funContext.prePred.pred)
@@ -1332,9 +1330,10 @@ class CCReader private (prog : Program,
         funToPreAtom.put(name, atom(funContext.prePred))
         funToPostAtom.put(name, atom(funContext.postPred))
         funsWithAnnot.add(name)
-        funToContract.put(name, contract)
+        val funContract = contract.asInstanceOf[FunctionContract]
+        funToContract.put(name, funContract)
 
-        (fun, contract)
+        (fun, funContract)
       }
 
     // ... and generate clauses for those functions
@@ -2559,6 +2558,8 @@ class CCReader private (prog : Program,
       else
         atom(oriInitPred, allFormalVarTerms)
     private def initPred = predCCPredMap(initAtom.pred)
+
+    def initAtomArgs = if(initAtom != null) Some(initAtom.args) else None
 
     private val savedStates = new Stack[(IAtom, Seq[CCExpr], IFormula, /*IFormula,*/ Boolean)]
     def saveState =
@@ -4311,6 +4312,63 @@ class CCReader private (prog : Program,
           translate(stm.jump_stm_, entry, exit)
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
+        case stm: AnnotationS => // todo: mvoe this into a separate translate method
+          val annotationInfo =
+            AnnotationParser(annotationStringExtractor(stm.annotation_))
+          annotationInfo match {
+            case Seq(MaybeACSLAnnotation(annot, _)) =>
+              val stmSymex = Symex(entry)
+              class LocalContext extends ACSLTranslator.StatementAnnotationContext {
+                /**
+                 * Returns the term from the init atom - this should work as
+                 * long as the annotation does not have side effects
+                 */
+                override def getTermInScope(name: String) : Option[CCTerm] = {
+                  entry.argVars.zipWithIndex.find{
+                    case (v, i) => v.name == name
+                  } match {
+                    case Some((v, i)) =>
+                     stmSymex.initAtomArgs match {
+                       case Some(args) => Some(CCTerm(args(i), v.typ, v.srcInfo))
+                       case None => None
+                     }
+                    case None => None
+                  }
+                }
+
+                override def getGlobals: Seq[CCVar] = globalVars.vars
+                override def sortWrapper(s: Sort): Option[IFunction] =
+                  sortWrapperMap get s
+                override def sortGetter(s: Sort): Option[IFunction] =
+                  sortGetterMap get s
+                override def getCtor(s: Sort): Int = sortCtorIdMap(s)
+                override def getTypOfPointer(t: CCType): CCType =
+                  t match {
+                    case p: CCHeapPointer => p.typ
+                    case t => t
+                  }
+                override implicit val arithMode = arithmeticMode
+                override def isHeapEnabled: Boolean = modelHeap
+                override def getHeap: HeapObj =
+                  if (modelHeap) heap else throw NeedsHeapModelException
+                override def getHeapTerm: ITerm =
+                  if (modelHeap) stmSymex.getValues.head.toTerm
+                  else throw NeedsHeapModelException
+                override def getOldHeapTerm: ITerm =
+                  getHeapTerm // todo: heap term for exit predicate?
+              }
+              ACSLTranslator.translateACSL(
+                "/*@" + annot + "*/", new LocalContext()) match {
+                case res : tricera.acsl.StatementAnnotation =>
+                  if(res.isAssert) {
+                    stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)))
+                  } else warn("Ignoring annotation: " + annot)
+                case _ =>
+                  // (this is not an error, as we are just ignoring it)
+                  warn("Ignoring annotation: " + annot)
+              }
+            case _ => warn("Ignoring annotation: " + annotationInfo)
+          }
       }
 
     private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {

@@ -30,11 +30,19 @@
 -- https://frama-c.com/download/acsl.pdf
 
 --- Annotation ---------------------------------------------
-AnnotContract. Annotation ::= "/*@" FunctionContract "*/";
+AnnotContract.  Annotation ::= "/*@" FunctionContract "*/";
+AnnotAssertion. Annotation ::= "/*@" Assertion "*/";
+
+---- Assertions --------------------------------------------
+RegularAssertion1. Assertion ::= AssertionKind Predicate ";"  ;
+RegularAssertion2. Assertion ::= AssertionKind Predicate ;
+-- BehaviourAssertion. Assertion ::= for id ... (see Figure 2.9 in the ACSL standard)
 
 ---- Contracts (2.6) ---------------------------------------
 Contract. FunctionContract ::= [RequiresClause] MaybeTerminatesClause MaybeDecreasesClause [SimpleClause] [NamedBehavior] [CompletenessClause] ;
 
+Assert.            AssertionKind ::= "assert" ;
+NonBlockingAssert. AssertionKind ::= ClauseKind ;
 
 NoClauseKind.   MaybeClauseKind ::= ;
 SomeClauseKind. MaybeClauseKind ::= ClauseKind ;

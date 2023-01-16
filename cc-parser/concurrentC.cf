@@ -225,14 +225,15 @@ NewFuncExpr.     Dir_abs_dec ::= Dir_abs_dec "(" Parameter_type ")" ;
 
 
 
-LabelS.   Stm ::= Labeled_stm ;
-CompS.    Stm ::= Compound_stm ;
-ExprS.    Stm ::= Expression_stm ;
-SelS.     Stm ::= Selection_stm ;
-IterS.    Stm ::= Iter_stm ;
-JumpS.    Stm ::= Jump_stm ;
-DecS.     Stm ::= Dec ; -- beyond ANSI-C
-AtomicS.  Stm ::= Atomic_stm ;
+LabelS.      Stm ::= Labeled_stm ;
+CompS.       Stm ::= Compound_stm ;
+ExprS.       Stm ::= Expression_stm ;
+SelS.        Stm ::= Selection_stm ;
+IterS.       Stm ::= Iter_stm ;
+JumpS.       Stm ::= Jump_stm ;
+DecS.        Stm ::= Dec ; -- beyond ANSI-C
+AtomicS.     Stm ::= Atomic_stm ;
+AnnotationS. Stm ::= Annotation ;
 
 SlabelOne.   Labeled_stm ::= CIdent ":" Stm ;
 SlabelTwo.   Labeled_stm ::= "case" Constant_expression ":" Stm ;

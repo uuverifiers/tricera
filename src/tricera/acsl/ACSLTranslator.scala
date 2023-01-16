@@ -29,18 +29,15 @@
 
 package tricera.acsl
 
-import tricera.acsl.{Absyn => AST};
+import tricera.acsl.{Absyn => AST}
 
 import collection.JavaConverters._
-
 import ap.parser.IExpression
-import ap.parser.{ISortedQuantified, IConstant, ITerm, IIntLit, IBoolLit,
-                  IFunApp, IFunction, IFormula, IFormulaITE, IVariable,
-                  ISortedVariable}
-import ap.types.{MonoSortedPredicate, SortedConstantTerm, Sort}
-import ap.theories.{Heap}
-
-import tricera.concurrency.CCReader.{CCType, CCVar, CCTerm, CCExpr}
+import ap.parser.{IBoolLit, IConstant, IFormula, IFormulaITE, IFunApp, IFunction, IIntLit, ISortedQuantified, ISortedVariable, ITerm, IVariable}
+import ap.types.{MonoSortedPredicate, Sort, SortedConstantTerm}
+import ap.theories.Heap
+import ap.theories.nia.GroebnerMultiplication._
+import tricera.concurrency.CCReader.{CCExpr, CCFormula, CCTerm, CCType, CCVar}
 import tricera.concurrency.CCReader
 
 class ACSLParseException(msg : String) extends Exception(msg)
@@ -48,35 +45,55 @@ class ACSLTranslateException(msg : String) extends Exception(msg)
 
 object ACSLTranslator {
 
-  trait Context {
-    def getOldVar(ident : String) : Option[CCVar]
-    def getPostGlobalVar(ident : String) : Option[CCVar]
-    def getParams  : Seq[CCVar]
+  trait AnnotationContext {
     def getGlobals : Seq[CCVar]
-    def getResultVar : Option[CCVar]
-    def isHeapEnabled : Boolean
-    def getHeap : Heap
-    def getHeapTerm : ITerm
+    def sortWrapper(s: Sort): Option[IFunction]
+    def sortGetter(s: Sort): Option[IFunction]
+    def getCtor(s: Sort): Int
+    def getTypOfPointer(t: CCType): CCType
+    def isHeapEnabled: Boolean
+    def getHeap: Heap
+    def getHeapTerm: ITerm
     def getOldHeapTerm : ITerm
-    def sortWrapper(s : Sort) : Option[IFunction]
-    def sortGetter(s : Sort) : Option[IFunction]
-    def getCtor(s : Sort) : Int
-    def getTypOfPointer(t : CCType) : CCType
-
     implicit val arithMode : CCReader.ArithmeticMode.Value
   }
 
-  def translateContract(annot : String, ctx : Context) : FunctionContract = {
+  trait FunctionContext extends AnnotationContext {
+    def getOldVar(ident : String) : Option[CCVar]
+    def getPostGlobalVar(ident : String) : Option[CCVar]
+    def getParams  : Seq[CCVar]
+    def getResultVar : Option[CCVar]
+  }
+
+  trait StatementAnnotationContext extends AnnotationContext {
+    def getTermInScope (name : String) : Option[CCTerm]
+  }
+
+  def translateACSL(annot : String,
+                    ctx   : AnnotationContext) : ParsedAnnotation = {
     val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
     val p : parser = new parser(l, l.getSymbolFactory())
     try {
       val ast : AST.Annotation = p.pAnnotation()
-      val translator = new ACSLTranslator(ast, ctx)
+      val translator = new ACSLTranslator(ctx)
 
       ast match {
         case ac : AST.AnnotContract =>
-          translator.translate(ac.functioncontract_)
-        case _ => throw new ACSLParseException("Not a contract annotation.")
+          ctx match {
+            case funCtx : FunctionContext =>
+              translator.translate(ac.functioncontract_)
+            case _ => throw new ACSLParseException("A function context is " +
+              "needed to parse a function contract.")
+          }
+        case ac : AST.AnnotAssertion =>
+          ctx match {
+            case stmCtx : StatementAnnotationContext =>
+              translator.translate(ac.assertion_, stmCtx)
+            case _ => throw new ACSLParseException("An statement context is " +
+              "needed to parse a statement annotation.")
+          }
+        case _ => throw new ACSLParseException("Not a contract or " +
+          "statement annotation.")
       }
     } catch {
       case CCReader.NeedsHeapModelException =>
@@ -101,16 +118,33 @@ object ACSLTranslator {
 
 }
 
-class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
+class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
   import scala.collection.mutable.{HashMap => MHashMap}
-  import scala.collection.immutable.Map
+  import ACSLTranslator._
   import ctx.arithMode
+
   val locals = new MHashMap[String, CCTerm]
-  var vars : Map[String, CCVar] = Map()
+  var vars: Map[String, CCVar] = Map()
   var inPostCond = false
   var useOldHeap = false
-
   // TODO: Make all `translate` private?
+
+  // ---- Statement annotations (e.g., assertions) -----------
+  def translate(assertAnnotation : AST.Assertion,
+                stmCtx           : StatementAnnotationContext) : StatementAnnotation = {
+    assertAnnotation match {
+      case regularAssertion : AST.RegularAssertion1 =>
+            val f = translate(regularAssertion.predicate_)
+            StatementAnnotation(f, isAssert = true)
+      case regularAssertion: AST.RegularAssertion2 =>
+        val f = translate(regularAssertion.predicate_)
+        StatementAnnotation(f, isAssert = true)
+      case _ =>
+        throw new ACSLParseException("Behaviour assertions are " +
+          "currently unsupported.")
+    }
+  }
+
   // ---- Contracts ------------------------------------------
   def translate(contract : AST.FunctionContract) : FunctionContract = contract match {
     case c : AST.Contract =>
@@ -128,35 +162,37 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
       // NOTE: `pre` and `post` defaults to true given usage of `and`.
       useOldHeap = true
-      val pre  : IFormula = IExpression.and(rcs.map(translate))
+      val pre  : IFormula = IExpression.and(rcs.map(f => translate(f)))
       useOldHeap = false
-      val post : IFormula = IExpression.and(ecs.map(translate))
+      val post : IFormula = IExpression.and(ecs.map(f => translate(f)))
 
       // FIXME: Refactor and break out in functions!
       val assigns : (IFormula, IFormula) = acs match {
         case Nil => (IBoolLit(true), IBoolLit(true))
         case acs =>
-          val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) =
-            acs.foldLeft(Set[CCTerm](), Set[CCTerm]()) ({(sets, clause) =>
+          val (idents, ptrDerefs) : (Set[CCExpr], Set[CCExpr]) =
+            acs.foldLeft(Set[CCExpr](), Set[CCExpr]()) ({(sets, clause) =>
               val (i, p) =
                 translateAssigns(clause.assignsclause_
                   .asInstanceOf[AST.AnAssignsClause])
               (i.union(sets._1), p.union(sets._2))
             })
 
+          val funCtx = ctx.asInstanceOf[FunctionContext]
+
           val globConstraint : IFormula =
             if (idents.isEmpty) {
               ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
                 (formula, globVar) => {
-                  val glob    : ITerm = ctx.getPostGlobalVar(globVar.name).get.term//globVar.term
-                  val globOld : ITerm = ctx.getOldVar(globVar.name).get.term
+                  val glob    : ITerm = funCtx.getPostGlobalVar(globVar.name).get.term//globVar.term
+                  val globOld : ITerm = funCtx.getOldVar(globVar.name).get.term
                   formula &&& glob === globOld
                 }
               )
             } else {
               val globals : Seq[ITerm] = ctx.getGlobals.map(_.term)
               val oldGlobals : Seq[ITerm] =
-                ctx.getGlobals.map(g => ctx.getOldVar(g.name).get.term)
+                ctx.getGlobals.map(g => funCtx.getOldVar(g.name).get.term)
               val globToOld : Map[ITerm, ITerm] =
                 globals.zip(oldGlobals).toMap
 
@@ -170,8 +206,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
           val (heapAssert, heapAssume) : (IFormula, IFormula) =
             if (ptrDerefs.isEmpty) {
-                if (ctx.isHeapEnabled) {
-                  val sameHeap = ctx.getHeapTerm === ctx.getOldHeapTerm
+                if (funCtx.isHeapEnabled) {
+                  val sameHeap = funCtx.getHeapTerm === funCtx.getOldHeapTerm
                   (sameHeap, sameHeap)
                 } else {
                   (IBoolLit(true), IBoolLit(true))
@@ -180,9 +216,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                 val ptrs = ptrDerefs.map(_.toTerm)
 
                 import ap.parser.IExpression.toFunApplier
-                val heap : Heap = ctx.getHeap
-                val newHeap : ITerm = ctx.getHeapTerm
-                val oldHeap : ITerm = ctx.getOldHeapTerm
+                val heap : Heap = funCtx.getHeap
+                val newHeap : ITerm = funCtx.getHeapTerm
+                val oldHeap : ITerm = funCtx.getOldHeapTerm
 
                 // Implicit existensional
                 val addrObjPairs : List[(ITerm, ITerm)] =
@@ -196,8 +232,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                     case (h, pair) => heap.write(h, pair._1, pair._2)
                   })
 
-                val ptrObjPairs : List[(CCTerm, ITerm)] =
-                  ptrDerefs.zip(addrObjPairs.unzip._2).toList
+                val ptrObjPairs : List[(CCExpr, ITerm)] =
+                  ptrDerefs.zip(addrObjPairs.map(_._2)).toList
 
                 val corrSort : IFormula =
                   ptrObjPairs.foldLeft(IBoolLit(true) : IFormula) (
@@ -206,7 +242,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                       val sort : Sort =
                         p.typ.asInstanceOf[CCReader.CCHeapPointer].typ.toSort
                       val corr : IFormula =
-                        ctx.getHeap.heapADTs.hasCtor(obj, ctx.getCtor(sort))
+                        funCtx.getHeap.heapADTs.hasCtor(obj, ctx.getCtor(sort))
                       formula &&& corr
                     }
                   )
@@ -216,7 +252,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
                 // Implicit universal
                 val quant : ITerm =
-                  new SortedConstantTerm("_p", ctx.getHeap.AddressSort)
+                  new SortedConstantTerm("_p", funCtx.getHeap.AddressSort)
                 val quantifiedNotEqual : IFormula =
                   ptrs.foldLeft(IBoolLit(true) : IFormula) (
                     (formula, ptr) => formula &&& quant =/= ptr
@@ -237,16 +273,17 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   }
 
   // FIXME: Return ITerm directly?
-  def translateAssigns(clause : AST.AnAssignsClause) : (Set[CCTerm], Set[CCTerm]) = {
-    vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
+  def translateAssigns(clause : AST.AnAssignsClause) : (Set[CCExpr], Set[CCExpr]) = {
+    val funCtx = ctx.asInstanceOf[FunctionContext]
+    vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
     clause.locations_ match {
       case ls : AST.LocationsSome    =>
         val tSets : List[AST.TSet] =
           ls.listlocation_.asScala.toList
           .map(_.asInstanceOf[AST.ALocation].tset_)
-        val nils = (Nil : List[CCTerm], Nil : List[CCTerm])
-        val terms : (List[CCTerm], List[CCTerm]) = tSets.foldRight(nils) ({
+        val nils = (Nil : List[CCExpr], Nil : List[CCExpr])
+        val terms : (List[CCExpr], List[CCExpr]) = tSets.foldRight(nils) ({
           case (t : AST.TSetTerm, (idents, ptrDerefs)) =>
             t.term_ match {
               case i : AST.TermIdent => (translate(i) :: idents, ptrDerefs)
@@ -269,6 +306,10 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
 
   // FIXME: Type is specified already.
+
+  /**
+   * Translates assigns / ensures clauses.
+   */
   def translate(clause : AST.SimpleClause) : IFormula = clause match {
     case ac : AST.SimpleClauseAssigns => throwNotImpl(ac)
     case ec : AST.SimpleClauseEnsures => translate(ec.ensuresclause_)
@@ -276,8 +317,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
 
   def translate(clause : AST.EnsuresClause) : IFormula = {
+    val funCtx = ctx.asInstanceOf[FunctionContext]
     inPostCond = true
-    vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
+    vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
     val res = translate(clause.asInstanceOf[AST.AnEnsuresClause].predicate_)
     inPostCond = false
@@ -285,8 +327,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   }
 
   def translate(clause : AST.RequiresClause) : IFormula = {
-    vars = (ctx.getParams ++ ctx.getGlobals).map(v =>
-      (v.name, ctx.getOldVar(v.name).get)).toMap
+    val funCtx = ctx.asInstanceOf[FunctionContext]
+    vars = (funCtx.getParams ++ ctx.getGlobals).map(v =>
+      (v.name, funCtx.getOldVar(v.name).get)).toMap
     translate(clause.asInstanceOf[AST.ARequiresClause].predicate_)
   }
 
@@ -367,7 +410,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
   def translate(pred : AST.PredNegation) : IFormula = {
     val right : IFormula = translate(pred.predicate_)
-    right.unary_!
+    !right
   }
 
   def translate(pred : AST.PredXOr) : IFormula = {
@@ -386,9 +429,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
   def translate(pred : AST.PredLocalBinding) : IFormula = {
     val ident   : String = pred.id_
-    val boundTo : CCTerm  = translate(pred.term_)
+    val boundTo : CCExpr  = translate(pred.term_)
 
-    locals.put(ident, boundTo)
+    locals.put(ident, CCTerm(boundTo.toTerm, boundTo.typ, boundTo.srcInfo))
     val inner : IFormula = translate(pred.predicate_)
     locals.remove(ident)
     inner
@@ -415,13 +458,13 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     val inner : IFormula = translate(pred.predicate_)
     val (names, terms) : (Seq[String], Seq[CCTerm]) = namedTerms.unzip
     // FIXME: If v is shadowed, this will remove the shadowed term.
-    names.map(locals.remove(_))
+    names.map(locals.remove)
 
     // FIXME: Look over order of creation here.
     // FIXME: Use IExpression.all?
     terms.foldLeft(inner)((formula, term) => {
         val sort : Sort = term.typ.toSort
-        new ISortedQuantified(IExpression.Quantifier.ALL, sort, formula)
+        ISortedQuantified(IExpression.Quantifier.ALL, sort, formula)
     })
   }
 
@@ -431,13 +474,13 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
         b.typename_.asInstanceOf[AST.TypeNameC].ctypespecifier_
       val ctyp : CCType = toCCType(typ)
       val idents : Seq[AST.VariableIdent] = b.listvariableident_.asScala.toList
-      idents.map(i => i match {
-        case v : AST.VariableIdentId =>
+      idents.map {
+        case v: AST.VariableIdentId =>
           (v.id_, CCTerm(ISortedVariable(0, ctyp.toSort), ctyp, None)) // todo: line no?
-        case v : AST.VariableIdentPtrDeref    => throwNotImpl(v)
-        case v : AST.VariableIdentArray       => throwNotImpl(v)
-        case v : AST.VariableIdentParentheses => throwNotImpl(v)
-      })
+        case v: AST.VariableIdentPtrDeref => throwNotImpl(v)
+        case v: AST.VariableIdentArray => throwNotImpl(v)
+        case v: AST.VariableIdentParentheses => throwNotImpl(v)
+      }
     })
   }
 
@@ -466,10 +509,11 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     translate(pred.predicate_)
   }
 
-  def translate(pred : AST.PredValid) : IFormula = {
+  // todo: this probably should work for statement annotations too
+  def translate(pred   : AST.PredValid) : IFormula = {
     val tSets : List[AST.TSet] =
       pred.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
-    val terms : List[CCTerm] = tSets.collect({
+    val terms : List[CCExpr] = tSets.collect({
       case t : AST.TSetTerm  => translate(t.term_)
       case t => throwNotImpl(t)
     })
@@ -494,7 +538,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   }
 
   // ---- Terms ----------------------------------------------
-  def translate(term : AST.Term) : CCTerm = term match {
+  def translate(term : AST.Term) : CCExpr = term match {
     case t : AST.TermLiteral                 => translate(t)
     case t : AST.TermIdent                   => translate(t)
     case t : AST.TermUnaryOp                 => translate(t)
@@ -525,18 +569,29 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     val ident = t.id_
     // TODO: Lookup if var exists as as local binding.
     // FIXME: Order of lookups (priority)?
-    val bound  : Option[CCTerm] = locals.get(ident)
-    val scoped : Option[CCTerm] =
-      vars.get(ident).map(v => CCTerm(v.term, v.typ, v.srcInfo))
-    bound.getOrElse(
-      scoped.getOrElse(
-        throw new ACSLParseException(s"Identifier $ident not found in scope.")
-      )
-    )
+
+    val maybeTerm = ctx match {
+      case stmCtx: StatementAnnotationContext =>
+        stmCtx.getTermInScope(ident)
+      case _ => None
+    }
+
+    maybeTerm match {
+      case Some(t) => t
+      case None =>
+        val bound: Option[CCTerm] = locals.get(ident)
+        val scoped: Option[CCTerm] =
+          vars.get(ident).map(v => CCTerm(v.term, v.typ, v.srcInfo))
+        bound.getOrElse(
+          scoped.getOrElse(
+            throw new ACSLParseException(s"Identifier $ident not found in scope.")
+          )
+        )
+    }
   }
 
-  def translate(term : AST.TermUnaryOp) : CCTerm = {
-    val right : CCTerm = translate(term.term_)
+  def translate(term : AST.TermUnaryOp) : CCExpr = {
+    val right : CCExpr = translate(term.term_)
     // FIXME: Probably needs type conversions.
     term.unaryop_ match {
       case op : AST.UnaryOpPlus            => throwNotImpl(op)
@@ -566,76 +621,98 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     }
   }
 
-  def translate(term : AST.TermBinOp) : CCTerm = {
-    val left  : CCTerm = translate(term.term_1)
-    val right : CCTerm = translate(term.term_2)
+  def translate(term: AST.TermBinOp): CCExpr = {
+    val left: CCExpr = translate(term.term_1)
+    val right: CCExpr = translate(term.term_2)
     // FIXME: Type promotion?
     //assert(left.typ == right.typ)
-    val typ : CCType = left.typ
+    val typ: CCType = left.typ
     val srcInfo = left.srcInfo
     term.binop_ match {
-      case op : AST.BinOpPlus =>
+      case op: AST.BinOpPlus =>
         CCTerm(left.toTerm + right.toTerm, typ, srcInfo)
-      case op : AST.BinOpMinus =>
+      case op: AST.BinOpMinus =>
         CCTerm(left.toTerm - right.toTerm, typ, srcInfo)
-      case op : AST.BinOpMult =>
-        import ap.theories.nia.GroebnerMultiplication.mult
+      case op: AST.BinOpMult =>
         CCTerm(mult(left.toTerm, right.toTerm), typ, srcInfo)
-      case op : AST.BinOpDiv =>
-        import ap.theories.nia.GroebnerMultiplication.tDiv
+      case op: AST.BinOpDiv =>
         CCTerm(tDiv(left.toTerm, right.toTerm), typ, srcInfo)
-      case op : AST.BinOpMod =>
-        import ap.theories.nia.GroebnerMultiplication.tMod
+      case op: AST.BinOpMod =>
         CCTerm(tMod(left.toTerm, right.toTerm), typ, srcInfo)
-      // FIXME: Comparisons create IFormula:s.. Desired?
-      case op : AST.BinOpEQ           => throwNotImpl(op) // left === right
-      case op : AST.BinOpNEQ          => throwNotImpl(op) // left =/= right
-      case op : AST.BinOpLEQ          => throwNotImpl(op) // left <= right
-      case op : AST.BinOpGEQ          => throwNotImpl(op) // left >= right
-      case op : AST.BinOpGT           => throwNotImpl(op) // left > right
-      case op : AST.BinOpLT           => throwNotImpl(op) // left < right
-      case op : AST.BinOpAnd          => throwNotImpl(op)
-      case op : AST.BinOpOr           => throwNotImpl(op)
-      case op : AST.BinOpXOr          => throwNotImpl(op)
-      case op : AST.BinOpLShift       => throwNotImpl(op)
-      case op : AST.BinOpRShift       => throwNotImpl(op)
-      case op : AST.BinOpBitwiseAnd   => throwNotImpl(op)
-      case op : AST.BinOpBitwiseOr    => throwNotImpl(op)
-      case op : AST.BinOpBitwiseImpl  => throwNotImpl(op)
-      case op : AST.BinOpBitwiseEquiv => throwNotImpl(op)
-      case op : AST.BinOpBitwiseXOr   => throwNotImpl(op)
+      case _: AST.BinOpEQ =>
+        CCFormula(left.toTerm === right.toTerm, typ, srcInfo)
+      case _: AST.BinOpNEQ =>
+        CCFormula(left.toTerm =/= right.toTerm, typ, srcInfo)
+      case _: AST.BinOpLEQ => // todo: this mixes and matches terms and formulas right now! needs parentheses everywhere to work correctly
+        CCFormula(left.toTerm <= right.toTerm, typ, srcInfo)
+      case _: AST.BinOpGEQ =>
+        CCFormula(left.toTerm >= right.toTerm, typ, srcInfo)
+      case op: AST.BinOpGT =>
+        CCFormula(left.toTerm > right.toTerm, typ, srcInfo)
+      case op: AST.BinOpLT =>
+        CCFormula(left.toTerm < right.toTerm, typ, srcInfo)
+      case op: AST.BinOpAnd =>
+        CCFormula(left.toFormula &&& right.toFormula, typ, srcInfo)
+      case op: AST.BinOpOr =>
+        CCFormula(left.toFormula ||| right.toFormula, typ, srcInfo)
+      case op: AST.BinOpXOr =>
+        CCFormula((left.toFormula &&& !right.toFormula) |||
+          (!left.toFormula &&& right.toFormula), typ, srcInfo)
+      case op: AST.BinOpLShift => throwNotImpl(op)
+      case op: AST.BinOpRShift => throwNotImpl(op)
+      case op: AST.BinOpBitwiseAnd => throwNotImpl(op)
+      case op: AST.BinOpBitwiseOr => throwNotImpl(op)
+      case op: AST.BinOpBitwiseImpl => throwNotImpl(op)
+      case op: AST.BinOpBitwiseEquiv => throwNotImpl(op)
+      case op: AST.BinOpBitwiseXOr => throwNotImpl(op)
     }
   }
 
-  def translate(term : AST.TermArrayAccess) : CCTerm = {
-    // TODO: Unsure if working.
-    val array : CCTerm = translate(term.term_1)
-    val index : CCTerm = translate(term.term_2)
-
-    val typ : CCType = array.typ match {
-      case p : CCReader.CCHeapPointer => p.typ
-      case _ =>
-        throw new ACSLParseException("Array access not on heap pointer.")
-    }
-
+  // todo: move heap getters to Context from FunctionContext, these should be usable from statement annoations too
+  //  otherwise we cannot use array accesses inside assertions.
+  def translate(term : AST.TermArrayAccess) : CCExpr = {
     import ap.parser.IExpression.toFunApplier
-    val heap : ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
-    val access  : IFunApp = ctx.getHeap.nth(array.toTerm, index.toTerm)
-    val readObj : IFunApp = ctx.getHeap.read(heap, access)
-    val getObj  : IFunction = ctx.sortGetter(typ.toSort).getOrElse(
-      throw new ACSLParseException(s"Cannot access $array[$index].")
-    )
-    CCTerm(getObj(readObj), typ, array.srcInfo)
+    // TODO: Unsure if working.
+    val array : CCExpr = translate(term.term_1)
+    val index : CCExpr = translate(term.term_2)
+    array.typ match {
+      case p : CCReader.CCHeapPointer =>
+        val heap: ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
+        val access: IFunApp = ctx.getHeap.nth(array.toTerm, index.toTerm)
+        val readObj: IFunApp = ctx.getHeap.read(heap, access)
+        val getObj: IFunction = ctx.sortGetter(p.typ.toSort).getOrElse(
+          throw new ACSLParseException(s"Cannot access $array[$index].")
+        )
+        CCTerm(getObj(readObj), p.typ, array.srcInfo)
+      case p : CCReader.CCHeapArrayPointer =>
+        val heap: ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
+        val access: IFunApp = ctx.getHeap.nth(array.toTerm, index.toTerm)
+        val readObj: IFunApp = ctx.getHeap.read(heap, access)
+        val getObj: IFunction = ctx.sortGetter(p.elementType.toSort).getOrElse(
+          throw new ACSLParseException(s"Cannot access $array[$index].")
+        )
+        CCTerm(getObj(readObj), p.elementType, array.srcInfo)
+      case p : CCReader.CCArray => // todo: currently does not use wrappers, should match the encoding in CCReader
+        val readObj: IFunApp = p.arrayTheory.select(array.toTerm, index.toTerm)
+        val getObj: IFunction = ctx.sortGetter(p.elementType.toSort).getOrElse(
+          throw new ACSLParseException(s"Cannot access $array[$index].")
+        )
+        //CCTerm(getObj(readObj), p.elementType, array.srcInfo)
+        CCTerm(readObj, p.elementType, array.srcInfo)
+      case _ =>
+        throw new ACSLParseException("Array access could not be handled.")
+    }
   }
 
-  def translate(term : AST.TermParentheses) : CCTerm = {
+  def translate(term : AST.TermParentheses) : CCExpr = {
     translate(term.term_)
   }
 
-  def translate(term : AST.TermOld) : CCTerm = {
+  def translate(term   : AST.TermOld) : CCExpr = {
     val old = vars
-    vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
-        ++ ctx.getGlobals.map(v => (v.name, ctx.getOldVar(v.name).get))).toMap
+    val funCtx = ctx.asInstanceOf[FunctionContext]
+    vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
+        ++ funCtx.getGlobals.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
     useOldHeap = true
     val res = translate(term.term_)
     useOldHeap = false
@@ -643,12 +720,13 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     res
   }
 
-  def translate(term : AST.TermResult) : CCTerm = {
+  def translate(term   : AST.TermResult) : CCExpr = {
+    val funCtx = ctx.asInstanceOf[FunctionContext]
     if (!inPostCond) {
       throw new ACSLParseException("\\result has no meaning.")
     }
 
-    ctx.getResultVar.map(v => CCTerm(v.term, v.typ, v.srcInfo))
+    funCtx.getResultVar.map(v => CCTerm(v.term, v.typ, v.srcInfo))
       .getOrElse(
         throw new ACSLParseException("\\result used in void function.")
       )
