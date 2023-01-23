@@ -30,7 +30,7 @@
 package tricera
 import ap.parser.{CollectingVisitor, ConstantSubstVisitor, ExpressionReplacingVisitor, IAtom, IBinJunctor, IConstant, IEquation, IExpression, IFormula, IFormulaITE, IFunApp, IFunction, IIntFormula, IIntRelation, INot, ITerm, IVariableBinder, LineariseVisitor, SymbolCollector, Transform2NNF}
 import ap.terfor.preds.Predicate
-import ap.theories.ExtArray
+import ap.theories.{ExtArray, Theory}
 import ap.types.MonoSortedIFunction
 import lazabs.horn.bottomup.HornClauses
 import tricera.concurrency.CCReader.TranslationException
@@ -432,4 +432,20 @@ object Util {
   }
 ////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////
+  trait TheoryExtractor {
+    def unapply(f : IFunction) : Option[Theory]
+  }
+  class FunAppsFromExtractorCollector(theoryExtractor : TheoryExtractor)
+    extends CollectingVisitor[Int, List[(IFunApp, Theory)]] {
+    def postVisit(t: IExpression, boundVars: Int,
+                  subres: Seq[List[(IFunApp, Theory)]]): List[(IFunApp, Theory)] = {
+      t match {
+        case f@IFunApp(fun@theoryExtractor(theory), _) =>
+          (f, theory) :: subres.flatten.toList
+        case _ => subres.flatten.toList
+      }
+    }
+}
+////////////////////////////////////////////////////////////////////////////////
 }

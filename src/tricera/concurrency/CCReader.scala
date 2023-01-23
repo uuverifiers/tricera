@@ -31,7 +31,7 @@ package tricera.concurrency
 
 import ap.basetypes.IdealInt
 import ap.parser._
-import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic}
+import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic, Theory, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrent_c._
 import concurrent_c.Absyn._
@@ -1266,7 +1266,7 @@ class CCReader private (prog : Program,
 
       localVars.popFrame
 
-      class Context extends ACSLTranslator.FunctionContext {
+      class ReaderFunctionContext extends ACSLTranslator.FunctionContext {
         def getOldVar(ident: String): Option[CCVar] =
           postOldVarsMap get ident
 
@@ -1310,7 +1310,7 @@ class CCReader private (prog : Program,
       }
 
       val funContext = new FunctionContext(prePred, postPred,
-        new Context, prePredArgACSLNames, postPredACSLArgNames)
+        new ReaderFunctionContext, prePredArgACSLNames, postPredACSLArgNames)
       functionContexts += ((funDef.name, funContext))
     }
 
@@ -4313,63 +4313,186 @@ class CCReader private (prog : Program,
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
         case stm: AnnotationS => // todo: mvoe this into a separate translate method
-          val annotationInfo =
-            AnnotationParser(annotationStringExtractor(stm.annotation_))
-          annotationInfo match {
-            case Seq(MaybeACSLAnnotation(annot, _)) =>
-              val stmSymex = Symex(entry)
-              class LocalContext extends ACSLTranslator.StatementAnnotationContext {
-                /**
-                 * Returns the term from the init atom - this should work as
-                 * long as the annotation does not have side effects
-                 */
-                override def getTermInScope(name: String) : Option[CCTerm] = {
-                  entry.argVars.zipWithIndex.find{
-                    case (v, i) => v.name == name
-                  } match {
-                    case Some((v, i)) =>
-                     stmSymex.initAtomArgs match {
-                       case Some(args) => Some(CCTerm(args(i), v.typ, v.srcInfo))
-                       case None => None
-                     }
+          translate(stm.annotation_, entry)
+      }
+
+    private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
+      val annotationInfo = AnnotationParser(annotationStringExtractor(stm))
+      annotationInfo match {
+        case Seq(MaybeACSLAnnotation(annot, _)) =>
+          val stmSymex = Symex(entry)
+          class LocalContext extends ACSLTranslator.StatementAnnotationContext {
+            /**
+             * Returns the term from the init atom - this should work as
+             * long as the annotation does not have side effects, because
+             * it always returns the original terms from initAtom
+             */
+            override def getTermInScope(name: String): Option[CCTerm] = {
+              entry.argVars.zipWithIndex.find {
+                case (v, i) => v.name == name
+              } match {
+                case Some((v, i)) =>
+                  stmSymex.initAtomArgs match {
+                    case Some(args) => Some(CCTerm(args(i), v.typ, v.srcInfo))
                     case None => None
                   }
-                }
+                case None => None
+              }
+            }
 
-                override def getGlobals: Seq[CCVar] = globalVars.vars
-                override def sortWrapper(s: Sort): Option[IFunction] =
-                  sortWrapperMap get s
-                override def sortGetter(s: Sort): Option[IFunction] =
-                  sortGetterMap get s
-                override def getCtor(s: Sort): Int = sortCtorIdMap(s)
-                override def getTypOfPointer(t: CCType): CCType =
-                  t match {
-                    case p: CCHeapPointer => p.typ
-                    case t => t
-                  }
-                override implicit val arithMode = arithmeticMode
-                override def isHeapEnabled: Boolean = modelHeap
-                override def getHeap: HeapObj =
-                  if (modelHeap) heap else throw NeedsHeapModelException
-                override def getHeapTerm: ITerm =
-                  if (modelHeap) stmSymex.getValues.head.toTerm
-                  else throw NeedsHeapModelException
-                override def getOldHeapTerm: ITerm =
-                  getHeapTerm // todo: heap term for exit predicate?
+            override def getGlobals: Seq[CCVar] = globalVars.vars
+            override def sortWrapper(s: Sort): Option[IFunction] =
+              sortWrapperMap get s
+            override def sortGetter(s: Sort): Option[IFunction] =
+              sortGetterMap get s
+            override def getCtor(s: Sort): Int = sortCtorIdMap(s)
+            override def getTypOfPointer(t: CCType): CCType =
+              t match {
+                case p: CCHeapPointer => p.typ
+                case t => t
               }
-              ACSLTranslator.translateACSL(
-                "/*@" + annot + "*/", new LocalContext()) match {
-                case res : tricera.acsl.StatementAnnotation =>
-                  if(res.isAssert) {
-                    stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)))
-                  } else warn("Ignoring annotation: " + annot)
-                case _ =>
-                  // (this is not an error, as we are just ignoring it)
-                  warn("Ignoring annotation: " + annot)
-              }
-            case _ => warn("Ignoring annotation: " + annotationInfo)
+            override implicit val arithMode = arithmeticMode
+            override def isHeapEnabled: Boolean = modelHeap
+            override def getHeap: HeapObj =
+              if (modelHeap) heap else throw NeedsHeapModelException
+            override def getHeapTerm: ITerm =
+              if (modelHeap) stmSymex.getValues.head.toTerm
+              else throw NeedsHeapModelException
+            override def getOldHeapTerm: ITerm =
+              getHeapTerm // todo: heap term for exit predicate?
           }
+          ACSLTranslator.translateACSL(
+            "/*@" + annot + "*/", new LocalContext()) match {
+            case res: tricera.acsl.StatementAnnotation =>
+              import IExpression._
+//              println(tryGetQuantifiedFormulaInfo(res.f))
+              if (res.isAssert) {
+                tryGetQuantifiedFormulaInfo(res.f) match {
+                  case Some(info) =>
+                    val reduceConj: (ITerm, ITerm) => ITerm =
+                      (a: ITerm, b: ITerm) =>
+                        ite((a === ADT.BoolADT.True) &&& info.predicate,
+                          b, ADT.BoolADT.False)
+                    val extQuan = new ExtendedQuantifier(
+                      name = info.quantifier match {
+                        case Quantifier.ALL => "\\forall"
+                        case Quantifier.EX => "\\exists"
+                      },
+                      arrayTheory = info.arrayTheory,
+                      identity = ADT.BoolADT.True,
+                      reduceOp = reduceConj,
+                      invReduceOp = None
+                    )
+                    TheoryRegistry register extQuan
+                    stmSymex.assertProperty(
+                      ADT.BoolADT.True ===
+                        extQuan.fun(info.arrayTerm, info.lo, info.hi),
+                      srcInfo = Some(getSourceInfo(stm))
+                    )
+                  case None =>
+                    stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)))
+                }
+              } else
+                warn("Ignoring annotation: " + annot)
+            case _ => warn("Ignoring annotation: " + annot)
+          }
+        case _ => warn("Ignoring annotation: " + annotationInfo)
       }
+    }
+
+    private case class QuantifiedFormulaInfo(quantifier : IExpression.Quantifier,
+                                             lo : ITerm, // inclusive
+                                             hi : ITerm, // exclusive
+                                             arrayTerm : ITerm,
+                                             predicate : IFormula,
+                                             arrayAccess : IFunApp,
+                                             arrayTheory : ExtArray,
+                                             originalF : IFormula)
+    /**
+     * Given a quantified formula, tries to extract ranges and the predicate.
+     * This is very basic and only extracts when the quantified formula is in
+     * one of two shapes:
+     *  1. ALL i. (! ((i + -1*lo) >= 0 & ((hi + -1*i) + -1) >= 0) | predicate
+     *    (or forall int i; lo <= i < hi ==> predicate)
+     *  2. EX  i. ...
+     *    (or exists int i; lo <= i < hi & predicate)
+     */
+    private def tryGetQuantifiedFormulaInfo(f : IFormula) :
+      Option[QuantifiedFormulaInfo] = {
+      import IExpression._
+      f match {
+        case IQuantified(quan, subf) =>
+          quan match {
+            case Quantifier.ALL =>
+              subf match {
+                case Disj(fRange, pred) =>
+                  fRange match {
+                    case INot(Conj(flo, fhi)) =>
+                      // try to extract the lo term
+                      val maybeLo = flo match {
+                        case GeqZ(IVariable(0)) => // _0 >= 0 // lo is 0
+                          Some(i(0))
+                        case GeqZ(IPlus(IVariable(0), ITimes(IdealInt(-1), lo))) => // _0 + -1*lo >= 0 or (_0 >= lo)
+                          Some(lo)
+                        case _ => None
+                      }
+                      // try to extract the hi term
+                      val maybeHi = fhi match {
+                        case GeqZ(IPlus(IPlus(hi, ITimes(IdealInt(-1), IVariable(0))), IIntLit(IdealInt(-1)))) => // hi + -1*_0 + -1 >= 0 or (hi > _0)
+                          Some(hi)
+                        case _ => None
+                      }
+                      // try to extract the array access from the predicate,
+                      // current implementation supports only a single array access
+                      // to the bound variable, i.e., a[j]. predicates with
+                      // more accesses, e.g., a[i] < a[i + 1], are currently
+                      // unsupported.
+                      object ArraySelectExtractor extends TheoryExtractor {
+                        override def unapply(f: IFunction): Option[Theory] =
+                          ExtArray.Select.unapply(f)
+                      }
+                      val selectCollector =
+                        new FunAppsFromExtractorCollector(ArraySelectExtractor)
+                      val (selects, theories) =
+                        selectCollector.visit(pred, 0).unzip
+                      // ensure that all selects are to the same array variable,
+                      // to the same index term and to the same theory
+
+                      val maybeArrayAccess : Option[(IFunApp, ExtArray)] =
+                        if (theories.nonEmpty &&
+                          theories.forall(theory => theory == theories.head)) {
+                          // a select is found and all theories are the same
+                          if(selects.forall { select =>
+                            select.args == selects.head.args}) {
+                            // all selects access the same array and index -> todo: support accesses like a[i] ... a[i + 1]
+                            Some((selects.head, theories.head.asInstanceOf[ExtArray]))
+                          } else None
+                        } else None
+
+                      if (maybeLo.nonEmpty && maybeHi.nonEmpty &&
+                        maybeArrayAccess.nonEmpty) {
+                        val (select, theory) = maybeArrayAccess.get
+                        Some(QuantifiedFormulaInfo(
+                          quantifier = quan,
+                          arrayTerm = select.args.head,
+                          lo = maybeLo.get,
+                          hi = maybeHi.get,
+                          predicate = pred,
+                          arrayAccess = select,
+                          arrayTheory = theory,
+                          originalF = f))
+                      } else None
+                    case _ => None
+                  }
+                case _ => None
+              }
+            case IExpression.Quantifier.EX => ???
+            // todo: support for extracting existential quantifiers to be
+            //  used for instrumentation
+          }
+        case _ => None
+      }
+    }
 
     private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {
       val decSymex = Symex(entry)
