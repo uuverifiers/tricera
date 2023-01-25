@@ -40,6 +40,7 @@ import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
+import ap.theories.ADT.BoolADT
 import lazabs.horn.extendedquantifiers.ExtendedQuantifier
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, HashSet => MHashSet}
@@ -3583,7 +3584,7 @@ class CCReader private (prog : Program,
           }
 
 
-          val extQuan = new ExtendedQuantifier(fun, arrayType.arrayTheory, identity, f, fInv)
+          val extQuan = new ExtendedQuantifier(fun, arrayType.arrayTheory, identity, f, fInv, None)
 
           ap.theories.TheoryRegistry.register(extQuan) // todo: can we avoid this?
 
@@ -4367,26 +4368,42 @@ class CCReader private (prog : Program,
               import IExpression._
 //              println(tryGetQuantifiedFormulaInfo(res.f))
               if (res.isAssert) {
+                import lazabs.prover.PrincessWrapper._
                 tryGetQuantifiedFormulaInfo(res.f) match {
                   case Some(info) =>
-                    val reduceConj: (ITerm, ITerm) => ITerm =
-                      (a: ITerm, b: ITerm) =>
-                        ite((a === ADT.BoolADT.True) &&& info.predicate,
-                          b, ADT.BoolADT.False)
+                    val reduceOp: (ITerm, ITerm) => ITerm =
+                      (a: ITerm, b: ITerm) => info.quantifier match { // a is the aggregate, b is the currently accessed value
+                        case Quantifier.ALL =>
+                          expr2Term(expr2Formula(a) &&& expr2Formula(b))
+                          //ite(expr2Formula(a), b, a) // if a is true, b must be true too
+                        case Quantifier.EX =>
+                          expr2Term(expr2Formula(a) ||| expr2Formula(b))
+                          //ite(expr2Formula(a), a, b) // if a is true, b is ignored, otherwise take b
+                      }
+                    val predicate : ITerm => ITerm = // // todo: this does not work for cases where other program variables are referred in the predicate
+                      (access : ITerm) =>
+                      {
+                        val substPred = ExpressionReplacingVisitor(
+                          info.predicate, info.arrayAccess, access)
+                        expr2Term(substPred)
+                      }
                     val extQuan = new ExtendedQuantifier(
                       name = info.quantifier match {
                         case Quantifier.ALL => "\\forall"
                         case Quantifier.EX => "\\exists"
                       },
                       arrayTheory = info.arrayTheory,
-                      identity = ADT.BoolADT.True,
-                      reduceOp = reduceConj,
-                      invReduceOp = None
+                      identity = info.quantifier match {
+                        case Quantifier.ALL => expr2Term(IBoolLit(true))
+                        case Quantifier.EX => expr2Term(IBoolLit(false))
+                      },
+                      reduceOp = reduceOp,
+                      invReduceOp = None,
+                      predicate = Some(predicate)
                     )
                     TheoryRegistry register extQuan
                     stmSymex.assertProperty(
-                      ADT.BoolADT.True ===
-                        extQuan.fun(info.arrayTerm, info.lo, info.hi),
+                      expr2Formula(extQuan.fun(info.arrayTerm, info.lo, info.hi)),
                       srcInfo = Some(getSourceInfo(stm))
                     )
                   case None =>
@@ -4420,6 +4437,69 @@ class CCReader private (prog : Program,
     private def tryGetQuantifiedFormulaInfo(f : IFormula) :
       Option[QuantifiedFormulaInfo] = {
       import IExpression._
+
+      def extractInfo(flo: IFormula,
+                      fhi: IFormula,
+                      pred: IFormula,
+                      quan: IExpression.Quantifier):
+      Option[QuantifiedFormulaInfo] = {
+        // try to extract the lo term
+        val maybeLo = flo match {
+          case GeqZ(IVariable(0)) => // _0 >= 0 // lo is 0
+            Some(i(0))
+          case GeqZ(IPlus(IVariable(0), ITimes(IdealInt(-1), lo))) => // _0 + -1*lo >= 0 or (_0 >= lo)
+            Some(lo)
+          case _ => None
+        }
+        // try to extract the hi term
+        val maybeHi = fhi match {
+          case GeqZ(IPlus(IPlus(hi, ITimes(IdealInt(-1), IVariable(0))), IIntLit(IdealInt(-1)))) => // hi + -1*_0 + -1 >= 0 or (hi > _0)
+            Some(hi)
+          case _ => None
+        }
+        // try to extract the array access from the predicate,
+        // current implementation supports only a single array access
+        // to the bound variable, i.e., a[j]. predicates with
+        // more accesses, e.g., a[i] < a[i + 1], are currently
+        // unsupported.
+        object ArraySelectExtractor extends TheoryExtractor {
+          override def unapply(f: IFunction): Option[Theory] =
+            ExtArray.Select.unapply(f)
+        }
+        val selectCollector =
+          new FunAppsFromExtractorCollector(ArraySelectExtractor)
+        val (selects, theories) =
+          selectCollector.visit(pred, 0).unzip
+        // ensure that all selects are to the same array variable,
+        // to the same index term and to the same theory
+
+        val maybeArrayAccess: Option[(IFunApp, ExtArray)] =
+          if (theories.nonEmpty &&
+            theories.forall(theory => theory == theories.head)) {
+            // a select is found and all theories are the same
+            if (selects.forall { select =>
+              select.args == selects.head.args
+            }) {
+              // all selects access the same array and index -> todo: support accesses like a[i] ... a[i + 1]
+              Some((selects.head, theories.head.asInstanceOf[ExtArray]))
+            } else None
+          } else None
+
+        if (maybeLo.nonEmpty && maybeHi.nonEmpty &&
+          maybeArrayAccess.nonEmpty) {
+          val (select, theory) = maybeArrayAccess.get
+          Some(QuantifiedFormulaInfo(
+            quantifier = quan,
+            arrayTerm = select.args.head,
+            lo = maybeLo.get,
+            hi = maybeHi.get,
+            predicate = pred,
+            arrayAccess = select,
+            arrayTheory = theory,
+            originalF = f))
+        } else None
+      }
+
       f match {
         case IQuantified(quan, subf) =>
           quan match {
@@ -4427,66 +4507,20 @@ class CCReader private (prog : Program,
               subf match {
                 case Disj(fRange, pred) =>
                   fRange match {
-                    case INot(Conj(flo, fhi)) =>
-                      // try to extract the lo term
-                      val maybeLo = flo match {
-                        case GeqZ(IVariable(0)) => // _0 >= 0 // lo is 0
-                          Some(i(0))
-                        case GeqZ(IPlus(IVariable(0), ITimes(IdealInt(-1), lo))) => // _0 + -1*lo >= 0 or (_0 >= lo)
-                          Some(lo)
-                        case _ => None
-                      }
-                      // try to extract the hi term
-                      val maybeHi = fhi match {
-                        case GeqZ(IPlus(IPlus(hi, ITimes(IdealInt(-1), IVariable(0))), IIntLit(IdealInt(-1)))) => // hi + -1*_0 + -1 >= 0 or (hi > _0)
-                          Some(hi)
-                        case _ => None
-                      }
-                      // try to extract the array access from the predicate,
-                      // current implementation supports only a single array access
-                      // to the bound variable, i.e., a[j]. predicates with
-                      // more accesses, e.g., a[i] < a[i + 1], are currently
-                      // unsupported.
-                      object ArraySelectExtractor extends TheoryExtractor {
-                        override def unapply(f: IFunction): Option[Theory] =
-                          ExtArray.Select.unapply(f)
-                      }
-                      val selectCollector =
-                        new FunAppsFromExtractorCollector(ArraySelectExtractor)
-                      val (selects, theories) =
-                        selectCollector.visit(pred, 0).unzip
-                      // ensure that all selects are to the same array variable,
-                      // to the same index term and to the same theory
-
-                      val maybeArrayAccess : Option[(IFunApp, ExtArray)] =
-                        if (theories.nonEmpty &&
-                          theories.forall(theory => theory == theories.head)) {
-                          // a select is found and all theories are the same
-                          if(selects.forall { select =>
-                            select.args == selects.head.args}) {
-                            // all selects access the same array and index -> todo: support accesses like a[i] ... a[i + 1]
-                            Some((selects.head, theories.head.asInstanceOf[ExtArray]))
-                          } else None
-                        } else None
-
-                      if (maybeLo.nonEmpty && maybeHi.nonEmpty &&
-                        maybeArrayAccess.nonEmpty) {
-                        val (select, theory) = maybeArrayAccess.get
-                        Some(QuantifiedFormulaInfo(
-                          quantifier = quan,
-                          arrayTerm = select.args.head,
-                          lo = maybeLo.get,
-                          hi = maybeHi.get,
-                          predicate = pred,
-                          arrayAccess = select,
-                          arrayTheory = theory,
-                          originalF = f))
-                      } else None
+                    case INot(Conj(flo, fhi)) => extractInfo(flo, fhi, pred, quan)
                     case _ => None
                   }
                 case _ => None
               }
-            case IExpression.Quantifier.EX => ???
+            case Quantifier.EX =>
+              subf match {
+                case Conj(fRange, pred) =>
+                  fRange match {
+                    case Conj(flo, fhi) => extractInfo(flo, fhi, pred, quan)
+                    case _ => None
+                  }
+                case _ => None
+              }
             // todo: support for extracting existential quantifiers to be
             //  used for instrumentation
           }

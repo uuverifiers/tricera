@@ -351,7 +351,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
     case p : AST.PredLocalBinding     => translate(p)
     case p : AST.PredLocalBinding2    => throwNotImpl(p)
     case p : AST.PredForAll           => translate(p)
-    case p : AST.PredExists           => throwNotImpl(p)
+    case p : AST.PredExists           => translate(p)
     case p : AST.PredSyntacticNaming  => translate(p)
     case p : AST.PredSyntacticNaming2 => translate(p)
     case p : AST.PredOld              => throwNotImpl(p)
@@ -465,6 +465,25 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
     terms.foldLeft(inner)((formula, term) => {
         val sort : Sort = term.typ.toSort
         ISortedQuantified(IExpression.Quantifier.ALL, sort, formula)
+    })
+  }
+
+  def translate(pred: AST.PredExists): IFormula = {
+    val binders: Seq[AST.ABinder] =
+      pred.listbinder_.asScala.toList.map(_.asInstanceOf[AST.ABinder])
+    val namedTerms: Seq[(String, CCTerm)] = bindersToConstants(binders)
+
+    namedTerms.map(t => locals.put(t._1, t._2))
+    val inner: IFormula = translate(pred.predicate_)
+    val (names, terms): (Seq[String], Seq[CCTerm]) = namedTerms.unzip
+    // FIXME: If v is shadowed, this will remove the shadowed term.
+    names.map(locals.remove)
+
+    // FIXME: Look over order of creation here.
+    // FIXME: Use IExpression.all?
+    terms.foldLeft(inner)((formula, term) => {
+      val sort: Sort = term.typ.toSort
+      ISortedQuantified(IExpression.Quantifier.EX, sort, formula)
     })
   }
 
