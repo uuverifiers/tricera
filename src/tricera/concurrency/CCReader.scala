@@ -33,7 +33,7 @@ import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic, Theory, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
-import concurrent_c._
+import concurrent_c.{Absyn, _}
 import concurrent_c.Absyn._
 import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints
@@ -3728,6 +3728,37 @@ class CCReader private (prog : Program,
             throw new TranslationException(getLineString(exp) +
               arrayTerm + " is not an array type!")
         }
+      case exp : Ebytesexpr =>
+        throw new TranslationException(getLineString(exp) +
+          "Ebytesexpr currently not supported by TriCera: " +
+          (printer print exp))
+      case exp: Ebytestype => // Adding support for sizeof()
+        exp.type_name_ match {
+          case pt : PlainType =>
+            pt.listspec_qual_.getFirst() match {
+              case ts : TypeSpec =>
+                ts.type_specifier_ match {
+                  case _ : Tint => //TODO: check what size should be int, now assumes sizeof(int) is 4
+                    pushVal(CCTerm(IExpression.i(IdealInt("4")), CCInt(),
+                      Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))))
+                  case _ => // Only int supported for now
+                    throw new TranslationException(getLineString(exp) +
+                      "Only int byteexprs currently supported by TriCera: " +
+                      (printer print exp))
+                }
+              case _  => throw new TranslationException(getLineString(exp) +
+                "Qual stuff currently not supported by TriCera: " +
+                (printer print exp))
+            }
+
+          case _ => throw new TranslationException(getLineString(exp) +
+            "Ebytestype currently not supported by TriCera for extended types: " +
+            (printer print exp))
+        }
+            exp: Enondet =>
+        throw new TranslationException(getLineString(exp) +
+          "Enondet currently not supported by TriCera: " +
+          (printer print exp))
 
       case _ =>
         throw new TranslationException(getLineString(exp) +
