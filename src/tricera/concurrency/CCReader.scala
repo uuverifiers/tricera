@@ -4380,12 +4380,15 @@ class CCReader private (prog : Program,
                           expr2Term(expr2Formula(a) ||| expr2Formula(b))
                           //ite(expr2Formula(a), a, b) // if a is true, b is ignored, otherwise take b
                       }
-                    val predicate : ITerm => ITerm = // // todo: this does not work for cases where other program variables are referred in the predicate
-                      (access : ITerm) =>
+                    val predicate : (ITerm, ITerm) => ITerm = // todo: this does not work for cases where other program variables are referred in the predicate
+                      (access : ITerm, index : ITerm) =>
                       {
-                        val substPred = ExpressionReplacingVisitor(
-                          info.predicate, info.arrayAccess, access)
-                        expr2Term(substPred)
+                        // replace the term a[i] with the value being read/written
+                        expr2Term(
+                          ExpressionReplacingVisitor( // then replace any references to the bound variable with the index term
+                            ExpressionReplacingVisitor( // first replace the array access term
+                              info.predicate, info.arrayAccess, access),
+                            info.arrayIndex, index))
                       }
                     val extQuan = new ExtendedQuantifier(
                       name = info.quantifier match {
@@ -4423,6 +4426,7 @@ class CCReader private (prog : Program,
                                              arrayTerm : ITerm,
                                              predicate : IFormula,
                                              arrayAccess : IFunApp,
+                                             arrayIndex : ITerm,
                                              arrayTheory : ExtArray,
                                              originalF : IFormula)
     /**
@@ -4495,6 +4499,7 @@ class CCReader private (prog : Program,
             hi = maybeHi.get,
             predicate = pred,
             arrayAccess = select,
+            arrayIndex = select.args.last,
             arrayTheory = theory,
             originalF = f))
         } else None
