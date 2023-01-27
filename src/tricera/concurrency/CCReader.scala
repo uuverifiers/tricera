@@ -4345,7 +4345,12 @@ class CCReader private (prog : Program,
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
         case stm: AnnotationS => // todo: mvoe this into a separate translate method
-          translate(stm.annotation_, entry)
+          try{translate(stm.annotation_, entry)}
+          catch {
+            case e : Exception =>
+              warn("Ignoring ACSL annotation (possibly " +
+                "an error or an unsupported fragment):\n" + e.getMessage)
+          }
       }
 
     private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
