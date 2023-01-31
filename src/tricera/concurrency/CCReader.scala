@@ -3584,7 +3584,8 @@ class CCReader private (prog : Program,
           }
 
 
-          val extQuan = new ExtendedQuantifier(fun, arrayType.arrayTheory, identity, f, fInv, None)
+          val extQuan = new ExtendedQuantifier(fun, arrayType.arrayTheory,
+            identity, f, fInv, None, None, None)
 
           ap.theories.TheoryRegistry.register(extQuan) // todo: can we avoid this?
 
@@ -4438,8 +4439,23 @@ class CCReader private (prog : Program,
                       },
                       reduceOp = reduceOp,
                       invReduceOp = None,
-                      predicate = Some(predicate)
-                    )
+                      predicate = Some(predicate),
+                      rangeFormulaLo = Some(info.quantifier match {
+                        case Quantifier.ALL =>
+                          (ghostLo: ITerm, lo: ITerm) =>
+                            ghostLo <= lo // true for the larger range
+                        case Quantifier.EX =>
+                          (ghostLo: ITerm, lo: ITerm) =>
+                            ghostLo >= lo // true for the smaller range
+                      }),
+                      rangeFormulaHi = Some(info.quantifier match {
+                        case Quantifier.ALL =>
+                          (ghostHi: ITerm, hi: ITerm) =>
+                            ghostHi >= hi // true for the larger range
+                        case Quantifier.EX =>
+                          (ghostHi: ITerm, hi: ITerm) =>
+                            ghostHi <= hi // true for the smaller range
+                      }))
                     TheoryRegistry register extQuan
                     stmSymex.assertProperty(
                       expr2Formula(extQuan.fun(info.arrayTerm, info.lo, info.hi)),
@@ -4487,6 +4503,8 @@ class CCReader private (prog : Program,
         val maybeLo = flo match {
           case GeqZ(IVariable(0)) => // _0 >= 0 // lo is 0
             Some(i(0))
+          case GeqZ(IPlus(IVariable(0), IIntLit(IdealInt(loMinus)))) => // _0 >= c // lo is c
+            Some(i(-loMinus))
           case GeqZ(IPlus(IVariable(0), ITimes(IdealInt(-1), lo))) => // _0 + -1*lo >= 0 or (_0 >= lo)
             Some(lo)
           case _ => None
