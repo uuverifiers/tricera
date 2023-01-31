@@ -63,6 +63,8 @@ class TriCeraParameters extends GlobalParameters {
 
   var useArraysForHeap : Boolean = false
 
+  var onlyExtQuans : Boolean = false
+
   var devMode : Boolean = false
 
   var displayACSL = false
@@ -119,6 +121,7 @@ class TriCeraParameters extends GlobalParameters {
 
     case "-memtrack" :: rest => shouldTrackMemory = true; parseArgs(rest)
     case "-heaparrays" :: rest => useArraysForHeap = true; parseArgs(rest)
+    case "-onlyexq" :: rest => onlyExtQuans = true; parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
     case "-abstractPO" :: rest => {

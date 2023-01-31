@@ -102,6 +102,7 @@ object CCReader {
 
   class ParseException(msg : String) extends Exception(msg)
   class TranslationException(msg : String) extends Exception(msg)
+  class ExtendedQuantifierException(msg : String) extends Exception(msg)
   object NeedsTimeException extends Exception
 
   val heapTermName = "@h"
@@ -4348,6 +4349,7 @@ class CCReader private (prog : Program,
         case stm: AnnotationS => // todo: mvoe this into a separate translate method
           try{translate(stm.annotation_, entry)}
           catch {
+            case e : ExtendedQuantifierException => throw e
             case e : Exception =>
               warn("Ignoring ACSL annotation (possibly " +
                 "an error or an unsupported fragment):\n" + e.getMessage)
@@ -4556,7 +4558,11 @@ class CCReader private (prog : Program,
             arrayIndex = select.args.last,
             arrayTheory = theory,
             originalF = f))
-        } else None
+        } else if (TriCeraParameters.get.onlyExtQuans) {
+          throw new ExtendedQuantifierException("Could not encode general quantifier as an " +
+            "extended quantifier: " + f)
+        }
+          else None
       }
 
       f match {
