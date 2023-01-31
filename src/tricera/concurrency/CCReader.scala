@@ -4350,6 +4350,7 @@ class CCReader private (prog : Program,
           try{translate(stm.annotation_, entry)}
           catch {
             case e : ExtendedQuantifierException => throw e
+            case e if TriCeraParameters.get.onlyExtQuans => throw e
             case e : Exception =>
               warn("Ignoring ACSL annotation (possibly " +
                 "an error or an unsupported fragment):\n" + e.getMessage)
