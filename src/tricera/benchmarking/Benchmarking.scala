@@ -67,6 +67,10 @@ object Benchmarking {
     override def toString : String =
       "UNSAFE"
   }
+  case object Unknown extends ExecutionResult {
+    override def toString: String =
+      "UNKNOWN"
+  }
   case object DidNotExecute extends ExecutionResult {
     override def toString : String =
       //"DID NOT EXECUTE"

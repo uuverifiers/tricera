@@ -30,8 +30,9 @@
 
 package tricera
 
-import java.io.{FileOutputStream, PrintStream}
+import lazabs.horn.extendedquantifiers.ExtendedQuantifier
 
+import java.io.{FileOutputStream, PrintStream}
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.benchmarking.Benchmarking._
@@ -527,6 +528,14 @@ class Main (args: Array[String]) {
           case None =>
         }
         Safe
+      // todo: if no cex and there is an extended quantifier assertion, return unknown
+      //       this should preferably be propagated from eldarica/hornconcurrency
+      //       this might not be correct if the failing assertion is in a
+      //       contract function + there is an extended quantifier assertion
+      case Right((_, lazabs.horn.bottomup.Util.DagEmpty))
+        if smallSystem.assertions.flatMap(_.theories).exists(
+          _.isInstanceOf[ExtendedQuantifier]) =>
+        Unknown
       case Right(cex) => {
         println("UNSAFE")
 
