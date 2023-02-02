@@ -4574,7 +4574,8 @@ class CCReader private (prog : Program,
                 case Disj(fRange, pred) =>
                   fRange match {
                     case INot(Conj(flo, fhi)) => extractInfo(flo, fhi, pred, quan)
-                    case _ => None
+                    case _ => throw new ExtendedQuantifierException("Could not encode general quantifier as an " +
+                      "extended quantifier: " + f)
                   }
                 case _ => None
               }
@@ -4583,7 +4584,8 @@ class CCReader private (prog : Program,
                 case Conj(fRange, pred) =>
                   fRange match {
                     case Conj(flo, fhi) => extractInfo(flo, fhi, pred, quan)
-                    case _ => None
+                    case _ => throw new ExtendedQuantifierException("Could not encode general quantifier as an " +
+                      "extended quantifier: " + f)
                   }
                 case _ => None
               }
