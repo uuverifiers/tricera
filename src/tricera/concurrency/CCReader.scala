@@ -4445,19 +4445,23 @@ class CCReader private (prog : Program,
                       predicate = Some(predicate),
                       rangeFormulaLo = Some(info.quantifier match {
                         case Quantifier.ALL =>
-                          (ghostLo: ITerm, lo: ITerm) =>
-                            ghostLo <= lo // true for the larger range
+                          (ghostLo: ITerm, lo: ITerm, p : ITerm) =>
+                            ite(expr2Formula(p), ghostLo <= lo, ghostLo >= lo)
+                        // true for the larger range
                         case Quantifier.EX =>
-                          (ghostLo: ITerm, lo: ITerm) =>
-                            ghostLo >= lo // true for the smaller range
+                          (ghostLo: ITerm, lo: ITerm, p : ITerm) =>
+                            ite(expr2Formula(p), ghostLo >= lo, ghostLo <= lo)
+                        // true for the smaller range
                       }),
                       rangeFormulaHi = Some(info.quantifier match {
                         case Quantifier.ALL =>
-                          (ghostHi: ITerm, hi: ITerm) =>
-                            ghostHi >= hi // true for the larger range
+                          (ghostHi: ITerm, hi: ITerm, p : ITerm) =>
+                            ite(expr2Formula(p), ghostHi >= hi, ghostHi <= hi)
+                             // true for the larger range
                         case Quantifier.EX =>
-                          (ghostHi: ITerm, hi: ITerm) =>
-                            ghostHi <= hi // true for the smaller range
+                          (ghostHi: ITerm, hi: ITerm, p : ITerm) =>
+                            ite(expr2Formula(p), ghostHi <= hi, ghostHi >= hi)
+                            // true for the smaller range
                       }))
                     TheoryRegistry register extQuan
                     stmSymex.assertProperty(
