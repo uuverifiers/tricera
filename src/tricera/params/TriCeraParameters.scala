@@ -170,6 +170,9 @@ class TriCeraParameters extends GlobalParameters {
       parseArgs(rest)
     }
 
+    case "-pHints" :: rest => templateBasedInterpolationPrint = true;
+      parseArgs(rest)
+
     case splitMode :: rest if (splitMode startsWith "-splitClauses:") => {
       splitClauses = splitMode.drop(14).toInt
       parseArgs(rest)
@@ -272,6 +275,7 @@ class TriCeraParameters extends GlobalParameters {
       //          " -glb\t\tUse the global approach to solve Horn clauses (outdated)\n" +
       "\n" +
       //          " -abstract\tUse interpolation abstraction for better interpolants (default)\n" +
+      " -pHints\t\tPrint initial predicates and abstraction templates\n" +
       " -abstract:t\tInterp. abstraction: off, manual, term, oct,\n" +
       "            \t                     relEqs (default), relIneqs\n" +
       " -abstractTO:t\tTimeout (s) for abstraction search (default: 2.0)\n" +
