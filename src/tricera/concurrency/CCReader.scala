@@ -4531,6 +4531,11 @@ class CCReader private (prog : Program,
           override def unapply(f: IFunction): Option[Theory] =
             ExtArray.Select.unapply(f)
         }
+        object ArrayStoreExtractor extends TheoryExtractor {
+          override def unapply(f: IFunction): Option[Theory] =
+            ExtArray.Store.unapply(f)
+        }
+
         val selectCollector =
           new FunAppsFromExtractorCollector(ArraySelectExtractor)
         val (selects, theories) =
@@ -4542,12 +4547,46 @@ class CCReader private (prog : Program,
           if (theories.nonEmpty &&
             theories.forall(theory => theory == theories.head)) {
             // a select is found and all theories are the same
-            if (selects.forall { select =>
-              select.args == selects.head.args
-            }) {
+            //if (selects.forall { select =>
+              //select.args == selects.head.args
+            //}) {
               // all selects access the same array and index -> todo: support accesses like a[i] ... a[i + 1]
-              Some((selects.head, theories.head.asInstanceOf[ExtArray]))
-            } else None
+            // we need to pick one select, as a simple heuristic, go back through
+            // the clauses and pick the last stored one, if nothing can be found,
+            // pick the first one. This might not always work, clauses might not
+            // be ordered as well, but better than nothing!
+
+            var candidateSelectTerm : Option[ConstantTerm] = None
+            val candidateTerms = selects.map(_.args.head).
+              filter(_.isInstanceOf[IConstant]).map(_.asInstanceOf[IConstant].c)
+            val candidateTermNames = candidateTerms.map(_.name)
+            val candidateNameToTerm = (candidateTermNames zip candidateTerms).toMap
+            for((clause, _) <- clauses.reverse if candidateSelectTerm isEmpty) {
+              val storeCollector =
+                new FunAppsFromExtractorCollector(ArrayStoreExtractor)
+              val (stores, theories) =
+                selectCollector.visit(clause.constraint, 0).unzip
+
+              if (stores nonEmpty) {
+                // found a store in this clause, see if it is over one of our
+                // candidates
+                for (IFunApp(_, Seq(IConstant(candidate), _, _)) <- stores) {
+                  if (candidateTermNames contains candidate.name) {
+                    candidateSelectTerm = Some(candidateNameToTerm(candidate.name))
+                  } // else nothing
+                } // else nothing
+              }
+            }
+
+            val selectedSelect = candidateSelectTerm match {
+              case Some(c) =>
+                selects.find(_.args(0) == c).get
+              case None =>
+                selects.head
+            }
+
+            Some((selectedSelect, theories.head.asInstanceOf[ExtArray]))
+            //} else None
           } else None
 
         if (maybeLo.nonEmpty && maybeHi.nonEmpty &&
