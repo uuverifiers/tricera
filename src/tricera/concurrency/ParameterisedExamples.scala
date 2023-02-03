@@ -89,11 +89,11 @@ object ParameterisedExamples extends App {
   def solve(system : System, expectedSafe : Boolean) = {
     val loop = new VerificationLoop(system)
     loop.result match {
-      case Left(_) => {
+      case (Left(_), _) => {
         println("SAFE")
         assert(expectedSafe)
       }
-      case Right(cex) => {
+      case (Right(cex), _) => {
         println("UNSAFE")
         VerificationLoop prettyPrint cex
         assert(!expectedSafe)

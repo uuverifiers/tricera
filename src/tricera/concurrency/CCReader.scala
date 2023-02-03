@@ -4595,8 +4595,6 @@ class CCReader private (prog : Program,
             //} else None
           } else None
 
-        println((maybeLo, maybeHi))
-
         if (maybeLo.nonEmpty && maybeHi.nonEmpty &&
           maybeArrayAccess.nonEmpty) {
           val (select, theory) = maybeArrayAccess.get
