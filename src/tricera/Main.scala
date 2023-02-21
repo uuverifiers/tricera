@@ -1,5 +1,5 @@
 /**
-  * Copyright (c) 2011-2022 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
+  * Copyright (c) 2011-2023 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
   * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without
@@ -30,12 +30,16 @@
 
 package tricera
 
-import java.io.{FileOutputStream, PrintStream}
+import hornconcurrency.ParametricEncoder
 
+import java.io.{FileOutputStream, PrintStream}
+import lazabs.horn.bottomup.HornClauses.Clause
+import lazabs.horn.bottomup.Util.DagNode
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
+import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
-import tricera.concurrency.CCReader.{ParseException, TranslationException}
+import tricera.concurrency.CCReader.{CCClause, ParseException, TranslationException}
 
 import sys.process._
 
@@ -304,8 +308,11 @@ class Main (args: Array[String]) {
     }
 
     import tricera.acsl.Encoder
-    val enc : Encoder = new Encoder(reader)
-    val system = enc.encode
+
+    val (system, maybeEnc : Option[Encoder]) = if (reader.funToContract.nonEmpty) {
+      val enc = new Encoder(reader)
+      (enc.encode, Some(enc))
+    } else (reader.system, None)
 
     def checkForSameNamedTerms = {
       val clausesWithSameNamedTerms =
@@ -346,15 +353,26 @@ class Main (args: Array[String]) {
     modelledHeap = modelledHeapRes
 
     if (prettyPrint) {
-      tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext)
+      val clauseToSrcInfo : Map[Clause, Option[SourceInfo]] =
+      (system.processes.flatMap(_._1.map(_._1)) ++
+        system.assertions).map(reader.getRichClause).filter(_.nonEmpty).map(c =>
+        (c.get.clause, c.get.srcInfo)).toMap
+      tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext, clauseToSrcInfo)
     }
 
-    val smallSystem = system.mergeLocalTransitions
+    val (smallSystem, mergedToOriginal) = system.mergeLocalTransitionsWithBackMapping
+
+//    mergedToOriginal.foreach{
+//      case (c, cs) =>
+//        println(c.toPrologString)
+//        cs.foreach(origC => println("  " + origC.toPrologString))
+//        println("-"*80)
+//    }
 
     if (prettyPrint) {
       println
       println("After simplification:")
-      tricera.concurrency.ReaderMain.printClauses(smallSystem, reader.PredPrintContext)
+      tricera.concurrency.ReaderMain.printClauses(smallSystem, reader.PredPrintContext, Map())
     }
 
     if(smtPrettyPrint)
@@ -480,8 +498,9 @@ class Main (args: Array[String]) {
               println("="*80)
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
               for ((fun, ctx) <- contexts
-                   if !enc.prePredsToReplace.contains(ctx.prePred.pred) &&
-                     !enc.postPredsToReplace.contains(ctx.postPred.pred)) {
+                   if maybeEnc.isEmpty ||
+                      !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
+                      !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
                 val fPre = ACSLLineariser asString processedSolution(ctx.prePred.pred)
                 val fPost = ACSLLineariser asString processedSolution(ctx.postPred.pred)
 
@@ -521,42 +540,57 @@ class Main (args: Array[String]) {
         println("UNSAFE")
 
         import hornconcurrency.VerificationLoop._
+        import tricera.Util.SourceInfo
         import lazabs.horn.bottomup.HornClauses
-        val cexClauses: Seq[HornClauses.Clause] = cex._1.last match {
-          case c: CEXLocalStep => Seq(c.clause)
-          case c: CEXInit => Seq(c.clauses.last) // todo: correct?
-          case _ => Nil // todo: others?
-        }
-        val relatedAssertions =
-          (for (c <- cexClauses) yield
-            reader.getRelatedAssertions(c.head.pred)).flatten
+
+      val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
+          case (_, clause) =>
+            val richClauses : Seq[CCClause]= mergedToOriginal get clause match {
+              case Some(clauses) =>
+                for (Some(richClause) <- clauses map reader.getRichClause) yield
+                  richClause
+              case None =>
+                reader.getRichClause(clause) match {
+                  case None => Nil
+                  case Some(richClause) => Seq(richClause)
+                }
+            }
+            (clause -> richClauses)
+        }.toMap
 
         if (plainCEX) {
           if (cex._1 == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
-            println("(An assertion has failed in the background clauses, " +
-              "counterexample is not available.)")
+            println("This counterexample cannot be printed in the " +
+                    "console, use -eogCEX for a graphical view.")
           }
           else {
             println
-            //reader.printPredsWithArgNames
             hornconcurrency.VerificationLoop.prettyPrint(cex)
-            println("\nRelated assertions: ")
-            for (assertion <- relatedAssertions) {
-              val assertionSource = assertion.srcInfo match {
-                case Some(srcInfo) =>
-                  "(assertion source: line " + srcInfo.line + ") "
-                case None => ""
+            if (system.processes.size == 1 &&
+                system.processes.head._2 == ParametricEncoder.Singleton) { // todo: print failed assertion for concurrent systems
+              val violatedAssertionClause = cex._2.head._2
+              clauseToUnmergedRichClauses get violatedAssertionClause match {
+                case Some(richClauses) if richClauses != Nil =>
+                  assert(richClauses.size == 1)
+                  println("Failed assertion:\n" + richClauses.head.toString)
+                  println
+                case None                                    =>
               }
-              println(" " + assertion.clause.toPrologString + " " +
-                assertionSource)
             }
           }
         }
         if (!pngNo) { // dotCEX and maybe eogCEX
-          Util.show(cex._2, "cex",
-            relatedAssertions.filter(c => c.srcInfo.nonEmpty).map(_.srcInfo.get),
-            reader.PredPrintContext.predArgNames,
-            reader.PredPrintContext.predSrcInfo)
+          if(system.processes.size == 1 &&
+             system.processes.head._2 == ParametricEncoder.Singleton) {
+            Util.show(cex._2, "cex",
+                      clauseToUnmergedRichClauses.map(c => (c._1 ->
+                                                            c._2.filter(_.srcInfo.nonEmpty).map(_.srcInfo.get))),
+                      reader.PredPrintContext.predArgNames,
+                      reader.PredPrintContext.predSrcInfo,
+                      reader.PredPrintContext.isUninterpretedPredicate)
+          } else {
+            println("Cannot display -eogCEX for concurrent processes, try -cex.")
+          }
         }
         Unsafe
       }

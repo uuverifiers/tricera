@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -35,6 +35,7 @@ import lazabs.horn.bottomup.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
 import hornconcurrency.{ParametricEncoder, VerificationLoop}
+import tricera.Util.SourceInfo
 import tricera.params.TriCeraParameters
 
 object ReaderMain {
@@ -52,7 +53,14 @@ object ReaderMain {
   }
 
   def printClauses(system : ParametricEncoder.System,
-                   printContext : PredPrintContext) = {
+                   printContext : PredPrintContext,
+                   clauseToSrcInfo : Map[Clause, Option[SourceInfo]]) = {
+    def getClauseLine (c : Clause) : String = {
+      clauseToSrcInfo get c match {
+        case Some(Some(srcInfo)) => "(line " + srcInfo.line + ")"
+        case _ => ""
+      }
+    }
     println("System predicates:")
     try {
       println("  " + (
@@ -191,8 +199,8 @@ object ReaderMain {
       def graphClause (actualHead : String, c : Clause, extraEdgeLabel : String) {
         if (c.body.isEmpty) {
           dotOutput.write(
-            graphConnect("", actualHead) +
-              graphLabelConstraint(c, extraEdgeLabel))
+            graphConnect("", c.head.pred.name/*actualHead*/) +
+              graphLabelConstraint(c, extraEdgeLabel + getClauseLine(c)))
         } else if (c.body.size > 1) {
           // create a dot sized merge node for the edges to merge into
           val mergeNode = "dotMergeNode" + mergeNodeId
@@ -200,15 +208,15 @@ object ReaderMain {
           mergeNodeId += 1
           for (bodyAtom <- c.body)
             dotOutput.write(
-              graphConnect(asString(bodyAtom), mergeNode) + "\n")
+              graphConnect(bodyAtom.pred.name/*asString(bodyAtom)*/, mergeNode) + "\n")
           dotOutput.write(
-            graphConnect(mergeNode, actualHead) +
-              graphLabelConstraint(c, extraEdgeLabel))
+            graphConnect(mergeNode, c.head.pred.name/*actualHead*/) +
+              graphLabelConstraint(c, extraEdgeLabel + getClauseLine(c)))
         } else {
           for (bodyAtom <- c.body) {
             dotOutput.write(
-              graphConnect(asString(bodyAtom), actualHead) +
-                graphLabelConstraint(c, extraEdgeLabel))
+              graphConnect(bodyAtom.pred.name /*asString(bodyAtom)*/, /*actualHead*/ c.head.pred.name) +
+                graphLabelConstraint(c, extraEdgeLabel + getClauseLine(c)))
           }
         }
       }

@@ -18,7 +18,7 @@ JLEX_PATH:=/usr/share/java/JLex.jar
 CLASSPATH:=$(CLASSPATH):$(PARSER_BASEDIR)/lib/java-cup-11b.jar:$(PARSER_BASEDIR):$(JLEX_PATH)
 
 JAVAC:=javac
-#JAVAC_FLAGS:=-target 1.5
+JAVAC_FLAGS:=-target 1.8 -source 1.8
 
 JAVA:=java
 JAVA_FLAGS:=

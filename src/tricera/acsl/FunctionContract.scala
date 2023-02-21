@@ -30,12 +30,15 @@
 package tricera.acsl
 
 import ap.parser.IFormula
+import tricera.Util.SourceInfo
 
 class FunctionContract(
   val pre  : IFormula,
   val post : IFormula,
   val assignsAssert : IFormula,
-  val assignsAssume : IFormula) {
+  val assignsAssume : IFormula,
+  val srcInfo       : SourceInfo,
+  val postSrcInfo   : SourceInfo) {
   override def toString : String = {
     s"Pre:  $pre\n" +
     s"Post: $post\n" +

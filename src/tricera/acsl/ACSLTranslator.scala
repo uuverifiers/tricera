@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2021-2022 Pontus Ernstedt. All rights reserved.
+ * Copyright (c) 2021-2022 Pontus Ernstedt
+ *               2022-2023 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -29,18 +30,17 @@
 
 package tricera.acsl
 
-import tricera.acsl.{Absyn => AST};
+import tricera.acsl.{Absyn => AST}
 
 import collection.JavaConverters._
-
 import ap.parser.IExpression
-import ap.parser.{ISortedQuantified, IConstant, ITerm, IIntLit, IBoolLit,
-                  IFunApp, IFunction, IFormula, IFormulaITE, IVariable,
-                  ISortedVariable}
-import ap.types.{MonoSortedPredicate, SortedConstantTerm, Sort}
-import ap.theories.{Heap}
-
-import tricera.concurrency.CCReader.{CCType, CCVar, CCTerm, CCExpr}
+import ap.parser.{IBoolLit, IConstant, IFormula, IFormulaITE, IFunApp, IFunction, IIntLit, ISortedQuantified, ISortedVariable, ITerm, IVariable}
+import ap.theories.nia.GroebnerMultiplication._
+import ap.types.{MonoSortedPredicate, Sort, SortedConstantTerm}
+import ap.theories.Heap
+import tricera.Util.{SourceInfo, getSourceInfo}
+import tricera.acsl.ACSLTranslator.getActualSourceInfo
+import tricera.concurrency.CCReader.{CCExpr, CCFormula, CCTerm, CCType, CCVar}
 import tricera.concurrency.CCReader
 
 class ACSLParseException(msg : String) extends Exception(msg)
@@ -64,6 +64,20 @@ object ACSLTranslator {
     def getTypOfPointer(t : CCType) : CCType
 
     implicit val arithMode : CCReader.ArithmeticMode.Value
+
+    val annotationBeginSourceInfo : SourceInfo
+    val annotationNumLines : Int
+  }
+
+  private[acsl] def getActualLine(ctx : Context, line : Int) = {
+    ctx.annotationBeginSourceInfo.line + line
+  }
+  private[acsl] def getActualSourceInfo (ctx : Context,
+                                   srcInfo : SourceInfo) : SourceInfo = {
+    val begin = ctx.annotationBeginSourceInfo
+    SourceInfo(line   = begin.line + srcInfo.line,
+               col    = srcInfo.col ,
+               offset = begin.offset + srcInfo.offset)
   }
 
   def translateContract(annot : String, ctx : Context) : FunctionContract = {
@@ -84,7 +98,7 @@ object ACSLTranslator {
       case e : Exception =>
         e.printStackTrace()
         throw new ACSLParseException(
-          "At line " + String.valueOf(l.line_num()) +
+          "At line " + String.valueOf(getActualLine(ctx, l.line_num())) +
           ", near \"" + l.buff() + "\" :" +
           "     " + e.getMessage()
         )
@@ -136,8 +150,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       val assigns : (IFormula, IFormula) = acs match {
         case Nil => (IBoolLit(true), IBoolLit(true))
         case acs =>
-          val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) =
-            acs.foldLeft(Set[CCTerm](), Set[CCTerm]()) ({(sets, clause) =>
+          val (idents, ptrDerefs) : (Set[CCExpr], Set[CCExpr]) =
+            acs.foldLeft(Set[CCExpr](), Set[CCExpr]()) ({(sets, clause) =>
               val (i, p) =
                 translateAssigns(clause.assignsclause_
                   .asInstanceOf[AST.AnAssignsClause])
@@ -196,8 +210,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
                     case (h, pair) => heap.write(h, pair._1, pair._2)
                   })
 
-                val ptrObjPairs : List[(CCTerm, ITerm)] =
-                  ptrDerefs.zip(addrObjPairs.unzip._2).toList
+                val ptrObjPairs : List[(CCExpr, ITerm)] =
+                  ptrDerefs.zip(addrObjPairs.map(_._2)).toList
 
                 val corrSort : IFormula =
                   ptrObjPairs.foldLeft(IBoolLit(true) : IFormula) (
@@ -231,13 +245,21 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
           (heapAssert &&& globConstraint, heapAssume &&& globConstraint)
       }
 
-      new FunctionContract(pre, post, assigns._1, assigns._2)
+      val postSrcInfo = ecs match {
+        case Nil => getSourceInfo(c) // no post-conditions, value does not matter
+        case hd :: tl => getSourceInfo(hd)
+      }
+
+      // todo: have separate line numbers for ecs
+      new FunctionContract(pre, post, assigns._1, assigns._2,
+                           getSourceInfo(c),
+                           getActualSourceInfo(ctx, postSrcInfo))
 
     case _ => throwNotImpl(contract)
   }
 
   // FIXME: Return ITerm directly?
-  def translateAssigns(clause : AST.AnAssignsClause) : (Set[CCTerm], Set[CCTerm]) = {
+  def translateAssigns(clause : AST.AnAssignsClause) : (Set[CCExpr], Set[CCExpr]) = {
     vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
     clause.locations_ match {
@@ -245,8 +267,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
         val tSets : List[AST.TSet] =
           ls.listlocation_.asScala.toList
           .map(_.asInstanceOf[AST.ALocation].tset_)
-        val nils = (Nil : List[CCTerm], Nil : List[CCTerm])
-        val terms : (List[CCTerm], List[CCTerm]) = tSets.foldRight(nils) ({
+        val nils = (Nil : List[CCExpr], Nil : List[CCExpr])
+        val terms : (List[CCExpr], List[CCExpr]) = tSets.foldRight(nils) ({
           case (t : AST.TSetTerm, (idents, ptrDerefs)) =>
             t.term_ match {
               case i : AST.TermIdent => (translate(i) :: idents, ptrDerefs)
@@ -386,9 +408,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
 
   def translate(pred : AST.PredLocalBinding) : IFormula = {
     val ident   : String = pred.id_
-    val boundTo : CCTerm  = translate(pred.term_)
+    val boundTo : CCExpr = translate(pred.term_)
 
-    locals.put(ident, boundTo)
+    locals.put(ident, CCTerm(boundTo.toTerm, boundTo.typ, boundTo.srcInfo))
     val inner : IFormula = translate(pred.predicate_)
     locals.remove(ident)
     inner
@@ -469,7 +491,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   def translate(pred : AST.PredValid) : IFormula = {
     val tSets : List[AST.TSet] =
       pred.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
-    val terms : List[CCTerm] = tSets.collect({
+    val terms : List[CCExpr] = tSets.collect({
       case t : AST.TSetTerm  => translate(t.term_)
       case t => throwNotImpl(t)
     })
@@ -494,7 +516,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
   }
 
   // ---- Terms ----------------------------------------------
-  def translate(term : AST.Term) : CCTerm = term match {
+  def translate(term : AST.Term) : CCExpr = term match {
     case t : AST.TermLiteral                 => translate(t)
     case t : AST.TermIdent                   => translate(t)
     case t : AST.TermUnaryOp                 => translate(t)
@@ -535,8 +557,8 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     )
   }
 
-  def translate(term : AST.TermUnaryOp) : CCTerm = {
-    val right : CCTerm = translate(term.term_)
+  def translate(term : AST.TermUnaryOp) : CCExpr = {
+    val right : CCExpr = translate(term.term_)
     // FIXME: Probably needs type conversions.
     term.unaryop_ match {
       case op : AST.UnaryOpPlus            => throwNotImpl(op)
@@ -566,9 +588,9 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     }
   }
 
-  def translate(term : AST.TermBinOp) : CCTerm = {
-    val left  : CCTerm = translate(term.term_1)
-    val right : CCTerm = translate(term.term_2)
+  def translate(term : AST.TermBinOp) : CCExpr = {
+    val left  : CCExpr = translate(term.term_1)
+    val right : CCExpr = translate(term.term_2)
     // FIXME: Type promotion?
     //assert(left.typ == right.typ)
     val typ : CCType = left.typ
@@ -579,24 +601,30 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
       case op : AST.BinOpMinus =>
         CCTerm(left.toTerm - right.toTerm, typ, srcInfo)
       case op : AST.BinOpMult =>
-        import ap.theories.nia.GroebnerMultiplication.mult
         CCTerm(mult(left.toTerm, right.toTerm), typ, srcInfo)
       case op : AST.BinOpDiv =>
-        import ap.theories.nia.GroebnerMultiplication.tDiv
         CCTerm(tDiv(left.toTerm, right.toTerm), typ, srcInfo)
       case op : AST.BinOpMod =>
-        import ap.theories.nia.GroebnerMultiplication.tMod
         CCTerm(tMod(left.toTerm, right.toTerm), typ, srcInfo)
-      // FIXME: Comparisons create IFormula:s.. Desired?
-      case op : AST.BinOpEQ           => throwNotImpl(op) // left === right
-      case op : AST.BinOpNEQ          => throwNotImpl(op) // left =/= right
-      case op : AST.BinOpLEQ          => throwNotImpl(op) // left <= right
-      case op : AST.BinOpGEQ          => throwNotImpl(op) // left >= right
-      case op : AST.BinOpGT           => throwNotImpl(op) // left > right
-      case op : AST.BinOpLT           => throwNotImpl(op) // left < right
-      case op : AST.BinOpAnd          => throwNotImpl(op)
-      case op : AST.BinOpOr           => throwNotImpl(op)
-      case op : AST.BinOpXOr          => throwNotImpl(op)
+      case _ : AST.BinOpEQ           =>
+        CCFormula(left.toTerm === right.toTerm, typ, srcInfo)
+      case _ : AST.BinOpNEQ          =>
+        CCFormula(left.toTerm =/= right.toTerm, typ, srcInfo)
+      case _ : AST.BinOpLEQ          => // todo: this mixes and matches terms and formulas right now! needs parentheses everywhere to work correctly
+        CCFormula(left.toTerm <= right.toTerm, typ, srcInfo)
+      case _ : AST.BinOpGEQ          =>
+        CCFormula(left.toTerm >= right.toTerm, typ, srcInfo)
+      case op : AST.BinOpGT           =>
+        CCFormula(left.toTerm > right.toTerm, typ, srcInfo)
+      case op : AST.BinOpLT           =>
+        CCFormula(left.toTerm < right.toTerm, typ, srcInfo)
+      case op : AST.BinOpAnd          =>
+        CCFormula(left.toFormula &&& right.toFormula, typ, srcInfo)
+      case op : AST.BinOpOr           =>
+        CCFormula(left.toFormula ||| right.toFormula, typ, srcInfo)
+      case op : AST.BinOpXOr          =>
+        CCFormula((left.toFormula &&& !right.toFormula) |||
+          (!left.toFormula &&& right.toFormula), typ, srcInfo)
       case op : AST.BinOpLShift       => throwNotImpl(op)
       case op : AST.BinOpRShift       => throwNotImpl(op)
       case op : AST.BinOpBitwiseAnd   => throwNotImpl(op)
@@ -607,10 +635,10 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     }
   }
 
-  def translate(term : AST.TermArrayAccess) : CCTerm = {
+  def translate(term : AST.TermArrayAccess) : CCExpr = {
     // TODO: Unsure if working.
-    val array : CCTerm = translate(term.term_1)
-    val index : CCTerm = translate(term.term_2)
+    val array : CCExpr = translate(term.term_1)
+    val index : CCExpr = translate(term.term_2)
 
     val typ : CCType = array.typ match {
       case p : CCReader.CCHeapPointer => p.typ
@@ -628,11 +656,11 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     CCTerm(getObj(readObj), typ, array.srcInfo)
   }
 
-  def translate(term : AST.TermParentheses) : CCTerm = {
+  def translate(term : AST.TermParentheses) : CCExpr = {
     translate(term.term_)
   }
 
-  def translate(term : AST.TermOld) : CCTerm = {
+  def translate(term : AST.TermOld) : CCExpr = {
     val old = vars
     vars = (ctx.getParams.map(v => (v.name, ctx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, ctx.getOldVar(v.name).get))).toMap
@@ -643,7 +671,7 @@ class ACSLTranslator(annot : AST.Annotation, ctx : ACSLTranslator.Context) {
     res
   }
 
-  def translate(term : AST.TermResult) : CCTerm = {
+  def translate(term : AST.TermResult) : CCExpr = {
     if (!inPostCond) {
       throw new ACSLParseException("\\result has no meaning.")
     }

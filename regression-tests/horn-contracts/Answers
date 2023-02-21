@@ -50,9 +50,9 @@ Init:
 Final:
  main7(-4, 5)  
 ---------------
+Failed assertion:
+false :- main7(g:2, y:14), g:2 < 0. (line 18)
 
-Related assertions: 
- false :- main7(g:2, y:14), g:2 < 0. (assertion source: line 18) 
 
 contract3.hcc
 SAFE
@@ -108,6 +108,6 @@ Init:
 Final:
  main3(8) 
 ----------
+Failed assertion:
+false :- main3(x:12), x:12 != 0. (line 14)
 
-Related assertions: 
- false :- main3(x:12), x:12 != 0. (assertion source: line 14) 

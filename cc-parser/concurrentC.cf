@@ -46,7 +46,7 @@ PredDeclarator.  Dec ::= "/*$" [Pred_hint] "$*/";
 separator nonempty Dec "";
 
 separator Pred_hint ",";
-PredicateHint. Pred_hint ::= CIdent "(" [Type_specifier] ")";
+PredicateHint. Pred_hint ::= CIdent "(" Parameter_type ")";
 separator nonempty Type_specifier ",";
 
 AChan. Chan_def ::= "chan" [CIdent] ";" ;

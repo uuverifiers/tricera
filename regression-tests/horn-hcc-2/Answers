@@ -63,9 +63,6 @@ Final:
      A0(1)        main4(1, 1)   
 --------------------------------
 
-Related assertions: 
- false :- main4(x:1, y:4), y:4 != 0. (assertion source: line 6) 
-
 channels.hcc
 Warning: entry function "main" not found
 SAFE
@@ -91,8 +88,6 @@ Init:
 Final:
    A0(42)     B3(42, -10) 
 --------------------------
-
-Related assertions: 
 
 channels-3.hcc
 tricera.concurrency.CCReader$TranslationException: Cannot execute Receive(d) and Send(c) in one step
@@ -136,9 +131,6 @@ Final:
   A8(0, 1, 0, 0, 0, 0)    main5(0, 1, 0, 0, 0, 0) 
 --------------------------------------------------
 
-Related assertions: 
- false :- A8(_GT, _GTU, x:1, D:3, E:3, C2:15), x:1 < 1. (assertion source: line 21) 
-
 duration3.hcc
 Warning: enabling time
 SAFE
@@ -175,8 +167,6 @@ Init:
 Final:
   B6(0, 1, 0, 0, 0)     main1(0, 1, 0, 0)   
 --------------------------------------------
-
-Related assertions: 
 
 duration3c.hcc
 Warning: enabling time
@@ -217,8 +207,6 @@ Final:
    B6(0, 1, 0, -1)      main1(0, 1, 0)    
 ------------------------------------------
 
-Related assertions: 
-
 nonlinear1.hcc
 Warning: no definition of function "nondet" available
 SAFE
@@ -239,9 +227,9 @@ Init:
 Final:
  main9(2, 4) 
 -------------
+Failed assertion:
+false :- main9(x:7, y:10). (line 13)
 
-Related assertions: 
- false :- main9(x:7, y:10). (assertion source: line 13) 
 
 typedef1.hcc
 SAFE
@@ -261,9 +249,9 @@ Init:
 Final:
  main5(0, 0)  
 --------------
+Failed assertion:
+false :- main5(x:4, y:5), y:5 < 1. (line 19)
 
-Related assertions: 
- false :- main5(x:4, y:5), y:5 < 1. (assertion source: line 19) 
 
 switch2.hcc
 Warning: no definition of function "nondet" available
