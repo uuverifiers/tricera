@@ -3417,9 +3417,12 @@ class CCReader private (prog : Program,
 
               case _ =>
                 val t = if (handlingFunContractArgs) {
-                  val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
-                  maybeOutputClause(Some(getSourceInfo(exp)))
-                  newTerm
+                  //val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
+                  //maybeOutputClause(Some(getSourceInfo(exp)))
+                  //newTerm
+                  throw new TranslationException(
+                    "Function contracts are currently not supported together " +
+                    s"with stack pointers (line ${exp.line_num})")
                 } else {
                   val ind = values.indexWhere(v => v == topVal)
                   assert(ind > -1 && ind < values.size - 1) // todo
@@ -3841,20 +3844,23 @@ class CCReader private (prog : Program,
       }
 
     private def checkPointerIntComparison(t1 : CCExpr, t2 : CCExpr) :
-      (CCExpr, CCExpr) =
+      (CCExpr, CCExpr) = {
       (t1.typ, t2.typ) match {
         case (_ : CCHeapPointer, _ : CCArithType) =>
           if (t2.toTerm != IIntLit(IdealInt(0)))
-            throw new TranslationException("Pointers can only compared with `null` or `0`.")
+            throw new TranslationException("Pointers can only compared with `null` or `0`. " +
+                                           getLineString(t2.srcInfo))
           else
             (t1, CCTerm(heap.nullAddr(), t1.typ, t1.srcInfo)) // 0 to nullAddr()
         case (_: CCArithType, _: CCHeapPointer) =>
           if (t1.toTerm != IIntLit(IdealInt(0)))
-            throw new TranslationException("Pointers can only compared with `null` or `0`.")
+            throw new TranslationException("Pointers can only compared with `null` or `0`. " +
+                                           getLineString(t2.srcInfo))
           else
             (CCTerm(heap.nullAddr(), t2.typ, t2.srcInfo), t2) // 0 to nullAddr()
         case _ => (t1, t2)
       }
+    }
 
     private def strictBinOp(left : Exp, right : Exp,
                             op : (CCExpr, CCExpr) => CCExpr) : Unit = {

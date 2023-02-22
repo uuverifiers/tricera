@@ -116,7 +116,15 @@ object Util {
 
   def getLineString(exp: Exp): String = {
     val sourceInfo = getSourceInfo(exp)
-    "At line " + sourceInfo.line + " (offset " + sourceInfo.offset + "): "
+    getLineString(Some(sourceInfo))
+  }
+
+  def getLineString(maybeSourceInfo : Option[SourceInfo]) : String = {
+    maybeSourceInfo match {
+      case Some(sourceInfo) =>
+        "At line " + sourceInfo.line + " (offset " + sourceInfo.offset + "): "
+      case None => ""
+    }
   }
 
   /**
