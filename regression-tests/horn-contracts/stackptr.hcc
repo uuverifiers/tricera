@@ -1,0 +1,12 @@
+/*@contract@*/
+void f(int *x)
+{
+  *x = *x + 1;
+}
+
+void main()
+{
+  int x = 0;
+  f(&x);
+  assert(x == 1);
+}
