@@ -34,6 +34,10 @@ import tricera.concurrency.concurrent_c.Absyn._
 
 sealed class AnnotationParserError (msg: String)
 
+/**
+ * Parses hint annotations. If an annotation cannot be parsed, it is returned
+ * as a MaybeACSLAnnotation.
+ */
 object AnnotationParser extends RegexParsers {
   override def skipWhitespace: Boolean = true
 
@@ -50,8 +54,8 @@ object AnnotationParser extends RegexParsers {
                            cost     : Option[String],
                            exp_args : Option[Exp])      extends AnnotationInfo
   case object ContractGen                               extends AnnotationInfo
-  case class  InvalidAnnotation (annot : String,
-                                 msg   : String)        extends AnnotationInfo
+  case class  MaybeACSLAnnotation(annot : String,
+                                  msg   : String)       extends AnnotationInfo
 
   private def parseAnnotation: Parser[AnnotationInfo] = {
     cident ~ maybe_cost ~ maybe_exp_args
@@ -61,7 +65,7 @@ object AnnotationParser extends RegexParsers {
     case "contract" ~ None ~ None =>
       ContractGen
     case s ~ None ~ None => // other cases
-      InvalidAnnotation(s, "")
+      MaybeACSLAnnotation(s, "")
   }
 
   def cident: Parser[String] = {
@@ -93,7 +97,7 @@ object AnnotationParser extends RegexParsers {
 
   def apply (annotation : String) : Seq[AnnotationInfo] = {
     parse(phrase(rep1(parseAnnotation)), annotation) match {
-      case NoSuccess(msg, _)  => Seq(InvalidAnnotation(annotation, msg))
+      case NoSuccess(msg, _)  => Seq(MaybeACSLAnnotation(annotation, msg))
       case Success(result, _) => result
     }
   }

@@ -1,0 +1,11 @@
+void main() {
+  int n = 0;
+  int a[];
+  int i = 0;
+  for(; i < n; ++i)
+  {
+    a[i] = 41;
+  }
+
+  //@ assert \forall int j; ((0 <= j) && (j < n)) ==> (a[j] == 42);
+}

@@ -61,6 +61,8 @@ class TriCeraParameters extends GlobalParameters {
 
   var shouldTrackMemory : Boolean = false
 
+  var useArraysForHeap : Boolean = false
+
   var devMode : Boolean = false
 
   var displayACSL = false
@@ -118,6 +120,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
     case "-memtrack" :: rest => shouldTrackMemory = true; parseArgs(rest)
+    case "-mathArrays" :: rest => useArraysForHeap = true; parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
     case "-abstractPO" :: rest => {
@@ -166,6 +169,9 @@ class TriCeraParameters extends GlobalParameters {
       parseArgs(rest)
     }
 
+    case "-pHints" :: rest => templateBasedInterpolationPrint = true;
+      parseArgs(rest)
+
     case splitMode :: rest if (splitMode startsWith "-splitClauses:") => {
       splitClauses = splitMode.drop(14).toInt
       parseArgs(rest)
@@ -213,6 +219,7 @@ class TriCeraParameters extends GlobalParameters {
     case mFuncName :: rest if (mFuncName.startsWith("-m:")) => funcName = mFuncName drop 3; parseArgs(rest)
     case sSolFileName :: rest if (sSolFileName.startsWith("-s:")) => solFileName = sSolFileName.drop(3); parseArgs(rest)
     case "-log" :: rest => setLogLevel(2); parseArgs(rest)
+    case "-statistics" :: rest => setLogLevel(1); parseArgs(rest)
     case logOption :: rest if (logOption startsWith "-log:") =>
       setLogLevel((logOption drop 5).toInt); parseArgs(rest)
     case "-logSimplified" :: rest => printHornSimplified = true; parseArgs(rest)
@@ -231,6 +238,7 @@ class TriCeraParameters extends GlobalParameters {
       " -h\t\tShow this information\n" +
       " -v\t\tPrint version number\n" +
       " -arithMode:t\tInteger semantics: math (default), ilp32, lp64, llp64\n" +
+      " -mathArrays:t\tUse mathematical arrays for modeling program arrays (no implicit memory safety properties))\n" +
       " -memtrack\tCheck that there are no memory leaks in the input program \n" +
       " -t:time\tSet timeout (in seconds)\n" +
       " -cex\t\tShow textual counterexamples\n" +
@@ -242,6 +250,7 @@ class TriCeraParameters extends GlobalParameters {
       " -acsl\t\tPrint inferred ACSL annotations\n" +
       " -log\t\tDisplay progress and found invariants\n" +
       " -log:n\t\tDisplay progress with verbosity n (currently 0 <= n <= 3)\n" +
+      " -statistics\tDisplay statistics (implied by -log)\n" +
       " -m:func\tUse function func as entry point (default: main)\n" +
       " -cpp\t\tExecute the C preprocessor (cpp) on the input file first, this will produce filename.i\n" +
       "\n" +
@@ -253,6 +262,7 @@ class TriCeraParameters extends GlobalParameters {
       " -varLines\tPrint program variables in clauses together with their line numbers (e.g., x:42)\n" +
       "\n" +
       "Horn engine options (Eldarica):\n" +
+      " -disj\t\tUse disjunctive interpolation\n" +
       " -stac\t\tStatic acceleration of loops\n" +
       " -lbe\t\tDisable preprocessor (e.g., clause inlining)\n" +
       " -arrayQuans:n\tIntroduce n quantifiers for each array argument (default: 1)\n" +
@@ -265,6 +275,7 @@ class TriCeraParameters extends GlobalParameters {
       " -abstractPO\tRun with and w/o interpolation abstraction in parallel\n" +
       " -splitClauses:n\tAggressiveness when splitting disjunctions in clauses\n" +
       "                \t                     (0 <= n <= 2, default: 1)\n" +
+      " -pHints\t\tPrint initial predicates and abstraction templates\n" +
       "\n" +
       "TriCera preprocessor:\n" +
       " -printPP\tPrint the output of the TriCera preprocessor to stdout\n" +

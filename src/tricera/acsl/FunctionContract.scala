@@ -32,13 +32,16 @@ package tricera.acsl
 import ap.parser.IFormula
 import tricera.Util.SourceInfo
 
+trait ParsedAnnotation
+
+// todo: make case class?
 class FunctionContract(
   val pre  : IFormula,
   val post : IFormula,
   val assignsAssert : IFormula,
   val assignsAssume : IFormula,
   val srcInfo       : SourceInfo,
-  val postSrcInfo   : SourceInfo) {
+  val postSrcInfo   : SourceInfo) extends ParsedAnnotation {
   override def toString : String = {
     s"Pre:  $pre\n" +
     s"Post: $post\n" +
@@ -47,3 +50,6 @@ class FunctionContract(
   }
 
 }
+
+case class StatementAnnotation(f        : IFormula,
+                               isAssert : Boolean) extends ParsedAnnotation

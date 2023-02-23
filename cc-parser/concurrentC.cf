@@ -165,6 +165,7 @@ Name.        Direct_declarator ::= CIdent ;
 ParenDecl.   Direct_declarator ::= "(" Declarator ")" ;
 InitArray.   Direct_declarator ::= Direct_declarator "[" Constant_expression "]" ;
 Incomplete.  Direct_declarator ::= Direct_declarator "[" "]" ;
+MathArray.   Direct_declarator ::= Direct_declarator "[" "_" "]" ;
 NewFuncDec.  Direct_declarator ::= Direct_declarator "(" Parameter_type ")" ;
 -- OldFuncDef.  Direct_declarator ::= Direct_declarator "(" [CIdent] ")" ;
 OldFuncDec.  Direct_declarator ::= Direct_declarator "(" ")" ;
@@ -224,14 +225,15 @@ NewFuncExpr.     Dir_abs_dec ::= Dir_abs_dec "(" Parameter_type ")" ;
 
 
 
-LabelS.   Stm ::= Labeled_stm ;
-CompS.    Stm ::= Compound_stm ;
-ExprS.    Stm ::= Expression_stm ;
-SelS.     Stm ::= Selection_stm ;
-IterS.    Stm ::= Iter_stm ;
-JumpS.    Stm ::= Jump_stm ;
-DecS.     Stm ::= Dec ; -- beyond ANSI-C
-AtomicS.  Stm ::= Atomic_stm ;
+LabelS.      Stm ::= Labeled_stm ;
+CompS.       Stm ::= Compound_stm ;
+ExprS.       Stm ::= Expression_stm ;
+SelS.        Stm ::= Selection_stm ;
+IterS.       Stm ::= Iter_stm ;
+JumpS.       Stm ::= Jump_stm ;
+DecS.        Stm ::= Dec ; -- beyond ANSI-C
+AtomicS.     Stm ::= Atomic_stm ;
+AnnotationS. Stm ::= Annotation ;
 
 SlabelOne.   Labeled_stm ::= CIdent ":" Stm ;
 SlabelTwo.   Labeled_stm ::= "case" Constant_expression ":" Stm ;
@@ -268,7 +270,7 @@ SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
 
 separator nonempty Stm "";
 
-token CIdent (letter | '_' | '$') (letter | digit | '_' | '$')*;
+token CIdent (letter | '_' | '$' | '\\') (letter | digit | '_' | '$')*;
 
 token AnnotationString   {"■■"} (char - ["■"])* {"■■"};
 

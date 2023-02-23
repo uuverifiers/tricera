@@ -69,22 +69,22 @@ object CommentPreprocessor {
             newLine ++= line.substring(curInd)
             curInd = line.length
         }
-      } else { // is in commment
-        val curStarInd = line.indexOf("*", curInd)
+      } else { // is in block commment
+        val curStarInd = line.indexOf("*", curInd) // try to find a closing comment
         curStarInd match {
-          case -1 =>
+          case -1 => // nothing found
             newLine ++= line.substring(curInd)
             curInd = line.length // will move on to next line
-          case i if i < line.length - 1 && line.charAt(i + 1) == '/' &&
+          case i if i < line.length - 1 && line.charAt(i + 1) == '/' && // "@*/" found
             i > 0 && line.charAt(i - 1) == '@' =>
             newLine ++= line.substring(curInd, i - 1) + annotationMarker
             curInd = i + 2
             isInComment = false
-          case i if i < line.length - 1 && line.charAt(i + 1) == '/' =>
+          case i if i < line.length - 1 && line.charAt(i + 1) == '/' => // "*/" found
             newLine ++= line.substring(curInd, i) ++ annotationMarker
             curInd = i + 2
             isInComment = false
-          case i =>
+          case i => // found a star, but was not for closing the comment
             newLine ++= line.substring(curInd, i + 1)
             curInd = i + 1
         }
