@@ -949,16 +949,6 @@ class CCReader private (prog : Program,
       res
   }
 
-  private var noSideEffects = false
-
-  private def withoutSideEffects[A](comp : => A) : A = {
-    val oldNoSideEffects = noSideEffects
-    noSideEffects = true
-    val res = comp
-    noSideEffects = oldNoSideEffects
-    res
-  }
-
   private var prefix : String = ""
   private var locationCounter = 0
 
@@ -2516,11 +2506,9 @@ class CCReader private (prog : Program,
     private var guard : IFormula = true
 
     def addGuard(f : IFormula) : Unit = {
-      if(!noSideEffects) {
-        guard = guard &&& f
-        touchedGlobalState =
-          touchedGlobalState || !freeFromGlobal(f)
-      }
+      guard = guard &&& f
+      touchedGlobalState =
+        touchedGlobalState || !freeFromGlobal(f)
     }
 
     def getGuard = guard
@@ -2698,8 +2686,8 @@ class CCReader private (prog : Program,
     private var assignedToStruct : Boolean = false
 
     private def maybeOutputClause(srcInfo : Option[SourceInfo]) : Unit =
-      if (!noSideEffects &&
-        ((!atomicMode && touchedGlobalState) || assignedToStruct)) outputClause(srcInfo)
+      if (((!atomicMode && touchedGlobalState) || assignedToStruct))
+        outputClause(srcInfo)
 
     private def pushVal(v : CCExpr, varName : String = "") = {
       val freshVar = getFreshEvalVar(v.typ, v.srcInfo, varName)
@@ -2769,12 +2757,10 @@ class CCReader private (prog : Program,
                      srcInfo : Option[SourceInfo],
                      sync : ParametricEncoder.Synchronisation =
                        ParametricEncoder.NoSync) : Unit = {
-      if(!noSideEffects) {
-        val c = genClause(pred, srcInfo)
-        if (!c.clause.hasUnsatConstraint)
-          output(c, sync)
-        resetFields(pred.pred)
-      }
+      val c = genClause(pred, srcInfo)
+      if (!c.clause.hasUnsatConstraint)
+        output(c, sync)
+      resetFields(pred.pred)
     }
 
     def outputClause(headAtom : IAtom,
@@ -2844,39 +2830,37 @@ class CCReader private (prog : Program,
       setValue(lookupVar(name), t, isIndirection)
     private def setValue(ind: Int, t : CCExpr,
                          isIndirection : Boolean) : Unit = {
-      if (!noSideEffects) {
-        val actualInd = getValue(ind, false).typ match {
-          case stackPtr: CCStackPointer => stackPtr.targetInd
-          case _ => ind
-        }
-        values(actualInd) = t
-        /* if(isIndirection) {
-          //val ptrType = getPointerType(ind)
-          getValue(ind, false).typ match {
-            case stackPtr : CCStackPointer =>
-              val actualInd = getActualInd(ind)
-              values(actualInd) = t/* stackPtr.fieldAddress match {
-                case Nil => t
-                case _ =>
-                  val pointedStruct = values(stackPtr.targetInd)
-                  val structType = pointedStruct.typ.asInstanceOf[CCStruct]
-                  CCTerm(
-                    structType.setFieldTerm(
-                      pointedStruct.toTerm, t.toTerm, stackPtr.fieldAddress),
-                    structType)
-              }*/
-              actualInd
-            case _ => throw new TranslationException(
-              "Trying to use a non-pointer as a pointer!")
-          }
-        }
-        else {
-          values(ind) = t
-          ind
-        }*/
-        touchedGlobalState =
-          touchedGlobalState || actualInd < globalVars.size || !freeFromGlobal(t)
+      val actualInd = getValue(ind, false).typ match {
+        case stackPtr: CCStackPointer => stackPtr.targetInd
+        case _ => ind
       }
+      values(actualInd) = t
+      /* if(isIndirection) {
+        //val ptrType = getPointerType(ind)
+        getValue(ind, false).typ match {
+          case stackPtr : CCStackPointer =>
+            val actualInd = getActualInd(ind)
+            values(actualInd) = t/* stackPtr.fieldAddress match {
+              case Nil => t
+              case _ =>
+                val pointedStruct = values(stackPtr.targetInd)
+                val structType = pointedStruct.typ.asInstanceOf[CCStruct]
+                CCTerm(
+                  structType.setFieldTerm(
+                    pointedStruct.toTerm, t.toTerm, stackPtr.fieldAddress),
+                  structType)
+            }*/
+            actualInd
+          case _ => throw new TranslationException(
+            "Trying to use a non-pointer as a pointer!")
+        }
+      }
+      else {
+        values(ind) = t
+        ind
+      }*/
+      touchedGlobalState =
+        touchedGlobalState || actualInd < globalVars.size || !freeFromGlobal(t)
     }
 
     private def getVar (ind : Int) : CCVar = {
@@ -3276,7 +3260,7 @@ class CCReader private (prog : Program,
             isIndirection(exp.exp_1)) // todo get rid of indirections?
         }
       }
-      case exp : Econdition => {
+      case exp : Econdition => { // exp_1 ? exp_2 : exp_3
         val cond = eval(exp.exp_1).toFormula
 
         saveState
@@ -3520,25 +3504,29 @@ class CCReader private (prog : Program,
         (printer print exp.exp_) match {
           case "assert" | "static_assert" | "__VERIFIER_assert"
                           if (exp.listexp_.size == 1) => {
-            withoutSideEffects(eval(exp.listexp_.head)) match {
-              case CCFormula(IAtom(_, _), _, _) =>
-                // todo: why atomicEval fails for uninterpreted predicate hints?
-                assertProperty(eval(exp.listexp_.head).toFormula, srcInfo)
-              case f =>
-                assertProperty(atomicEval(exp.listexp_.head).toFormula, srcInfo)
-            }
-            pushVal(CCFormula(true, CCInt(), srcInfo))
+          val property = exp.listexp_.head match {
+            case atom : Efunkpar if uninterpPredDecls contains (printer print atom.exp_) =>
+              val args = atom.listexp_.map(atomicEval).map(_.toTerm)
+              val pred = uninterpPredDecls(printer print atom.exp_)
+              IAtom(pred.pred, args)
+            case _ =>
+              atomicEval(exp.listexp_.head).toFormula
           }
+          assertProperty(property, srcInfo)
+          pushVal(CCFormula(true, CCInt(), srcInfo))
+        }
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) => {
-            withoutSideEffects(eval(exp.listexp_.head)) match {
-              case f@CCFormula(IAtom(_, _), _, _) =>
-                // todo: why atomicEval fails for uninterpreted predicate hints?
-                addGuard(eval(exp.listexp_.head).toFormula)
-              case f =>
-                addGuard(atomicEval(exp.listexp_.head).toFormula)
-            }
-            pushVal(CCFormula(true, CCInt(), srcInfo))
+          val property = exp.listexp_.head match {
+            case atom : Efunkpar if uninterpPredDecls contains(printer print atom.exp_) =>
+              val args = atom.listexp_.map(atomicEval).map(_.toTerm)
+              val pred = uninterpPredDecls(printer print atom.exp_)
+              IAtom(pred.pred, args)
+            case _ =>
+              atomicEval(exp.listexp_.head).toFormula
+          }
+          addGuard(property)
+          pushVal(CCFormula(true, CCInt(), srcInfo))
         }
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {
           val name = printer print exp.listexp_.head
@@ -4164,7 +4152,10 @@ class CCReader private (prog : Program,
     localVars pushFrame
     val stm = pushArguments(functionDef, args)
 
-    assert(entry.arity == allFormalVars.size)
+    // this might be an inlined function in an expression where we need to
+    // carry along other terms that were generated in the expression, so this
+    // assertion is not necessarily true:
+    // assert(entry.arity == allFormalVars.size)
 
     val translator = FunctionTranslator(exit)
     val finalPred =
@@ -4337,7 +4328,10 @@ class CCReader private (prog : Program,
 
     def translateWithReturn(compound : Compound_stm,
                             entry : CCPredicate) : CCPredicate = {
-      val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
+      val finalPred = returnPred match {
+          case Some(pred) => pred
+          case None => newPred(Nil, Some(getLastSourceInfo(compound)))
+      }
       translate(compound, entry, finalPred)
       // add a default return edge
       //val rp = returnPred.get

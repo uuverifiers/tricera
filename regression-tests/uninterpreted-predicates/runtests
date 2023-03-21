@@ -2,7 +2,8 @@
 
 LAZABS=../../tri
 
-TESTS="pred-hint.c pred-hint-loop.c"
+TESTS="pred-hint.c pred-hint-loop.c \
+       unint-pred-simple-false.c unint-pred-simple-true.c"
 
 for name in $TESTS; do
     echo

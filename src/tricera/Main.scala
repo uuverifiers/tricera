@@ -135,7 +135,7 @@ class Main (args: Array[String]) {
     val cppFileName = if (cPreprocessor) {
       val preprocessedFile = File.createTempFile("tri-", ".i")
       System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
-      val cmdLine = "cpp " + fileName + " -E -P"
+      val cmdLine = "cpp " + fileName + " -E -P -CC"
       try {
         cmdLine !
       }
