@@ -391,7 +391,7 @@ class Main (args: Array[String]) {
         }
       }
 
-    val result = verificationLoop.result
+    val (result, runStats) = verificationLoop.result
 
     if (printIntermediateClauseSets)
       return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
@@ -399,6 +399,14 @@ class Main (args: Array[String]) {
     val executionResult = result match {
       case Left(res) =>
         println("SAFE")
+        if (runStats.usedExtendedQuantifiers) {
+          print("Search space sizes: ")
+          println(runStats.extendedQuantifierSearchSpaceSizes.toSeq.
+            sortBy(_._1).mkString(","))
+          print("Search steps: ")
+          println(runStats.extendedQuantifierSearchNumSteps.toSeq.
+            sortBy(_._1).mkString(","))
+        }
         res match {
           case Some(solution) =>
             import tricera.postprocessor._
@@ -538,6 +546,14 @@ class Main (args: Array[String]) {
         Unknown
       case Right(cex) => {
         println("UNSAFE")
+        if(runStats.usedExtendedQuantifiers) {
+          print("Search space sizes ")
+          println(runStats.extendedQuantifierSearchSpaceSizes.toSeq.
+            sortBy(_._1).mkString(","))
+          print("Search steps: ")
+          println(runStats.extendedQuantifierSearchNumSteps.toSeq.
+            sortBy(_._1).mkString(","))
+        }
 
         import hornconcurrency.VerificationLoop._
         import lazabs.horn.bottomup.HornClauses
