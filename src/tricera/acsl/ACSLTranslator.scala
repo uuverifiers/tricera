@@ -40,6 +40,7 @@ import ap.types.{MonoSortedPredicate, Sort, SortedConstantTerm}
 import ap.theories.Heap
 import tricera.Util.{SourceInfo, getSourceInfo}
 import tricera.acsl.ACSLTranslator.getActualSourceInfo
+import tricera.acsl.Absyn.LoopInvSimple
 import tricera.concurrency.CCReader.{CCExpr, CCFormula, CCTerm, CCType, CCVar}
 import tricera.concurrency.CCReader
 
@@ -105,8 +106,15 @@ object ACSLTranslator {
           ctx match {
             case stmCtx : StatementAnnotationContext =>
               translator.translate(ac.assertion_, stmCtx)
-            case _ => throw new ACSLParseException("An statement context is " +
+            case _ => throw new ACSLParseException("A statement context is " +
               "needed to parse a statement annotation.")
+          }
+        case ac : AST.LoopAnnot =>
+          ctx match {
+            case stmCtx : StatementAnnotationContext =>
+              translator.translate(ac.loopinvariant_, stmCtx)
+            case _ => throw new ACSLParseException("A statement context is " +
+              "needed to parse a loop invariant annotation.")
           }
         case _ => throw new ACSLParseException("Not a contract or " +
           "statement annotation.")
@@ -158,6 +166,17 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
       case _ =>
         throw new ACSLParseException("Behaviour assertions are " +
           "currently unsupported.")
+    }
+  }
+
+  // ---- Loop annotations -----------------------------------
+  def translate(loopInvariantAnnotation : AST.LoopInvariant,
+                stmCtx                  : StatementAnnotationContext)
+  : LoopAnnotation = {
+    loopInvariantAnnotation match {
+      case inv : LoopInvSimple =>
+        val f = translate(inv.predicate_)
+        LoopAnnotation(f)
     }
   }
 

@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2021-2022 Pontus Ernstedt. All rights reserved.
+ * Copyright (c) 2021-2022 Pontus Ernstedt
+ *                    2023 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -53,3 +54,5 @@ class FunctionContract(
 
 case class StatementAnnotation(f        : IFormula,
                                isAssert : Boolean) extends ParsedAnnotation
+
+case class LoopAnnotation(invariant : IFormula) extends ParsedAnnotation

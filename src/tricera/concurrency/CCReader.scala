@@ -41,7 +41,7 @@ import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintIn
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
-import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, 
+import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap,
                                  HashSet => MHashSet}
 
 import tricera.Util._
@@ -831,6 +831,7 @@ class CCReader private (prog : Program,
   private val enumeratorDefs= new MHashMap[String, CCExpr]
 
   private val uninterpPredDecls     = new MHashMap[String, CCPredicate]
+  private val interpPredDefs        = new MHashMap[String, CCFormula]
   private val loopInvariants        =
     new MHashMap[String, (CCPredicate, SourceInfo)]
 
@@ -1618,6 +1619,7 @@ class CCReader private (prog : Program,
         }
       }
       case preddecl : PredDeclarator => // nothing
+      case interpPredDecl : InterpPredDeclarator => // nothing
     }
   }
 
@@ -1669,6 +1671,8 @@ class CCReader private (prog : Program,
   case object CCNoDeclaration extends CCDeclaration
   case class CCPredDeclaration(predHints : ListPred_hint,
                                srcInfo   : SourceInfo) extends CCDeclaration
+
+  case class CCInterpPredDeclaration(predDecl: Pred_interp) extends CCDeclaration
 
   private[concurrency]
   def collectVarDecls(dec : Dec, isGlobal : Boolean) : Seq[CCDeclaration] = {
@@ -1746,6 +1750,65 @@ class CCReader private (prog : Program,
         Seq(CCNoDeclaration)
       case predDecl: PredDeclarator =>
         Seq(CCPredDeclaration(predDecl.listpred_hint_, getSourceInfo(predDecl)))
+      case interpPredDecl: InterpPredDeclarator =>
+        Seq(CCInterpPredDeclaration(interpPredDecl.pred_interp_))
+    }
+  }
+
+  private def collectArgTypesAndNames(decList : ListParameter_declaration,
+                                      declName : String = "") :
+    Seq[(CCType, String)] = {
+    for (ind <- decList.indices) yield {
+      decList(ind) match {
+        case t : OnlyType => {
+          if (t.listdeclaration_specifier_.exists(spec => !spec
+            .isInstanceOf[Type]))
+            throw new TranslationException("Only type specifiers" +
+                                           "are allowed inside predicate" +
+                                           "declarations.")
+          val argType = getType(
+            t.listdeclaration_specifier_.map(_.asInstanceOf[Type]
+                                              .type_specifier_).toIterator)
+          val argName = declName + "_" + ind
+          (argType, argName)
+        }
+        case argDec : TypeAndParam => {
+          val name       = getName(argDec.declarator_)
+          val typ        = getType(argDec.listdeclaration_specifier_)
+          val actualType = argDec.declarator_ match {
+            case p : BeginPointer =>
+              //createHeapPointer(p, typ)
+              throw new TranslationException("Pointers inside " +
+                                             "predicate declarations are " +
+                                              "not supported.")
+            case np : NoPointer   =>
+              np.direct_declarator_ match {
+                case _ : Incomplete =>
+                  //CCHeapArrayPointer(heap, typ, HeapArray)
+                  throw new TranslationException("Arrays inside " +
+                                                 "predicate declarations " +
+                                                 "are not supported.")
+                case _ => typ
+              }
+            case _ => typ
+          }
+          (actualType, name)
+        }
+        case argDec : TypeHintAndParam => {
+          val name       = getName(argDec.declarator_)
+          val typ        = getType(argDec.listdeclaration_specifier_)
+          val actualType = argDec.declarator_ match {
+            case p : BeginPointer =>
+              //createHeapPointer(p, typ)
+              throw new TranslationException("Pointers inside" +
+                                             "predicate declarations are " +
+                                              "not supported.")
+            case _                => typ
+          }
+          processHints(argDec.listannotation_) // todo: does this work??
+          (actualType, name)
+        }
+      }
     }
   }
 
@@ -1918,52 +1981,8 @@ class CCReader private (prog : Program,
               // todo: refactor this using other code collecting parameter information
               val decList = predHint.parameter_type_.asInstanceOf[AllSpec]
                 .listparameter_declaration_
-              val (argTypesAndNames : Seq[(CCType, String)]) = for (ind <- decList.indices) yield {
-                decList(ind) match {
-                  case t : OnlyType => {
-                    if (t.listdeclaration_specifier_.exists(spec => !spec.isInstanceOf[Type]))
-                      throw new TranslationException("Only type specifiers" +
-                        "are allowed inside an uninterpreted predicate.")
-                    val argType = getType(
-                      t.listdeclaration_specifier_.map(_.asInstanceOf[Type].type_specifier_).toIterator)
-                    val argName = predHint.cident_ + "_" + ind
-                    (argType, argName)
-                  }
-                  case argDec : TypeAndParam => {
-                    val name = getName(argDec.declarator_)
-                    val typ = getType(argDec.listdeclaration_specifier_)
-                    val actualType = argDec.declarator_ match {
-                      case p : BeginPointer =>
-                        //createHeapPointer(p, typ)
-                        throw new TranslationException("Pointers inside " +
-                          "uninterpreted predicates are not supported.")
-                      case np : NoPointer =>
-                        np.direct_declarator_ match {
-                          case _ : Incomplete =>
-                            //CCHeapArrayPointer(heap, typ, HeapArray)
-                            throw new TranslationException("Arrays inside " +
-                              "uninterpreted predicates are not supported.")
-                          case _ => typ
-                        }
-                      case _ => typ
-                    }
-                    (actualType, name)
-                  }
-                  case argDec : TypeHintAndParam => {
-                    val name = getName(argDec.declarator_)
-                    val typ = getType(argDec.listdeclaration_specifier_)
-                    val actualType = argDec.declarator_ match {
-                      case p : BeginPointer =>
-                        //createHeapPointer(p, typ)
-                        throw new TranslationException("Pointers inside" +
-                          "uninterpreted predicates are not supported.")
-                      case _ => typ
-                    }
-                    processHints(argDec.listannotation_) // todo: does this work??
-                    (actualType, name)
-                  }
-                }
-              }
+              val argTypesAndNames : Seq[(CCType, String)] =
+                collectArgTypesAndNames(decList, predHint.cident_)
               val srcInfo =
                 SourceInfo(predHint.line_num, predHint.col_num, predHint.offset)
               val argCCVars = // needed for adding to predCCPredMap, used in printing
@@ -1972,6 +1991,32 @@ class CCReader private (prog : Program,
               val hintPred = newPred(predHint.cident_, argCCVars, Some(srcInfo))
               uninterpPredDecls += ((predHint.cident_, hintPred))
           }
+        }
+      case interpPredDec : CCInterpPredDeclaration =>
+        interpPredDec.predDecl match {
+          case predExp : PredicateExp =>
+            val decList = predExp.parameter_type_.asInstanceOf[AllSpec].
+                                 listparameter_declaration_
+            val argTypesAndNames : Seq[(CCType, String)] =
+              collectArgTypesAndNames(decList, predExp.cident_)
+
+            val ccVars = argTypesAndNames.map{
+              case (typ, name) =>
+                new CCVar(name, Some(getSourceInfo(predExp)), typ)
+            }
+            localVars.pushFrame
+            ccVars.foreach(localVars addVar)
+            for ((ccVar, ind) <- ccVars.zipWithIndex) {
+              values.addValue(CCTerm(IExpression.v(ind), ccVar.typ, ccVar.srcInfo))
+            }
+            val predFormula : CCFormula = values.eval(predExp.exp_) match {
+              case f : CCFormula => f
+              case _ => throw new TranslationException("Only Boolean " +
+                "expressions are supported inside interpreted predicate " +
+                "declarations.")
+            }
+            localVars.popFrame
+            interpPredDefs += predExp.cident_ -> predFormula
         }
       case CCNoDeclaration => // todo: nothing?
     }
@@ -3505,10 +3550,18 @@ class CCReader private (prog : Program,
           case "assert" | "static_assert" | "__VERIFIER_assert"
                           if (exp.listexp_.size == 1) => {
           val property = exp.listexp_.head match {
-            case atom : Efunkpar if uninterpPredDecls contains (printer print atom.exp_) =>
+            case atom : Efunkpar
+              if uninterpPredDecls contains (printer print atom.exp_) =>
               val args = atom.listexp_.map(atomicEval).map(_.toTerm)
               val pred = uninterpPredDecls(printer print atom.exp_)
               IAtom(pred.pred, args)
+            case interpPred : Efunkpar
+              if interpPredDefs contains(printer print interpPred.exp_) =>
+              val args = interpPred.listexp_.map (atomicEval).map (_.toTerm)
+              val formula = interpPredDefs (printer print interpPred.exp_)
+              // the formula refers to pred arguments as IVariable(index)
+              // we need to subsitute those for the actual arguments
+              VariableSubstVisitor (formula.f, (args.toList, 0) )
             case _ =>
               atomicEval(exp.listexp_.head).toFormula
           }
@@ -3518,10 +3571,18 @@ class CCReader private (prog : Program,
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) => {
           val property = exp.listexp_.head match {
-            case atom : Efunkpar if uninterpPredDecls contains(printer print atom.exp_) =>
+            case atom : Efunkpar
+              if uninterpPredDecls contains(printer print atom.exp_) =>
               val args = atom.listexp_.map(atomicEval).map(_.toTerm)
               val pred = uninterpPredDecls(printer print atom.exp_)
               IAtom(pred.pred, args)
+            case interpPred : Efunkpar
+              if interpPredDefs contains (printer print interpPred.exp_) =>
+              val args = interpPred.listexp_.map(atomicEval).map(_.toTerm)
+              val formula = interpPredDefs(printer print interpPred.exp_)
+              // the formula refers to pred arguments as IVariable(index)
+              // we need to subsitute those for the actual arguments
+              VariableSubstVisitor(formula.f, (args.toList, 0))
             case _ =>
               atomicEval(exp.listexp_.head).toFormula
           }
@@ -4440,13 +4501,15 @@ class CCReader private (prog : Program,
           translate(stm.jump_stm_, entry, exit)
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
-        case stm: AnnotationS => // todo: mvoe this into a separate translate method
+        case stm: AnnotationS => // todo: move this into a separate translate method
           try{translate(stm.annotation_, entry)}
           catch {
             case e : Exception =>
               warn("Ignoring ACSL annotation (possibly " +
                 "an error or an unsupported fragment):\n" + e.getMessage)
           }
+        case stm : AnnotatedIterS =>
+          translate(stm.annotation_, stm.iter_stm_, entry, exit)
       }
 
     private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
@@ -4502,9 +4565,7 @@ class CCReader private (prog : Program,
           ACSLTranslator.translateACSL(
             "/*@" + annot + "*/", new LocalContext()) match {
             case res: tricera.acsl.StatementAnnotation =>
-              import IExpression._
               if (res.isAssert) {
-                import lazabs.prover.PrincessWrapper._
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)))
               } else
                 warn("Ignoring annotation: " + annot)
@@ -4513,6 +4574,74 @@ class CCReader private (prog : Program,
         case _ => warn("Ignoring annotation: " + annotationInfo)
       }
     }
+
+    private def translate(loop_annot : Annotation,
+                          iter       : Iter_stm,
+                          entry      : CCPredicate,
+                          exit       : CCPredicate) : Unit = {
+      val annotationInfo = AnnotationParser(annotationStringExtractor(loop_annot))
+      annotationInfo match {
+        case Seq(MaybeACSLAnnotation(annot, _)) =>
+          val stmSymex = Symex(entry)
+          class LocalContext extends ACSLTranslator.StatementAnnotationContext {
+            /**
+             * Returns the term from the init atom - this should work as
+             * long as the annotation does not have side effects, because
+             * it always returns the original terms from initAtom
+             */
+            override def getTermInScope(name : String) : Option[CCTerm] = {
+              entry.argVars.zipWithIndex.find{
+                case (v, i) => v.name == name
+              } match {
+                case Some((v, i)) =>
+                  stmSymex.initAtomArgs match {
+                    case Some(args) => Some(CCTerm(args(i), v.typ, v.srcInfo))
+                    case None       => None
+                  }
+                case None         => None
+              }
+            }
+
+            override def getGlobals : Seq[CCVar] = globalVars.vars
+            override def sortWrapper(s : Sort) : Option[IFunction] =
+              sortWrapperMap get s
+            override def sortGetter(s : Sort) : Option[IFunction] =
+              sortGetterMap get s
+            override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
+            override def getTypOfPointer(t : CCType) : CCType =
+              t match {
+                case p : CCHeapPointer => p.typ
+                case _ => t
+              }
+            override implicit val arithMode = arithmeticMode
+            override def isHeapEnabled : Boolean = modelHeap
+            override def getHeap : HeapObj =
+              if (modelHeap) heap else throw NeedsHeapModelException
+            override def getHeapTerm : ITerm =
+              if (modelHeap) stmSymex.getValues.head.toTerm
+              else throw NeedsHeapModelException
+            override def getOldHeapTerm : ITerm =
+              getHeapTerm // todo: heap term for exit predicate?
+
+            override val annotationBeginSourceInfo : SourceInfo =
+              getSourceInfo(loop_annot)
+
+            override val annotationNumLines : Int = 1
+          }
+          ACSLTranslator.translateACSL(
+            "/*@" + annot + "*/", new LocalContext()) match {
+            case res : tricera.acsl.LoopAnnotation =>
+                ???
+            case _ =>
+              warn("Ignoring annotation: " + annot)
+              ???
+          }
+        case _  =>
+          warn("Ignoring annotation: " + annotationInfo)
+          ???
+      }
+    }
+
 
     private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {
       val decSymex = Symex(entry)

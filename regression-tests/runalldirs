@@ -16,4 +16,5 @@ set -e
 ./rundir uninterpreted-predicates "" -assert -dev -t:60
 ./rundir math-arrays  "" -assert -dev -t:60
 ./rundir quantifiers "" -assert -dev -t:60
+./rundir interpreted-predicates "" -assert -dev -t:60
 #./rundir ParametricEncoder ""
