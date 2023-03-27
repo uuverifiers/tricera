@@ -2005,7 +2005,7 @@ class CCReader private (prog : Program,
               case (typ, name) =>
                 new CCVar(name, Some(getSourceInfo(predExp)), typ)
             }
-            localVars.pushFrame
+            values.saveState
             ccVars.foreach(localVars addVar)
             for ((ccVar, ind) <- ccVars.zipWithIndex) {
               values.addValue(CCTerm(IExpression.v(ind), ccVar.typ, ccVar.srcInfo))
@@ -2018,7 +2018,7 @@ class CCReader private (prog : Program,
                 "expressions are supported inside interpreted predicate " +
                 "declarations.")
             }
-            localVars.popFrame
+            values.restoreState
             interpPredDefs += predExp.cident_ -> predFormula
         }
       case CCNoDeclaration => // todo: nothing?
