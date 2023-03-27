@@ -1843,7 +1843,7 @@ class CCReader private (prog : Program,
 
                 if (varDec.typ.isInstanceOf[CCHeapArrayPointer])
                   values.lhsIsArrayPointer = true // todo: find smarter solution!
-                val res = values eval actualInitExp
+                val res = values.eval(actualInitExp)(values.EvalSettings.default)
                 values.lhsIsArrayPointer = false
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
                   case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
@@ -1873,7 +1873,7 @@ class CCReader private (prog : Program,
                   val addressRangeValue = varDec.initArrayExpr match {
                     case Some(expr) =>
                       val arraySizeTerm =
-                        values eval expr.asInstanceOf[Especial].exp_
+                        values.eval(expr.asInstanceOf[Especial].exp_)(values.EvalSettings.default)
                       val arraySize = arraySizeTerm match {
                         case CCTerm(IIntLit(IdealInt(n)), actualType, srcInfo)
                           if actualType.isInstanceOf[CCArithType] => n
@@ -1932,7 +1932,8 @@ class CCReader private (prog : Program,
                       CCTerm(values.getValues.head.toTerm, CCHeap(heap), srcInfo)
                   val addressRangeValue = varDec.initArrayExpr match {
                     case Some(expr) =>
-                      val arraySize = values eval expr.asInstanceOf[Especial].exp_
+                      val arraySize =
+                        values.eval(expr.asInstanceOf[Especial].exp_)(values.EvalSettings.default)
                       values.heapBatchAlloc(objTerm, arraySize.toTerm, initHeapTerm)
                     case None =>
                       heap.addressRangeCtor(heap.nullAddr(), IIntLit(0))
@@ -2009,7 +2010,9 @@ class CCReader private (prog : Program,
             for ((ccVar, ind) <- ccVars.zipWithIndex) {
               values.addValue(CCTerm(IExpression.v(ind), ccVar.typ, ccVar.srcInfo))
             }
-            val predFormula : CCFormula = values.eval(predExp.exp_) match {
+            val predFormula : CCFormula =
+              values.eval(predExp.exp_)(values.EvalSettings(
+                noExtraClauseForTernaryExp = true)) match {
               case f : CCFormula => f
               case _ => throw new TranslationException("Only Boolean " +
                 "expressions are supported inside interpreted predicate " +
@@ -2165,8 +2168,8 @@ class CCReader private (prog : Program,
                 ExtArray(Seq(CCInt().toSort), typ.toSort), HeapArray) // todo: only int indexed arrays
             case initArray: InitArray =>
               val arraySizeSymex = Symex(null)
-              val arraySizeExp = arraySizeSymex eval
-                initArray.constant_expression_.asInstanceOf[Especial].exp_
+              val arraySizeExp = arraySizeSymex.eval(
+                initArray.constant_expression_.asInstanceOf[Especial].exp_)(arraySizeSymex.EvalSettings.default)
               val arraySize = arraySizeExp match {
                 case CCTerm(IIntLit(IdealInt(n)), typ, srcInfo)
                   if typ.isInstanceOf[CCArithType] => n
@@ -2301,7 +2304,8 @@ class CCReader private (prog : Program,
     val initStack = new Stack[ITerm]
     def fillInit(init: Initializer) {
       init match {
-        case init: InitExpr => initStack.push(s.eval(init.exp_).toTerm)
+        case init: InitExpr =>
+          initStack.push(s.eval(init.exp_)(s.EvalSettings.default).toTerm)
         case init: InitListOne => fillInits(init.initializers_)
         case init: InitListTwo => fillInits(init.initializers_)
       }
@@ -2522,7 +2526,7 @@ class CCReader private (prog : Program,
   private def translateConstantExpr(expr : Constant_expression,
                                     symex : Symex = Symex(null)) : CCExpr = {
     symex.saveState
-    val res = symex eval expr.asInstanceOf[Especial].exp_
+    val res = symex.eval(expr.asInstanceOf[Especial].exp_)(symex.EvalSettings(false))
     if (!symex.atomValuesUnchanged)
       throw new TranslationException(
         "constant expression is not side-effect free")
@@ -3026,19 +3030,19 @@ class CCReader private (prog : Program,
           "a non-pointer!")
       }
 
-    var evaluatingLhs = false
+    var evaluatingLhs = false // todo: move to EvalSettings
     var handlingFunContractArgs = false
     var lhsIsArrayPointer = false
     def evalLhs(exp : Exp) : CCExpr = {
       evaluatingLhs = true
-      val res = eval(exp)
+      val res = eval(exp)(EvalSettings.default) // todo: move evaluatingLhs into EvalSettings
       evaluatingLhs = false
       res
     }
 
-    def eval(exp : Exp) : CCExpr = {
+    def eval(exp : Exp)(implicit evalSettings : EvalSettings) : CCExpr = {
       val initSize = values.size
-      evalHelp(exp)
+      evalHelp(exp)(evalSettings)
       val res = popVal
       assert(initSize == values.size)
       res
@@ -3050,11 +3054,11 @@ class CCReader private (prog : Program,
       var e = exp
       while (e.isInstanceOf[Ecomma]) {
         val ec = e.asInstanceOf[Ecomma]
-        res += eval(ec.exp_2)
+        res += eval(ec.exp_2)(EvalSettings.default)
         e = ec.exp_1
       }
 
-      res += eval(e)
+      res += eval(e)(EvalSettings.default)
 
       res.toList
     }
@@ -3069,7 +3073,7 @@ class CCReader private (prog : Program,
         pushVal(CCFormula(true, CCVoid(), None))
         for (exp <- exps) {
           popVal
-          evalHelp(exp)
+          evalHelp(exp)(EvalSettings.default) // todo: EvalSettings(true)?
         }
       }
 
@@ -3150,7 +3154,14 @@ class CCReader private (prog : Program,
       }
     }
 
-    private def evalHelp(exp : Exp) : Unit = exp match {
+    case class EvalSettings(noExtraClauseForTernaryExp : Boolean)
+    case object EvalSettings {
+      val default : EvalSettings = EvalSettings(false)
+    }
+
+    private def evalHelp(exp : Exp)
+                        (implicit evalSettings : EvalSettings)
+    : Unit = exp match {
       case exp : Ecomma => {
         evalHelp(exp.exp_1)
         popVal
@@ -3306,18 +3317,37 @@ class CCReader private (prog : Program,
         }
       }
       case exp : Econdition => { // exp_1 ? exp_2 : exp_3
-        val cond = eval(exp.exp_1).toFormula
+        val srcInfo = getSourceInfo(exp)
+        if(evalSettings.noExtraClauseForTernaryExp) {
+          val oldSize = clauses.size
+          val cond = eval(exp.exp_1)
+          val t1 = eval(exp.exp_2)
+          val t2 = eval(exp.exp_3)
+          if(clauses.size > oldSize)
+            throw new TranslationException("This ternary expression must be " +
+                                           "side effect free: " +
+                                           printer.print(exp) + " at line " +
+                                           srcInfo.line)
+          // throw exceptioon if t1.typ != t2.typ
+          if(t1.typ != t2.typ)
+            throw new TranslationException("Unsupported operation: ternary " +
+              "expression with different types: " + printer.print(exp) +
+              " at line " + srcInfo.line)
+          pushVal(CCTerm(IExpression.ite(cond.toFormula, t1.toTerm, t2.toTerm),
+                         t1.typ, Some(srcInfo) ))
+        } else { // evalSettings.noExtraClauseForTernaryExp == false
+          val cond = eval(exp.exp_1).toFormula
+          saveState
+          addGuard(cond)
+          evalHelp(exp.exp_2)
+          outputClause(Some(getSourceInfo(exp)))
+          val intermediatePred = initPred
 
-        saveState
-        addGuard(cond)
-        evalHelp(exp.exp_2)
-        outputClause(Some(getSourceInfo(exp)))
-        val intermediatePred = initPred
-
-        restoreState
-        addGuard(~cond)
-        evalHelp(exp.exp_3)
-        outputClause(intermediatePred, Some(getSourceInfo(exp)))
+          restoreState
+          addGuard(~cond)
+          evalHelp(exp.exp_3)
+          outputClause(intermediatePred, Some(srcInfo))
+        }
       }
       case exp : Elor => {
         evalHelp(exp.exp_1)
@@ -3615,8 +3645,7 @@ class CCReader private (prog : Program,
             //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
             case exp : Etimes =>
               exp.exp_1 match {
-                case e : Ebytestype =>
-                  (getType(e), eval(exp.exp_2))
+                case e : Ebytestype => (getType(e), eval(exp.exp_2))
                 case e if exp.exp_2.isInstanceOf[Ebytestype] =>
                   (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
                 case _ =>
@@ -3659,8 +3688,7 @@ class CCReader private (prog : Program,
             //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
             case exp : Etimes =>
               exp.exp_1 match {
-                case e : Ebytestype =>
-                  (getType(e), eval(exp.exp_2))
+                case e : Ebytestype => (getType(e), eval(exp.exp_2))
                 case e if exp.exp_2.isInstanceOf[Ebytestype] =>
                   (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
                 case _ =>
@@ -4004,7 +4032,8 @@ class CCReader private (prog : Program,
     }
 
     private def strictBinOp(left : Exp, right : Exp,
-                            op : (CCExpr, CCExpr) => CCExpr) : Unit = {
+                            op : (CCExpr, CCExpr) => CCExpr)
+                           (implicit evalSettings : EvalSettings) : Unit = {
       evalHelp(left)
       maybeOutputClause(Some(getSourceInfo(left)))
       evalHelp(right)
@@ -4025,7 +4054,8 @@ class CCReader private (prog : Program,
 
     private def strictBinFun(left : Exp, right : Exp,
                              op : (ITerm, ITerm) => ITerm,
-                             opIsAddition : Boolean = false) : Unit = {
+                             opIsAddition : Boolean = false)
+                            (implicit evalSettings : EvalSettings) : Unit = {
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => {
                     (lhs.typ, rhs.typ) match {
@@ -4047,7 +4077,8 @@ class CCReader private (prog : Program,
     }
 
     private def strictUnsignedBinFun(left : Exp, right : Exp,
-                                     op : (ITerm, ITerm) => ITerm) : Unit = {
+                                     op : (ITerm, ITerm) => ITerm)
+                                    (implicit evalSettings : EvalSettings) : Unit = {
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => {
                      val (promLhs, promRhs) = unifyTypes(lhs, rhs)
@@ -4060,7 +4091,8 @@ class CCReader private (prog : Program,
     }
 
     private def strictBinPred(left : Exp, right : Exp,
-                              op : (ITerm, ITerm) => IFormula) : Unit = {
+                              op : (ITerm, ITerm) => IFormula)
+                             (implicit evalSettings : EvalSettings) : Unit = {
       import IExpression._
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => (lhs.typ, rhs.typ) match {
@@ -4348,7 +4380,9 @@ class CCReader private (prog : Program,
       val exprSymex = Symex(initPred)
       val res = stm match {
         case _ : SexprOne => None
-        case stm : SexprTwo => Some(exprSymex eval stm.exp_)
+        case stm : SexprTwo =>
+          implicit val evalSettings = exprSymex.EvalSettings.default
+          Some(exprSymex eval stm.exp_)
       }
       (exprSymex, res)
     }
@@ -4866,6 +4900,7 @@ class CCReader private (prog : Program,
             SourceInfo(stm.line_num, stm.col_num, stm.offset)) // todo: expand util for extracting srcInfo from stmt
 
         val condSymex = Symex(entry)
+        implicit val evalSettings = condSymex.EvalSettings.default
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, first, exit, entry.srcInfo)
         withinLoop(entry, exit) {
@@ -4887,6 +4922,7 @@ class CCReader private (prog : Program,
         }
 
         val condSymex = Symex(first)
+        implicit val evalSettings = condSymex.EvalSettings.default
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, entry, exit, Some(srcInfo))
       }
@@ -4928,7 +4964,7 @@ class CCReader private (prog : Program,
               Some(srcInfo)))
           case stm : SiterFour  => {
             val incSymex = Symex(third)
-            incSymex eval stm.exp_
+            incSymex.eval(stm.exp_)(incSymex.EvalSettings.default)
             incSymex outputClause (first, Some(srcInfo))
           }
         }
@@ -4940,6 +4976,7 @@ class CCReader private (prog : Program,
                           exit : CCPredicate) : Unit = stm match {
       case _ : SselOne | _ : SselTwo => { // if
         val condSymex = Symex(entry)
+        implicit val evalSettings = condSymex.EvalSettings.default
         val (cond, srcInfo1, srcInfo2) = stm match {
           case stm : SselOne =>
             ((condSymex eval stm.exp_).toFormula,
@@ -4969,6 +5006,7 @@ class CCReader private (prog : Program,
       case stm : SselThree => {  // switch
         import IExpression._
         val selectorSymex = Symex(entry)
+        implicit val evalSettings = selectorSymex.EvalSettings.default
         val selector = (selectorSymex eval stm.exp_).toTerm
 
         val newEntry = newPred(Nil, Some(getSourceInfo(stm)))
@@ -5056,6 +5094,7 @@ class CCReader private (prog : Program,
         }
       case jump : SjumpFive => { // return exp
         val symex = Symex(entry)
+        implicit val evalSettings = symex.EvalSettings.default
         val retValue = symex eval jump.exp_
         returnPred match {
           case Some(rp) => {
@@ -5121,6 +5160,7 @@ class CCReader private (prog : Program,
           inAtomicMode {
             val first = newPred(Nil, srcInfo)
             val condSymex = Symex(entry)
+            implicit val evalSettings = condSymex.EvalSettings.default
             condSymex.saveState
             val cond = (condSymex eval stm.exp_).toFormula
             if (!condSymex.atomValuesUnchanged)
