@@ -4225,7 +4225,7 @@ class CCReader private (prog : Program,
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
 //      case constant : Eoctalunslong. Constant ::= OctalUnsLong;
 //      case constant : Ecdouble.      Constant ::= CDouble;
-//      case constant : Ecfloat.       Constant ::= CFloat;
+//      case constant : Ecfloat =>     Constant ::= CFloat;
 //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
         pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt(),
