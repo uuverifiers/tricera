@@ -29,7 +29,7 @@
 
 package tricera.concurrency
 
-import ap.basetypes.IdealInt
+import ap.basetypes.{IdealInt, IdealRat}
 import ap.parser._
 import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
@@ -40,10 +40,11 @@ import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
+import ap.theories.rationals.Rationals
+import ap.theories.rationals.Rationals.Fraction
+import ap.theories.rationals.Rationals.denom
 
-import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap,
-                                 HashSet => MHashSet}
-
+import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, HashSet => MHashSet}
 import tricera.Util._
 import tricera.acsl.{ACSLTranslator, FunctionContract}
 import tricera.params.TriCeraParameters
@@ -141,6 +142,9 @@ object CCReader {
         case CCULong() => UnsignedBVSort(32)
         case CCLongLong() => SignedBVSort(64)
         case CCULongLong() => UnsignedBVSort(64)
+        case CCFloat()     => Rationals.dom
+        //case CCDouble()     => ...?
+        //case CCLongDouble()     => ...?
         case CCDuration() => Sort.Nat
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
@@ -159,6 +163,9 @@ object CCReader {
         case CCULong() => UnsignedBVSort(64)
         case CCLongLong() => SignedBVSort(64)
         case CCULongLong() => UnsignedBVSort(64)
+        //case CCFloat()     => Rationals.dom
+        //case CCDouble()     => ...?
+        //case CCLongDouble()     => ...?
         case CCDuration() => Sort.Nat
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
@@ -267,6 +274,13 @@ object CCReader {
     val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
     val isUnsigned : Boolean = false
   }
+
+  case class CCFloat()(implicit arithmeticMode: ArithmeticMode.Value)
+    extends CCType (arithmeticMode){
+    override def toString: String = "float"
+    def shortName = "float"
+  }
+
   case class CCUInt()(implicit arithmeticMode : ArithmeticMode.Value)
     extends CCArithType(arithmeticMode) {
     override def toString : String = "unsigned int"
@@ -4223,10 +4237,14 @@ class CCReader private (prog : Program,
         pushVal(CCTerm(IdealInt(constant.octallong_.substring(0,
                                 constant.octallong_.size - 1), 8), CCLong(),
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-//      case constant : Eoctalunslong. Constant ::= OctalUnsLong;
+ //     case constant : Eoctalunslong. Constant ::= OctalUnsLong;
 //      case constant : Ecdouble.      Constant ::= CDouble;
-//      case constant : Ecfloat =>     Constant ::= CFloat;
-//      case constant : Eclongdouble.  Constant ::= CLongDouble;
+
+      case constant : Ecfloat =>
+        pushVal(CCTerm(Fraction(IdealRat(constant.cfloat_), IdealRat(constant.cfloat_)), CCFloat(),
+          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
+
+      //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
         pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt(),
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
