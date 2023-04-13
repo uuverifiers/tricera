@@ -51,6 +51,7 @@ import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 
+
 object CCReader {
   def apply(input : java.io.Reader, entryFunction : String,
             arithMode : ArithmeticMode.Value = ArithmeticMode.Mathematical,
@@ -4240,9 +4241,9 @@ class CCReader private (prog : Program,
  //     case constant : Eoctalunslong. Constant ::= OctalUnsLong;
 //      case constant : Ecdouble.      Constant ::= CDouble;
 
-      case constant : Ecfloat =>
-        pushVal(CCTerm(Fraction(IdealRat(constant.cfloat_), IdealRat(constant.cfloat_)), CCFloat(),
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
+     //  case constant : Ecfloat =>
+     //    pushVal(CCTerm(Fraction(constant.cfloat_, constant.cfloat_), CCFloat(),
+     //      Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
 
       //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
@@ -4253,6 +4254,140 @@ class CCReader private (prog : Program,
     }
   }
 
+  //////////////////////////////////////////////////////////////////////////////
+
+import scala.util.control._
+import scala.math.pow
+
+  private def double2fraction(fp: String) : (String, String) = {
+    val f : Double = fp.toDouble
+    if (f.isNaN) {
+      ("0", "0")
+    }
+    else if (f.isInfinity) {
+      ("0", "0")
+    }
+    else {
+      val mantissaBits: Long = (java.lang.Double.doubleToLongBits(f) << 11 >>> 11)
+      val mantissa: String = String.format("%52s", java.lang.Long.toBinaryString(mantissaBits)).replace(' ', '0')
+
+      val exponentBits: Long = (java.lang.Double.doubleToLongBits(f) << 1 >>> 53)
+      val exponent: String = String.format("%11s", java.lang.Long.toBinaryString(exponentBits)).replace(' ', '0')
+
+      val signBit = (java.lang.Double.doubleToLongBits(f) >>> 63).toBinaryString
+
+      var bitCount: Int = 53
+
+      var denominator: Int = 0
+      var numerator: Int = 0
+      var loop = new Breaks
+      loop.breakable {
+        for (bit <- mantissa.reverse) {
+          if (bit == '1') {
+            denominator = (pow(2, bitCount)).toInt
+            loop.break()
+          }
+          bitCount = bitCount - 1
+        }
+      }
+
+      // reset bitCount
+      bitCount = 1
+      numerator = denominator
+      for (bit <- mantissa) {
+        if (bit == '1') {
+          numerator = numerator + denominator / pow(2, bitCount).toInt
+        }
+        bitCount = bitCount + 1
+      }
+
+      bitCount = 0
+      var exponentInt: Int = -pow(2, exponent.length() - 1).toInt + 1
+      for (bit <- exponent.reverse) {
+        if (bit == '1') {
+          exponentInt = exponentInt + pow(2, bitCount).toInt
+        }
+        bitCount = bitCount + 1
+      }
+
+      if (exponentInt > 0) {
+        numerator = numerator * pow(2, exponentInt).toInt
+      }
+      if (exponentInt < 0) {
+        denominator = denominator * pow(2, exponentInt).toInt
+      }
+      if (signBit == "1") {
+        numerator = -numerator
+      }
+      (numerator.toString, denominator.toString)
+    }
+  }
+
+
+  private def float2fraction(fp : String) : (String, String) = {
+    val f : Float = fp.toFloat
+
+    if(f.isNaN) {
+      ("0", "0")
+    }
+    else if(f.isInfinity) {
+      ("0", "0")
+    }
+    else {
+      val mantissaBits: Int = java.lang.Float.floatToIntBits(f) << 8 >>> 8
+      val mantissa: String = String.format("%23s", Integer.toBinaryString(mantissaBits)).replace(' ', '0')
+
+      val exponentBits: Int = (java.lang.Float.floatToIntBits(f) << 1 >>> 24)
+      val exponent: String = String.format("%8s", Integer.toBinaryString(exponentBits)).replace(' ', '0')
+
+      val signBit = (java.lang.Float.floatToIntBits(f) >>> 31).toBinaryString
+
+      var bitCount: Int = 23
+
+      var denominator : Int = 0
+      var numerator : Int = 0
+      var loop = new Breaks
+      loop.breakable {
+        for (bit <- mantissa.reverse) {
+          if (bit == '1') {
+            denominator = (pow(2, bitCount)).toInt
+            loop.break()
+          }
+          bitCount = bitCount - 1
+        }
+      }
+
+      // reset bitCount
+      bitCount = 1
+      numerator = denominator
+      for (bit <- mantissa) {
+        if (bit == '1') {
+          numerator = numerator + denominator/pow(2, bitCount).toInt
+        }
+        bitCount = bitCount + 1
+      }
+
+      bitCount = 0
+      var exponentInt : Int = - pow(2, exponent.length() - 1).toInt + 1
+      for (bit <- exponent.reverse) {
+        if (bit == '1') {
+          exponentInt = exponentInt + pow(2, bitCount).toInt
+        }
+        bitCount = bitCount + 1
+      }
+
+      if (exponentInt > 0) {
+        numerator = numerator * pow(2, exponentInt).toInt
+      }
+      if (exponentInt < 0) {
+        denominator = denominator * pow(2, exponentInt).toInt
+      }
+      if (signBit == "1") {
+        numerator = -numerator
+      }
+      (numerator.toString, denominator.toString)
+    }
+  }
   //////////////////////////////////////////////////////////////////////////////
 
   private def inlineFunction(functionDef : Function_def,
