@@ -767,7 +767,7 @@ class CCReader private (prog : Program,
 
   private def freeFromGlobal(t : IExpression) : Boolean =
     !ContainsSymbol(t, (s:IExpression) => s match {
-                      case IConstant(c) => globalVars contains c
+                      case IConstant(c) => globalVars contains c // todo: true only with concurrency?
                       case _ => false
                     })
 
@@ -2012,7 +2012,7 @@ class CCReader private (prog : Program,
             }
             val predFormula : CCFormula =
               values.eval(predExp.exp_)(values.EvalSettings(
-                noExtraClauseForTernaryExp = true)) match {
+                noClausesForExprs = true)) match {
               case f : CCFormula => f
               case _ => throw new TranslationException("Only Boolean " +
                 "expressions are supported inside interpreted predicate " +
@@ -2526,7 +2526,7 @@ class CCReader private (prog : Program,
   private def translateConstantExpr(expr : Constant_expression,
                                     symex : Symex = Symex(null)) : CCExpr = {
     symex.saveState
-    val res = symex.eval(expr.asInstanceOf[Especial].exp_)(symex.EvalSettings(false))
+    val res = symex.eval(expr.asInstanceOf[Especial].exp_)(symex.EvalSettings.default)
     if (!symex.atomValuesUnchanged)
       throw new TranslationException(
         "constant expression is not side-effect free")
@@ -3154,9 +3154,11 @@ class CCReader private (prog : Program,
       }
     }
 
-    case class EvalSettings(noExtraClauseForTernaryExp : Boolean)
+    case class EvalSettings(noClausesForExprs : Boolean)
     case object EvalSettings {
-      val default : EvalSettings = EvalSettings(false)
+      val default : EvalSettings = EvalSettings(
+        noClausesForExprs = false
+        )
     }
 
     private def evalHelp(exp : Exp)
@@ -3318,7 +3320,7 @@ class CCReader private (prog : Program,
       }
       case exp : Econdition => { // exp_1 ? exp_2 : exp_3
         val srcInfo = getSourceInfo(exp)
-        if(evalSettings.noExtraClauseForTernaryExp) {
+        if(evalSettings.noClausesForExprs) {
           val oldSize = clauses.size
           val cond = eval(exp.exp_1)
           val t1 = eval(exp.exp_2)
@@ -4034,12 +4036,18 @@ class CCReader private (prog : Program,
     private def strictBinOp(left : Exp, right : Exp,
                             op : (CCExpr, CCExpr) => CCExpr)
                            (implicit evalSettings : EvalSettings) : Unit = {
-      evalHelp(left)
-      maybeOutputClause(Some(getSourceInfo(left)))
-      evalHelp(right)
-      val rhs = popVal
-      val lhs = popVal
-      val (actualLhs, actualRhs) = checkPointerIntComparison(lhs, rhs) // todo: not correct for ops except === and =/=, refactor or add check
+      val (lhs, rhs) = if(evalSettings.noClausesForExprs) {
+        (eval(left), eval(right))
+      } else {
+        evalHelp(left)
+        maybeOutputClause(Some(getSourceInfo(left)))
+        evalHelp(right)
+        val rhs = popVal
+        val lhs = popVal
+        (lhs, rhs)
+      }
+      val (actualLhs, actualRhs) = checkPointerIntComparison(lhs, rhs) //
+      // todo: not correct for ops except === and =/=, refactor or add check
       pushVal(op(actualLhs, actualRhs))
     }
 
