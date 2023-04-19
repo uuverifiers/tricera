@@ -40,6 +40,7 @@ import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
+import ap.basetypes.IdealInt._
 import ap.theories.rationals.Rationals
 import ap.theories.rationals.Rationals.Fraction
 import ap.theories.rationals.Rationals.denom
@@ -2453,6 +2454,8 @@ class CCReader private (prog : Program,
               // ignore
             case _ : Tchar =>
               // ignore
+            case _ : Tfloat =>
+              typ = CCFloat()
             case _ : Tsigned =>
               typ = CCInt()
             case _ : Tunsigned =>
@@ -4241,9 +4244,10 @@ class CCReader private (prog : Program,
  //     case constant : Eoctalunslong. Constant ::= OctalUnsLong;
 //      case constant : Ecdouble.      Constant ::= CDouble;
 
-     //  case constant : Ecfloat =>
-     //    pushVal(CCTerm(Fraction(constant.cfloat_, constant.cfloat_), CCFloat(),
-     //      Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
+      case constant : Ecfloat =>
+        val frac : (String, String) = float2fraction(constant.cfloat_)
+        pushVal(CCTerm(Fraction(IExpression.i((IdealInt(frac._1))), IExpression.i(IdealInt(frac._2))), CCFloat(),
+          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
 
       //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
@@ -4257,9 +4261,9 @@ class CCReader private (prog : Program,
   //////////////////////////////////////////////////////////////////////////////
 
 import scala.util.control._
-import scala.math.pow
+import scala.math._
 
-  private def double2fraction(fp: String) : (String, String) = {
+   def double2fraction(fp: String) : (String, String) = {
     val f : Double = fp.toDouble
     if (f.isNaN) {
       ("0", "0")
@@ -4324,16 +4328,17 @@ import scala.math.pow
   }
 
 
-  private def float2fraction(fp : String) : (String, String) = {
-    val f : Float = fp.toFloat
+  def float2fraction(fp: String): (String, String) = {
+    val f: Float = fp.toFloat
 
-    if(f.isNaN) {
+    if (f.isNaN) {
       ("0", "0")
     }
-    else if(f.isInfinity) {
+    else if (f.isInfinity) {
       ("0", "0")
     }
     else {
+      //
       val mantissaBits: Int = java.lang.Float.floatToIntBits(f) << 8 >>> 8
       val mantissa: String = String.format("%23s", Integer.toBinaryString(mantissaBits)).replace(' ', '0')
 
@@ -4344,13 +4349,13 @@ import scala.math.pow
 
       var bitCount: Int = 23
 
-      var denominator : Int = 0
-      var numerator : Int = 0
+      var denominator: BigInt = 1
+      var numerator: BigInt = 0
       var loop = new Breaks
       loop.breakable {
         for (bit <- mantissa.reverse) {
           if (bit == '1') {
-            denominator = (pow(2, bitCount)).toInt
+            denominator = BigInt(2).pow(bitCount)
             loop.break()
           }
           bitCount = bitCount - 1
@@ -4362,25 +4367,25 @@ import scala.math.pow
       numerator = denominator
       for (bit <- mantissa) {
         if (bit == '1') {
-          numerator = numerator + denominator/pow(2, bitCount).toInt
+          numerator = numerator + denominator / BigInt(2).pow(bitCount)
         }
         bitCount = bitCount + 1
       }
 
       bitCount = 0
-      var exponentInt : Int = - pow(2, exponent.length() - 1).toInt + 1
+      var exponentInt: Int = -pow(2, exponent.length() - 1).toInt + 1
       for (bit <- exponent.reverse) {
         if (bit == '1') {
           exponentInt = exponentInt + pow(2, bitCount).toInt
         }
         bitCount = bitCount + 1
       }
-
+      denominator
       if (exponentInt > 0) {
-        numerator = numerator * pow(2, exponentInt).toInt
+        numerator = numerator * BigInt(2).pow(exponentInt)
       }
       if (exponentInt < 0) {
-        denominator = denominator * pow(2, exponentInt).toInt
+        denominator = denominator * BigInt(2).pow(abs(exponentInt))
       }
       if (signBit == "1") {
         numerator = -numerator
@@ -4388,6 +4393,7 @@ import scala.math.pow
       (numerator.toString, denominator.toString)
     }
   }
+
   //////////////////////////////////////////////////////////////////////////////
 
   private def inlineFunction(functionDef : Function_def,
