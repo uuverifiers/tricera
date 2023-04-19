@@ -39,7 +39,7 @@ import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
-import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
+import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier, toPredApplier, i}
 import ap.basetypes.IdealInt._
 import ap.theories.rationals.Rationals
 import ap.theories.rationals.Rationals.Fraction
@@ -115,6 +115,35 @@ object CCReader {
   }
 
   //////////////////////////////////////////////////////////////////////////////
+  // Floats
+
+  val floatADTCtorSignatures : Seq[(String, ADT.CtorSignature)] = Seq(
+    ("floatData", ADT.CtorSignature(
+      Seq(("getFloat", ADT.OtherSort(Rationals.dom))), ADT.ADTSort(0))),
+    ("NaN", ADT.CtorSignature(Nil, ADT.ADTSort(0))),
+    ("plusInfinity", ADT.CtorSignature(Nil, ADT.ADTSort(0))),
+    ("negativeInfinity", ADT.CtorSignature(Nil, ADT.ADTSort(0)))
+    )
+
+  val floatADT = new ADT(sortNames = Seq("floatADT"), floatADTCtorSignatures)
+  val floatADTSort = floatADT.sorts.head
+
+  object FloatADT {
+    val floatCtor : MonoSortedIFunction = floatADT.constructors(0)
+    val getData   : MonoSortedIFunction = floatADT.selectors(0)(0)
+
+    val nan     : ITerm = IFunApp(floatADT.constructors(1), Nil)
+    val plusInf : ITerm = ???
+    val negInf  : ITerm = ???
+
+    val isFloat   : Predicate = floatADT.ctorIdPreds(0)
+    val isNan     : Predicate = floatADT.ctorIdPreds(1)
+    val isPlusInf : Predicate = floatADT.ctorIdPreds(2)
+    val isNegInf  : Predicate = floatADT.ctorIdPreds(3)
+  }
+  //////////////////////////////////////////////////////////////////////////////
+
+  //////////////////////////////////////////////////////////////////////////////
 
   // todo: maybe make private to package?
   abstract sealed class CCType (arithmeticMode : ArithmeticMode.Value) {
@@ -144,7 +173,7 @@ object CCReader {
         case CCULong() => UnsignedBVSort(32)
         case CCLongLong() => SignedBVSort(64)
         case CCULongLong() => UnsignedBVSort(64)
-        case CCFloat()     => Rationals.dom
+        case CCFloat()     => floatADTSort
         //case CCDouble()     => ...?
         //case CCLongDouble()     => ...?
         case CCDuration() => Sort.Nat
@@ -826,7 +855,6 @@ class CCReader private (prog : Program,
     val res = new CCVar(varName, srcInfo, typ)
     res
   }
-
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -4245,10 +4273,14 @@ class CCReader private (prog : Program,
 //      case constant : Ecdouble.      Constant ::= CDouble;
 
       case constant : Ecfloat =>
-        val frac : (String, String) = float2fraction(constant.cfloat_)
-        pushVal(CCTerm(Fraction(IExpression.i((IdealInt(frac._1))), IExpression.i(IdealInt(frac._2))), CCFloat(),
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
+        //val frac : (String, String) = float2fraction(constant.cfloat_)
+        val (num, denum) = float2fraction(constant.cfloat_)
+        val floatData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
+        pushVal(CCTerm(FloatADT.floatCtor(floatData),
+                       CCFloat(), Some(getSourceInfo(constant))))
 
+        // assertProperty(FloatADT.isFloat(floatData), None) // todo: just an example of adding an implicit assertion
+        // addGuard(FloatADT.isFloat(floatData)) // todo: just an example of adding an assumption
       //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
         pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt(),
