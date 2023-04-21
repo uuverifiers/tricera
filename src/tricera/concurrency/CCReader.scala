@@ -134,14 +134,17 @@ object CCReader {
     val getData   : MonoSortedIFunction = floatADT.selectors(0)(0)
 
     val nan     : ITerm = IFunApp(floatADT.constructors(1), Nil)
-    val plusInf : ITerm = ???
-    val negInf  : ITerm = ???
+    val plusInf : ITerm = IFunApp(floatADT.constructors(2), Nil)
+    val negInf  : ITerm = IFunApp(floatADT.constructors(3), Nil)
 
     val isFloat   : Predicate = floatADT.ctorIdPreds(0)
-    val isNan     : Predicate = floatADT.ctorIdPreds(1)
-    val isPlusInf : Predicate = floatADT.ctorIdPreds(2)
-    val isNegInf  : Predicate = floatADT.ctorIdPreds(3)
+
+    // val isFloat   : Predicate = floatADT.predicates(0)
+    // val isNan     : Predicate = floatADT.predicates(1)
+    // val isPlusInf : Predicate = floatADT.predicates(2)
+    // val isNegInf  : Predicate = floatADT.predicates(3)
   }
+
   //////////////////////////////////////////////////////////////////////////////
 
   //////////////////////////////////////////////////////////////////////////////
@@ -195,7 +198,7 @@ object CCReader {
         case CCULong() => UnsignedBVSort(64)
         case CCLongLong() => SignedBVSort(64)
         case CCULongLong() => UnsignedBVSort(64)
-        //case CCFloat()     => Rationals.dom
+        case CCFloat()     => FloatADT.sort
         //case CCDouble()     => ...?
         //case CCLongDouble()     => ...?
         case CCDuration() => Sort.Nat
@@ -216,6 +219,7 @@ object CCReader {
         case CCULong() => UnsignedBVSort(32)
         case CCLongLong() => SignedBVSort(64)
         case CCULongLong() => UnsignedBVSort(64)
+        case CCFloat() => FloatADT.sort
         case CCDuration() => Sort.Nat
         case CCHeap(heap) => heap.HeapSort
         case CCStackPointer(_, _, _) => Sort.Integer
@@ -3323,7 +3327,7 @@ class CCReader private (prog : Program,
             (lhsE.typ, rhsE.typ) match {
               case (_ : CCHeapArrayPointer, _ : CCArithType) =>
                 addToAddressRangeStart(lhs, rhs)
-              case _ => lhs + rhs
+              case _ => lhs +  rhs //todo: add Rationals.plus here??
             }
           case _ : AssignSub =>
             (lhsE.typ, rhsE.typ) match {
@@ -3475,19 +3479,19 @@ class CCReader private (prog : Program,
       case exp : Eright =>
         strictUnsignedBinFun(exp.exp_1, exp.exp_2, ModuloArithmetic.bvashr(_, _))
       case exp : Eplus =>
-        strictBinFun(exp.exp_1, exp.exp_2, _ + _, opIsAddition = true)
+        strictBinFun(exp.exp_1, exp.exp_2, _ + _ , opIsAddition = true, operator = "add")
       case exp : Eminus =>
-        strictBinFun(exp.exp_1, exp.exp_2, _ - _)
+        strictBinFun(exp.exp_1, exp.exp_2, _ - _, operator = "sub")
       case exp : Etimes =>
         strictBinFun(exp.exp_1, exp.exp_2, {
           (x : ITerm, y : ITerm) =>
             ap.theories.nia.GroebnerMultiplication.mult(x, y)
-        })
+        }, operator = "mul")
       case exp : Ediv =>
         strictBinFun(exp.exp_1, exp.exp_2, {
           (x : ITerm, y : ITerm) =>
             ap.theories.nia.GroebnerMultiplication.tDiv(x, y)
-        })
+        }, operator = "div")
       case exp : Emod =>
         strictBinFun(exp.exp_1, exp.exp_2, {
           (x : ITerm, y : ITerm) =>
@@ -4101,7 +4105,7 @@ class CCReader private (prog : Program,
 
     private def strictBinFun(left : Exp, right : Exp,
                              op : (ITerm, ITerm) => ITerm,
-                             opIsAddition : Boolean = false)
+                             opIsAddition : Boolean = false, operator : String = "")
                             (implicit evalSettings : EvalSettings) : Unit = {
       strictBinOp(left, right,
                   (lhs : CCExpr, rhs : CCExpr) => {
@@ -4113,6 +4117,27 @@ class CCReader private (prog : Program,
                         else
                           throw new TranslationException("Pointer arithmetic" +
                             "over arrays is only supported with addition.")
+                      case (CCFloat(), CCFloat()) =>
+                        val (promLhs, promRhs) = unifyTypes(lhs, rhs)
+                        val typ = promLhs.typ
+                        operator match {
+                          case "add" =>
+                            CCTerm(typ cast Rationals.plus(promLhs.toTerm, promRhs.toTerm), typ,
+                              lhs.srcInfo)
+                          case "sub" =>
+                            CCTerm(typ cast Rationals.minus(promLhs.toTerm, promRhs.toTerm), typ,
+                              lhs.srcInfo)
+                          case "mul" =>
+                            CCTerm(typ cast Rationals.mul(promLhs.toTerm, promRhs.toTerm), typ,
+                              lhs.srcInfo)
+                          case "div" =>
+                            CCTerm(typ cast Rationals.div(promLhs.toTerm, promRhs.toTerm), typ,
+                              lhs.srcInfo)
+                          case _ =>
+                            CCTerm(typ cast op(promLhs.toTerm, promRhs.toTerm), typ,
+                              lhs.srcInfo)
+                        }
+                        // TODO: correct type promotion
                       case _ =>
                         val (promLhs, promRhs) = unifyTypes(lhs, rhs)
                         // TODO: correct type promotion
@@ -4280,7 +4305,7 @@ class CCReader private (prog : Program,
         pushVal(CCTerm(FloatADT.floatCtor(floatData),
                        CCFloat(), Some(getSourceInfo(constant))))
 
-        // assertProperty(FloatADT.isFloat(floatData), None) // todo: just an example of adding an implicit assertion
+        // assertProperty(FloatADT.isFloat(floatData), None)) // todo: just an example of adding an implicit assertion
         // addGuard(FloatADT.isFloat(floatData)) // todo: just an example of adding an assumption
       //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
