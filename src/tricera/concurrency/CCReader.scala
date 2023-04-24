@@ -116,7 +116,7 @@ object CCReader {
 
   //////////////////////////////////////////////////////////////////////////////
   // Floats
-
+// TODO: Add doubleADT
   object FloatADT {
     private val floatADTCtorSignatures : Seq[(String, ADT.CtorSignature)] = Seq(
       ("floatData", ADT.CtorSignature(
@@ -137,12 +137,18 @@ object CCReader {
     val plusInf : ITerm = IFunApp(floatADT.constructors(2), Nil)
     val negInf  : ITerm = IFunApp(floatADT.constructors(3), Nil)
 
-    val isFloat   : Predicate = floatADT.ctorIdPreds(0)
+    // val isFloat   : Predicate = floatADT.ctorIdPreds(0)
 
-    // val isFloat   : Predicate = floatADT.predicates(0)
-    // val isNan     : Predicate = floatADT.predicates(1)
-    // val isPlusInf : Predicate = floatADT.predicates(2)
-    // val isNegInf  : Predicate = floatADT.predicates(3)
+    // todo: change to hasCtor
+    private def isFloat(t: ITerm): IFormula = floatADT.hasCtor(t, 0)
+    private def isNan(t: ITerm): IFormula = floatADT.hasCtor(t, 1)
+    private def isPlusinf(t: ITerm): IFormula = floatADT.hasCtor(t, 2)
+    private def isNeginf(t: ITerm): IFormula = floatADT.hasCtor(t, 3)
+
+    // val isFloat   : Predicate = floatADT.hasCtor(I, 0)
+    // val isNan     : Predicate = floatADT.ctorIdPreds(1)
+    // val isPlusInf : Predicate = floatADT.ctorIdPreds(2)
+    // val isNegInf  : Predicate = floatADT.ctorIdPreds(3)
   }
 
   //////////////////////////////////////////////////////////////////////////////
