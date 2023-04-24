@@ -39,7 +39,8 @@ import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
-import tricera.concurrency.CCReader.{CCClause, ParseException, TranslationException}
+import tricera.concurrency.CCReader.CCClause
+import tricera.concurrency.ccreader.CCExceptions._
 
 import sys.process._
 
@@ -281,7 +282,7 @@ class Main (args: Array[String]) {
       new java.io.FileReader(new java.io.File(ppFileName))))
     val (reader, modelledHeapRes) =
       try {
-        CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
+        CCReader(bufferedReader, funcName, shouldTrackMemory)
       } catch {
         case e: ParseException if !devMode =>
           return ExecutionSummary(ParseError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
