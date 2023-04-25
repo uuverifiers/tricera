@@ -50,3 +50,11 @@ SAFE
 
 cast-stack-heap-01.c
 SAFE
+
+ptrptr-bug-1.c
+Warning: enabling heap model
+SAFE
+
+ptrptr-bug-2.c
+Warning: enabling heap model
+SAFE

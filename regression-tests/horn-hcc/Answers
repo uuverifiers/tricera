@@ -85,12 +85,12 @@ atomic2.hcc
 SAFE
 
 atomic3.hcc
-tricera.concurrency.CCReader$TranslationException: cycles in atomic blocks are not supported yet
+tricera.concurrency.ccreader.CCExceptions$TranslationException: cycles in atomic blocks are not supported yet
 (error "cycles in atomic blocks are not supported yet")
 Other Error: cycles in atomic blocks are not supported yet
 
 atomic3b.hcc
-tricera.concurrency.CCReader$TranslationException: cycles in atomic blocks are not supported yet
+tricera.concurrency.ccreader.CCExceptions$TranslationException: cycles in atomic blocks are not supported yet
 (error "cycles in atomic blocks are not supported yet")
 Other Error: cycles in atomic blocks are not supported yet
 

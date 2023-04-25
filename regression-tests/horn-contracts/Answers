@@ -114,6 +114,6 @@ false :- main3(x:12), x:12 != 0. (line 14)
 
 stackptr.hcc
 Warning: enabling heap model
-tricera.concurrency.CCReader$TranslationException: Function contracts are currently not supported together with stack pointers (line 10)
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Function contracts are currently not supported together with stack pointers (line 10)
 (error "Function contracts are currently not supported together with stack pointers (line 10)")
 Other Error: Function contracts are currently not supported together with stack pointers (line 10)

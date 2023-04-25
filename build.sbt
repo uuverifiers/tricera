@@ -45,7 +45,7 @@ lazy val acslParser = (project in file("acsl-parser")).
 
 lazy val pp = taskKey[Unit]("")
 pp := {
-  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.1/tri-pp")
+  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.2/tri-pp")
   f #> file("tri-pp") !
 }
 def addExecutePermissions(file : File) {

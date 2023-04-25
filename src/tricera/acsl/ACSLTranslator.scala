@@ -34,15 +34,14 @@ import tricera.acsl.{Absyn => AST}
 
 import collection.JavaConverters._
 import ap.parser.IExpression
-import ap.parser.{IBoolLit, IConstant, IFormula, IFormulaITE, IFunApp, IFunction, IIntLit, ISortedQuantified, ISortedVariable, ITerm, IVariable}
+import ap.parser.{IBoolLit, IConstant, IFormula, IFormulaITE, IFunApp, IFunction, ISortedQuantified, ISortedVariable, ITerm}
 import ap.theories.nia.GroebnerMultiplication._
-import ap.types.{MonoSortedPredicate, Sort, SortedConstantTerm}
+import ap.types.{Sort, SortedConstantTerm}
 import ap.theories.Heap
 import tricera.Util.{SourceInfo, getSourceInfo}
-import tricera.acsl.ACSLTranslator.getActualSourceInfo
 import tricera.acsl.Absyn.LoopInvSimple
-import tricera.concurrency.CCReader.{CCExpr, CCFormula, CCTerm, CCType, CCVar}
-import tricera.concurrency.CCReader
+import tricera.concurrency.ccreader._
+import CCExceptions._
 
 class ACSLParseException(msg : String) extends Exception(msg)
 class ACSLTranslateException(msg : String) extends Exception(msg)
@@ -59,7 +58,6 @@ object ACSLTranslator {
     def getHeap: Heap
     def getHeapTerm: ITerm
     def getOldHeapTerm : ITerm
-    implicit val arithMode : CCReader.ArithmeticMode.Value
     val annotationBeginSourceInfo : SourceInfo
     val annotationNumLines : Int
   }
@@ -120,8 +118,8 @@ object ACSLTranslator {
           "statement annotation.")
       }
     } catch {
-      case CCReader.NeedsHeapModelException =>
-        throw CCReader.NeedsHeapModelException
+      case NeedsHeapModelException =>
+        throw NeedsHeapModelException
       case e : Exception =>
         e.printStackTrace()
         throw new ACSLParseException(
@@ -145,7 +143,6 @@ object ACSLTranslator {
 class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
   import scala.collection.mutable.{HashMap => MHashMap}
   import ACSLTranslator._
-  import ctx.arithMode
 
   val locals = new MHashMap[String, CCTerm]
   var vars: Map[String, CCVar] = Map()
@@ -275,7 +272,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
                     (formula, pair) => {
                       val (p, obj) = pair
                       val sort : Sort =
-                        p.typ.asInstanceOf[CCReader.CCHeapPointer].typ.toSort
+                        p.typ.asInstanceOf[CCHeapPointer].typ.toSort
                       val corr : IFormula =
                         funCtx.getHeap.heapADTs.hasCtor(obj, ctx.getCtor(sort))
                       formula &&& corr
@@ -550,7 +547,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
     case t : AST.CTypeSpecifierVoid     => throwNotImpl(t)
     case t : AST.CTypeSpecifierChar     => throwNotImpl(t)
     case t : AST.CTypeSpecifierShort    => throwNotImpl(t)
-    case t : AST.CTypeSpecifierInt      => CCReader.CCInt()
+    case t : AST.CTypeSpecifierInt      => CCInt
     case t : AST.CTypeSpecifierLong     => throwNotImpl(t)
     case t : AST.CTypeSpecifierFloat    => throwNotImpl(t)
     case t : AST.CTypeSpecifierDouble   => throwNotImpl(t)
@@ -584,7 +581,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
     terms.foldLeft(IBoolLit(true) : IFormula)((formula, term) =>
       term.typ match {
         // FIXME: Handle CCPointer in general? (Need access to field `typ`)
-        case p : CCReader.CCHeapPointer =>
+        case p : CCHeapPointer =>
           import ap.parser.IExpression.{toFunApplier, toPredApplier}
           val sort : Sort = p.typ.toSort
           val heap : ITerm = ctx.getOldHeapTerm
@@ -664,7 +661,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
       case op : AST.UnaryOpComplementation => throwNotImpl(op)
       case op : AST.UnaryOpPtrDeref =>
         right.typ match {
-          case p : CCReader.CCHeapPointer =>
+          case p : CCHeapPointer =>
             import ap.parser.IExpression.toFunApplier
             val heap : ITerm =
               if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
@@ -738,7 +735,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
     val array : CCExpr = translate(term.term_1)
     val index : CCExpr = translate(term.term_2)
     array.typ match {
-      case p : CCReader.CCHeapPointer =>
+      case p : CCHeapPointer =>
         val heap: ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
         val access: IFunApp = ctx.getHeap.nth(array.toTerm, index.toTerm)
         val readObj: IFunApp = ctx.getHeap.read(heap, access)
@@ -746,7 +743,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
           throw new ACSLParseException(s"Cannot access $array[$index].")
         )
         CCTerm(getObj(readObj), p.typ, array.srcInfo)
-      case p : CCReader.CCHeapArrayPointer =>
+      case p : CCHeapArrayPointer =>
         val heap: ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
         val access: IFunApp = ctx.getHeap.nth(array.toTerm, index.toTerm)
         val readObj: IFunApp = ctx.getHeap.read(heap, access)
@@ -754,7 +751,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
           throw new ACSLParseException(s"Cannot access $array[$index].")
         )
         CCTerm(getObj(readObj), p.elementType, array.srcInfo)
-      case p : CCReader.CCArray => // todo: currently does not use wrappers, should match the encoding in CCReader
+      case p : CCArray => // todo: currently does not use wrappers, should match the encoding in CCReader
         val readObj: IFunApp = p.arrayTheory.select(array.toTerm, index.toTerm)
         val getObj: IFunction = ctx.sortGetter(p.elementType.toSort).getOrElse(
           throw new ACSLParseException(s"Cannot access $array[$index].")
@@ -802,7 +799,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
     case l : AST.LiteralInt    =>
       import ap.basetypes.IdealInt
       val term : ITerm = IExpression.i(IdealInt(l.unboundedinteger_))
-      CCTerm(term, CCReader.CCInt(), None) // todo; line no?
+      CCTerm(term, CCInt, None) // todo; line no?
     case l : AST.LiteralReal   => throwNotImpl(l)
     case l : AST.LiteralString => throwNotImpl(l) // ap.theories.string.StringTheory?
     case l : AST.LiteralChar   => throwNotImpl(l)
