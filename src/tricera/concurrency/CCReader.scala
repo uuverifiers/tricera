@@ -139,7 +139,6 @@ object CCReader {
 
     // val isFloat   : Predicate = floatADT.ctorIdPreds(0)
 
-    // todo: change to hasCtor
     private def isFloat(t: ITerm): IFormula = floatADT.hasCtor(t, 0)
     private def isNan(t: ITerm): IFormula = floatADT.hasCtor(t, 1)
     private def isPlusinf(t: ITerm): IFormula = floatADT.hasCtor(t, 2)
