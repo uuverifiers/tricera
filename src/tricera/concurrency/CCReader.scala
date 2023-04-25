@@ -39,7 +39,7 @@ import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
-import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
+import IExpression.{ConstantTerm, Predicate, Sort, i, toFunApplier}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, HashSet => MHashSet}
 import tricera.Util._
@@ -50,6 +50,10 @@ import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
+import ap.theories.rationals
+import ap.theories.rationals.Rationals
+import ap.theories.rationals.Rationals.Fraction
+
 
 
 object CCReader {
@@ -1985,7 +1989,7 @@ class CCReader private (prog : Program,
             case _ : Tchar =>
               // ignore
             case _ : Tfloat =>
-              typ = CCFloat()
+              typ = CCFloat
             case _ : Tsigned =>
               typ = CCInt
             case _ : Tunsigned =>
@@ -3661,7 +3665,7 @@ class CCReader private (prog : Program,
         val (num, denum) = float2fraction(constant.cfloat_)
         val floatData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
         pushVal(CCTerm(FloatADT.floatCtor(floatData),
-                       CCFloat(), Some(getSourceInfo(constant))))
+                       CCFloat, Some(getSourceInfo(constant))))
 
         // assertProperty(FloatADT.isFloat(floatData), None)) // todo: just an example of adding an implicit assertion
         // addGuard(FloatADT.isFloat(floatData)) // todo: just an example of adding an assumption

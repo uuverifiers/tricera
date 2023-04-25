@@ -109,7 +109,7 @@ class toFractionTests extends AnyFlatSpec {
         }
         bitCount = bitCount + 1
       }
-denominator
+
       if (exponentInt > 0) {
         numerator = numerator * BigInt(2).pow(exponentInt)
       }

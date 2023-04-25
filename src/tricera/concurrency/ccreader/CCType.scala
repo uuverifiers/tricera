@@ -31,17 +31,15 @@ package tricera.concurrency.ccreader
 
 import ap.basetypes.IdealInt
 import ap.parser.{IFormula, IIntLit, ITerm}
-import ap.theories.Heap
+import ap.theories.{Heap, ADT}
 import tricera.concurrency.CCReader._
+import tricera.concurrency.CCReader.FloatADT._
 import ap.parser.IExpression.{Sort, _}
 import ap.theories.bitvectors.ModuloArithmetic._
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import CCExceptions._
 
-import scala.collection.mutable.{
-  Stack,
-  HashMap => MHashMap
-}
+import scala.collection.mutable.{Stack, HashMap => MHashMap}
 
 abstract sealed class CCType {
   def shortName: String
@@ -71,6 +69,7 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(32)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
+        case CCFloat                        => FloatADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -90,6 +89,7 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(64)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
+        case CCFloat                        => FloatADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -109,6 +109,7 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(32)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
+        case CCFloat                        => FloatADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer

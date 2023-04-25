@@ -33,6 +33,7 @@ import ap.theories.ModuloArithmetic
 import tricera.concurrency.CCReader._
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import IExpression._
+import ap.theories.rationals.Rationals
 
 object CCBinaryExpressions {
   object BinaryOperators {
@@ -122,7 +123,8 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm === rhsTerm
-      override def getFloatRes = ???
+      override def getFloatRes = lhsTerm === rhsTerm // &&& !isNaN(lhsTerm) //todo: Should it be the same
+
     }
 
     case class Disequality(_lhs: CCExpr, _rhs: CCExpr)
@@ -130,7 +132,7 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm =/= rhsTerm
-      override def getFloatRes = ???
+      override def getFloatRes = lhsTerm =/= rhsTerm //todo: Should it be the same
     }
 
     case class Less(_lhs: CCExpr, _rhs: CCExpr)
@@ -138,7 +140,7 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm < rhsTerm
-      override def getFloatRes = ???
+      override def getFloatRes = Rationals.lt(lhsTerm, rhsTerm)
     }
 
     case class Greater(_lhs: CCExpr, _rhs: CCExpr)
@@ -146,7 +148,7 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm > rhsTerm
-      override def getFloatRes = ???
+      override def getFloatRes = Rationals.gt(lhsTerm, rhsTerm)
     }
 
     case class LessEqual(_lhs: CCExpr, _rhs: CCExpr)
@@ -154,7 +156,7 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm <= rhsTerm
-      override def getFloatRes = ???
+      override def getFloatRes = Rationals.leq(lhsTerm, rhsTerm)
     }
 
     case class GreaterEqual(_lhs: CCExpr, _rhs: CCExpr)
@@ -162,7 +164,7 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm >= rhsTerm
-      override def getFloatRes = ???
+      override def getFloatRes = Rationals.geq(lhsTerm, rhsTerm)
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -177,7 +179,10 @@ object CCBinaryExpressions {
         case _ =>
           lhs.toTerm + rhs.toTerm
       }
-      override def getFloatRes = ???
+      override def getFloatRes = (lhs.typ, rhs.typ) match {
+        case(CCFloat, CCFloat) =>
+          Rationals.plus(lhs.toTerm, rhs.toTerm)
+      }
     }
 
     case class Minus(_lhs: CCExpr, _rhs: CCExpr)
@@ -186,7 +191,10 @@ object CCBinaryExpressions {
         throwErrorIfPointerArithmetic(lhs, rhs)
         lhs.toTerm - rhs.toTerm
       }
-      override def getFloatRes = ???
+      override def getFloatRes = (lhs.typ, rhs.typ) match {
+        case (CCFloat, CCFloat) =>
+          Rationals.minus(lhs.toTerm, rhs.toTerm)
+      }
     }
 
     case class Times(_lhs: CCExpr, _rhs: CCExpr)
