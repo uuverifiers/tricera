@@ -26,7 +26,6 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 package tricera.concurrency.ccreader
 
 import ap.parser.{IExpression, IFormula, ITerm}
@@ -50,20 +49,18 @@ object CCBinaryExpressions {
       // these should be handled in relevant cases supporting pointer arithmetic,
       // e.g., addition
 
-      protected def getFloatRes: CCExpr = toCCTerm(getFloatResIExpr)
-      protected def getIntRes:   CCExpr = toCCTerm(getIntResIExpr)
+      protected def getFloatRes: IExpression
+      protected def getIntRes:   IExpression
 
       def expr: CCExpr = {
         (lhs.typ, rhs.typ) match {
-          case (CCFloat, _) => getFloatRes
-          case (_, CCFloat) => getFloatRes
-          case _            => getIntRes
+          case (CCFloat, _) => toCCExpr(getFloatRes)
+          case (_, CCFloat) => toCCExpr(getFloatRes)
+          case _            => toCCExpr(getIntRes)
         }
       }
 
-      protected def getFloatResIExpr: IExpression
-      protected def getIntResIExpr:   IExpression
-      private def toCCTerm(exp: IExpression): CCExpr = {
+      private def toCCExpr(exp: IExpression): CCExpr = {
         exp match {
           case term: ITerm =>
             val resultType = lhs.typ
@@ -71,7 +68,6 @@ object CCBinaryExpressions {
           case f: IFormula =>
             CCFormula(f, CCInt, lhs.srcInfo)
         }
-
       }
     }
 
@@ -80,42 +76,42 @@ object CCBinaryExpressions {
     // note: cast2unsigned is important because rhs might be IdealInt
     case class BitwiseOr(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr =
+      override def getIntRes =
         ModuloArithmetic.bvor(lhs.typ cast2Unsigned lhs.toTerm,
                               lhs.typ cast2Unsigned rhs.toTerm)
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class BitwiseAnd(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr =
+      override def getIntRes =
         ModuloArithmetic.bvand(lhs.typ cast2Unsigned lhs.toTerm,
                                lhs.typ cast2Unsigned rhs.toTerm)
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class BitwiseXor(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr =
+      override def getIntRes =
         ModuloArithmetic.bvxor(lhs.typ cast2Unsigned lhs.toTerm,
                                lhs.typ cast2Unsigned rhs.toTerm)
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class ShiftLeft(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr =
+      override def getIntRes =
         ModuloArithmetic.bvshl(lhs.typ cast2Unsigned lhs.toTerm,
                                lhs.typ cast2Unsigned rhs.toTerm)
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class ShiftRight(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr =
+      override def getIntRes =
         ModuloArithmetic.bvashr(lhs.typ cast2Unsigned lhs.toTerm,
                                 lhs.typ cast2Unsigned rhs.toTerm)
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -125,55 +121,55 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntResIExpr   = lhsTerm === rhsTerm
-      override def getFloatResIExpr = ???
+      override def getIntRes   = lhsTerm === rhsTerm
+      override def getFloatRes = ???
     }
 
     case class Disequality(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntResIExpr   = lhsTerm =/= rhsTerm
-      override def getFloatResIExpr = ???
+      override def getIntRes   = lhsTerm =/= rhsTerm
+      override def getFloatRes = ???
     }
 
     case class Less(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntResIExpr   = lhsTerm < rhsTerm
-      override def getFloatResIExpr = ???
+      override def getIntRes   = lhsTerm < rhsTerm
+      override def getFloatRes = ???
     }
 
     case class Greater(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntResIExpr   = lhsTerm > rhsTerm
-      override def getFloatResIExpr = ???
+      override def getIntRes   = lhsTerm > rhsTerm
+      override def getFloatRes = ???
     }
 
     case class LessEqual(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntResIExpr   = lhsTerm <= rhsTerm
-      override def getFloatResIExpr = ???
+      override def getIntRes   = lhsTerm <= rhsTerm
+      override def getFloatRes = ???
     }
 
     case class GreaterEqual(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntResIExpr   = lhsTerm >= rhsTerm
-      override def getFloatResIExpr = ???
+      override def getIntRes   = lhsTerm >= rhsTerm
+      override def getFloatRes = ???
     }
 
     ////////////////////////////////////////////////////////////////////////////
     // Binary functions
     case class Plus(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr = (lhs.typ, rhs.typ) match {
+      override def getIntRes = (lhs.typ, rhs.typ) match {
         case (arrTyp: CCHeapArrayPointer, _: CCArithType) =>
           import arrTyp.heap._
           addressRangeCtor(nth(lhs.toTerm, rhs.toTerm),
@@ -181,43 +177,43 @@ object CCBinaryExpressions {
         case _ =>
           lhs.toTerm + rhs.toTerm
       }
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class Minus(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr = {
+      override def getIntRes = {
         throwErrorIfPointerArithmetic(lhs, rhs)
         lhs.toTerm - rhs.toTerm
       }
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class Times(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr = {
+      override def getIntRes = {
         throwErrorIfPointerArithmetic(lhs, rhs)
         ap.theories.nia.GroebnerMultiplication.mult(lhs.toTerm, rhs.toTerm)
       }
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class Div(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr = {
+      override def getIntRes = {
         throwErrorIfPointerArithmetic(lhs, rhs)
         ap.theories.nia.GroebnerMultiplication.tDiv(lhs.toTerm, rhs.toTerm)
       }
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     case class Mod(_lhs: CCExpr, _rhs: CCExpr)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntResIExpr = {
+      override def getIntRes = {
         throwErrorIfPointerArithmetic(lhs, rhs)
         ap.theories.nia.GroebnerMultiplication.tMod(lhs.toTerm, rhs.toTerm)
       }
-      override def getFloatResIExpr = ???
+      override def getFloatRes = ???
     }
 
     private def throwErrorIfPointerArithmetic(lhs: CCExpr,
