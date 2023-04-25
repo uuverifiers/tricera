@@ -186,6 +186,8 @@ object CCBinaryExpressions {
         case(CCFloat, CCFloat) =>
           FloatADT.floatCtor(Rationals.plus(
             FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
       }
     }
 
@@ -197,7 +199,11 @@ object CCBinaryExpressions {
       }
       override def getFloatRes = (lhs.typ, rhs.typ) match {
         case (CCFloat, CCFloat) =>
-          Rationals.minus(lhs.toTerm, rhs.toTerm)
+          FloatADT.floatCtor(Rationals.minus(
+            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+
       }
     }
 
@@ -207,7 +213,13 @@ object CCBinaryExpressions {
         throwErrorIfPointerArithmetic(lhs, rhs)
         ap.theories.nia.GroebnerMultiplication.mult(lhs.toTerm, rhs.toTerm)
       }
-      override def getFloatRes = ???
+      override def getFloatRes = (lhs.typ, rhs.typ) match {
+        case (CCFloat, CCFloat) =>
+          FloatADT.floatCtor(Rationals.mul(
+            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
     }
 
     case class Div(_lhs: CCExpr, _rhs: CCExpr)
@@ -216,7 +228,13 @@ object CCBinaryExpressions {
         throwErrorIfPointerArithmetic(lhs, rhs)
         ap.theories.nia.GroebnerMultiplication.tDiv(lhs.toTerm, rhs.toTerm)
       }
-      override def getFloatRes = ???
+      override def getFloatRes = (lhs.typ, rhs.typ) match {
+        case (CCFloat, CCFloat) =>
+          FloatADT.floatCtor(Rationals.div(
+            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
     }
 
     case class Mod(_lhs: CCExpr, _rhs: CCExpr)

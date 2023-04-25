@@ -53,6 +53,7 @@ import CCExceptions._
 import ap.theories.rationals
 import ap.theories.rationals.Rationals
 import ap.theories.rationals.Rationals.Fraction
+import tricera.concurrency.CCReader.Floats.float2fraction
 
 
 
@@ -150,6 +151,141 @@ object CCReader {
   }
 
   //////////////////////////////////////////////////////////////////////////////
+  object Floats {
+    import scala.util.control._
+    import scala.math._
+    def double2fraction(fp: String): (String, String) = {
+      val f: Double = fp.toDouble
+      if (f.isNaN) {
+        ("0", "0")
+      }
+      else if (f.isInfinity) {
+        ("0", "0")
+      }
+      else {
+        val mantissaBits: Long = (java.lang.Double.doubleToLongBits(f) << 11 >>> 11)
+        val mantissa: String = String.format("%52s", java.lang.Long.toBinaryString(mantissaBits)).replace(' ', '0')
+
+        val exponentBits: Long = (java.lang.Double.doubleToLongBits(f) << 1 >>> 53)
+        val exponent: String = String.format("%11s", java.lang.Long.toBinaryString(exponentBits)).replace(' ', '0')
+
+        val signBit = (java.lang.Double.doubleToLongBits(f) >>> 63).toBinaryString
+
+        var bitCount: Int = 53
+
+        var denominator: Int = 0
+        var numerator: Int = 0
+        var loop = new Breaks
+        loop.breakable {
+          for (bit <- mantissa.reverse) {
+            if (bit == '1') {
+              denominator = (pow(2, bitCount)).toInt
+              loop.break()
+            }
+            bitCount = bitCount - 1
+          }
+        }
+
+        // reset bitCount
+        bitCount = 1
+        numerator = denominator
+        for (bit <- mantissa) {
+          if (bit == '1') {
+            numerator = numerator + denominator / pow(2, bitCount).toInt
+          }
+          bitCount = bitCount + 1
+        }
+
+        bitCount = 0
+        var exponentInt: Int = -pow(2, exponent.length() - 1).toInt + 1
+        for (bit <- exponent.reverse) {
+          if (bit == '1') {
+            exponentInt = exponentInt + pow(2, bitCount).toInt
+          }
+          bitCount = bitCount + 1
+        }
+
+        if (exponentInt > 0) {
+          numerator = numerator * pow(2, exponentInt).toInt
+        }
+        if (exponentInt < 0) {
+          denominator = denominator * pow(2, exponentInt).toInt
+        }
+        if (signBit == "1") {
+          numerator = -numerator
+        }
+        (numerator.toString, denominator.toString)
+      }
+    }
+
+
+    def float2fraction(fp: String): (String, String) = {
+      val f: Float = fp.toFloat
+
+      if (f.isNaN) {
+        ("0", "0")
+      }
+      else if (f.isInfinity) {
+        ("0", "0")
+      }
+      else {
+        //
+        val mantissaBits: Int = java.lang.Float.floatToIntBits(f) << 9 >>> 9
+        val mantissa: String = String.format("%23s", Integer.toBinaryString(mantissaBits)).replace(' ', '0')
+
+        val exponentBits: Int = (java.lang.Float.floatToIntBits(f) << 1 >>> 24)
+        val exponent: String = String.format("%8s", Integer.toBinaryString(exponentBits)).replace(' ', '0')
+
+        val signBit = (java.lang.Float.floatToIntBits(f) >>> 31).toBinaryString
+
+        var bitCount: Int = 23
+
+        var denominator: BigInt = 1
+        var numerator: BigInt = 0
+        var loop = new Breaks
+        loop.breakable {
+          for (bit <- mantissa.reverse) {
+            if (bit == '1') {
+              denominator = BigInt(2).pow(bitCount)
+              loop.break()
+            }
+            bitCount = bitCount - 1
+          }
+        }
+
+        // reset bitCount
+        bitCount = 1
+        numerator = denominator
+        for (bit <- mantissa) {
+          if (bit == '1') {
+            numerator = numerator + denominator / BigInt(2).pow(bitCount)
+          }
+          bitCount = bitCount + 1
+        }
+
+        bitCount = 0
+        var exponentInt: Int = -pow(2, exponent.length() - 1).toInt + 1
+        for (bit <- exponent.reverse) {
+          if (bit == '1') {
+            exponentInt = exponentInt + pow(2, bitCount).toInt
+          }
+          bitCount = bitCount + 1
+        }
+        denominator
+        if (exponentInt > 0) {
+          numerator = numerator * BigInt(2).pow(exponentInt)
+        }
+        if (exponentInt < 0) {
+          denominator = denominator * BigInt(2).pow(abs(exponentInt))
+        }
+        if (signBit == "1") {
+          numerator = -numerator
+        }
+        (numerator.toString, denominator.toString)
+      }
+    }
+  }
+
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -3675,142 +3811,6 @@ class CCReader private (prog : Program,
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
       case constant => throw new TranslationException("Unimplemented type: " +
         constant.getClass)
-    }
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
-
-import scala.util.control._
-import scala.math._
-
-   def double2fraction(fp: String) : (String, String) = {
-    val f : Double = fp.toDouble
-    if (f.isNaN) {
-      ("0", "0")
-    }
-    else if (f.isInfinity) {
-      ("0", "0")
-    }
-    else {
-      val mantissaBits: Long = (java.lang.Double.doubleToLongBits(f) << 11 >>> 11)
-      val mantissa: String = String.format("%52s", java.lang.Long.toBinaryString(mantissaBits)).replace(' ', '0')
-
-      val exponentBits: Long = (java.lang.Double.doubleToLongBits(f) << 1 >>> 53)
-      val exponent: String = String.format("%11s", java.lang.Long.toBinaryString(exponentBits)).replace(' ', '0')
-
-      val signBit = (java.lang.Double.doubleToLongBits(f) >>> 63).toBinaryString
-
-      var bitCount: Int = 53
-
-      var denominator: Int = 0
-      var numerator: Int = 0
-      var loop = new Breaks
-      loop.breakable {
-        for (bit <- mantissa.reverse) {
-          if (bit == '1') {
-            denominator = (pow(2, bitCount)).toInt
-            loop.break()
-          }
-          bitCount = bitCount - 1
-        }
-      }
-
-      // reset bitCount
-      bitCount = 1
-      numerator = denominator
-      for (bit <- mantissa) {
-        if (bit == '1') {
-          numerator = numerator + denominator / pow(2, bitCount).toInt
-        }
-        bitCount = bitCount + 1
-      }
-
-      bitCount = 0
-      var exponentInt: Int = -pow(2, exponent.length() - 1).toInt + 1
-      for (bit <- exponent.reverse) {
-        if (bit == '1') {
-          exponentInt = exponentInt + pow(2, bitCount).toInt
-        }
-        bitCount = bitCount + 1
-      }
-
-      if (exponentInt > 0) {
-        numerator = numerator * pow(2, exponentInt).toInt
-      }
-      if (exponentInt < 0) {
-        denominator = denominator * pow(2, exponentInt).toInt
-      }
-      if (signBit == "1") {
-        numerator = -numerator
-      }
-      (numerator.toString, denominator.toString)
-    }
-  }
-
-
-  def float2fraction(fp: String): (String, String) = {
-    val f: Float = fp.toFloat
-
-    if (f.isNaN) {
-      ("0", "0")
-    }
-    else if (f.isInfinity) {
-      ("0", "0")
-    }
-    else {
-      //
-      val mantissaBits: Int = java.lang.Float.floatToIntBits(f) << 8 >>> 8
-      val mantissa: String = String.format("%23s", Integer.toBinaryString(mantissaBits)).replace(' ', '0')
-
-      val exponentBits: Int = (java.lang.Float.floatToIntBits(f) << 1 >>> 24)
-      val exponent: String = String.format("%8s", Integer.toBinaryString(exponentBits)).replace(' ', '0')
-
-      val signBit = (java.lang.Float.floatToIntBits(f) >>> 31).toBinaryString
-
-      var bitCount: Int = 23
-
-      var denominator: BigInt = 1
-      var numerator: BigInt = 0
-      var loop = new Breaks
-      loop.breakable {
-        for (bit <- mantissa.reverse) {
-          if (bit == '1') {
-            denominator = BigInt(2).pow(bitCount)
-            loop.break()
-          }
-          bitCount = bitCount - 1
-        }
-      }
-
-      // reset bitCount
-      bitCount = 1
-      numerator = denominator
-      for (bit <- mantissa) {
-        if (bit == '1') {
-          numerator = numerator + denominator / BigInt(2).pow(bitCount)
-        }
-        bitCount = bitCount + 1
-      }
-
-      bitCount = 0
-      var exponentInt: Int = -pow(2, exponent.length() - 1).toInt + 1
-      for (bit <- exponent.reverse) {
-        if (bit == '1') {
-          exponentInt = exponentInt + pow(2, bitCount).toInt
-        }
-        bitCount = bitCount + 1
-      }
-      denominator
-      if (exponentInt > 0) {
-        numerator = numerator * BigInt(2).pow(exponentInt)
-      }
-      if (exponentInt < 0) {
-        denominator = denominator * BigInt(2).pow(abs(exponentInt))
-      }
-      if (signBit == "1") {
-        numerator = -numerator
-      }
-      (numerator.toString, denominator.toString)
     }
   }
 
