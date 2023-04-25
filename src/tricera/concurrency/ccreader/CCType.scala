@@ -59,6 +59,7 @@ abstract sealed class CCType {
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
+        case CCFloat                        => FloatADT.sort
         case _                              => Sort.Integer
       }
     case ArithmeticMode.ILP32 =>

@@ -123,7 +123,9 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm === rhsTerm
-      override def getFloatRes = lhsTerm === rhsTerm // &&& !isNaN(lhsTerm) //todo: Should it be the same
+      override def getFloatRes = {
+        FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)
+      } // &&& !isNaN(lhsTerm) //todo: Should it be the same
 
     }
 
@@ -132,7 +134,8 @@ object CCBinaryExpressions {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
       override def getIntRes   = lhsTerm =/= rhsTerm
-      override def getFloatRes = lhsTerm =/= rhsTerm //todo: Should it be the same
+      override def getFloatRes =
+        FloatADT.getData(lhsTerm) =/= FloatADT.getData(rhsTerm) //todo: Should it be the same
     }
 
     case class Less(_lhs: CCExpr, _rhs: CCExpr)
@@ -181,7 +184,8 @@ object CCBinaryExpressions {
       }
       override def getFloatRes = (lhs.typ, rhs.typ) match {
         case(CCFloat, CCFloat) =>
-          Rationals.plus(lhs.toTerm, rhs.toTerm)
+          FloatADT.floatCtor(Rationals.plus(
+            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
       }
     }
 
