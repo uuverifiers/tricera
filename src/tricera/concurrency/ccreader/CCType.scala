@@ -71,6 +71,7 @@ abstract sealed class CCType {
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
         case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -91,6 +92,7 @@ abstract sealed class CCType {
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
         case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -111,6 +113,7 @@ abstract sealed class CCType {
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
         case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -242,6 +245,10 @@ case object CCULongLong extends CCArithType {
 case object CCFloat extends CCType {
   override def toString : String = "float"
   def shortName = "float"
+}
+case object CCDouble extends CCType {
+  override def toString : String = "doublej"
+  def shortName = "double"
 }
 
 case class CCHeap(heap: Heap) extends CCType {
