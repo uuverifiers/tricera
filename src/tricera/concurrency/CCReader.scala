@@ -139,10 +139,10 @@ object CCReader {
 
     // val isFloat   : Predicate = floatADT.ctorIdPreds(0)
 
-    private def isFloat(t: ITerm): IFormula = floatADT.hasCtor(t, 0)
-    private def isNan(t: ITerm): IFormula = floatADT.hasCtor(t, 1)
-    private def isPlusinf(t: ITerm): IFormula = floatADT.hasCtor(t, 2)
-    private def isNeginf(t: ITerm): IFormula = floatADT.hasCtor(t, 3)
+    def isFloat(t: ITerm): IFormula = floatADT.hasCtor(t, 0)
+    def isNan(t: ITerm): IFormula = floatADT.hasCtor(t, 1)
+    def isPlusinf(t: ITerm): IFormula = floatADT.hasCtor(t, 2)
+    def isNeginf(t: ITerm): IFormula = floatADT.hasCtor(t, 3)
 
     // val isFloat   : Predicate = floatADT.hasCtor(I, 0)
     // val isNan     : Predicate = floatADT.ctorIdPreds(1)

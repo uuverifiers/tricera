@@ -124,8 +124,8 @@ object CCBinaryExpressions {
 
       override def getIntRes   = lhsTerm === rhsTerm
       override def getFloatRes = {
-        FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)
-      } // &&& !isNaN(lhsTerm) //todo: Should it be the same
+        (FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)) &&& (!FloatADT.isNan(lhsTerm) ||| !FloatADT.isNan(rhsTerm)) //todo: Should it be the same
+      }
 
     }
 
