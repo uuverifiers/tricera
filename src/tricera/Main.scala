@@ -502,6 +502,22 @@ class Main (args: Array[String]) {
                    if maybeEnc.isEmpty ||
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
+                
+                val preconditionProcessors = Seq(
+                  TheoryOfHeapProcessor
+                )
+                val postconditionProcessors = Seq(
+                  TheoryOfHeapProcessor
+                )
+                for (processor <- preconditionProcessors) {
+                  processedSolution =
+                    processedSolution + (ctx.prePred.pred -> processor(processedSolution, ctx.prePred.pred, fun, ctx))
+                }
+                for (processor <- postconditionProcessors) {
+                  processedSolution =
+                    processedSolution + (ctx.postPred.pred -> processor(processedSolution, ctx.postPred.pred, fun, ctx))
+                }
+                
                 val fPre = ACSLLineariser asString processedSolution(ctx.prePred.pred)
                 val fPost = ACSLLineariser asString processedSolution(ctx.postPred.pred)
 
