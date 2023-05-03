@@ -36,52 +36,52 @@ class FractionTest extends AnyFlatSpec {
 
   ////////////////////////////////////////////////////////////////////////////////
   // Tests
-  var foo: (String, String) = float2fraction("2.0f")
+  var foo: (String, String) = floatToFraction("2.0f")
   assert(foo == ("2", "1"))
 
-  foo = float2fraction("-2.0f")
+  foo = floatToFraction("-2.0f")
   assert(foo == ("-2", "1"))
 
-  foo = float2fraction("8.0f")
+  foo = floatToFraction("8.0f")
   assert(foo == ("8", "1"))
 
-  foo = float2fraction("-8.0f")
+  foo = floatToFraction("-8.0f")
   assert(foo == ("-8", "1"))
 
-  foo = float2fraction("3.14f")
+  foo = floatToFraction("3.14f")
   assert(foo == ("26340230", "8388608"))
 
-  foo = float2fraction("-3.14f")
+  foo = floatToFraction("-3.14f")
   assert(foo == ("-26340230", "8388608"))
 
-  foo = float2fraction("2.64f")
+  foo = floatToFraction("2.64f")
   assert(foo == ("22145926", "8388608"))
 
-  foo = float2fraction("-2.64f")
+  foo = floatToFraction("-2.64f")
   assert(foo == ("-22145926", "8388608"))
 
-  foo = float2fraction("0.125f")
+  foo = floatToFraction("0.125f")
   assert(foo == ("1", "8"))
 
-  foo = float2fraction("-0.125f")
+  foo = floatToFraction("-0.125f")
   assert(foo == ("-1", "8"))
 
-  foo = float2fraction("0.0032f")
+  foo = floatToFraction("0.0032f")
   assert(foo == ("13743895", "4294967296"))
 
-  foo = float2fraction("-0.0032f")
+  foo = floatToFraction("-0.0032f")
   assert(foo == ("-13743895", "4294967296"))
 
-  foo = float2fraction("0.69f")
+  foo = floatToFraction("0.69f")
   assert(foo == ("11576279", "16777216"))
 
-  foo = float2fraction("-0.69f")
+  foo = floatToFraction("-0.69f")
   assert(foo == ("-11576279", "16777216"))
 
-  foo = float2fraction("2.35098856151e-38")
+  foo = floatToFraction("2.35098856151e-38")
   assert(foo == ("16777215" , "713623846352979940529142984724747568191373312"))
 
-  foo = float2fraction("-2.35098856151e-38")
+  foo = floatToFraction("-2.35098856151e-38")
   assert(foo == ("-16777215", "713623846352979940529142984724747568191373312"))
 
   println("ALL TESTS PASSED")

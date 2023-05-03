@@ -130,7 +130,8 @@ object CCBinaryExpressions {
 
       override def getIntRes   = lhsTerm === rhsTerm
       override def getFloatRes = {
-        (FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)) &&& (!FloatADT.isNan(lhsTerm) ||| !FloatADT.isNan(rhsTerm)) //todo: Should it be the same
+        //IExpression.ite(FloatADT.isFloat(lhsTerm),(FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)), !(FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)))
+        (FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm))// &&& (!FloatADT.isNan(lhsTerm) ||| !FloatADT.isNan(rhsTerm)) //todo: Should it be the same
       }
       override def getDoubleRes = ???
 

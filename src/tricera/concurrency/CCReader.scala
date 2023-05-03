@@ -53,7 +53,9 @@ import CCExceptions._
 import ap.theories.rationals
 import ap.theories.rationals.Rationals
 import ap.theories.rationals.Rationals.Fraction
-import tricera.concurrency.CCReader.Floats.float2fraction
+import tricera.concurrency.CCReader.Doubles.doubleToFraction
+import tricera.concurrency.CCReader.Floats.floatToFraction
+
 
 
 
@@ -149,7 +151,7 @@ object CCReader {
   object Doubles {
     import scala.util.control._
     import scala.math._
-    def double2fraction(fp: String): (String, String) = {
+    def doubleToFraction(fp: String): (String, String) = {
     val f: Double = fp.toDouble
     if (f.isNaN) {
       ("0", "0")
@@ -216,7 +218,6 @@ object CCReader {
     }
     }
   }
-  }
 
   //////////////////////////////////////////////////////////////////////////////
   // Floats
@@ -257,7 +258,7 @@ object CCReader {
 
     import scala.util.control._
     import scala.math._
-    def float2fraction(fp: String): (String, String) = {
+    def floatToFraction(fp: String): (String, String) = {
       val f: Float = fp.toFloat
 
       if (f.isNaN) {
@@ -3792,7 +3793,6 @@ class CCReader private (prog : Program,
     ////////////////////////////////////////////////////////////////////////////
 
     private def evalHelp(constant : Constant) : Unit = constant match {
-//      case constant : Efloat.        Constant ::= Double;
       case constant : Echar =>
         pushVal(CCTerm(IdealInt(constant.char_.toInt), CCInt, Some(
           SourceInfo(constant.line_num, constant.col_num, constant.offset))))
@@ -3833,19 +3833,20 @@ class CCReader private (prog : Program,
         pushVal(CCTerm(IdealInt(constant.octallong_.substring(0,
                                 constant.octallong_.size - 1), 8), CCLong,
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
- //     case constant : Eoctalunslong. Constant ::= OctalUnsLong;
-//      case constant : Ecdouble.      Constant ::= CDouble;
-
       case constant : Ecfloat =>
-        //val frac : (String, String) = float2fraction(constant.cfloat_)
-        val (num, denum) = float2fraction(constant.cfloat_)
+        //val frac : (String, String) = floatToFraction(constant.cfloat_)
+        val (num, denum) = floatToFraction(constant.cfloat_)
         val floatData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
         pushVal(CCTerm(FloatADT.floatCtor(floatData),
                        CCFloat, Some(getSourceInfo(constant))))
-
         // assertProperty(FloatADT.isFloat(floatData), None)) // todo: just an example of adding an implicit assertion
         // addGuard(FloatADT.isFloat(floatData)) // todo: just an example of adding an assumption
-      //      case constant : Eclongdouble.  Constant ::= CLongDouble;
+      case constant : Ecdouble =>
+        val (num, denum) = doubleToFraction(constant.cdouble_)
+        val doubleData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
+        pushVal(CCTerm(DoubleADT.doubleCtor(doubleData),
+          CCDouble, Some(getSourceInfo(constant))))
+      case constant : Eclongdouble => ???
       case constant : Eint =>
         pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt,
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
