@@ -7,7 +7,7 @@ import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.Heap
 import ap.theories.Heap.HeapFunExtractor
 
-object TheoryOfHeapProcessor extends ContractConditionProcessor {
+object TheoryOfHeapProcessor extends ContractConditionProcessor with IExpressionProcessor {
   def process(
       solution: SolutionProcessor.Solution,
       predicate: Predicate,

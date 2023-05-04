@@ -14,20 +14,6 @@ import ContractConditionType._
 
 trait ContractConditionProcessor {
 
-  def apply(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
-  ): IExpression = {
-    process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
-    ): IExpression
-  }
-
   def getContractConditionType(
       predicate: Predicate,
       context: FunctionContext
@@ -48,6 +34,22 @@ trait ContractConditionProcessor {
       case ContractConditionType.postcondition =>
         context.postPredACSLArgNames
     }
+  }
+}
+
+trait IExpressionProcessor {
+  def apply(
+      solution: SolutionProcessor.Solution,
+      predicate: Predicate,
+      function: String,
+      context: FunctionContext
+  ): IExpression = {
+    process(
+      solution: SolutionProcessor.Solution,
+      predicate: Predicate,
+      function: String,
+      context: FunctionContext
+    ): IExpression
   }
 
   /** This is the function that should be implemented in new
@@ -106,4 +108,28 @@ trait ExpressionUtils {
     function.name.startsWith("get")
 
   def isO_SortFun(function: IFunction): Boolean = function.name.startsWith("O_")
+}
+
+object ContainsQuantifiedVisitor extends CollectingVisitor[Int, Boolean] {
+  def apply(expr: IExpression, quantifierDepth: Int): Boolean = {
+    ContainsQuantifiedVisitor.visit(expr, quantifierDepth)
+  }
+
+  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
+    t match {
+      case v: ISortedQuantified => UniSubArgs(quantifierDepth + 1)
+      case ISortedVariable(index, _) =>
+        if (index < quantifierDepth)
+          ShortCutResult(true)
+        else
+          ShortCutResult(false)
+      case _ => KeepArg
+    }
+
+  override def postVisit(
+      t: IExpression,
+      quantifierDepth: Int,
+      subres: Seq[Boolean]
+  ): Boolean =
+    if (subres.isEmpty) false else subres.reduce(_ || _)
 }

@@ -503,6 +503,13 @@ class Main (args: Array[String]) {
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
                 
+                println("Applying EqualityReader to solution: \n" + processedSolution)
+                val equalitiesPre = EqualityReader.process(processedSolution, ctx.prePred.pred, fun, ctx)
+                val equalitiesPost = EqualityReader.process(processedSolution, ctx.postPred.pred, fun, ctx)
+                println("pre equalities: \n" + replaceArgs(equalitiesPre.toString, ctx.prePredACSLArgNames))
+                println("post equalities: \n" + replaceArgs(equalitiesPost.toString, ctx.postPredACSLArgNames))
+                println("joined equalities: \n" + replaceArgs((Equivalences.join(equalitiesPre, equalitiesPost)).toString, ctx.postPredACSLArgNames))
+
                 val preconditionProcessors = Seq(
                   TheoryOfHeapProcessor
                 )
