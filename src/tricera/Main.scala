@@ -514,7 +514,8 @@ class Main (args: Array[String]) {
                   TheoryOfHeapProcessor
                 )
                 val postconditionProcessors = Seq(
-                  TheoryOfHeapProcessor
+                  TheoryOfHeapProcessor,
+                  PostconditionSimplifier
                 )
                 for (processor <- preconditionProcessors) {
                   processedSolution =
