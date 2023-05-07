@@ -4,10 +4,12 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.Heap
+import ap.theories.Heap.HeapFunExtractor
+import ap.theories.ADT
 
 object ContractConditionType extends Enumeration {
   type ContractConditionType = Value
-  val precondition, postcondition = Value
+  val Precondition, Postcondition = Value
 }
 
 import ContractConditionType._
@@ -19,9 +21,9 @@ trait ContractConditionProcessor {
       context: FunctionContext
   ): ContractConditionType = predicate match {
     case context.prePred.pred =>
-      ContractConditionType.precondition
+      ContractConditionType.Precondition
     case context.postPred.pred =>
-      ContractConditionType.postcondition
+      ContractConditionType.Postcondition
   }
 
   def getACSLArgNames(
@@ -29,11 +31,62 @@ trait ContractConditionProcessor {
       context: FunctionContext
   ): Seq[String] = {
     getContractConditionType(predicate, context) match {
-      case ContractConditionType.precondition =>
+      case Precondition =>
         context.prePredACSLArgNames
-      case ContractConditionType.postcondition =>
+      case Postcondition =>
         context.postPredACSLArgNames
     }
+  }
+
+  def getVarName(
+      variable: ISortedVariable,
+      quantifierDepth: Int,
+      acslArgNames: Seq[String]
+  ): String = {
+    acslArgNames(variable.index - quantifierDepth)
+  }
+
+  def isPrecondition(contractConditionType: ContractConditionType): Boolean = {
+    contractConditionType == Precondition
+  }
+
+  def isPostcondition(contractConditionType: ContractConditionType): Boolean = {
+    contractConditionType == Postcondition
+  }
+
+  def isParam(
+      variable: ISortedVariable,
+      quantifierDepth: Int,
+      acslArgNames: Seq[String],
+      paramNames: Seq[String]
+  ): Boolean = {
+    val varName = getVarName(variable, quantifierDepth, acslArgNames)
+    paramNames.contains(varName)
+  }
+
+  def isOldVar(
+      variable: ISortedVariable,
+      quantifierDepth: Int,
+      acslArgNames: Seq[String]
+  ): Boolean = {
+    val varName = getVarName(variable, quantifierDepth, acslArgNames)
+    varName.startsWith("\\old")
+  }
+
+  def isOldHeap(
+      variable: ISortedVariable,
+      quantifierDepth: Int,
+      acslArgNames: Seq[String]
+  ): Boolean = {
+    getVarName(variable, quantifierDepth, acslArgNames) == "\\old(@h)"
+  }
+
+  def isHeap(
+      variable: ISortedVariable,
+      quantifierDepth: Int,
+      acslArgNames: Seq[String]
+  ): Boolean = {
+    getVarName(variable, quantifierDepth, acslArgNames) == "@h"
   }
 }
 
@@ -74,29 +127,6 @@ trait IExpressionProcessor {
 }
 
 trait ExpressionUtils {
-  def getVarName(
-      variableIndex: Int,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): String = {
-    acslArgNames(variableIndex - quantifierDepth)
-  }
-
-  def isOldHeap(
-      variableIndex: Int,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): Boolean = {
-    getVarName(variableIndex, quantifierDepth, acslArgNames) == "\\old(@h)"
-  }
-
-  def isHeap(
-      variableIndex: Int,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): Boolean = {
-    getVarName(variableIndex, quantifierDepth, acslArgNames) == "@h"
-  }
 
   def isWriteFun(function: IFunction, heapTheory: Heap): Boolean =
     function == heapTheory.write
@@ -179,9 +209,9 @@ object CleanupVisitor extends CollectingVisitor[Unit, IExpression] {
   }
 }
 
-// Returns a tuple (newExpression, replacedExpression) where n:th IFormula 
-// in depth-first left-first order is replaced by a BoolLit(true) in 
-// newExpression, and replacedExpression is the expression that was 
+// Returns a tuple (newExpression, replacedExpression) where n:th IFormula
+// in depth-first left-first order is replaced by a BoolLit(true) in
+// newExpression, and replacedExpression is the expression that was
 // substituted
 object ReplaceNthIFormulaVisitor {
   def apply(expr: IExpression, n: Int): (IExpression, Option[IExpression]) = {
@@ -226,4 +256,48 @@ object IFormulaCounterVisitor extends CollectingVisitor[Unit, Int] {
       case f: IFormula => subres.sum + 1
       case _           => subres.sum
     }
+}
+
+// Match types
+
+object Is_O_Sort {
+  def unapply(
+      expr: IExpression
+  ): Option[IExpression] = expr match {
+    case IExpression.EqLit(
+          IFunApp(
+            ADT.CtorId(_, _),
+            Seq(arg)
+          ),
+          _
+        ) =>
+      Some(arg)
+
+    case _ => None
+  }
+}
+
+object TheoryOfHeapFunApp {
+  def unapply(
+      expr: IExpression
+  ): Option[(IFunction, Heap, Seq[IExpression])] = expr match {
+    case IFunApp(
+          function @ HeapFunExtractor(heapTheory),
+          args
+        ) =>
+      Some((function, heapTheory, args))
+
+    case _ => None
+  }
+}
+
+object Var {
+  def unapply(
+      expr: IExpression
+  ): Option[ISortedVariable] = expr match {
+    case variable @ ISortedVariable(index, _) =>
+      Some(variable)
+
+    case _ => None
+  }
 }

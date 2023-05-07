@@ -7,7 +7,9 @@ import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.Heap
 import ap.theories.Heap.HeapFunExtractor
 
-object TheoryOfHeapProcessor extends ContractConditionProcessor with IExpressionProcessor {
+object TheoryOfHeapProcessor
+    extends ContractConditionProcessor
+    with IExpressionProcessor {
   def process(
       solution: SolutionProcessor.Solution,
       predicate: Predicate,
@@ -39,7 +41,7 @@ object TheoryOfHeapProcessor extends ContractConditionProcessor with IExpression
       import IExpression._
       t match {
         case v @ ISortedVariable(vIndex, _) =>
-          isOldHeap(vIndex, quantifierDepth, acslArgNames)
+          isOldHeap(v, quantifierDepth, acslArgNames)
         case IFunApp(writeFun @ HeapFunExtractor(heapTheory), args)
             if (isWriteFun(writeFun, heapTheory)) =>
           leadsToOldHeap(args.head, quantifierDepth)
@@ -63,9 +65,12 @@ object TheoryOfHeapProcessor extends ContractConditionProcessor with IExpression
       }
     }
 
-    override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult = t match {
-        case v: IVariableBinder => UniSubArgs(quantifierDepth + 1)
-        case _ => KeepArg
+    override def preVisit(
+        t: IExpression,
+        quantifierDepth: Int
+    ): PreVisitResult = t match {
+      case v: IVariableBinder => UniSubArgs(quantifierDepth + 1)
+      case _                  => KeepArg
     }
 
     override def postVisit(
@@ -74,14 +79,21 @@ object TheoryOfHeapProcessor extends ContractConditionProcessor with IExpression
         subres: Seq[IExpression]
     ): IExpression = {
 
-      def extractEqualitiesFromWriteChain(funApp: IFunApp, heapVar: ISortedVariable, heapTheory: Heap) = {
+      def extractEqualitiesFromWriteChain(
+          funApp: IExpression,
+          heapVar: ISortedVariable,
+          heapTheory: Heap
+      ) = {
         getAssignments(funApp)
           .map { case (pointer, value) =>
             val function = heapTheory.userADTSels(0)(
               0
             ) // HOW TO GET CORRECT TYPE?
             IEquation(
-              IFunApp(function, Seq(IFunApp(heapTheory.read, Seq(heapVar, pointer)))),
+              IFunApp(
+                function,
+                Seq(IFunApp(heapTheory.read, Seq(heapVar, pointer)))
+              ),
               IFunApp(function, Seq(value))
             ).asInstanceOf[IFormula]
           }
@@ -92,11 +104,24 @@ object TheoryOfHeapProcessor extends ContractConditionProcessor with IExpression
         // write(write(...write(@h, ptr1, val1)...)) -> read(@h, ptr1) == val1 && read(@h, ptr2) == val2 && ...
         // addresses must be separated and pointers valid
         case IEquation(
-              heapFunApp @ IFunApp(HeapFunExtractor(heapTheory), _),
-              heap @ ISortedVariable(vIndex, sortToBeSelected)
-            ) if (leadsToOldHeap(heapFunApp, quantifierDepth) && isHeap(vIndex, quantifierDepth, acslArgNames)) =>
-          extractEqualitiesFromWriteChain(heapFunApp, heap, heapTheory)
-
+              heapFunApp @ TheoryOfHeapFunApp(function, heapTheory, _),
+              Var(h)
+            )
+            if (leadsToOldHeap(
+              heapFunApp,
+              quantifierDepth
+            ) && isHeap(h, quantifierDepth, acslArgNames)) =>
+          extractEqualitiesFromWriteChain(heapFunApp, h, heapTheory)
+        // other order..
+        case IEquation(
+              Var(h),
+              heapFunApp @ TheoryOfHeapFunApp(function, heapTheory, _)
+            )
+            if (leadsToOldHeap(
+              heapFunApp,
+              quantifierDepth
+            ) && isHeap(h, quantifierDepth, acslArgNames)) =>
+          extractEqualitiesFromWriteChain(heapFunApp, h, heapTheory)
 
         // o.get<sort>.O_<sort> -> o
         case IFunApp(o_SortFun, Seq(IFunApp(getSortFun, Seq(obj))))
@@ -111,22 +136,15 @@ object TheoryOfHeapProcessor extends ContractConditionProcessor with IExpression
           obj
 
         // read(write(h,p,o),p) -> o
-        case IFunApp(
-              readFun @ HeapFunExtractor(heapTheory),
-              Seq(IFunApp(writeFun, Seq(h, p2, o)), p1)
+        case TheoryOfHeapFunApp(
+              readFun,
+              heapTheory,
+              Seq(TheoryOfHeapFunApp(writeFun, _, Seq(Var(h), p2, o)), p1)
             )
             if (isReadFun(readFun, heapTheory)
               && isWriteFun(writeFun, heapTheory)
               && p1 == p2) =>
           o
-
-        
-
-        case IEquation(
-              heap @ ISortedVariable(vIndex, sortToBeSelected),
-              heapFunApp @ IFunApp(HeapFunExtractor(heapTheory), _)
-            ) if (leadsToOldHeap(heapFunApp, quantifierDepth) && isHeap(vIndex, quantifierDepth, acslArgNames)) =>
-          extractEqualitiesFromWriteChain(heapFunApp, heap, heapTheory)
 
         case _ => t update subres
       }

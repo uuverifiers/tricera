@@ -18,7 +18,7 @@ object PostconditionSimplifier
       context: FunctionContext
   ): IExpression = {
     getContractConditionType(predicate, context) match {
-      case ContractConditionType.postcondition =>
+      case ContractConditionType.Postcondition =>
         apply(solution, context)
     }
   }
