@@ -60,6 +60,7 @@ abstract sealed class CCType {
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
         case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
         case _                              => Sort.Integer
       }
     case ArithmeticMode.ILP32 =>
@@ -72,6 +73,7 @@ abstract sealed class CCType {
         case CCULongLong                    => UnsignedBVSort(64)
         case CCFloat                        => FloatADT.sort
         case CCDouble                       => DoubleADT.sort
+        case CCLongDouble                   => LongDoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -93,6 +95,7 @@ abstract sealed class CCType {
         case CCULongLong                    => UnsignedBVSort(64)
         case CCFloat                        => FloatADT.sort
         case CCDouble                       => DoubleADT.sort
+        case CCLongDouble                   => LongDoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -114,6 +117,7 @@ abstract sealed class CCType {
         case CCULongLong                    => UnsignedBVSort(64)
         case CCFloat                        => FloatADT.sort
         case CCDouble                       => DoubleADT.sort
+        case CCLongDouble                   => LongDoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -247,10 +251,14 @@ case object CCFloat extends CCType {
   def shortName = "float"
 }
 case object CCDouble extends CCType {
-  override def toString : String = "doublej"
+  override def toString : String = "double"
   def shortName = "double"
 }
 
+case object CCLongDouble extends CCType {
+  override def toString : String = "long double"
+  def shortName = "long double"
+}
 case class CCHeap(heap: Heap) extends CCType {
   override def toString: String = heap.toString
   def shortName = "heap"

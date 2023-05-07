@@ -50,9 +50,10 @@ object CCBinaryExpressions {
       // these should be handled in relevant cases supporting pointer arithmetic,
       // e.g., addition
 
-      protected def getDoubleRes: IExpression
-      protected def getFloatRes: IExpression
-      protected def getIntRes:   IExpression
+      protected def getLongDoubleRes: IExpression
+      protected def getDoubleRes:     IExpression
+      protected def getFloatRes:      IExpression
+      protected def getIntRes:        IExpression
 
       def expr: CCExpr = {
         (lhs.typ, rhs.typ) match {
@@ -83,6 +84,7 @@ object CCBinaryExpressions {
                               lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
       override def getDoubleRes = ???
+      override def getLongDoubleRes = ???
     }
 
     case class BitwiseAnd(_lhs: CCExpr, _rhs: CCExpr)
@@ -92,6 +94,7 @@ object CCBinaryExpressions {
                                lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
       override def getDoubleRes = ???
+      override def getLongDoubleRes = ???
     }
 
     case class BitwiseXor(_lhs: CCExpr, _rhs: CCExpr)
@@ -101,6 +104,7 @@ object CCBinaryExpressions {
                                lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
       override def getDoubleRes = ???
+      override def getLongDoubleRes = ???
     }
 
     case class ShiftLeft(_lhs: CCExpr, _rhs: CCExpr)
@@ -110,6 +114,7 @@ object CCBinaryExpressions {
                                lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
       override def getDoubleRes = ???
+      override def getLongDoubleRes = ???
     }
 
     case class ShiftRight(_lhs: CCExpr, _rhs: CCExpr)
@@ -119,6 +124,7 @@ object CCBinaryExpressions {
                                 lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
       override def getDoubleRes = ???
+      override def getLongDoubleRes = ???
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -133,7 +139,8 @@ object CCBinaryExpressions {
         //IExpression.ite(FloatADT.isFloat(lhsTerm),(FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)), !(FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm)))
         (FloatADT.getData(lhsTerm) === FloatADT.getData(rhsTerm))// &&& (!FloatADT.isNan(lhsTerm) ||| !FloatADT.isNan(rhsTerm)) //todo: Should it be the same
       }
-      override def getDoubleRes = ???
+      override def getDoubleRes = DoubleADT.getData(lhsTerm) === DoubleADT.getData(rhsTerm)
+      override def getLongDoubleRes = LongDoubleADT.getData(lhsTerm) === LongDoubleADT.getData(rhsTerm)
 
     }
 
@@ -144,7 +151,9 @@ object CCBinaryExpressions {
       override def getIntRes   = lhsTerm =/= rhsTerm
       override def getFloatRes =
         FloatADT.getData(lhsTerm) =/= FloatADT.getData(rhsTerm) //todo: Should it be the same
-      override def getDoubleRes = ???
+      override def getDoubleRes = DoubleADT.getData(lhsTerm) =/= DoubleADT.getData(rhsTerm)
+      override def getLongDoubleRes = LongDoubleADT.getData(lhsTerm) =/= LongDoubleADT.getData(rhsTerm)
+
     }
 
     case class Less(_lhs: CCExpr, _rhs: CCExpr)
@@ -153,7 +162,8 @@ object CCBinaryExpressions {
 
       override def getIntRes   = lhsTerm < rhsTerm
       override def getFloatRes = Rationals.lt(FloatADT.getData(lhsTerm), FloatADT.getData(rhsTerm))
-      override def getDoubleRes = ???
+      override def getDoubleRes = Rationals.lt(DoubleADT.getData(lhsTerm), DoubleADT.getData(rhsTerm))
+      override def getLongDoubleRes = Rationals.lt(LongDoubleADT.getData(lhsTerm), LongDoubleADT.getData(rhsTerm))
     }
 
     case class Greater(_lhs: CCExpr, _rhs: CCExpr)
@@ -162,7 +172,10 @@ object CCBinaryExpressions {
 
       override def getIntRes   = lhsTerm > rhsTerm
       override def getFloatRes = Rationals.gt(FloatADT.getData(lhsTerm), FloatADT.getData(rhsTerm))
-      override def getDoubleRes = ???
+
+      override def getDoubleRes = Rationals.gt(DoubleADT.getData(lhsTerm), DoubleADT.getData(rhsTerm))
+
+      override def getLongDoubleRes = Rationals.gt(LongDoubleADT.getData(lhsTerm), LongDoubleADT.getData(rhsTerm))
     }
 
     case class LessEqual(_lhs: CCExpr, _rhs: CCExpr)
@@ -171,7 +184,9 @@ object CCBinaryExpressions {
 
       override def getIntRes   = lhsTerm <= rhsTerm
       override def getFloatRes = Rationals.leq(FloatADT.getData(lhsTerm), FloatADT.getData(rhsTerm))
-      override def getDoubleRes = ???
+      override def getDoubleRes = Rationals.leq(DoubleADT.getData(lhsTerm), DoubleADT.getData(rhsTerm))
+
+      override def getLongDoubleRes = Rationals.leq(LongDoubleADT.getData(lhsTerm), LongDoubleADT.getData(rhsTerm))
     }
 
     case class GreaterEqual(_lhs: CCExpr, _rhs: CCExpr)
@@ -180,7 +195,8 @@ object CCBinaryExpressions {
 
       override def getIntRes   = lhsTerm >= rhsTerm
       override def getFloatRes = Rationals.geq(FloatADT.getData(lhsTerm), FloatADT.getData(rhsTerm))
-      override def getDoubleRes = ???
+      override def getDoubleRes = Rationals.geq(DoubleADT.getData(lhsTerm), DoubleADT.getData(rhsTerm))
+      override def getLongDoubleRes = Rationals.geq(LongDoubleADT.getData(lhsTerm), LongDoubleADT.getData(rhsTerm))
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -204,8 +220,16 @@ object CCBinaryExpressions {
       }
       override def getDoubleRes = (lhs.typ, rhs.typ) match {
         case (CCDouble, CCDouble) =>
-          FloatADT.floatCtor(Rationals.plus(
-            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+          DoubleADT.doubleCtor(Rationals.plus(
+            DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
+
+      override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
+        case (CCLongDouble, CCLongDouble) =>
+          LongDoubleADT.longDoubleCtor(Rationals.plus(
+            LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
         case _ =>
           throw new Exception("Unmatched types")
       }
@@ -225,7 +249,22 @@ object CCBinaryExpressions {
           throw new Exception("Unmatched types")
 
       }
-      override def getDoubleRes = ???
+
+      override def getDoubleRes = (lhs.typ, rhs.typ) match {
+        case (CCDouble, CCDouble) =>
+          DoubleADT.doubleCtor(Rationals.minus(
+            DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
+
+      override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
+        case (CCLongDouble, CCLongDouble) =>
+          LongDoubleADT.longDoubleCtor(Rationals.minus(
+            LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
     }
 
     case class Times(_lhs: CCExpr, _rhs: CCExpr)
@@ -241,7 +280,21 @@ object CCBinaryExpressions {
         case _ =>
           throw new Exception("Unmatched types")
       }
-      override def getDoubleRes = ???
+      override def getDoubleRes = (lhs.typ, rhs.typ) match {
+        case (CCDouble, CCDouble) =>
+          DoubleADT.doubleCtor(Rationals.mul(
+            DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
+
+      override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
+        case (CCLongDouble, CCLongDouble) =>
+          LongDoubleADT.longDoubleCtor(Rationals.mul(
+            LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
     }
 
     case class Div(_lhs: CCExpr, _rhs: CCExpr)
@@ -257,7 +310,22 @@ object CCBinaryExpressions {
         case _ =>
           throw new Exception("Unmatched types")
       }
-      override def getDoubleRes = ???
+
+      override def getDoubleRes = (lhs.typ, rhs.typ) match {
+        case (CCDouble, CCDouble) =>
+          DoubleADT.doubleCtor(Rationals.div(
+            DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
+
+      override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
+        case (CCLongDouble, CCLongDouble) =>
+          LongDoubleADT.longDoubleCtor(Rationals.div(
+            LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
+        case _ =>
+          throw new Exception("Unmatched types")
+      }
     }
 
     case class Mod(_lhs: CCExpr, _rhs: CCExpr)
@@ -268,6 +336,7 @@ object CCBinaryExpressions {
       }
       override def getFloatRes = ???
       override def getDoubleRes = ???
+      override def getLongDoubleRes = ???
     }
 
     private def throwErrorIfPointerArithmetic(lhs: CCExpr,

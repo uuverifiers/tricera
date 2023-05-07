@@ -222,19 +222,20 @@ TSetTerm. TSet ::= Term ;
 
 -- C Type Expressions (A.1) --------------------------------
 -- TODO: Missing a lot. 
-CTypeSpecifierVoid.     CTypeSpecifier ::= "void" ;
-CTypeSpecifierChar.     CTypeSpecifier ::= "char" ;
-CTypeSpecifierShort.    CTypeSpecifier ::= "short" ;
-CTypeSpecifierInt.      CTypeSpecifier ::= "int" ;
-CTypeSpecifierLong.     CTypeSpecifier ::= "long" ;
-CTypeSpecifierFloat.    CTypeSpecifier ::= "float" ;
-CTypeSpecifierDouble.   CTypeSpecifier ::= "double" ;
-CTypeSpecifierSigned.   CTypeSpecifier ::= "signed" ;
-CTypeSpecifierUnsigned. CTypeSpecifier ::= "unsigned" ;
-CTypeSpecifierStruct.   CTypeSpecifier ::= "struct" Id ;
-CTypeSpecifierUnion.    CTypeSpecifier ::= "union" Id ;
-CTypeSpecifierEnum.     CTypeSpecifier ::= "enum" Id ;
-CTypeSpecifierId.       CTypeSpecifier ::= Id ;
+CTypeSpecifierVoid.       CTypeSpecifier ::= "void" ;
+CTypeSpecifierChar.       CTypeSpecifier ::= "char" ;
+CTypeSpecifierShort.      CTypeSpecifier ::= "short" ;
+CTypeSpecifierInt.        CTypeSpecifier ::= "int" ;
+CTypeSpecifierLong.       CTypeSpecifier ::= "long" ;
+CTypeSpecifierFloat.      CTypeSpecifier ::= "float" ;
+CTypeSpecifierDouble.     CTypeSpecifier ::= "double" ;
+CTypeSpecifierLongDouble. CTypeSpecifier ::= "long double";
+CTypeSpecifierSigned.     CTypeSpecifier ::= "signed" ;
+CTypeSpecifierUnsigned.   CTypeSpecifier ::= "unsigned" ;
+CTypeSpecifierStruct.     CTypeSpecifier ::= "struct" Id ;
+CTypeSpecifierUnion.      CTypeSpecifier ::= "union" Id ;
+CTypeSpecifierEnum.       CTypeSpecifier ::= "enum" Id ;
+CTypeSpecifierId.         CTypeSpecifier ::= Id ;
 
 
 ---- Tokens ------------------------------------------------ 

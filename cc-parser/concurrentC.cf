@@ -313,7 +313,6 @@ token CFloat (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-')? di
 token CLongDouble (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-')? 
                    digit+)?('l'|'L'))|((digit+ ('e'|'E')('-')? digit+)('l'|'L'));
 
-token Cnan ('N''A''N')
 
 
 Ecomma.      Exp   ::= Exp "," Exp2;
@@ -355,9 +354,7 @@ Econst.      Exp17 ::= Constant;
 Estring.     Exp17 ::= String;
 Enondet.     Exp17 ::= "_";
 
-Enan.          Constant ::= Cnan;
 Einf.          Constant ::= "INFINITY";
-Efloat.        Constant ::= Double;
 Echar.         Constant ::= Char;
 Eunsigned.     Constant ::= Unsigned;
 Elong.         Constant ::= Long;
@@ -370,13 +367,10 @@ Eoctal.        Constant ::= Octal;
 Eoctalunsign.  Constant ::= OctalUnsigned;
 Eoctallong.    Constant ::= OctalLong;
 Eoctalunslong. Constant ::= OctalUnsLong;
-Ecdouble.      Constant ::= CDouble;
 Ecfloat.       Constant ::= CFloat;
+Ecdouble.      Constant ::= CDouble;
 Eclongdouble.  Constant ::= CLongDouble;
-Eint.          Constant ::= UnboundedInteger;  
-
--- internal Elonger. Constant ::= Integer;
--- internal Edouble. Constant ::= Double;
+Eint.          Constant ::= UnboundedInteger;
 
 Especial. Constant_expression ::= Exp3;
 

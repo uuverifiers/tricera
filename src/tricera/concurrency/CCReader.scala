@@ -31,7 +31,7 @@ package tricera.concurrency
 
 import ap.basetypes.{IdealInt, IdealRat}
 import ap.parser._
-import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic}
+import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic, rationals}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrent_c._
 import concurrent_c.Absyn._
@@ -50,11 +50,13 @@ import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
-import ap.theories.rationals
 import ap.theories.rationals.Rationals
 import ap.theories.rationals.Rationals.Fraction
 import tricera.concurrency.CCReader.Doubles.doubleToFraction
 import tricera.concurrency.CCReader.Floats.floatToFraction
+import tricera.concurrency.CCReader.LongDoubles.longDoubleToFraction
+
+import scala.collection.immutable.Nil
 
 
 
@@ -115,6 +117,110 @@ object CCReader {
 
   object ArithmeticMode extends Enumeration {
     val Mathematical, ILP32, LP64, LLP64 = Value
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Long Doubles
+  object LongDoubleADT {
+    private val longDoubleADTCtorSignatures: Seq[(String, ADT.CtorSignature)] = Seq(
+      ("longDoubleData", ADT.CtorSignature(
+        Seq(("getLongDouble", ADT.OtherSort(Rationals.dom))), ADT.ADTSort(0))),
+      ("NaN", ADT.CtorSignature(Nil, ADT.ADTSort(0))),
+      ("plusInfinity", ADT.CtorSignature(Nil, ADT.ADTSort(0))),
+      ("negativeInfinity", ADT.CtorSignature(Nil, ADT.ADTSort(0)))
+    )
+
+    val longDoubleADT = new ADT(sortNames = Seq("longDoubleADT"),
+      longDoubleADTCtorSignatures)
+    val sort = longDoubleADT.sorts.head
+
+    val longDoubleCtor: MonoSortedIFunction = longDoubleADT.constructors(0)
+    val getData: MonoSortedIFunction = longDoubleADT.selectors(0)(0)
+
+    val nan: ITerm = IFunApp(longDoubleADT.constructors(1), Nil)
+    val plusInf: ITerm = IFunApp(longDoubleADT.constructors(2), Nil)
+    val negInf: ITerm = IFunApp(longDoubleADT.constructors(3), Nil)
+
+    def isFloat(t: ITerm): IFormula = longDoubleADT.hasCtor(t, 0)
+
+    def isNan(t: ITerm): IFormula = longDoubleADT.hasCtor(t, 1)
+
+    def isPlusinf(t: ITerm): IFormula = longDoubleADT.hasCtor(t, 2)
+
+    def isNeginf(t: ITerm): IFormula = longDoubleADT.hasCtor(t, 3)
+  }
+
+  object LongDoubles {
+
+    import scala.util.control._
+    import scala.math._
+
+    def longDoubleToFraction(fp: String): (String, String) = {
+      val f: Double = fp.toDouble
+      if (f.isNaN) {
+        ("0", "0")
+      }
+      else if (f.isInfinity) {
+        ("0", "0")
+      }
+      else {
+        val mantissaBits: Long = (java.lang.Double.doubleToLongBits(f) << 12 >>> 12)
+        val mantissa: String = String.format("%52s", java.lang.Long.toBinaryString(mantissaBits)).replace(' ', '0')
+
+        val exponentBits: Long = (java.lang.Double.doubleToLongBits(f) << 1 >>> 53)
+        val exponent: String = String.format("%11s", java.lang.Long.toBinaryString(exponentBits)).replace(' ', '0')
+
+        val signBit = (java.lang.Double.doubleToLongBits(f) >>> 63).toBinaryString
+
+        var bitCount: Int = 53
+        var denominator: BigInt = 1
+        var numerator: BigInt = 0
+
+        //Get the denominator from the mantissa
+        var loop = new Breaks
+        loop.breakable {
+          for (bit <- mantissa.reverse) {
+            if (bit == '1') {
+              denominator = BigInt(2).pow(bitCount)
+              loop.break()
+            }
+            bitCount = bitCount - 1
+          }
+        }
+
+        // reset bitCount
+        bitCount = 1
+        numerator = denominator
+        //Get the numerator from the mantissa
+        for (bit <- mantissa) {
+          if (bit == '1') {
+            numerator = numerator + denominator / BigInt(2).pow(bitCount)
+          }
+          bitCount = bitCount + 1
+        }
+
+        bitCount = 0
+        // Get the exponent
+        var exponentInt: Int = -pow(2, exponent.length() - 1).toInt + 1
+        for (bit <- exponent.reverse) {
+          if (bit == '1') {
+            exponentInt = exponentInt + pow(2, bitCount).toInt
+          }
+          bitCount = bitCount + 1
+        }
+
+        if (exponentInt > 0) {
+          numerator = numerator * BigInt(2).pow(exponentInt)
+        }
+        if (exponentInt < 0) {
+          denominator = denominator * BigInt(2).pow(abs(exponentInt))
+        }
+        if (signBit == "1") {
+          numerator = -numerator
+        }
+        (numerator.toString, denominator.toString)
+      }
+    }
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -2167,6 +2273,10 @@ class CCReader private (prog : Program,
               // ignore
             case _ : Tfloat =>
               typ = CCFloat
+            case _: Tdouble =>
+              typ = CCDouble
+            case _: Tlong if typ == CCDouble =>
+              typ = CCLongDouble
             case _ : Tsigned =>
               typ = CCInt
             case _ : Tunsigned =>
@@ -3846,7 +3956,11 @@ class CCReader private (prog : Program,
         val doubleData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
         pushVal(CCTerm(DoubleADT.doubleCtor(doubleData),
           CCDouble, Some(getSourceInfo(constant))))
-      case constant : Eclongdouble => ???
+      case constant : Eclongdouble =>
+        val (num, denum) = doubleToFraction(constant.clongdouble_.dropRight(1))
+        val longDoubleData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
+        pushVal(CCTerm(LongDoubleADT.longDoubleCtor(longDoubleData),
+          CCLongDouble, Some(getSourceInfo(constant))))
       case constant : Eint =>
         pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt,
           Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
