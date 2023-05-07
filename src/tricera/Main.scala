@@ -502,8 +502,7 @@ class Main (args: Array[String]) {
                    if maybeEnc.isEmpty ||
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
-                
-                println("Applying EqualityReader to solution: \n" + processedSolution)
+                println("Applying EqualityReader to solution. \n")
                 val equalitiesPre = EqualityReader.process(processedSolution, ctx.prePred.pred, fun, ctx)
                 val equalitiesPost = EqualityReader.process(processedSolution, ctx.postPred.pred, fun, ctx)
                 println("pre equalities: \n" + replaceArgs(equalitiesPre.toString, ctx.prePredACSLArgNames))
@@ -518,16 +517,43 @@ class Main (args: Array[String]) {
                   PostconditionSimplifier
                 )
                 for (processor <- preconditionProcessors) {
+                  println("----- Applying " + processor + " to \n" + processedSolution(ctx.prePred.pred))
                   processedSolution =
                     processedSolution + (ctx.prePred.pred -> processor(processedSolution, ctx.prePred.pred, fun, ctx))
+                  println("----- Result: \n" + processedSolution(ctx.prePred.pred) + "\n")
                 }
                 for (processor <- postconditionProcessors) {
+                  println("----- Applying " + processor + " to \n" + processedSolution(ctx.postPred.pred))
                   processedSolution =
                     processedSolution + (ctx.postPred.pred -> processor(processedSolution, ctx.postPred.pred, fun, ctx))
+                  println("----- Result: \n" + processedSolution(ctx.postPred.pred) + "\n")
+
                 }
                 
-                val fPre = ACSLLineariser asString processedSolution(ctx.prePred.pred)
-                val fPost = ACSLLineariser asString processedSolution(ctx.postPred.pred)
+                var printProcessedSolution = processedSolution
+                println("printProcessedSolution: \n" + printProcessedSolution(ctx.prePred.pred))
+                val preconditionPrintProcessors = Seq(
+                  ACSLExpressionProcessor
+                )
+                val postconditionPrintProcessors = Seq(
+                  ACSLExpressionProcessor
+                )
+                for (processor <- preconditionPrintProcessors) {
+                  println("----- Applying " + processor + " to \n" + printProcessedSolution(ctx.prePred.pred))
+                  printProcessedSolution =
+                    printProcessedSolution + (ctx.prePred.pred -> processor(printProcessedSolution, ctx.prePred.pred, fun, ctx))
+                  println("----- Result: \n" + printProcessedSolution(ctx.prePred.pred) + "\n")
+
+                }
+                for (processor <- postconditionPrintProcessors) {
+                  println("----- Applying " + processor + " to \n" + printProcessedSolution(ctx.postPred.pred))
+                  printProcessedSolution =
+                    printProcessedSolution + (ctx.postPred.pred -> processor(printProcessedSolution, ctx.postPred.pred, fun, ctx))
+                  println("----- Result: \n" + printProcessedSolution(ctx.postPred.pred) + "\n")
+                }
+
+                val fPre = ACSLLineariser asString printProcessedSolution(ctx.prePred.pred)
+                val fPost = ACSLLineariser asString printProcessedSolution(ctx.postPred.pred)
 
                 // todo: implement replaceArgs as a solution processor
                 // replaceArgs does a simple string replacement (see above def)
