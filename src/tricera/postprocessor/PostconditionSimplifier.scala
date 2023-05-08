@@ -50,7 +50,7 @@ object PostconditionSimplifier
           cont = false
       }
     }
-    CleanupVisitor.cleanup(postcondition)
+    CleanupVisitor(postcondition)
   }
 
   def replaceVarsWithConstants(p: SimpleAPI, formula: IFormula): IFormula = {

@@ -197,7 +197,7 @@ object MaxIndexVisitor extends CollectingVisitor[Unit, Int] {
 // Returns an IExpression where simplifications related to the literals
 // true and false have been made
 object CleanupVisitor extends CollectingVisitor[Unit, IExpression] {
-  def cleanup(expr: IExpression): IExpression = {
+  def apply(expr: IExpression): IExpression = {
     Rewriter.rewrite(expr, (t) => CleanupVisitor.visit(t, ()))
   }
 
