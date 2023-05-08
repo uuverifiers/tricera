@@ -14,7 +14,7 @@ object ContractConditionType extends Enumeration {
 
 import ContractConditionType._
 
-trait ContractConditionProcessor {
+trait ContractConditionTools {
 
   def getContractConditionType(
       predicate: Predicate,
@@ -24,6 +24,20 @@ trait ContractConditionProcessor {
       ContractConditionType.Precondition
     case context.postPred.pred =>
       ContractConditionType.Postcondition
+  }
+
+  def getPrecondition(
+      solution: SolutionProcessor.Solution,
+      context: FunctionContext
+  ) = {
+    solution(context.prePred.pred)
+  }
+
+  def getPostcondition(
+      solution: SolutionProcessor.Solution,
+      context: FunctionContext
+  ) = {
+    solution(context.postPred.pred)
   }
 
   def getACSLArgNames(

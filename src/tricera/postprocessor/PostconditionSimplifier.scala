@@ -9,8 +9,8 @@ import ap.theories._
 import ap.SimpleAPI
 
 object PostconditionSimplifier
-    extends ContractConditionProcessor
-    with IExpressionProcessor {
+    extends IExpressionProcessor
+    with ContractConditionTools {
   def process(
       solution: SolutionProcessor.Solution,
       predicate: Predicate,
@@ -39,12 +39,12 @@ object PostconditionSimplifier
             postcondition,
             newPostcondition.asInstanceOf[IFormula]
           ) match {
-            case true => 
-                postcondition = newPostcondition.asInstanceOf[IFormula]
-                val removedIFormulas = IFormulaCounterVisitor(replacedFormula) - 1
-                i = i + 1 - removedIFormulas
+            case true =>
+              postcondition = newPostcondition.asInstanceOf[IFormula]
+              val removedIFormulas = IFormulaCounterVisitor(replacedFormula) - 1
+              i = i + 1 - removedIFormulas
             case false =>
-                i = i + 1
+              i = i + 1
           }
         case (_, None) =>
           cont = false
