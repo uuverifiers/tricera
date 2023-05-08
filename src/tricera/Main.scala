@@ -516,42 +516,48 @@ class Main (args: Array[String]) {
                   TheoryOfHeapProcessor,
                   PostconditionSimplifier
                 )
-                for (processor <- preconditionProcessors) {
-                  println("----- Applying " + processor + " to \n" + processedSolution(ctx.prePred.pred))
+
+                def applyProcessor(processor: IExpressionProcessor, predicate: ap.parser.IExpression.Predicate) = {
+                  println("----- Applying " + processor + " to \n" + processedSolution(predicate))
                   processedSolution =
-                    processedSolution + (ctx.prePred.pred -> processor(processedSolution, ctx.prePred.pred, fun, ctx))
-                  println("----- Result: \n" + processedSolution(ctx.prePred.pred) + "\n")
+                    processedSolution + (predicate -> processor(processedSolution, predicate, fun, ctx))
+                  println("----- Result: \n" + processedSolution(predicate) + "\n")
+                }
+
+                for (processor <- preconditionProcessors) {
+                  applyProcessor(processor, ctx.prePred.pred)
                 }
                 for (processor <- postconditionProcessors) {
-                  println("----- Applying " + processor + " to \n" + processedSolution(ctx.postPred.pred))
-                  processedSolution =
-                    processedSolution + (ctx.postPred.pred -> processor(processedSolution, ctx.postPred.pred, fun, ctx))
-                  println("----- Result: \n" + processedSolution(ctx.postPred.pred) + "\n")
-
+                  applyProcessor(processor, ctx.postPred.pred)
                 }
                 
                 var printProcessedSolution = processedSolution
                 println("printProcessedSolution: \n" + printProcessedSolution(ctx.prePred.pred))
+
+                def applyPrintProcessor(processor: IExpressionProcessor, predicate: ap.parser.IExpression.Predicate) = {
+                  println("----- Applying " + processor + " to \n" + printProcessedSolution(predicate))
+                  printProcessedSolution =
+                    printProcessedSolution + (predicate -> processor(printProcessedSolution, predicate, fun, ctx))
+                  println("----- Result: \n" + printProcessedSolution(predicate) + "\n")
+                }
+
+                applyPrintProcessor(EqualitySwapper, ctx.prePred.pred)
+                applyPrintProcessor(EqualitySwapper, ctx.postPred.pred)
+
                 val preconditionPrintProcessors = Seq(
-                  EqualitySwapper,
-                  ACSLExpressionProcessor
+                  ACSLExpressionProcessor,
+                  ClauseRemover
                 )
                 val postconditionPrintProcessors = Seq(
-                  EqualitySwapper, 
-                  ACSLExpressionProcessor
+                  ACSLExpressionProcessor,
+                  ClauseRemover
                 )
-                for (processor <- preconditionPrintProcessors) {
-                  println("----- Applying " + processor + " to \n" + printProcessedSolution(ctx.prePred.pred))
-                  printProcessedSolution =
-                    printProcessedSolution + (ctx.prePred.pred -> processor(printProcessedSolution, ctx.prePred.pred, fun, ctx))
-                  println("----- Result: \n" + printProcessedSolution(ctx.prePred.pred) + "\n")
 
+                for (processor <- preconditionPrintProcessors) {
+                  applyPrintProcessor(processor, ctx.prePred.pred)
                 }
                 for (processor <- postconditionPrintProcessors) {
-                  println("----- Applying " + processor + " to \n" + printProcessedSolution(ctx.postPred.pred))
-                  printProcessedSolution =
-                    printProcessedSolution + (ctx.postPred.pred -> processor(printProcessedSolution, ctx.postPred.pred, fun, ctx))
-                  println("----- Result: \n" + printProcessedSolution(ctx.postPred.pred) + "\n")
+                  applyPrintProcessor(processor, ctx.postPred.pred)
                 }
 
                 val fPre = ACSLLineariser asString printProcessedSolution(ctx.prePred.pred)
