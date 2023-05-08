@@ -263,7 +263,7 @@ object CCReader {
       ("0", "0")
     }
     else if (f.isInfinity) {
-      ("0", "0")
+      ("1", "0")
     }
     else {
       val mantissaBits: Long = (java.lang.Double.doubleToLongBits(f) << 12 >>> 12)
@@ -2275,7 +2275,7 @@ class CCReader private (prog : Program,
               typ = CCFloat
             case _: Tdouble =>
               typ = CCDouble
-            case _: Tlong if typ == CCDouble =>
+            case _: Tdouble if typ == CCLong =>
               typ = CCLongDouble
             case _ : Tsigned =>
               typ = CCInt

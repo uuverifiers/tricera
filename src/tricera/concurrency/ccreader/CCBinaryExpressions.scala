@@ -57,9 +57,13 @@ object CCBinaryExpressions {
 
       def expr: CCExpr = {
         (lhs.typ, rhs.typ) match {
-          case (CCFloat, _) => toCCExpr(getFloatRes)
-          case (_, CCFloat) => toCCExpr(getFloatRes)
-          case _            => toCCExpr(getIntRes)
+          case (CCFloat, _)      => toCCExpr(getFloatRes)
+          case (_, CCFloat)      => toCCExpr(getFloatRes)
+          case (CCDouble, _)     => toCCExpr(getDoubleRes)
+          case (_, CCDouble)     => toCCExpr(getDoubleRes)
+          case (CCLongDouble, _) => toCCExpr(getLongDoubleRes)
+          case (_, CCLongDouble) => toCCExpr(getLongDoubleRes)
+          case _                 => toCCExpr(getIntRes)
         }
       }
 

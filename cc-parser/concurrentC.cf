@@ -304,8 +304,8 @@ token OctalLong '0'["01234567"]* ('l'|'L');
 
 token OctalUnsLong '0'["01234567"]* (('u''l')|('U''L'));
 
-token CDouble (((digit+ '.')|('.' digit+))(('e'|'E') ('-')? digit+)?)|
-              (digit+ ('e'|'E') ('-')? digit+)|(digit+ '.' digit+ 'E' ('-')? digit+);
+token CDouble (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-')? digit+)?
+                                             )|((digit+ ('e'|'E')('-')? digit+));
 
 token CFloat (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-')? digit+)?
                                ('f'|'F'))|((digit+ ('e'|'E')('-')? digit+)('f'|'F'));

@@ -1,8 +1,8 @@
 
 int main () {
-    long double a = 1.0l;
-    long double b = 1.0l;
+    long double a = 0.5l;
+    long double b = 0.25l;
 
-    assert(a+b == 2.0l);
+    assert(a+b == 0.75l);
     return 0;
 }
