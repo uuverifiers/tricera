@@ -507,7 +507,7 @@ class Main (args: Array[String]) {
                 val equalitiesPost = EqualityReader.process(processedSolution, ctx.postPred.pred, fun, ctx)
                 println("pre equalities: \n" + replaceArgs(equalitiesPre.toString, ctx.prePredACSLArgNames))
                 println("post equalities: \n" + replaceArgs(equalitiesPost.toString, ctx.postPredACSLArgNames))
-                println("joined equalities: \n" + replaceArgs((Equivalences.join(equalitiesPre, equalitiesPost)).toString, ctx.postPredACSLArgNames))
+                println("joined equalities: \n" + replaceArgs((Equalities.join(equalitiesPre, equalitiesPost)).toString, ctx.postPredACSLArgNames))
 
                 val preconditionProcessors = Seq(
                   TheoryOfHeapProcessor
@@ -533,9 +533,11 @@ class Main (args: Array[String]) {
                 var printProcessedSolution = processedSolution
                 println("printProcessedSolution: \n" + printProcessedSolution(ctx.prePred.pred))
                 val preconditionPrintProcessors = Seq(
+                  EqualitySwapper,
                   ACSLExpressionProcessor
                 )
                 val postconditionPrintProcessors = Seq(
+                  EqualitySwapper, 
                   ACSLExpressionProcessor
                 )
                 for (processor <- preconditionPrintProcessors) {

@@ -8,8 +8,8 @@ import ap.theories.Heap
 import ap.theories.Heap.HeapFunExtractor
 
 object TheoryOfHeapProcessor
-    extends ContractConditionProcessor
-    with IExpressionProcessor {
+    extends IExpressionProcessor
+    with ContractConditionTools {
   def process(
       solution: SolutionProcessor.Solution,
       predicate: Predicate,

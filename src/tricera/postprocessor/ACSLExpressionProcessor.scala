@@ -10,8 +10,8 @@ import ap.theories.Theory
 import ContractConditionType._
 
 object ACSLExpressionProcessor
-    extends ContractConditionProcessor
-    with IExpressionProcessor {
+    extends IExpressionProcessor
+    with ContractConditionTools {
   def process(
       solution: SolutionProcessor.Solution,
       predicate: Predicate,
@@ -124,7 +124,6 @@ object ACSLExpressionProcessor
 
         // *p.field ~> p->field: how to tell whether an ADT function is a field selector?
 
-        
         case _ => t update subres
       }
     }
