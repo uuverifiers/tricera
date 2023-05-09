@@ -531,14 +531,14 @@ class Main (args: Array[String]) {
                   applyProcessor(processor, ctx.postPred.pred)
                 }
                 
-                var printProcessedSolution = processedSolution
-                println("printProcessedSolution: \n" + printProcessedSolution(ctx.prePred.pred))
+                var processedSolutionForPrint = processedSolution
+                println("processedSolutionForPrint: \n" + processedSolutionForPrint(ctx.prePred.pred))
 
                 def applyPrintProcessor(processor: IExpressionProcessor, predicate: ap.parser.IExpression.Predicate) = {
-                  println("----- Applying " + processor + " to \n" + printProcessedSolution(predicate))
-                  printProcessedSolution =
-                    printProcessedSolution + (predicate -> processor(printProcessedSolution, predicate, fun, ctx))
-                  println("----- Result: \n" + printProcessedSolution(predicate) + "\n")
+                  println("----- Applying " + processor + " to \n" + processedSolutionForPrint(predicate))
+                  processedSolutionForPrint =
+                    processedSolutionForPrint + (predicate -> processor(processedSolutionForPrint, predicate, fun, ctx))
+                  println("----- Result: \n" + processedSolutionForPrint(predicate) + "\n")
                 }
 
                 applyPrintProcessor(EqualitySwapper, ctx.prePred.pred)
@@ -559,9 +559,9 @@ class Main (args: Array[String]) {
                 for (processor <- postconditionPrintProcessors) {
                   applyPrintProcessor(processor, ctx.postPred.pred)
                 }
-
-                val fPre = ACSLLineariser asString printProcessedSolution(ctx.prePred.pred)
-                val fPost = ACSLLineariser asString printProcessedSolution(ctx.postPred.pred)
+                
+                val fPre = ACSLLineariser asString processedSolutionForPrint(ctx.prePred.pred)
+                val fPost = ACSLLineariser asString processedSolutionForPrint(ctx.postPred.pred)
 
                 // todo: implement replaceArgs as a solution processor
                 // replaceArgs does a simple string replacement (see above def)

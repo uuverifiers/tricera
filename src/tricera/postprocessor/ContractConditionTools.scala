@@ -60,6 +60,38 @@ trait ContractConditionTools {
     acslArgNames(variable.index - quantifierDepth)
   }
 
+  def stripOld(input: String): String = {
+    val prefix = "\\old("
+    val suffix = ")"
+
+    if (input.startsWith(prefix) && input.endsWith(suffix)) {
+      input.substring(prefix.length, input.length - suffix.length)
+    } else if (
+      !input.contains("(") && !input.contains(")") && !input.contains("\\")
+    ) {
+      input
+    } else {
+      throw new IllegalArgumentException(s"Invalid input: $input")
+    }
+  }
+
+  def getCurrentVar(
+      variable: ISortedVariable,
+      quantifierDepth: Int,
+      acslArgNames: Seq[String]
+  ): ISortedVariable = {
+    val varName = stripOld(getVarName(variable, quantifierDepth, acslArgNames))
+    println(
+      "getCurrentVar: " + getVarName(
+        variable,
+        quantifierDepth,
+        acslArgNames
+      ) + "\n" + varName + "\n" + acslArgNames.indexOf(varName)
+    )
+    println(acslArgNames)
+    ISortedVariable(acslArgNames.indexOf(varName), variable.sort)
+  }
+
   def isPrecondition(contractConditionType: ContractConditionType): Boolean = {
     contractConditionType == Precondition
   }
@@ -74,7 +106,7 @@ trait ContractConditionTools {
       acslArgNames: Seq[String],
       paramNames: Seq[String]
   ): Boolean = {
-    val varName = getVarName(variable, quantifierDepth, acslArgNames)
+    val varName = stripOld(getVarName(variable, quantifierDepth, acslArgNames))
     paramNames.contains(varName)
   }
 
