@@ -2273,10 +2273,10 @@ class CCReader private (prog : Program,
               // ignore
             case _ : Tfloat =>
               typ = CCFloat
-            case _: Tdouble =>
-              typ = CCDouble
             case _: Tdouble if typ == CCLong =>
               typ = CCLongDouble
+            case _: Tdouble =>
+              typ = CCDouble
             case _ : Tsigned =>
               typ = CCInt
             case _ : Tunsigned =>
