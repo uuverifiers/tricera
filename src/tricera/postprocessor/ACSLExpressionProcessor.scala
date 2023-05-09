@@ -77,7 +77,7 @@ object ACSLExpressionProcessor
             isPostcondition(contractConditionType) &&
             isParam(p, quantifierDepth, acslArgNames, paramNames)
           ) {
-            t update subres // Can we express "value p currently points to is valid!" in postcondition?
+            t update subres
           } else {
             IAtom(ACSLExpression.valid, Seq(p))
           }
@@ -108,15 +108,40 @@ object ACSLExpressionProcessor
                 isParam(p, quantifierDepth, acslArgNames, paramNames)
               ) match {
                 case (false, false, false) => // read(@h, p), p not param
-                  IFunApp(ACSLExpression.deref, Seq(p))
+                  ACSLExpression.derefFunApp(
+                    ACSLExpression.deref,
+                    p,
+                    quantifierDepth,
+                    acslArgNames
+                  )
                 case (false, true, true) => // read(@h, p_0), p is param
-                  IFunApp(ACSLExpression.deref, Seq(p))
+                  ACSLExpression.derefFunApp(
+                    ACSLExpression.deref,
+                    p,
+                    quantifierDepth,
+                    acslArgNames
+                  )
                 case (false, true, false) => // read(@h, p_0), p not param
-                  IFunApp(ACSLExpression.derefOld, Seq(p))
+                  ACSLExpression.derefFunApp(
+                    ACSLExpression.derefOld,
+                    p,
+                    quantifierDepth,
+                    acslArgNames
+                  )
                 case (true, true, true) => // read(@h_0, p_0), p is param
-                  IFunApp(ACSLExpression.oldDeref, Seq(p))
+                  ACSLExpression.derefFunApp(
+                    ACSLExpression.oldDeref,
+                    p,
+                    quantifierDepth,
+                    acslArgNames
+                  )
                 case (true, true, false) => // read(@h_0, p_0), p not param
-                  IFunApp(ACSLExpression.oldDeref, Seq(p))
+                  ACSLExpression.derefFunApp(
+                    ACSLExpression.oldDeref,
+                    p,
+                    quantifierDepth,
+                    acslArgNames
+                  )
                 case _ => t update subres
               }
           }
