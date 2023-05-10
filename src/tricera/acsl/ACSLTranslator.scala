@@ -52,12 +52,15 @@ object ACSLTranslator {
     def getGlobals : Seq[CCVar]
     def sortWrapper(s: Sort): Option[IFunction]
     def sortGetter(s: Sort): Option[IFunction]
+    def wrapperSort(wrapper: IFunction): Option[Sort]
+    def getterSort(getter: IFunction): Option[Sort]
     def getCtor(s: Sort): Int
     def getTypOfPointer(t: CCType): CCType
     def isHeapEnabled: Boolean
     def getHeap: Heap
     def getHeapTerm: ITerm
     def getOldHeapTerm : ITerm
+    def getStruct(s: IFunction): Option[CCStruct]
     val annotationBeginSourceInfo : SourceInfo
     val annotationNumLines : Int
   }
