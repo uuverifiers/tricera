@@ -608,9 +608,11 @@ class Main (args: Array[String]) {
                 println("joined equalities: \n" + replaceArgs((Equalities.join(equalitiesPre, equalitiesPost)).toString, ctx.postPredACSLArgNames))
 
                 val preconditionProcessors = Seq(
+                  ADTSimplifier,
                   TheoryOfHeapProcessor
                 )
                 val postconditionProcessors = Seq(
+                  ADTSimplifier,
                   TheoryOfHeapProcessor,
                   PostconditionSimplifier
                 )
@@ -629,6 +631,8 @@ class Main (args: Array[String]) {
                   applyProcessor(processor, ctx.postPred.pred)
                 }
                 
+                processedSolution = ADTExploder(processedSolution)()
+
                 var processedSolutionForPrint = processedSolution
                 println("processedSolutionForPrint: \n" + processedSolutionForPrint(ctx.prePred.pred))
 

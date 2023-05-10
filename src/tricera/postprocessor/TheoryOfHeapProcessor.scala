@@ -6,6 +6,9 @@ import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.Heap
 import ap.theories.Heap.HeapFunExtractor
+import ContractConditionType._
+import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
+import ap.types.Sort
 
 object TheoryOfHeapProcessor
     extends IExpressionProcessor
@@ -19,15 +22,32 @@ object TheoryOfHeapProcessor
     val contractCondition = solution(predicate)
     val contractConditionType = getContractConditionType(predicate, context)
     val acslArgNames = getACSLArgNames(predicate, context)
-    val theoryOfHeapRewriter = new TheoryOfHeapRewriter(acslArgNames)
-    Rewriter.rewrite(
-      contractCondition,
-      theoryOfHeapRewriter.apply
-    ) // repeatedly applies theoryOfHeapRewriter until fixpoint reached
+    val acslFunctionContext = context.acslContext
+    val theoryOfHeapRewriter = new TheoryOfHeapRewriter(
+      contractConditionType,
+      acslArgNames,
+      acslFunctionContext
+    )
+
+    def iterateUntilFixedPoint(
+        expr: IExpression,
+        apply: IExpression => IExpression
+    ): IExpression = {
+      val expressions: Stream[IExpression] = Stream.iterate(expr)(apply)
+      expressions
+        .zip(expressions.tail)
+        .collectFirst { case (a, b) if a == b => a }
+        .getOrElse(expr)
+    }
+
+    iterateUntilFixedPoint(contractCondition, theoryOfHeapRewriter.apply)
   }
 
-  class TheoryOfHeapRewriter(acslArgNames: Seq[String])
-      extends CollectingVisitor[Int, IExpression]
+  class TheoryOfHeapRewriter(
+      contractConditionType: ContractConditionType,
+      acslArgNames: Seq[String],
+      acslContext: ACSLFunctionContext
+  ) extends CollectingVisitor[Int, IExpression]
       with ExpressionUtils {
 
     def apply(contractCondition: IExpression): IExpression = {
@@ -79,6 +99,39 @@ object TheoryOfHeapProcessor
         subres: Seq[IExpression]
     ): IExpression = {
 
+      def getGetter(heapTerm: ITerm): Option[IFunction] = {
+        heapTerm match {
+          case IFunApp(wrapper, _) =>
+            acslContext.wrapperSort(wrapper) match {
+              case Some(sort) =>
+                acslContext.sortGetter(sort)
+              case _ => None
+            }
+          case _ => None
+        }
+      }
+
+      def assignmentToEquality(
+          pointer: ITerm,
+          value: ITerm,
+          heapVar: ISortedVariable,
+          heapTheory: Heap
+      ): Option[IFormula] = {
+        getGetter(value) match {
+          case Some(selector) =>
+            Some(
+              IEquation(
+                IFunApp(
+                  selector,
+                  Seq(IFunApp(heapTheory.read, Seq(heapVar, pointer)))
+                ),
+                IFunApp(selector, Seq(value))
+              ).asInstanceOf[IFormula]
+            )
+          case _ => None
+        }
+      }
+
       def extractEqualitiesFromWriteChain(
           funApp: IExpression,
           heapVar: ISortedVariable,
@@ -86,16 +139,9 @@ object TheoryOfHeapProcessor
       ) = {
         getAssignments(funApp)
           .map { case (pointer, value) =>
-            val function = heapTheory.userADTSels(0)(
-              0
-            ) // HOW TO GET CORRECT TYPE?
-            IEquation(
-              IFunApp(
-                function,
-                Seq(IFunApp(heapTheory.read, Seq(heapVar, pointer)))
-              ),
-              IFunApp(function, Seq(value))
-            ).asInstanceOf[IFormula]
+            assignmentToEquality(pointer, value, heapVar, heapTheory) match {
+              case Some(eq) => eq
+            }
           }
           .reduce(_ & _)
       }
@@ -103,6 +149,7 @@ object TheoryOfHeapProcessor
       t match {
         // write(write(...write(@h, ptr1, val1)...)) -> read(@h, ptr1) == val1 && read(@h, ptr2) == val2 && ...
         // addresses must be separated and pointers valid
+
         case IEquation(
               heapFunApp @ TheoryOfHeapFunApp(function, heapTheory, _),
               Var(h)
