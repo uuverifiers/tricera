@@ -1,9 +1,10 @@
 int main()
 {
-  long double x = _;
+  double x = _;
 
-  if (x >= -1e10 && x <= 1e10) {
+  if (x >= -0.00001f && x <= -0.00001f) {
     assert(x==x); 
   }
   return 0;
 }
+

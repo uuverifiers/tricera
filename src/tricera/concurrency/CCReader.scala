@@ -155,8 +155,10 @@ object CCReader {
     import scala.util.control._
     import scala.math._
 
+    // todo: uses the same implementation as Doubles right now
     def longDoubleToFraction(fp: String): (String, String) = {
       val f: Double = fp.toDouble
+      println("Warning: wrong implementation for converting Long Doubles to Doubles")
       if (f.isNaN) {
         ("0", "0")
       }
