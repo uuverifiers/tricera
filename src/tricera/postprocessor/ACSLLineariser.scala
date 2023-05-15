@@ -317,17 +317,28 @@ object ACSLLineariser {
           TryAgain(t, ctxt.addOpPrec("[" + upper + ":" + lower + "]", 10))
 
         // constant is a temporary container of the variable name
-        case IFunApp(ACSLExpression.deref, Seq(p@IConstant(constant))) =>
+        case IFunApp(ACSLExpression.deref, Seq(_: IConstant)) =>
           print("*")
           noParentOp(ctxt)
         
-        case IFunApp(ACSLExpression.derefOld, Seq(p@IConstant(constant))) =>
+        case IFunApp(ACSLExpression.derefOldPointer, Seq(_: IConstant)) =>
           print("*\\old(")
           SubArgs(List(ctxt setParentOp ")"))
 
-        case IFunApp(ACSLExpression.oldDeref, Seq(p@IConstant(constant))) =>
+        case IFunApp(ACSLExpression.oldDeref, Seq(_: IConstant)) =>
           print("\\old(*")
           SubArgs(List(ctxt setParentOp ")"))
+
+         case IFunApp(ACSLExpression.arrow, Seq(_: IConstant, _: IConstant)) =>
+          allButLast(ctxt setPrecLevel 0, "->", "", 2)
+        
+        case IFunApp(ACSLExpression.arrowOldPointer, Seq(_: IConstant, _: IConstant)) =>
+          print("\\old(")
+          allButLast(ctxt setPrecLevel 0, ")->", "", 2)
+
+        case IFunApp(ACSLExpression.oldArrow, Seq(_: IConstant, _: IConstant)) =>
+          print("\\old(")
+          allButLast(ctxt setPrecLevel 0, "->", ")", 2)
            
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {

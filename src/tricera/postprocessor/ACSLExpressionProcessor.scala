@@ -8,6 +8,8 @@ import ap.theories.ADT
 import ap.theories.Heap
 import ap.theories.Theory
 import ContractConditionType._
+import ap.types.MonoSortedIFunction
+import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 
 object ACSLExpressionProcessor
     extends IExpressionProcessor
@@ -30,15 +32,22 @@ object ACSLExpressionProcessor
     val contractCondition = solution(predicate)
     val contractConditionType = getContractConditionType(predicate, context)
     val paramNames = context.acslContext.getParams.map(x => x.name)
+    val acslFunctionContext = context.acslContext
     val visitor =
-      new ACSLExpressionVisitor(contractConditionType, acslArgNames, paramNames)
+      new ACSLExpressionVisitor(
+        contractConditionType,
+        acslArgNames,
+        paramNames,
+        acslFunctionContext
+      )
     visitor(contractCondition)
   }
 
   class ACSLExpressionVisitor(
       contractConditionType: ContractConditionType,
       acslArgNames: Seq[String],
-      paramNames: Seq[String]
+      paramNames: Seq[String],
+      acslFunctionContext: ACSLFunctionContext
   ) extends CollectingVisitor[Int, IExpression]
       with ExpressionUtils {
 
@@ -59,6 +68,15 @@ object ACSLExpressionProcessor
         quantifierDepth: Int,
         subres: Seq[IExpression]
     ): IExpression = {
+
+      def isSelector(
+          function: MonoSortedIFunction,
+          acslFunctionContext: ACSLFunctionContext
+      ): Boolean = {
+        val selectors = acslFunctionContext.getStructMap.values.map((struct) => struct.sels.map(_._1)).toSet.flatten
+        selectors.contains(function)
+      }
+
       t match {
         // NOTE: getSort and O_ are not theory of heap functions
 
@@ -83,6 +101,91 @@ object ACSLExpressionProcessor
           }
         }
 
+        // get<sort>(field(read(h,p))) ~> p->field: how to tell whether an ADT function is a field selector?
+        case IFunApp(
+              selector: MonoSortedIFunction,
+              Seq(
+                IFunApp(
+                  getFun,
+                  Seq(
+                    TheoryOfHeapFunApp(
+                      readFun,
+                      heapTheory,
+                      Seq(Var(h), Var(p))
+                    )
+                  )
+                )
+              )
+            )
+            if (isGetSortFun(getFun) &&
+              isReadFun(readFun, heapTheory) &&
+              isSelector(selector, acslFunctionContext) &&
+              (isHeap(h, quantifierDepth, acslArgNames) ||
+                isOldHeap(h, quantifierDepth, acslArgNames))) =>
+          contractConditionType match {
+            case Precondition =>
+              ACSLExpression.arrowFunApp(
+                ACSLExpression.arrow,
+                p,
+                selector,
+                quantifierDepth,
+                acslArgNames
+              )
+            case Postcondition =>
+              (
+                isOldHeap(h, quantifierDepth, acslArgNames),
+                isOldVar(p, quantifierDepth, acslArgNames),
+                isParam(p, quantifierDepth, acslArgNames, paramNames)
+              ) match {
+                case (false, false, false) =>
+                  // read(@h, p), p not param => p->a
+                  ACSLExpression.arrowFunApp(
+                    ACSLExpression.arrow,
+                    p,
+                    selector,
+                    quantifierDepth,
+                    acslArgNames
+                  )
+                case (false, true, true) =>
+                  // read(@h, p_0), p is param => p->a
+                  ACSLExpression.arrowFunApp(
+                    ACSLExpression.arrow,
+                    p,
+                    selector,
+                    quantifierDepth,
+                    acslArgNames
+                  )
+                case (false, true, false) =>
+                  // read(@h, p_0), p not param => \old(p)->a
+                  ACSLExpression.arrowFunApp(
+                    ACSLExpression.arrowOldPointer,
+                    p,
+                    selector,
+                    quantifierDepth,
+                    acslArgNames
+                  )
+                case (true, true, true) =>
+                  // read(@h_0, p_0), p is param => \old(p->a)
+                  ACSLExpression.arrowFunApp(
+                    ACSLExpression.oldArrow,
+                    p,
+                    selector,
+                    quantifierDepth,
+                    acslArgNames
+                  )
+                case (true, true, false) =>
+                  // read(@h_0, p_0), p not param => \old(p->a)
+                  ACSLExpression.arrowFunApp(
+                    ACSLExpression.oldArrow,
+                    p,
+                    selector,
+                    quantifierDepth,
+                    acslArgNames
+                  )
+                case _ => t update subres
+              }
+          }
+
         // read(h,p).get_<sort> ~> *p
         case IFunApp(
               getFun,
@@ -100,7 +203,12 @@ object ACSLExpressionProcessor
                 isOldHeap(h, quantifierDepth, acslArgNames))) => {
           contractConditionType match {
             case Precondition =>
-              IFunApp(ACSLExpression.deref, Seq(p))
+              ACSLExpression.derefFunApp(
+                ACSLExpression.deref,
+                p,
+                quantifierDepth,
+                acslArgNames
+              )
             case Postcondition =>
               (
                 isOldHeap(h, quantifierDepth, acslArgNames),
@@ -123,7 +231,7 @@ object ACSLExpressionProcessor
                   )
                 case (false, true, false) => // read(@h, p_0), p not param
                   ACSLExpression.derefFunApp(
-                    ACSLExpression.derefOld,
+                    ACSLExpression.derefOldPointer,
                     p,
                     quantifierDepth,
                     acslArgNames
@@ -146,8 +254,6 @@ object ACSLExpressionProcessor
               }
           }
         }
-
-        // *p.field ~> p->field: how to tell whether an ADT function is a field selector?
 
         case _ => t update subres
       }
