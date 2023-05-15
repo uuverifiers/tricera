@@ -47,7 +47,7 @@ object ADTSimplifier extends IExpressionProcessor {
           constructor: MonoSortedIFunction,
           fields: Seq[ITerm]
       ): Option[ITerm] = {
-        acslFunctionContext.getStruct(constructor) match {
+        acslFunctionContext.getStructMap.get(constructor) match {
           case Some(struct) =>
             val index = struct.sels.map(_._1).indexOf(selector)
             fields.lift(index)
@@ -60,7 +60,7 @@ object ADTSimplifier extends IExpressionProcessor {
           acslFunctionContext: ACSLFunctionContext
       ): Boolean = {
         acslFunctionContext
-          .getStruct(fun)
+          .getStructMap.get(fun)
           .isDefined
       }
 
@@ -70,7 +70,7 @@ object ADTSimplifier extends IExpressionProcessor {
           acslFunctionContext: ACSLFunctionContext
       ) = {
         acslFunctionContext
-          .getStruct(constructor) match {
+          .getStructMap.get(constructor) match {
           case Some(s) =>
             s.sels.map((ctorAndType) => ctorAndType._1).contains(selector)
           case _ => false
@@ -93,7 +93,6 @@ object ADTSimplifier extends IExpressionProcessor {
               selFun,
               acslFunctionContext
             ) =>
-          println("match! " + t)
           getField(selFun, structCtor, fields) match {
             case Some(x) => x
           }

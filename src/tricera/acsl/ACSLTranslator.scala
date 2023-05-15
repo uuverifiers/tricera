@@ -60,7 +60,7 @@ object ACSLTranslator {
     def getHeap: Heap
     def getHeapTerm: ITerm
     def getOldHeapTerm : ITerm
-    def getStruct(s: IFunction): Option[CCStruct]
+    def getStructMap: Map[IFunction, CCStruct]
     val annotationBeginSourceInfo : SourceInfo
     val annotationNumLines : Int
   }
