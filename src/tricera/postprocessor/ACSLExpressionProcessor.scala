@@ -12,15 +12,12 @@ import ap.types.MonoSortedIFunction
 import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 
 object ACSLExpressionProcessor
-    extends IExpressionProcessor
+    extends ContractProcessor
     with ContractConditionTools {
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
+  def processContractCondition(
+      cci: ContractConditionInfo
   ): IExpression = {
-    apply(solution, predicate, context)
+    apply(cci.solution, cci.predicate, cci.context)
   }
 
   def apply(

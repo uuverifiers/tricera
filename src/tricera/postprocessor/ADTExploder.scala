@@ -37,18 +37,14 @@ import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 
 object ADTExploder extends SolutionProcessor 
-                      with IExpressionProcessor {
+                      with ContractProcessor {
   def apply(expr : IExpression) : IExpression =
     Rewriter.rewrite(expr, explodeADTs)
 
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
+  def processContractCondition(
+      cci: ContractConditionInfo
   ): IExpression = {
-    val contractCondition = solution(predicate)
-    apply(contractCondition)
+    apply(cci.contractCondition)
   }
 
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)

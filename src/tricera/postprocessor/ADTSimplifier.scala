@@ -9,16 +9,11 @@ import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 
-object ADTSimplifier extends IExpressionProcessor {
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
+object ADTSimplifier extends ContractProcessor {
+  def processContractCondition(
+      cci: ContractConditionInfo
   ): IExpression = {
-    val expr = solution(predicate)
-    val acslFunctionContext = context.acslContext
-    apply(expr, acslFunctionContext)
+    apply(cci.contractCondition, cci.acslContext)
   }
 
   def apply(
