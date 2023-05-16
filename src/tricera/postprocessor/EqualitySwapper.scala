@@ -3,24 +3,23 @@ package tricera.postprocessor
 import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
+import tricera.postprocessor.ContractConditionType._
 
 object EqualitySwapper
-    extends ContractProcessor
-    with ContractConditionTools {
+    extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
     val equalities = cci.contractConditionType match {
-      case ContractConditionType.Precondition =>
+      case Precondition =>
         EqualityReaderVisitor(cci.precondition)
-      case ContractConditionType.Postcondition =>
+      case Postcondition =>
         Equalities.join(
           EqualityReaderVisitor(cci.precondition),
           EqualityReaderVisitor(cci.postcondition)
         )
     }
-    val equalitySwapper = new EqualitySwapper(equalitiesToMap(equalities))
-    equalitySwapper.swap(cci.contractCondition)
+    EqualitySwapper(cci.contractCondition, equalitiesToMap(equalities))
   }
 
   def equalitiesToMap(equalities: Equalities) = {
@@ -42,6 +41,12 @@ object EqualitySwapper
       .foldLeft(Map.empty[IExpression, ISortedVariable])((map, eqSetWithVar) =>
         addMappings(map, eqSetWithVar)
       )
+  }
+
+  object EqualitySwapper {
+    def apply(expr: IExpression, swapMap: Map[IExpression, ISortedVariable]) = {
+      (new EqualitySwapper(swapMap)).swap(expr)
+    }
   }
 
   class EqualitySwapper(swapMap: Map[IExpression, ISortedVariable])

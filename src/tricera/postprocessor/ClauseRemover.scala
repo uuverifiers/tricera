@@ -9,21 +9,23 @@ object ClauseRemover extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
-    apply(cci.contractCondition)
+    apply(cci.contractCondition, cci)
   }
 
-  def apply(contractCondition: IExpression): IExpression = {
-    val newContractCondition = TheoryOfHeapRemoverVisitor(contractCondition)
+  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
+    val newContractCondition = TheoryOfHeapRemoverVisitor(expr, cci)
     // add additional clause remover visitors here (explicit pointers, etc.)
     CleanupVisitor(newContractCondition)
   }
 }
 
-object TheoryOfHeapRemoverVisitor extends CollectingVisitor[Int, IExpression] {
-
-  def apply(expr: IExpression): IExpression = {
-    TheoryOfHeapRemoverVisitor.visit(expr, 0)
+object TheoryOfHeapRemoverVisitor {
+  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
+    (new TheoryOfHeapRemoverVisitor(cci)).visit(expr, 0)
   }
+}
+
+class TheoryOfHeapRemoverVisitor(cci: ContractConditionInfo) extends CollectingVisitor[Int, IExpression] {
 
   override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
     t match {
@@ -39,7 +41,7 @@ object TheoryOfHeapRemoverVisitor extends CollectingVisitor[Int, IExpression] {
     case IBinFormula(IBinJunctor.And, _, _) =>
       val f1 = subres(0)
       val f2 = subres(1)
-      (ContainsTOHVisitor(f1), ContainsTOHVisitor(f2)) match {
+      (ContainsTOHVisitor(f1, cci), ContainsTOHVisitor(f2, cci)) match {
         case (false, false) =>
           t update subres
         case (true, false) =>
@@ -55,19 +57,25 @@ object TheoryOfHeapRemoverVisitor extends CollectingVisitor[Int, IExpression] {
   }
 }
 
-object ContainsTOHVisitor
+object ContainsTOHVisitor {
+  def apply(expr: IExpression, cci: ContractConditionInfo): Boolean = {
+    (new ContainsTOHVisitor(cci))(expr)
+  }
+}
+
+class ContainsTOHVisitor(cci: ContractConditionInfo)
     extends CollectingVisitor[Unit, Boolean]
     with ExpressionUtils {
   import ap.theories.Heap
 
   def apply(expr: IExpression): Boolean = {
-    ContainsTOHVisitor.visit(expr, ())
+    visit(expr, ())
   }
 
   override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
     case TheoryOfHeapFunApp(_, _, _) =>
       ShortCutResult(true)
-    case IFunApp(fun, args) if (isGetSortFun(fun) || isO_SortFun(fun)) =>
+    case IFunApp(fun, args) if (cci.isGetter(fun) || cci.isWrapper(fun)) =>
       ShortCutResult(true)
     case _ =>
       KeepArg
