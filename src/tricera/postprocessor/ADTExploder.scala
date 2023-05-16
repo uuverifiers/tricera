@@ -33,10 +33,23 @@ import ap.parser._
 import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
+import IExpression.Predicate
+import tricera.concurrency.CCReader.FunctionContext
 
-object ADTExploder extends SolutionProcessor {
+object ADTExploder extends SolutionProcessor 
+                      with IExpressionProcessor {
   def apply(expr : IFormula) : IFormula =
     Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
+
+  def process(
+      solution: SolutionProcessor.Solution,
+      predicate: Predicate,
+      function: String,
+      context: FunctionContext
+  ): IExpression = {
+    val contractCondition = solution(predicate)
+    apply(contractCondition)
+  }
 
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
