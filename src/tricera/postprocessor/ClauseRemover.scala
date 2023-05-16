@@ -73,7 +73,7 @@ class ContainsTOHVisitor(cci: ContractConditionInfo)
   }
 
   override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case TheoryOfHeapFunApp(_, _, _) =>
+    case TheoryOfHeapFunApp(_, _) =>
       ShortCutResult(true)
     case IFunApp(fun, args) if (cci.isGetter(fun) || cci.isWrapper(fun)) =>
       ShortCutResult(true)

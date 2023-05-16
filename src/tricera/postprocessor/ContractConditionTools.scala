@@ -161,12 +161,12 @@ object Is_O_Sort {
 object TheoryOfHeapFunApp {
   def unapply(
       expr: IExpression
-  ): Option[(IFunction, Heap, Seq[IExpression])] = expr match {
+  ): Option[(IFunction, Seq[IExpression])] = expr match {
     case IFunApp(
-          function @ HeapFunExtractor(heapTheory),
+          function,
           args
         ) =>
-      Some((function, heapTheory, args))
+      Some((function, args))
 
     case _ => None
   }
