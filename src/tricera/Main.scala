@@ -617,10 +617,10 @@ class Main (args: Array[String]) {
 
                 val printProcessors = Seq(
                   PostconditionSimplifier,
-                  ADTSimplifier,
-                  ADTExploder,
                   AssignmentProcessor,
                   TheoryOfHeapProcessor,
+                  ADTSimplifier,
+                  ADTExploder,
                   EqualitySwapper,
                   ACSLExpressionProcessor,
                   ClauseRemover
