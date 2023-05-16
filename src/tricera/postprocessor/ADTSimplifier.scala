@@ -13,20 +13,17 @@ object ADTSimplifier extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
-    apply(cci.contractCondition, cci.acslContext)
+    apply(cci)
   }
 
   def apply(
-      expr: IExpression,
-      acslFunctionContext: ACSLFunctionContext
+      cci: ContractConditionInfo
   ): IExpression = {
-    val adtTermSimplifier = new ADTTermSimplifier(
-      acslFunctionContext: ACSLFunctionContext
-    )
-    adtTermSimplifier.visit(expr, null)
+    val adtTermSimplifier = new ADTTermSimplifier(cci)
+    adtTermSimplifier.visit(cci.contractCondition, null)
   }
 
-  class ADTTermSimplifier(acslFunctionContext: ACSLFunctionContext)
+  class ADTTermSimplifier(cci: ContractConditionInfo)
       extends CollectingVisitor[Object, IExpression] {
 
     override def postVisit(
@@ -42,7 +39,7 @@ object ADTSimplifier extends ContractProcessor {
           constructor: MonoSortedIFunction,
           fields: Seq[ITerm]
       ): Option[ITerm] = {
-        acslFunctionContext.getStructMap.get(constructor) match {
+        cci.acslContext.getStructMap.get(constructor) match {
           case Some(struct) =>
             val index = struct.sels.map(_._1).indexOf(selector)
             fields.lift(index)
@@ -50,24 +47,14 @@ object ADTSimplifier extends ContractProcessor {
         }
       }
 
-      def isStructCtor(
-          fun: MonoSortedIFunction,
-          acslFunctionContext: ACSLFunctionContext
-      ): Boolean = {
-        acslFunctionContext
-          .getStructMap.get(fun)
-          .isDefined
-      }
-
       def structHasField(
           constructor: MonoSortedIFunction,
           selector: MonoSortedIFunction,
-          acslFunctionContext: ACSLFunctionContext
+          acslContext: ACSLFunctionContext
       ) = {
-        acslFunctionContext
-          .getStructMap.get(constructor) match {
-          case Some(s) =>
-            s.sels.map((ctorAndType) => ctorAndType._1).contains(selector)
+        acslContext.getStructMap.get(constructor) match {
+          case Some(struct) =>
+            struct.sels.map(_._1).contains(selector)
           case _ => false
         }
       }
@@ -83,14 +70,9 @@ object ADTSimplifier extends ContractProcessor {
                 )
               )
             )
-            if isStructCtor(structCtor, acslFunctionContext) && structHasField(
-              structCtor,
-              selFun,
-              acslFunctionContext
-            ) =>
-          getField(selFun, structCtor, fields) match {
-            case Some(x) => x
-          }
+            if cci.isStructCtor(structCtor)
+              && structHasField(structCtor, selFun, cci.acslContext) =>
+          getField(selFun, structCtor, fields).get
 
         case _ =>
           t update subres

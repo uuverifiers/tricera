@@ -87,6 +87,10 @@ case class ContractConditionInfo(
   def isWrapper(function: IFunction): Boolean =
     acslContext.wrapperSort(function).isDefined
 
+  def isStructCtor(fun: MonoSortedIFunction): Boolean = {
+    acslContext.getStructMap.get(fun).isDefined
+  }
+  
   def isPrecondition: Boolean = {
     contractConditionType == Precondition
   }
