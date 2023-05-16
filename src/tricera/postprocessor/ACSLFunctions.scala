@@ -5,7 +5,7 @@ import ap.terfor.ConstantTerm
 import IExpression._
 import ap.types.MonoSortedIFunction
 
-object ACSLExpression extends ContractConditionTools {
+object ACSLExpression {
   val valid = new Predicate("\\valid", 1)
   val deref = new IFunction("deref", 1, false, false) // *p
   val oldDeref = new IFunction("oldDeref", 1, false, false) // \old(*p)
@@ -21,9 +21,9 @@ object ACSLExpression extends ContractConditionTools {
       derefFunction: IFunction,
       pointer: ISortedVariable,
       quantifierDepth: Int,
-      acslArgNames: Seq[String]
+      cci: ContractConditionInfo
   ) = {
-    val name = stripOld(getVarName(pointer, quantifierDepth, acslArgNames))
+    val name = cci.stripOld(cci.getVarName(pointer, quantifierDepth))
     IFunApp(derefFunction, Seq(IConstant(new ConstantTerm(name))))
   }
 
@@ -32,10 +32,10 @@ object ACSLExpression extends ContractConditionTools {
       pointer: ISortedVariable,
       selector: MonoSortedIFunction,
       quantifierDepth: Int,
-      acslArgNames: Seq[String]
+      cci: ContractConditionInfo
   ) = {
-    val pointerName = stripOld(
-      getVarName(pointer, quantifierDepth, acslArgNames)
+    val pointerName = cci.stripOld(
+      cci.getVarName(pointer, quantifierDepth)
     )
     val selectorName = selector.name
     IFunApp(
