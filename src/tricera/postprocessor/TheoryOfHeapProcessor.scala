@@ -11,8 +11,7 @@ import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 import ap.types.Sort
 
 object TheoryOfHeapProcessor
-    extends ContractProcessor
- {
+    extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
@@ -28,113 +27,17 @@ object TheoryOfHeapProcessor
 
   class TheoryOfHeapRewriter(
       cci: ContractConditionInfo
-  ) extends CollectingVisitor[Int, IExpression] {
+  ) extends CollectingVisitor[Unit, IExpression] {
 
     def apply(contractCondition: IExpression): IExpression = {
-      visit(contractCondition, 0)
-    }
-
-    private def leadsToOldHeap(
-        t: IExpression,
-        quantifierDepth: Int
-    ): Boolean = {
-      import IExpression._
-      t match {
-        case v @ ISortedVariable(vIndex, _) =>
-          cci.isOldHeap(v, quantifierDepth)
-        case IFunApp(writeFun, args)
-            if (cci.isWriteFun(writeFun)) =>
-          leadsToOldHeap(args.head, quantifierDepth)
-        case _ => false
-      }
-    }
-
-    private def getAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
-      import IExpression._
-      t match {
-        case IFunApp(
-              writeFun,
-              Seq(heap, pointer, value)
-            ) if (cci.isWriteFun(writeFun)) =>
-          val assignment =
-            (pointer.asInstanceOf[ITerm], value.asInstanceOf[ITerm])
-          assignment +: getAssignments(
-            heap
-          ) // handle case where same pointer occurs twice (should be ruled out be rewriting rule)
-        case _ => Seq()
-      }
-    }
-
-    override def preVisit(
-        t: IExpression,
-        quantifierDepth: Int
-    ): PreVisitResult = t match {
-      case v: IVariableBinder => UniSubArgs(quantifierDepth + 1)
-      case _                  => KeepArg
+      visit(contractCondition, ())
     }
 
     override def postVisit(
         t: IExpression,
-        quantifierDepth: Int,
+        arg: Unit,
         subres: Seq[IExpression]
-    ): IExpression = {
-
-      def assignmentToEquality(
-          pointer: ITerm,
-          value: ITerm,
-          heapVar: ISortedVariable
-      ): Option[IFormula] = {
-        cci.getGetter(value) match {
-          case Some(selector) =>
-            Some(
-              IEquation(
-                IFunApp(
-                  selector,
-                  Seq(IFunApp(cci.heapTheory.read, Seq(heapVar, pointer)))
-                ),
-                IFunApp(selector, Seq(value))
-              ).asInstanceOf[IFormula]
-            )
-          case _ => None
-        }
-      }
-
-      def extractEqualitiesFromWriteChain(
-          funApp: IExpression,
-          heapVar: ISortedVariable
-      ) = {
-        getAssignments(funApp)
-          .map { case (pointer, value) =>
-            assignmentToEquality(pointer, value, heapVar) match {
-              case Some(eq) => eq
-            }
-          }
-          .reduce(_ & _)
-      }
-
-      t match {
-        // write(write(...write(@h, ptr1, val1)...)) -> read(@h, ptr1) == val1 && read(@h, ptr2) == val2 && ...
-        // addresses must be separated and pointers valid
-
-        case IEquation(
-              heapFunApp @ TheoryOfHeapFunApp(function, _),
-              Var(h)
-            )
-            if (leadsToOldHeap(
-              heapFunApp,
-              quantifierDepth
-            ) && cci.isHeap(h, quantifierDepth)) =>
-          extractEqualitiesFromWriteChain(heapFunApp, h)
-        // other order..
-        case IEquation(
-              Var(h),
-              heapFunApp @ TheoryOfHeapFunApp(function, _)
-            )
-            if (leadsToOldHeap(
-              heapFunApp,
-              quantifierDepth
-            ) && cci.isHeap(h, quantifierDepth)) =>
-          extractEqualitiesFromWriteChain(heapFunApp, h)
+    ): IExpression = t match {
 
         // o.get<sort>.O_<sort> -> o
         case IFunApp(wrapper, Seq(IFunApp(getter, Seq(obj))))
@@ -159,8 +62,6 @@ object TheoryOfHeapProcessor
           o
 
         case _ => t update subres
-      }
     }
   }
-
 }

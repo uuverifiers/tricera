@@ -51,7 +51,6 @@ object ACSLExpressionProcessor
         case Is_O_Sort(
               TheoryOfHeapFunApp(
                 readFun,
-                heapTheory,
                 Seq(Var(h), Var(p))
               )
             )
@@ -76,7 +75,6 @@ object ACSLExpressionProcessor
                   Seq(
                     TheoryOfHeapFunApp(
                       readFun,
-                      heapTheory,
                       Seq(Var(h), Var(p))
                     )
                   )
@@ -158,7 +156,6 @@ object ACSLExpressionProcessor
               Seq(
                 TheoryOfHeapFunApp(
                   readFun,
-                  heapTheory,
                   Seq(Var(h), Var(p))
                 )
               )
