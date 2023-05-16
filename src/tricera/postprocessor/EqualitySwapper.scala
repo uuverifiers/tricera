@@ -5,42 +5,33 @@ import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import tricera.postprocessor.ContractConditionType._
 
-object EqualitySwapper
-    extends ContractProcessor {
+object EqualitySwapper extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
-    val equalities = cci.contractConditionType match {
+    val valueSet = cci.contractConditionType match {
       case Precondition =>
-        EqualityReaderVisitor(cci.precondition)
+        ValSetReader.deBrujin(cci.precondition)
       case Postcondition =>
-        Equalities.join(
-          EqualityReaderVisitor(cci.precondition),
-          EqualityReaderVisitor(cci.postcondition)
+        ValSet.merge(
+          ValSetReader.deBrujin(cci.precondition),
+          ValSetReader.deBrujin(cci.postcondition)
         )
     }
-    EqualitySwapper(cci.contractCondition, equalitiesToMap(equalities))
+    EqualitySwapper(cci.contractCondition, equalitiesToMap(valueSet))
   }
 
-  def equalitiesToMap(equalities: Equalities) = {
-    def addMappings(
-        map: Map[IExpression, ISortedVariable],
-        eqSetWithVar: Set[ITerm]
-    ) = {
-      val variable = eqSetWithVar.find(_.isInstanceOf[ISortedVariable])
-      variable match {
-        case Some(v: ISortedVariable) =>
-          eqSetWithVar
-            .filter(term => term != v)
-            .foldLeft(map)((map, term) => map + (term -> v))
+  def equalitiesToMap(valueSet: ValSet): Map[IExpression, ISortedVariable] = {
+    valueSet.vals
+      .collect {
+        case value if value.getVariableForm.isDefined =>
+          val variable = value.getVariableForm.get.asInstanceOf[ISortedVariable]
+          value.variants
+            .filterNot(_ == variable)
+            .map(_ -> variable)
       }
-    }
-
-    equalities.sets
-      .filter(eqSet => eqSet.exists(_.isInstanceOf[ISortedVariable]))
-      .foldLeft(Map.empty[IExpression, ISortedVariable])((map, eqSetWithVar) =>
-        addMappings(map, eqSetWithVar)
-      )
+      .flatten
+      .toMap
   }
 
   object EqualitySwapper {
