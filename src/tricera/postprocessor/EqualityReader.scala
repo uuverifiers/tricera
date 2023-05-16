@@ -62,20 +62,6 @@ case class Equalities(sets: Set[Set[ITerm]]) {
   }
 }
 
-object EqualityReader extends ContractConditionTools {
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
-  ): Equalities = {
-    val contractCondition = solution(predicate)
-    val contractConditionType = getContractConditionType(predicate, context)
-    val acslArgNames = getACSLArgNames(predicate, context)
-    EqualityReaderVisitor(contractCondition)
-  }
-}
-
 object EqualityReaderVisitor
     extends CollectingVisitor[Int, Equalities]
     with ExpressionUtils {

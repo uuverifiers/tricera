@@ -8,139 +8,17 @@ import ap.theories.Heap.HeapFunExtractor
 import ap.theories.ADT
 import tricera.postprocessor.ContractConditionType._
 
-trait ContractConditionTools {
-  def getContractConditionType(
-      predicate: Predicate,
-      context: FunctionContext
-  ): ContractConditionType = predicate match {
-    case context.prePred.pred =>
-      ContractConditionType.Precondition
-    case context.postPred.pred =>
-      ContractConditionType.Postcondition
-  }
-
-  def getPrecondition(
-      solution: SolutionProcessor.Solution,
-      context: FunctionContext
-  ) = {
-    solution(context.prePred.pred)
-  }
-
-  def getPostcondition(
-      solution: SolutionProcessor.Solution,
-      context: FunctionContext
-  ) = {
-    solution(context.postPred.pred)
-  }
-
-  def getACSLArgNames(
-      predicate: Predicate,
-      context: FunctionContext
-  ): Seq[String] = {
-    getContractConditionType(predicate, context) match {
-      case Precondition =>
-        context.prePredACSLArgNames
-      case Postcondition =>
-        context.postPredACSLArgNames
-    }
-  }
-
-  def getVarName(
-      variable: ISortedVariable,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): String = {
-    acslArgNames(variable.index - quantifierDepth)
-  }
-
-  def stripOld(input: String): String = {
-    val prefix = "\\old("
-    val suffix = ")"
-
-    if (input.startsWith(prefix) && input.endsWith(suffix)) {
-      input.substring(prefix.length, input.length - suffix.length)
-    } else if (
-      !input.contains("(") && !input.contains(")") && !input.contains("\\")
-    ) {
-      input
-    } else {
-      throw new IllegalArgumentException(s"Invalid input: $input")
-    }
-  }
-
-  def getCurrentVar(
-      variable: ISortedVariable,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): ISortedVariable = {
-    val varName = stripOld(getVarName(variable, quantifierDepth, acslArgNames))
-    println(
-      "getCurrentVar: " + getVarName(
-        variable,
-        quantifierDepth,
-        acslArgNames
-      ) + "\n" + varName + "\n" + acslArgNames.indexOf(varName)
-    )
-    println(acslArgNames)
-    ISortedVariable(acslArgNames.indexOf(varName), variable.sort)
-  }
-
-  def isPrecondition(contractConditionType: ContractConditionType): Boolean = {
-    contractConditionType == Precondition
-  }
-
-  def isPostcondition(contractConditionType: ContractConditionType): Boolean = {
-    contractConditionType == Postcondition
-  }
-
-  def isParam(
-      variable: ISortedVariable,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String],
-      paramNames: Seq[String]
-  ): Boolean = {
-    val varName = stripOld(getVarName(variable, quantifierDepth, acslArgNames))
-    paramNames.contains(varName)
-  }
-
-  def isOldVar(
-      variable: ISortedVariable,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): Boolean = {
-    val varName = getVarName(variable, quantifierDepth, acslArgNames)
-    varName.startsWith("\\old")
-  }
-
-  def isOldHeap(
-      variable: ISortedVariable,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): Boolean = {
-    getVarName(variable, quantifierDepth, acslArgNames) == "\\old(@h)"
-  }
-
-  def isHeap(
-      variable: ISortedVariable,
-      quantifierDepth: Int,
-      acslArgNames: Seq[String]
-  ): Boolean = {
-    getVarName(variable, quantifierDepth, acslArgNames) == "@h"
-  }
-}
-
 trait ExpressionUtils {
-
-  def isWriteFun(function: IFunction, heapTheory: Heap): Boolean =
-    function == heapTheory.write
-
-  def isReadFun(function: IFunction, heapTheory: Heap): Boolean =
-    function == heapTheory.read
-
-  def isGetSortFun(function: IFunction): Boolean =
-    function.name.startsWith("get")
-
-  def isO_SortFun(function: IFunction): Boolean = function.name.startsWith("O_")
+  def iterateUntilFixedPoint(
+        expr: IExpression,
+        apply: IExpression => IExpression
+    ): IExpression = {
+      val expressions: Stream[IExpression] = Stream.iterate(expr)(apply)
+      expressions
+        .zip(expressions.tail)
+        .collectFirst { case (a, b) if a == b => a }
+        .getOrElse(expr)
+    }
 }
 
 // Indicates whether an IExpression contains a quantifier

@@ -9,8 +9,7 @@ import ap.theories._
 import ap.SimpleAPI
 
 object PostconditionSimplifier
-    extends ContractProcessor
-    with ContractConditionTools {
+    extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
@@ -18,16 +17,13 @@ object PostconditionSimplifier
       case ContractConditionType.Precondition =>
         cci.contractCondition
       case ContractConditionType.Postcondition =>
-        apply(cci.solution, cci.context)
+        apply(cci.precondition, cci.postcondition)
     }
   }
 
-  def apply(
-      solution: SolutionProcessor.Solution,
-      context: FunctionContext
-  ): IExpression = {
-    val precondition = solution(context.prePred.pred).asInstanceOf[IFormula]
-    var postcondition = solution(context.postPred.pred).asInstanceOf[IFormula]
+  def apply(precond: IExpression, postcond: IExpression): IExpression = {
+    val precondition = precond.asInstanceOf[IFormula]
+    var postcondition = postcond.asInstanceOf[IFormula]
     var i = 0
     var cont = true
     while (cont) {

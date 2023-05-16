@@ -90,7 +90,7 @@ case class ContractConditionInfo(
   def isStructCtor(fun: MonoSortedIFunction): Boolean = {
     acslContext.getStructMap.get(fun).isDefined
   }
-  
+
   def isPrecondition: Boolean = {
     contractConditionType == Precondition
   }
@@ -141,6 +141,14 @@ case class ContractConditionInfo(
       input
     } else {
       throw new IllegalArgumentException(s"Invalid input: $input")
+    }
+  }
+
+  def getGetter(heapTerm: ITerm): Option[IFunction] = {
+    heapTerm match {
+      case IFunApp(wrapper, _) =>
+        acslContext.wrapperSort(wrapper).flatMap(acslContext.sortGetter)
+      case _ => None
     }
   }
 }

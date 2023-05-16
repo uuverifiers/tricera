@@ -12,36 +12,23 @@ import ap.types.Sort
 
 object TheoryOfHeapProcessor
     extends ContractProcessor
-    with ContractConditionTools {
+ {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
-    val theoryOfHeapRewriter = new TheoryOfHeapRewriter(
-      cci.contractConditionType,
-      cci.acslArgNames,
-      cci.acslContext
-    )
+    TheoryOfHeapRewriter(cci)
+  }
 
-    def iterateUntilFixedPoint(
-        expr: IExpression,
-        apply: IExpression => IExpression
-    ): IExpression = {
-      val expressions: Stream[IExpression] = Stream.iterate(expr)(apply)
-      expressions
-        .zip(expressions.tail)
-        .collectFirst { case (a, b) if a == b => a }
-        .getOrElse(expr)
+  object TheoryOfHeapRewriter extends ExpressionUtils {
+    def apply(cci: ContractConditionInfo): IExpression = {
+      val theoryOfHeapRewriter = new TheoryOfHeapRewriter(cci)
+      iterateUntilFixedPoint(cci.contractCondition, theoryOfHeapRewriter.apply)
     }
-
-    iterateUntilFixedPoint(cci.contractCondition, theoryOfHeapRewriter.apply)
   }
 
   class TheoryOfHeapRewriter(
-      contractConditionType: ContractConditionType,
-      acslArgNames: Seq[String],
-      acslContext: ACSLFunctionContext
-  ) extends CollectingVisitor[Int, IExpression]
-      with ExpressionUtils {
+      cci: ContractConditionInfo
+  ) extends CollectingVisitor[Int, IExpression] {
 
     def apply(contractCondition: IExpression): IExpression = {
       visit(contractCondition, 0)
@@ -54,9 +41,9 @@ object TheoryOfHeapProcessor
       import IExpression._
       t match {
         case v @ ISortedVariable(vIndex, _) =>
-          isOldHeap(v, quantifierDepth, acslArgNames)
-        case IFunApp(writeFun @ HeapFunExtractor(heapTheory), args)
-            if (isWriteFun(writeFun, heapTheory)) =>
+          cci.isOldHeap(v, quantifierDepth)
+        case IFunApp(writeFun, args)
+            if (cci.isWriteFun(writeFun)) =>
           leadsToOldHeap(args.head, quantifierDepth)
         case _ => false
       }
@@ -66,9 +53,9 @@ object TheoryOfHeapProcessor
       import IExpression._
       t match {
         case IFunApp(
-              writeFun @ HeapFunExtractor(heapTheory),
+              writeFun,
               Seq(heap, pointer, value)
-            ) if (isWriteFun(writeFun, heapTheory)) =>
+            ) if (cci.isWriteFun(writeFun)) =>
           val assignment =
             (pointer.asInstanceOf[ITerm], value.asInstanceOf[ITerm])
           assignment +: getAssignments(
@@ -92,31 +79,18 @@ object TheoryOfHeapProcessor
         subres: Seq[IExpression]
     ): IExpression = {
 
-      def getGetter(heapTerm: ITerm): Option[IFunction] = {
-        heapTerm match {
-          case IFunApp(wrapper, _) =>
-            acslContext.wrapperSort(wrapper) match {
-              case Some(sort) =>
-                acslContext.sortGetter(sort)
-              case _ => None
-            }
-          case _ => None
-        }
-      }
-
       def assignmentToEquality(
           pointer: ITerm,
           value: ITerm,
-          heapVar: ISortedVariable,
-          heapTheory: Heap
+          heapVar: ISortedVariable
       ): Option[IFormula] = {
-        getGetter(value) match {
+        cci.getGetter(value) match {
           case Some(selector) =>
             Some(
               IEquation(
                 IFunApp(
                   selector,
-                  Seq(IFunApp(heapTheory.read, Seq(heapVar, pointer)))
+                  Seq(IFunApp(cci.heapTheory.read, Seq(heapVar, pointer)))
                 ),
                 IFunApp(selector, Seq(value))
               ).asInstanceOf[IFormula]
@@ -127,12 +101,11 @@ object TheoryOfHeapProcessor
 
       def extractEqualitiesFromWriteChain(
           funApp: IExpression,
-          heapVar: ISortedVariable,
-          heapTheory: Heap
+          heapVar: ISortedVariable
       ) = {
         getAssignments(funApp)
           .map { case (pointer, value) =>
-            assignmentToEquality(pointer, value, heapVar, heapTheory) match {
+            assignmentToEquality(pointer, value, heapVar) match {
               case Some(eq) => eq
             }
           }
@@ -150,8 +123,8 @@ object TheoryOfHeapProcessor
             if (leadsToOldHeap(
               heapFunApp,
               quantifierDepth
-            ) && isHeap(h, quantifierDepth, acslArgNames)) =>
-          extractEqualitiesFromWriteChain(heapFunApp, h, heapTheory)
+            ) && cci.isHeap(h, quantifierDepth)) =>
+          extractEqualitiesFromWriteChain(heapFunApp, h)
         // other order..
         case IEquation(
               Var(h),
@@ -160,19 +133,19 @@ object TheoryOfHeapProcessor
             if (leadsToOldHeap(
               heapFunApp,
               quantifierDepth
-            ) && isHeap(h, quantifierDepth, acslArgNames)) =>
-          extractEqualitiesFromWriteChain(heapFunApp, h, heapTheory)
+            ) && cci.isHeap(h, quantifierDepth)) =>
+          extractEqualitiesFromWriteChain(heapFunApp, h)
 
         // o.get<sort>.O_<sort> -> o
-        case IFunApp(o_SortFun, Seq(IFunApp(getSortFun, Seq(obj))))
-            if (isO_SortFun(o_SortFun)
-              && isGetSortFun(getSortFun)) =>
+        case IFunApp(wrapper, Seq(IFunApp(getter, Seq(obj))))
+            if (cci.isWrapper(wrapper)
+              && cci.isGetter(getter)) =>
           obj
 
         // o.O_<sort>.get<sort> -> o
-        case IFunApp(getSortFun, Seq(IFunApp(o_SortFun, Seq(obj))))
-            if (isO_SortFun(o_SortFun)
-              && isGetSortFun(getSortFun)) =>
+        case IFunApp(getter, Seq(IFunApp(wrapper, Seq(obj))))
+            if (cci.isWrapper(wrapper)
+              && cci.isGetter(getter)) =>
           obj
 
         // read(write(h,p,o),p) -> o
@@ -181,8 +154,8 @@ object TheoryOfHeapProcessor
               heapTheory,
               Seq(TheoryOfHeapFunApp(writeFun, _, Seq(Var(h), p2, o)), p1)
             )
-            if (isReadFun(readFun, heapTheory)
-              && isWriteFun(writeFun, heapTheory)
+            if (cci.isReadFun(readFun)
+              && cci.isWriteFun(writeFun)
               && p1 == p2) =>
           o
 
