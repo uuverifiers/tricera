@@ -502,70 +502,36 @@ class Main (args: Array[String]) {
                    if maybeEnc.isEmpty ||
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
-                println("Applying EqualityReader to solution. \n")
-                val equalitiesPre = EqualityReader.process(processedSolution, ctx.prePred.pred, fun, ctx)
-                val equalitiesPost = EqualityReader.process(processedSolution, ctx.postPred.pred, fun, ctx)
-                println("pre equalities: \n" + replaceArgs(equalitiesPre.toString, ctx.prePredACSLArgNames))
-                println("post equalities: \n" + replaceArgs(equalitiesPost.toString, ctx.postPredACSLArgNames))
-                println("joined equalities: \n" + replaceArgs((Equalities.join(equalitiesPre, equalitiesPost)).toString, ctx.postPredACSLArgNames))
 
-                val preconditionProcessors = Seq(
-                  ADTSimplifier,
-                  TheoryOfHeapProcessor
-                )
-                val postconditionProcessors = Seq(
+                def applyProcessor(processor: IExpressionProcessor, 
+                                   predicate: ap.parser.IExpression.Predicate, 
+                                   solution: SolutionProcessor.Solution
+                                  ): SolutionProcessor.Solution = {
+                  println("----- Applying " + processor + " to \n" + solution(predicate))
+                  val result = processor(solution, predicate, fun, ctx)
+                  println("----- Result: \n" + result + "\n")
+                  solution + (predicate -> result)
+                }
+
+                var acslProcessedSolution = processedSolution
+
+                val printProcessors = Seq(
                   ADTSimplifier,
                   TheoryOfHeapProcessor,
-                  PostconditionSimplifier
-                )
-
-                def applyProcessor(processor: IExpressionProcessor, predicate: ap.parser.IExpression.Predicate) = {
-                  println("----- Applying " + processor + " to \n" + processedSolution(predicate))
-                  processedSolution =
-                    processedSolution + (predicate -> processor(processedSolution, predicate, fun, ctx))
-                  println("----- Result: \n" + processedSolution(predicate) + "\n")
-                }
-
-                for (processor <- preconditionProcessors) {
-                  applyProcessor(processor, ctx.prePred.pred)
-                }
-                for (processor <- postconditionProcessors) {
-                  applyProcessor(processor, ctx.postPred.pred)
-                }
-                
-                processedSolution = ADTExploder(processedSolution)()
-
-                var processedSolutionForPrint = processedSolution
-                println("processedSolutionForPrint: \n" + processedSolutionForPrint(ctx.prePred.pred))
-
-                def applyPrintProcessor(processor: IExpressionProcessor, predicate: ap.parser.IExpression.Predicate) = {
-                  println("----- Applying " + processor + " to \n" + processedSolutionForPrint(predicate))
-                  processedSolutionForPrint =
-                    processedSolutionForPrint + (predicate -> processor(processedSolutionForPrint, predicate, fun, ctx))
-                  println("----- Result: \n" + processedSolutionForPrint(predicate) + "\n")
-                }
-
-                applyPrintProcessor(EqualitySwapper, ctx.prePred.pred)
-                applyPrintProcessor(EqualitySwapper, ctx.postPred.pred)
-
-                val preconditionPrintProcessors = Seq(
-                  ACSLExpressionProcessor,
-                  ClauseRemover
-                )
-                val postconditionPrintProcessors = Seq(
+                  PostconditionSimplifier,
+                  ADTExploder,
+                  EqualitySwapper,
                   ACSLExpressionProcessor,
                   ClauseRemover
                 )
 
-                for (processor <- preconditionPrintProcessors) {
-                  applyPrintProcessor(processor, ctx.prePred.pred)
-                }
-                for (processor <- postconditionPrintProcessors) {
-                  applyPrintProcessor(processor, ctx.postPred.pred)
+                for (processor <- printProcessors) {
+                  acslProcessedSolution = applyProcessor(processor, ctx.prePred.pred, acslProcessedSolution)
+                  acslProcessedSolution = applyProcessor(processor, ctx.postPred.pred, acslProcessedSolution)
                 }
                 
-                val fPre = ACSLLineariser asString processedSolutionForPrint(ctx.prePred.pred)
-                val fPost = ACSLLineariser asString processedSolutionForPrint(ctx.postPred.pred)
+                val fPre = ACSLLineariser asString acslProcessedSolution(ctx.prePred.pred)
+                val fPost = ACSLLineariser asString acslProcessedSolution(ctx.postPred.pred)
 
                 // todo: implement replaceArgs as a solution processor
                 // replaceArgs does a simple string replacement (see above def)

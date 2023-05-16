@@ -18,6 +18,8 @@ object PostconditionSimplifier
       context: FunctionContext
   ): IExpression = {
     getContractConditionType(predicate, context) match {
+      case ContractConditionType.Precondition =>
+        solution(predicate)
       case ContractConditionType.Postcondition =>
         apply(solution, context)
     }
