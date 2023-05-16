@@ -117,7 +117,7 @@ object TheoryOfHeapProcessor
         // addresses must be separated and pointers valid
 
         case IEquation(
-              heapFunApp @ TheoryOfHeapFunApp(function, heapTheory, _),
+              heapFunApp @ TheoryOfHeapFunApp(function, _),
               Var(h)
             )
             if (leadsToOldHeap(
@@ -128,7 +128,7 @@ object TheoryOfHeapProcessor
         // other order..
         case IEquation(
               Var(h),
-              heapFunApp @ TheoryOfHeapFunApp(function, heapTheory, _)
+              heapFunApp @ TheoryOfHeapFunApp(function, _)
             )
             if (leadsToOldHeap(
               heapFunApp,
@@ -151,8 +151,7 @@ object TheoryOfHeapProcessor
         // read(write(h,p,o),p) -> o
         case TheoryOfHeapFunApp(
               readFun,
-              heapTheory,
-              Seq(TheoryOfHeapFunApp(writeFun, _, Seq(Var(h), p2, o)), p1)
+              Seq(TheoryOfHeapFunApp(writeFun, Seq(Var(h), p2, o)), p1)
             )
             if (cci.isReadFun(readFun)
               && cci.isWriteFun(writeFun)
