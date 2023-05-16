@@ -11,22 +11,15 @@ import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 import ap.types.Sort
 
 object TheoryOfHeapProcessor
-    extends IExpressionProcessor
+    extends ContractProcessor
     with ContractConditionTools {
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
+  def processContractCondition(
+      cci: ContractConditionInfo
   ): IExpression = {
-    val contractCondition = solution(predicate)
-    val contractConditionType = getContractConditionType(predicate, context)
-    val acslArgNames = getACSLArgNames(predicate, context)
-    val acslFunctionContext = context.acslContext
     val theoryOfHeapRewriter = new TheoryOfHeapRewriter(
-      contractConditionType,
-      acslArgNames,
-      acslFunctionContext
+      cci.contractConditionType,
+      cci.acslArgNames,
+      cci.acslContext
     )
 
     def iterateUntilFixedPoint(
@@ -40,7 +33,7 @@ object TheoryOfHeapProcessor
         .getOrElse(expr)
     }
 
-    iterateUntilFixedPoint(contractCondition, theoryOfHeapRewriter.apply)
+    iterateUntilFixedPoint(cci.contractCondition, theoryOfHeapRewriter.apply)
   }
 
   class TheoryOfHeapRewriter(

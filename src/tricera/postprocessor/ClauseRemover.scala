@@ -5,15 +5,11 @@ import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import ContractConditionType._
 
-object ClauseRemover extends IExpressionProcessor {
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
+object ClauseRemover extends ContractProcessor {
+  def processContractCondition(
+      cci: ContractConditionInfo
   ): IExpression = {
-    val contractCondition = solution(predicate)
-    apply(contractCondition)
+    apply(cci.contractCondition)
   }
 
   def apply(contractCondition: IExpression): IExpression = {

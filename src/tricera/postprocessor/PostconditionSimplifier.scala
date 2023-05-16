@@ -9,19 +9,16 @@ import ap.theories._
 import ap.SimpleAPI
 
 object PostconditionSimplifier
-    extends IExpressionProcessor
+    extends ContractProcessor
     with ContractConditionTools {
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
+  def processContractCondition(
+      cci: ContractConditionInfo
   ): IExpression = {
-    getContractConditionType(predicate, context) match {
+    cci.contractConditionType match {
       case ContractConditionType.Precondition =>
-        solution(predicate)
+        cci.contractCondition
       case ContractConditionType.Postcondition =>
-        apply(solution, context)
+        apply(cci.solution, cci.context)
     }
   }
 

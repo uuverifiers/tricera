@@ -5,29 +5,22 @@ import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 
 object EqualitySwapper
-    extends IExpressionProcessor
+    extends ContractProcessor
     with ContractConditionTools {
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
+  def processContractCondition(
+      cci: ContractConditionInfo
   ): IExpression = {
-    val precondition = getPrecondition(solution, context)
-    val contractCondition = solution(predicate)
-    val contractConditionType = getContractConditionType(predicate, context)
-    val equalities = contractConditionType match {
+    val equalities = cci.contractConditionType match {
       case ContractConditionType.Precondition =>
-        EqualityReaderVisitor(precondition)
+        EqualityReaderVisitor(cci.precondition)
       case ContractConditionType.Postcondition =>
-        val postcondition = getPostcondition(solution, context)
         Equalities.join(
-          EqualityReaderVisitor(precondition),
-          EqualityReaderVisitor(postcondition)
+          EqualityReaderVisitor(cci.precondition),
+          EqualityReaderVisitor(cci.postcondition)
         )
     }
     val equalitySwapper = new EqualitySwapper(equalitiesToMap(equalities))
-    equalitySwapper.swap(contractCondition)
+    equalitySwapper.swap(cci.contractCondition)
   }
 
   def equalitiesToMap(equalities: Equalities) = {

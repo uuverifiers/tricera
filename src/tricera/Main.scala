@@ -601,14 +601,16 @@ class Main (args: Array[String]) {
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
 
-                def applyProcessor(processor: IExpressionProcessor, 
-                                   predicate: ap.parser.IExpression.Predicate, 
+                def applyProcessor(processor: ContractProcessor, 
                                    solution: SolutionProcessor.Solution
                                   ): SolutionProcessor.Solution = {
-                  println("----- Applying " + processor + " to \n" + solution(predicate))
-                  val result = processor(solution, predicate, fun, ctx)
-                  println("----- Result: \n" + result + "\n")
-                  solution + (predicate -> result)
+                  println("----- Applying " + processor + " to " + fun + ".")
+                  val (newPrecondition, newPostcondition) = processor(solution, fun, ctx)
+                  println("----- Precondition: \n" + solution(ctx.prePred.pred))
+                  println("----- New Precondition: \n" + newPrecondition)
+                  println("----- Postcondition: \n" + solution(ctx.postPred.pred))
+                  println("----- New Postcondition: \n" + newPostcondition + "\n")
+                  solution + (ctx.prePred.pred -> newPrecondition) + (ctx.postPred.pred -> newPostcondition)
                 }
 
                 var acslProcessedSolution = processedSolution
@@ -624,8 +626,7 @@ class Main (args: Array[String]) {
                 )
 
                 for (processor <- printProcessors) {
-                  acslProcessedSolution = applyProcessor(processor, ctx.prePred.pred, acslProcessedSolution)
-                  acslProcessedSolution = applyProcessor(processor, ctx.postPred.pred, acslProcessedSolution)
+                  acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
                 }
                 
                 val fPre = ACSLLineariser asString acslProcessedSolution(ctx.prePred.pred)

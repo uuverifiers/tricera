@@ -6,16 +6,9 @@ import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.Heap
 import ap.theories.Heap.HeapFunExtractor
 import ap.theories.ADT
-
-object ContractConditionType extends Enumeration {
-  type ContractConditionType = Value
-  val Precondition, Postcondition = Value
-}
-
-import ContractConditionType._
+import tricera.postprocessor.ContractConditionType._
 
 trait ContractConditionTools {
-
   def getContractConditionType(
       predicate: Predicate,
       context: FunctionContext
@@ -134,42 +127,6 @@ trait ContractConditionTools {
   ): Boolean = {
     getVarName(variable, quantifierDepth, acslArgNames) == "@h"
   }
-}
-
-trait IExpressionProcessor {
-  def apply(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
-  ): IExpression = {
-    process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
-    ): IExpression
-  }
-
-  /** This is the function that should be implemented in new
-    * ContractConditionProcessors
-    * @param solution
-    *   : All predicates in solution
-    * @param predicate
-    *   : Predicate to process
-    * @param function
-    *   : function name
-    * @param context
-    *   : function context
-    * @return
-    *   : processed IExpression
-    */
-  def process(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      function: String,
-      context: FunctionContext
-  ): IExpression
 }
 
 trait ExpressionUtils {
