@@ -163,7 +163,7 @@ object TheoryOfHeapFunApp {
       expr: IExpression
   ): Option[(IFunction, Seq[IExpression])] = expr match {
     case IFunApp(
-          function,
+          function @ Heap.HeapFunExtractor(_),
           args
         ) =>
       Some((function, args))

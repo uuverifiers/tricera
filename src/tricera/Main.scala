@@ -518,10 +518,11 @@ class Main (args: Array[String]) {
                 var acslProcessedSolution = processedSolution
 
                 val printProcessors = Seq(
-                  ADTSimplifier,
-                  TheoryOfHeapProcessor,
                   PostconditionSimplifier,
+                  ADTSimplifier,
                   ADTExploder,
+                  AssignmentProcessor,
+                  TheoryOfHeapProcessor,
                   EqualitySwapper,
                   ACSLExpressionProcessor,
                   ClauseRemover
