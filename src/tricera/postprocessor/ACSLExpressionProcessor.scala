@@ -12,41 +12,18 @@ import ap.types.MonoSortedIFunction
 import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 
 object ACSLExpressionProcessor
-    extends ContractProcessor
-    with ContractConditionTools {
+    extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
-    apply(cci.solution, cci.predicate, cci.context)
-  }
-
-  def apply(
-      solution: SolutionProcessor.Solution,
-      predicate: Predicate,
-      context: FunctionContext
-  ): IExpression = {
-    val acslArgNames = getACSLArgNames(predicate, context)
-    val contractCondition = solution(predicate)
-    val contractConditionType = getContractConditionType(predicate, context)
-    val paramNames = context.acslContext.getParams.map(x => x.name)
-    val acslFunctionContext = context.acslContext
     val visitor =
-      new ACSLExpressionVisitor(
-        contractConditionType,
-        acslArgNames,
-        paramNames,
-        acslFunctionContext
-      )
-    visitor(contractCondition)
+      new ACSLExpressionVisitor(cci)
+    visitor(cci.contractCondition)
   }
 
   class ACSLExpressionVisitor(
-      contractConditionType: ContractConditionType,
-      acslArgNames: Seq[String],
-      paramNames: Seq[String],
-      acslFunctionContext: ACSLFunctionContext
-  ) extends CollectingVisitor[Int, IExpression]
-      with ExpressionUtils {
+      cci: ContractConditionInfo
+  ) extends CollectingVisitor[Int, IExpression] {
 
     def apply(contractCondition: IExpression): IExpression = {
       visit(contractCondition, 0)
@@ -66,14 +43,6 @@ object ACSLExpressionProcessor
         subres: Seq[IExpression]
     ): IExpression = {
 
-      def isSelector(
-          function: MonoSortedIFunction,
-          acslFunctionContext: ACSLFunctionContext
-      ): Boolean = {
-        val selectors = acslFunctionContext.getStructMap.values.map((struct) => struct.sels.map(_._1)).toSet.flatten
-        selectors.contains(function)
-      }
-
       t match {
         // NOTE: getSort and O_ are not theory of heap functions
 
@@ -86,11 +55,11 @@ object ACSLExpressionProcessor
                 Seq(Var(h), Var(p))
               )
             )
-            if (isReadFun(readFun, heapTheory) &&
-              isHeap(h, quantifierDepth, acslArgNames)) => {
+            if (cci.isReadFun(readFun) &&
+              cci.isHeap(h, quantifierDepth)) => {
           if (
-            isPostcondition(contractConditionType) &&
-            isParam(p, quantifierDepth, acslArgNames, paramNames)
+            cci.isPostcondition &&
+            cci.isParam(p, quantifierDepth)
           ) {
             t update subres
           } else {
@@ -114,25 +83,25 @@ object ACSLExpressionProcessor
                 )
               )
             )
-            if (isGetSortFun(getFun) &&
-              isReadFun(readFun, heapTheory) &&
-              isSelector(selector, acslFunctionContext) &&
-              (isHeap(h, quantifierDepth, acslArgNames) ||
-                isOldHeap(h, quantifierDepth, acslArgNames))) =>
-          contractConditionType match {
+            if (cci.isGetter(getFun) &&
+              cci.isReadFun(readFun) &&
+              cci.isSelector(selector) &&
+              (cci.isHeap(h, quantifierDepth) ||
+                cci.isOldHeap(h, quantifierDepth))) =>
+          cci.contractConditionType match {
             case Precondition =>
               ACSLExpression.arrowFunApp(
                 ACSLExpression.arrow,
                 p,
                 selector,
                 quantifierDepth,
-                acslArgNames
+                cci
               )
             case Postcondition =>
               (
-                isOldHeap(h, quantifierDepth, acslArgNames),
-                isOldVar(p, quantifierDepth, acslArgNames),
-                isParam(p, quantifierDepth, acslArgNames, paramNames)
+                cci.isOldHeap(h, quantifierDepth),
+                cci.isOldVar(p, quantifierDepth),
+                cci.isParam(p, quantifierDepth)
               ) match {
                 case (false, false, false) =>
                   // read(@h, p), p not param => p->a
@@ -141,7 +110,7 @@ object ACSLExpressionProcessor
                     p,
                     selector,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (false, true, true) =>
                   // read(@h, p_0), p is param => p->a
@@ -150,7 +119,7 @@ object ACSLExpressionProcessor
                     p,
                     selector,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (false, true, false) =>
                   // read(@h, p_0), p not param => \old(p)->a
@@ -159,7 +128,7 @@ object ACSLExpressionProcessor
                     p,
                     selector,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (true, true, true) =>
                   // read(@h_0, p_0), p is param => \old(p->a)
@@ -168,7 +137,7 @@ object ACSLExpressionProcessor
                     p,
                     selector,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (true, true, false) =>
                   // read(@h_0, p_0), p not param => \old(p->a)
@@ -177,7 +146,7 @@ object ACSLExpressionProcessor
                     p,
                     selector,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case _ => t update subres
               }
@@ -194,58 +163,58 @@ object ACSLExpressionProcessor
                 )
               )
             )
-            if (isGetSortFun(getFun) &&
-              isReadFun(readFun, heapTheory) &&
-              (isHeap(h, quantifierDepth, acslArgNames) ||
-                isOldHeap(h, quantifierDepth, acslArgNames))) => {
-          contractConditionType match {
+            if (cci.isGetter(getFun) &&
+              cci.isReadFun(readFun) &&
+              (cci.isHeap(h, quantifierDepth) ||
+                cci.isOldHeap(h, quantifierDepth))) => {
+          cci.contractConditionType match {
             case Precondition =>
               ACSLExpression.derefFunApp(
                 ACSLExpression.deref,
                 p,
                 quantifierDepth,
-                acslArgNames
+                cci
               )
             case Postcondition =>
               (
-                isOldHeap(h, quantifierDepth, acslArgNames),
-                isOldVar(p, quantifierDepth, acslArgNames),
-                isParam(p, quantifierDepth, acslArgNames, paramNames)
+                cci.isOldHeap(h, quantifierDepth),
+                cci.isOldVar(p, quantifierDepth),
+                cci.isParam(p, quantifierDepth)
               ) match {
                 case (false, false, false) => // read(@h, p), p not param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.deref,
                     p,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (false, true, true) => // read(@h, p_0), p is param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.deref,
                     p,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (false, true, false) => // read(@h, p_0), p not param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.derefOldPointer,
                     p,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (true, true, true) => // read(@h_0, p_0), p is param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.oldDeref,
                     p,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case (true, true, false) => // read(@h_0, p_0), p not param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.oldDeref,
                     p,
                     quantifierDepth,
-                    acslArgNames
+                    cci
                   )
                 case _ => t update subres
               }
