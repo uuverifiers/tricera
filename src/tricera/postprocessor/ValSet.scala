@@ -50,6 +50,14 @@ case class Val(variants: Set[ITerm]) {
   def nonEmpty: Boolean = {
     variants.nonEmpty
   }
+
+  def equalsTerm(term: ITerm): Boolean = {
+    variants.contains(term)
+  }
+
+  def equalsOneOf(terms: Set[ITerm]): Boolean = {
+    (variants & terms).nonEmpty
+  }
 }
 
 object ValSet {
@@ -100,6 +108,13 @@ case class ValSet(vals: Set[Val]) {
   }
 
   def isEmpty = vals.isEmpty
+
+  def areEqual(term1: ITerm, term2: ITerm): Boolean = {
+    getVal(term1) match {
+      case Some(v) => v.equalsTerm(term2)
+      case None    => term1 == term2
+    }
+  }
 
   def getVal(term: ITerm): Option[Val] = {
     vals.find {

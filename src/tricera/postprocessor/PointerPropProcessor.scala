@@ -5,20 +5,27 @@ import scala.collection.immutable.Stack
 
 object PointerPropProcessor extends ContractProcessor {
   def processContractCondition(cci: ContractConditionInfo) = {
-    val invForm = ToInvariantFormVisitor(cci.contractCondition)
+    getSafePointers(cci.contractCondition, cci) match {
+      case safePointers if safePointers.size >= 2 =>
+        cci.contractCondition
+          .asInstanceOf[IFormula]
+          .&(ACSLExpression.separatedPointers(safePointers, 0, cci))
+          .&(ACSLExpression.validPointers(safePointers, 0, cci))
+      case _ => 
+        cci.contractCondition
+    }
+  }
+
+  def getSafePointers(expr: IExpression, cci: ContractConditionInfo): Set[ISortedVariable] = {
+    val invForm = ToInvariantFormVisitor(expr)
     val valueSet = ValSetReader.invariant(invForm)
     val explForm = ToExplicitForm.invariant(invForm, valueSet, cci)
     val redForm = HeapReducer(explForm, cci)
     HeapExtractor(redForm, cci) match {
       case Some(heap) =>
         val redValueSet = ValSetReader.invariant(redForm)
-        val separatedValid = readSafeVariables(heap, redValueSet)
-        cci.contractCondition
-          .asInstanceOf[IFormula]
-          .&(ACSLExpression.separatedPointers(separatedValid, 0, cci))
-          .&(ACSLExpression.validPointers(separatedValid, 0, cci))
-      case None => 
-        cci.contractCondition
+        readSafeVariables(heap, redValueSet)
+      case _ => Set.empty[ISortedVariable]
     }
   }
 
