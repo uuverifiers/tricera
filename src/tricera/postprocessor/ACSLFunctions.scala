@@ -15,6 +15,7 @@ object ACSLExpression {
   val arrowOldPointer =
     new IFunction("arrowOldPointer", 2, false, false) // \old(p)->a
   val oldArrow = new IFunction("oldArrow", 2, false, false) // \old(p)->a
+  val separated = new Predicate("\\separated", 2) // \separated(p1, p2)
 
   // Here a ConstantTerm is introduced as a container for the variable name
   def derefFunApp(
@@ -45,5 +46,62 @@ object ACSLExpression {
         IConstant(new ConstantTerm(selectorName))
       )
     )
+  }
+
+  def separatedPointers(
+      pointers: Set[ISortedVariable],
+      quantifierDepth: Int,
+      cci: ContractConditionInfo
+  ): IFormula = {
+
+    def separatedAtom(p1: String, p2: String): IFormula = {
+      IAtom(
+        separated,
+        Seq(IConstant(new ConstantTerm(p1)), IConstant(new ConstantTerm(p2)))
+      ).asInstanceOf[IFormula]
+    }
+
+    val pointerNames = variableSetToRawNameSeq(pointers, quantifierDepth, cci)
+    if (pointerNames.size >= 2) {
+      pointerNames
+        .combinations(2)
+        .map({ case Seq(p1, p2) =>
+          separatedAtom(p1, p2)
+        })
+        .reduceLeft(_ & _)
+    } else {
+      IBoolLit(true)
+    }
+  }
+
+  def validPointers(
+      pointers: Set[ISortedVariable],
+      quantifierDepth: Int,
+      cci: ContractConditionInfo
+  ): IFormula = {
+    def validAtom(p: String) = {
+      IAtom(valid, Seq(IConstant(new ConstantTerm(p)))).asInstanceOf[IFormula]
+    }
+
+    val pointerNames = variableSetToRawNameSeq(pointers, quantifierDepth, cci)
+    if (pointerNames.size >= 2) {
+      pointerNames
+        .map((p) => validAtom(p))
+        .reduceLeft(_ & _)
+    } else {
+      IBoolLit(true)
+    }
+  }
+
+  def variableSetToRawNameSeq(
+      variableSet: Set[ISortedVariable],
+      quantifierDepth: Int,
+      cci: ContractConditionInfo
+  ): Seq[String] = {
+    variableSet
+      .map(pointer =>
+        cci.stripOld(cci.getVarName(pointer, quantifierDepth).get)
+      )
+      .toSeq
   }
 }
