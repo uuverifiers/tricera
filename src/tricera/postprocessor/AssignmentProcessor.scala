@@ -9,13 +9,20 @@ object AssignmentProcessor extends ContractProcessor {
       case Precondition =>
         cci.contractCondition
       case Postcondition =>
-        (new AssignmentProcessor(cci)).visit(cci.contractCondition, 0)
+        val valueSet = ValSetReader.deBrujin(cci.contractCondition)
+        val separatedSet =
+          PointerPropProcessor.getSafePointers(cci.contractCondition, cci)
+        (new AssignmentProcessor(valueSet, separatedSet, cci))
+          .visit(cci.contractCondition, 0)
     }
   }
 }
 
-class AssignmentProcessor(cci: ContractConditionInfo)
-    extends CollectingVisitor[Int, IExpression] {
+class AssignmentProcessor(
+    valueSet: ValSet,
+    separatedSet: Set[ISortedVariable],
+    cci: ContractConditionInfo
+) extends CollectingVisitor[Int, IExpression] {
 
   private def getAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
     t match {
@@ -54,15 +61,36 @@ class AssignmentProcessor(cci: ContractConditionInfo)
       funApp: IExpression,
       heapVar: ISortedVariable
   ) = {
+    def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) = {
+      assignments.takeWhile { case (pointer, value) =>
+        separatedSet.exists(valueSet.areEqual(pointer, _))
+      }
+    }
+
+    def takeFirstAddressWrites(assignments: Seq[(ITerm, ITerm)]) = {
+      assignments
+        .foldLeft((Set[ITerm](), Seq[(ITerm, ITerm)]())) {
+          case ((seen, acc), (pointer, value)) =>
+            if (seen.contains(pointer)) {
+              (seen, acc)
+            } else {
+              (seen + pointer, acc :+ (pointer, value))
+            }
+        }
+        ._2
+    }
+
     val assignments = getAssignments(funApp)
+    val separatedAssignments = takeWhileSeparated(assignments)
+    val currentAssignments = takeFirstAddressWrites(separatedAssignments)
       .map { case (pointer, value) =>
         assignmentToEquality(pointer, value, heapVar).get
       }
-    assignments.size match {
+    currentAssignments.size match {
       case s if s >= 2 =>
-        assignments.reduce(_ & _)
+        currentAssignments.reduce(_ & _)
       case 1 =>
-        assignments.head
+        currentAssignments.head
       case _ => IBoolLit(true)
     }
   }
