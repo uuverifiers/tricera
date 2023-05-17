@@ -523,7 +523,7 @@ class Main (args: Array[String]) {
                   TheoryOfHeapProcessor,
                   ADTSimplifier,
                   ADTExploder,
-                  EqualitySwapper,
+                  ToVariableForm,
                   ACSLExpressionProcessor,
                   ClauseRemover
                 )

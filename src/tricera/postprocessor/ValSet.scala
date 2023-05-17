@@ -122,6 +122,32 @@ case class ValSet(vals: Set[Val]) {
     }
   }
 
+  def toVariableFormMap: Map[IExpression, ISortedVariable] = {
+    vals
+      .collect {
+        case value if value.getVariableForm.isDefined =>
+          val variable = value.getVariableForm.get.asInstanceOf[ISortedVariable]
+          value.variants
+            .filterNot(_ == variable)
+            .map(_ -> variable)
+      }
+      .flatten
+      .toMap
+  }
+
+  def toExplicitFormMap: Map[IExpression, ITerm] = {
+    vals
+      .collect {
+        case value if value.getExplicitForm.isDefined =>
+          val variable = value.getExplicitForm.get
+          value.variants
+            .filterNot(_ == variable)
+            .map(_ -> variable)
+      }
+      .flatten
+      .toMap
+  }
+
   def merge(eqs: ValSet): ValSet = {
     ValSet.merge(this, eqs)
   }

@@ -63,8 +63,8 @@ case class ContractConditionInfo(
   def getVarName(
       variable: ISortedVariable,
       quantifierDepth: Int
-  ): String = {
-    acslArgNames(variable.index - quantifierDepth)
+  ): Option[String] = {
+    acslArgNames.lift(variable.index - quantifierDepth)
   }
 
   def isSelector(
@@ -80,6 +80,14 @@ case class ContractConditionInfo(
   def isWriteFun(function: IFunction): Boolean = function == heapTheory.write
 
   def isReadFun(function: IFunction): Boolean = function == heapTheory.read
+
+  def isAllocFun(function: IFunction): Boolean = function == heapTheory.alloc
+
+  def isNewHeapFun(function: IFunction): Boolean =
+    function == heapTheory.newHeap
+
+  def isNewAddrFun(function: IFunction): Boolean =
+    function == heapTheory.newAddr
 
   def isGetter(function: IFunction): Boolean =
     acslContext.getterSort(function).isDefined
@@ -103,30 +111,32 @@ case class ContractConditionInfo(
       variable: ISortedVariable,
       quantifierDepth: Int
   ): Boolean = {
-    val varName = stripOld(getVarName(variable, quantifierDepth))
-    paramNames.contains(varName)
+    getVarName(variable, quantifierDepth).exists(varName =>
+      paramNames.contains(stripOld(varName))
+    )
   }
 
   def isOldVar(
       variable: ISortedVariable,
       quantifierDepth: Int
   ): Boolean = {
-    val varName = getVarName(variable, quantifierDepth)
-    varName.startsWith("\\old")
+    getVarName(variable, quantifierDepth).exists(varName =>
+      varName.startsWith("\\old")
+    )
   }
 
   def isOldHeap(
       variable: ISortedVariable,
       quantifierDepth: Int
   ): Boolean = {
-    getVarName(variable, quantifierDepth) == "\\old(@h)"
+    getVarName(variable, quantifierDepth).exists(_ == "\\old(@h)")
   }
 
   def isHeap(
       variable: ISortedVariable,
       quantifierDepth: Int
   ): Boolean = {
-    getVarName(variable, quantifierDepth) == "@h"
+    getVarName(variable, quantifierDepth).exists(_ == "@h")
   }
 
   def stripOld(input: String): String = {

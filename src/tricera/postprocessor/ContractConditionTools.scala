@@ -21,6 +21,10 @@ trait ExpressionUtils {
     }
 }
 
+trait IdGenerator {
+  def generateId: String = java.util.UUID.randomUUID.toString
+}
+
 // Indicates whether an IExpression contains a quantifier
 object ContainsQuantifiedVisitor extends CollectingVisitor[Int, Boolean] {
   def apply(expr: IExpression, quantifierDepth: Int): Boolean = {
