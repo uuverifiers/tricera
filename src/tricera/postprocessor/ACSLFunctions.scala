@@ -23,7 +23,7 @@ object ACSLExpression {
       quantifierDepth: Int,
       cci: ContractConditionInfo
   ) = {
-    val name = cci.stripOld(cci.getVarName(pointer, quantifierDepth))
+    val name = cci.stripOld(cci.getVarName(pointer, quantifierDepth).get)
     IFunApp(derefFunction, Seq(IConstant(new ConstantTerm(name))))
   }
 
@@ -35,7 +35,7 @@ object ACSLExpression {
       cci: ContractConditionInfo
   ) = {
     val pointerName = cci.stripOld(
-      cci.getVarName(pointer, quantifierDepth)
+      cci.getVarName(pointer, quantifierDepth).get
     )
     val selectorName = selector.name
     IFunApp(
