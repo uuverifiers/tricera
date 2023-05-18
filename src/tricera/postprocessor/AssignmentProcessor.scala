@@ -4,16 +4,30 @@ import tricera.postprocessor.ContractConditionType._
 import ap.parser._
 
 object AssignmentProcessor extends ContractProcessor {
+  def apply(expr: IExpression, valueSet: ValSet, separatedSet: Set[ISortedVariable], cci: ContractConditionInfo): Option[IFormula] = {
+    (new AssignmentProcessor(valueSet, separatedSet, cci)).visit(expr, 0)
+  }
+
   def processContractCondition(cci: ContractConditionInfo) = {
+    getClauses(cci.contractCondition, cci) match {
+      case Some(clauses) =>
+        cci.contractCondition
+          .asInstanceOf[IFormula]
+          .&(clauses)
+      case _ =>
+        cci.contractCondition
+    }
+  }
+
+  def getClauses(expr: IExpression, cci: ContractConditionInfo): Option[IFormula] = {
     cci.contractConditionType match {
       case Precondition =>
-        cci.contractCondition
+        None
       case Postcondition =>
         val valueSet = ValSetReader.deBrujin(cci.contractCondition)
         val separatedSet =
           PointerPropProcessor.getSafePointers(cci.contractCondition, cci)
-        (new AssignmentProcessor(valueSet, separatedSet, cci))
-          .visit(cci.contractCondition, 0)
+        AssignmentProcessor(expr, valueSet, separatedSet, cci)
     }
   }
 }
@@ -22,7 +36,7 @@ class AssignmentProcessor(
     valueSet: ValSet,
     separatedSet: Set[ISortedVariable],
     cci: ContractConditionInfo
-) extends CollectingVisitor[Int, IExpression] {
+) extends CollectingVisitor[Int, Option[IFormula]] {
 
   private def getAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
     t match {
@@ -60,7 +74,7 @@ class AssignmentProcessor(
   def extractEqualitiesFromWriteChain(
       funApp: IExpression,
       heapVar: ISortedVariable
-  ) = {
+  ): Option[IFormula] = {
     def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) = {
       assignments.takeWhile { case (pointer, value) =>
         separatedSet.exists(valueSet.areEqual(pointer, _))
@@ -88,10 +102,10 @@ class AssignmentProcessor(
       }
     currentAssignments.size match {
       case s if s >= 2 =>
-        currentAssignments.reduce(_ & _)
+        Some(currentAssignments.reduce(_ & _))
       case 1 =>
-        currentAssignments.head
-      case _ => IBoolLit(true)
+        Some(currentAssignments.head)
+      case _ => None
     }
   }
 
@@ -106,8 +120,8 @@ class AssignmentProcessor(
   override def postVisit(
       t: IExpression,
       quantifierDepth: Int,
-      subres: Seq[IExpression]
-  ): IExpression = {
+      subres: Seq[Option[IFormula]]
+  ): Option[IFormula] = {
     t match {
       // write(write(...write(@h, ptr1, val1)...)) -> read(@h, ptr1) == val1 && read(@h, ptr2) == val2 && ...
       // addresses must be separated and pointers valid
@@ -123,7 +137,7 @@ class AssignmentProcessor(
           ) if cci.isHeap(h, quantifierDepth) =>
         extractEqualitiesFromWriteChain(heapFunApp, h)
 
-      case _ => t update subres
+      case _ => subres.collectFirst { case Some(h) => h }
     }
   }
 }
