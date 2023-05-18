@@ -11,26 +11,6 @@ case class ContractInfo(
     function: String,
     context: FunctionContext
 ) {
-  def getContractConditionType(
-      predicate: Predicate
-  ): ContractConditionType = predicate match {
-    case context.prePred.pred =>
-      ContractConditionType.Precondition
-    case context.postPred.pred =>
-      ContractConditionType.Postcondition
-  }
-
-  def toContractConditionInfo(predicate: Predicate): ContractConditionInfo = {
-    ContractConditionInfo(predicate, this)
-  }
-}
-
-case class ContractConditionInfo(
-    predicate: Predicate,
-    contractInfo: ContractInfo
-) {
-  val solution = contractInfo.solution
-  val context = contractInfo.context
   val prePredicate = context.prePred.pred
   val postPredicate = context.postPred.pred
   val precondition = solution(prePredicate)
@@ -45,19 +25,44 @@ case class ContractConditionInfo(
     .toSet
     .flatten
 
-  // vals unique for the contract condition
-  val contractConditionType = contractInfo.getContractConditionType(predicate)
+  def getContractConditionType(
+      predicate: Predicate
+  ): ContractConditionType = predicate match {
+    case context.prePred.pred =>
+      ContractConditionType.Precondition
+    case context.postPred.pred =>
+      ContractConditionType.Postcondition
+  }
+
+  def toContractConditionInfo(predicate: Predicate): ContractConditionInfo = {
+    ContractConditionInfo(predicate, this)
+  }
+}
+
+case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
+  val prePredicate = ci.prePredicate
+  val postPredicate = ci.postPredicate
+  val precondition = ci.precondition
+  val postcondition = ci.postcondition
+  val acslContext = ci.acslContext
+  val prePredACSLArgNames = ci.prePredACSLArgNames
+  val postPredACSLArgNames = ci.postPredACSLArgNames
+  val paramNames = ci.paramNames
+  val heapTheory = ci.heapTheory
+  val selectors = ci.selectors
+  
+  val contractConditionType = ci.getContractConditionType(predicate)
   val contractCondition: IExpression = contractConditionType match {
     case ContractConditionType.Precondition =>
-      precondition
+      ci.precondition
     case ContractConditionType.Postcondition =>
-      postcondition
+      ci.postcondition
   }
   val acslArgNames = contractConditionType match {
     case Precondition =>
-      prePredACSLArgNames
+      ci.prePredACSLArgNames
     case Postcondition =>
-      postPredACSLArgNames
+      ci.postPredACSLArgNames
   }
 
   def getVarName(
