@@ -84,12 +84,14 @@ object ACSLExpression {
     }
 
     val pointerNames = variableSetToRawNameSeq(pointers, quantifierDepth, cci)
-    if (pointerNames.size >= 2) {
-      pointerNames
-        .map((p) => validAtom(p))
-        .reduceLeft(_ & _)
-    } else {
-      IBoolLit(true)
+    pointerNames.size match {
+      case s if s >= 2 =>
+        pointerNames
+          .map((p) => validAtom(p))
+          .reduceLeft(_ & _)
+      case s if s == 1 =>
+        validAtom(pointerNames.head)
+      case _ => IBoolLit(true)
     }
   }
 

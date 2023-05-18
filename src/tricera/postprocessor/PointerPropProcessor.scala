@@ -16,6 +16,18 @@ object PointerPropProcessor extends ContractProcessor {
     }
   }
 
+  def getClauses(expr: IExpression, cci: ContractConditionInfo): Option[IFormula] = {
+    getSafePointers(expr, cci) match {
+        case safePointers if safePointers.size >= 2 =>
+          Some(ACSLExpression.separatedPointers(safePointers, 0, cci)
+            .&(ACSLExpression.validPointers(safePointers, 0, cci)))
+        case safePointers if safePointers.size == 1 =>
+          Some(ACSLExpression.validPointers(safePointers, 0, cci))
+        case _ => 
+            None
+    }
+  }
+
   def getSafePointers(expr: IExpression, cci: ContractConditionInfo): Set[ISortedVariable] = {
     val invForm = ToInvariantFormVisitor(expr)
     val valueSet = ValSetReader.invariant(invForm)
