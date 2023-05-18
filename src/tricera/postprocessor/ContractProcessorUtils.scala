@@ -5,6 +5,9 @@ import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import tricera.postprocessor.ContractConditionType._
 import ap.types.MonoSortedIFunction
+import _root_.tricera.concurrency.ccreader.CCHeapPointer
+import _root_.tricera.concurrency.ccreader.CCStackPointer
+import _root_.tricera.concurrency.ccreader.CCHeapArrayPointer
 
 case class ContractInfo(
     solution: SolutionProcessor.Solution,
@@ -142,6 +145,33 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
       quantifierDepth: Int
   ): Boolean = {
     getVarName(variable, quantifierDepth).exists(_ == "@h")
+  }
+
+  def isPointer(variable: ISortedVariable, quantifierDepth: Int): Boolean = {
+    getPureVarName(variable, quantifierDepth) match {
+      case Some(varName) =>
+        val ccVar = acslContext.getParams
+          .find(_.name == varName)
+          .orElse(acslContext.getGlobals.find(_.name == varName))
+
+        ccVar.flatMap(ccVariable => Some(ccVariable.typ)) match {
+          case Some(_: CCHeapPointer)      => true
+          case Some(_: CCStackPointer)     => true
+          case Some(_: CCHeapArrayPointer) => true
+          case _                     => false
+        }
+      case None => false
+    }
+  }
+
+  def getPureVarName(
+      variable: ISortedVariable,
+      quantifierDepth: Int
+  ): Option[String] = {
+    getVarName(variable, quantifierDepth) match {
+      case Some(varName) => Some(stripOld(varName))
+      case None          => None
+    }
   }
 
   def stripOld(input: String): String = {

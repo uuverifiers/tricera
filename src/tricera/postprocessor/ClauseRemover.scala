@@ -13,8 +13,9 @@ object ClauseRemover extends ContractProcessor {
   }
 
   def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    val newContractCondition = TheoryOfHeapRemoverVisitor(expr, cci)
-    // add additional clause remover visitors here (explicit pointers, etc.)
+    val noTOHExpr = TheoryOfHeapRemoverVisitor(expr, cci)
+    val noTOHOrExplPtrExpr = ExplicitPointerRemover(noTOHExpr, cci)
+    val newContractCondition = TrivialEqualityRemover(noTOHOrExplPtrExpr, cci)
     CleanupVisitor(newContractCondition)
   }
 }
@@ -25,7 +26,8 @@ object TheoryOfHeapRemoverVisitor {
   }
 }
 
-class TheoryOfHeapRemoverVisitor(cci: ContractConditionInfo) extends CollectingVisitor[Int, IExpression] {
+class TheoryOfHeapRemoverVisitor(cci: ContractConditionInfo)
+    extends CollectingVisitor[Int, IExpression] {
 
   override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
     t match {
@@ -64,9 +66,7 @@ object ContainsTOHVisitor {
 }
 
 class ContainsTOHVisitor(cci: ContractConditionInfo)
-    extends CollectingVisitor[Unit, Boolean]
-    with ExpressionUtils {
-  import ap.theories.Heap
+    extends CollectingVisitor[Unit, Boolean] {
 
   def apply(expr: IExpression): Boolean = {
     visit(expr, ())
@@ -87,4 +87,92 @@ class ContainsTOHVisitor(cci: ContractConditionInfo)
       subres: Seq[Boolean]
   ): Boolean =
     if (subres.isEmpty) false else subres.reduce(_ || _)
+}
+
+object ExplicitPointerRemover extends ContractProcessor {
+  def processContractCondition(cci: ContractConditionInfo): IExpression = {
+    (new ExplicitPointerRemoverVisitor(cci)).visit(cci.contractCondition, 0)
+  }
+
+  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
+    (new ExplicitPointerRemoverVisitor(cci)).visit(expr, 0)
+  }
+}
+
+class ExplicitPointerRemoverVisitor(cci: ContractConditionInfo)
+    extends CollectingVisitor[Int, IExpression] {
+
+  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
+    t match {
+      case vb: IVariableBinder =>
+        UniSubArgs(quantifierDepth + 1)
+      case _ =>
+        KeepArg
+    }
+
+  override def postVisit(
+      t: IExpression,
+      quantifierDepth: Int,
+      subres: Seq[IExpression]
+  ): IExpression = t match {
+    case IBinFormula(
+          IBinJunctor.And,
+          IEquation(v1: ISortedVariable, v2: ISortedVariable),
+          f
+        )
+        if cci.isPointer(v1, quantifierDepth) && cci.isPointer(
+          v2,
+          quantifierDepth
+        ) =>
+      t update subres
+    case IBinFormula(
+          IBinJunctor.And,
+          f,
+          IEquation(v1: ISortedVariable, v2: ISortedVariable)
+        )
+        if cci.isPointer(v1, quantifierDepth) && cci.isPointer(
+          v2,
+          quantifierDepth
+        ) =>
+      t update subres
+    case IBinFormula(IBinJunctor.And, IEquation(v: ISortedVariable, _), f)
+        if cci.isPointer(v, quantifierDepth) =>
+      f
+    case IBinFormula(IBinJunctor.And, IEquation(_, v: ISortedVariable), f)
+        if cci.isPointer(v, quantifierDepth) =>
+      f
+    case IBinFormula(IBinJunctor.And, f, IEquation(v: ISortedVariable, _))
+        if cci.isPointer(v, quantifierDepth) =>
+      f
+    case IBinFormula(IBinJunctor.And, f, IEquation(_, v: ISortedVariable))
+        if cci.isPointer(v, quantifierDepth) =>
+      f
+    case IIntFormula(_, v: ISortedVariable)
+        if cci.isPointer(v, quantifierDepth) =>
+      IBoolLit(true)
+    // need to be able to get type of any term to be exhaustive
+    case _ =>
+      t update subres
+  }
+}
+
+object TrivialEqualityRemover {
+  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
+    (new TrivialEqualityRemover(cci)).visit(expr, ())
+  }
+}
+
+class TrivialEqualityRemover(cci: ContractConditionInfo)
+    extends CollectingVisitor[Unit, IExpression] {
+
+  override def postVisit(
+      t: IExpression,
+      arg: Unit,
+      subres: Seq[IExpression]
+  ): IExpression = t match {
+    case IEquation(left, right) if left == right =>
+      IBoolLit(true)
+    case _ =>
+      t update subres
+  }
 }
