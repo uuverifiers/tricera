@@ -38,14 +38,11 @@ case class HeapState(
       addr: Address,
       obj: ITerm
   ): HeapState = {
-    println("write " + addr + " " + obj + " to " + this)
-    val res = if (addressSpaceId == addr.addressSpaceId) {
+    if (addressSpaceId == addr.addressSpaceId) {
       writeToAddressSpace(addr, obj)
     } else {
       HeapState(addressSpaceId, counter, HeapState.emptyStorage)
     }
-    println("result " + res)
-    res
   }
 
   private def writeToAddressSpace(addr: Address, obj: ITerm): HeapState = {
