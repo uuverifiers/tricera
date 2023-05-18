@@ -515,11 +515,35 @@ class Main (args: Array[String]) {
                   solution + (ctx.prePred.pred -> newPrecondition) + (ctx.postPred.pred -> newPostcondition)
                 }
 
+                import ap.parser.IFormula
+                import ap.parser.IExpression.Predicate
+                def addClauses(clauses: Option[IFormula], predicate: Predicate, solution: SolutionProcessor.Solution): SolutionProcessor.Solution = {
+                  clauses match {
+                    case Some(clauseFormula) =>
+                      val newContractCondition = solution(predicate).asInstanceOf[IFormula] & clauseFormula
+                      solution + (predicate -> newContractCondition)
+                    case None =>
+                      solution
+                  }  
+                }
+
                 var acslProcessedSolution = processedSolution
+                
+                val contractInfo = ContractInfo(solution, fun, ctx)
+                val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
+                val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
+                val prePointerPropClauses = PointerPropProcessor.getClauses(preCCI.contractCondition, preCCI)
+                val postPointerPropClauses = PointerPropProcessor.getClauses(postCCI.contractCondition, postCCI)
+                val preAssignmentClauses = AssignmentProcessor.getClauses(preCCI.contractCondition, preCCI)
+                val postAssignmentClauses = AssignmentProcessor.getClauses(postCCI.contractCondition, postCCI)
+                
+                acslProcessedSolution = applyProcessor(PostconditionSimplifier, acslProcessedSolution)
+                acslProcessedSolution = addClauses(prePointerPropClauses, ctx.prePred.pred, acslProcessedSolution)
+                acslProcessedSolution = addClauses(postPointerPropClauses, ctx.postPred.pred, acslProcessedSolution)
+                acslProcessedSolution = addClauses(preAssignmentClauses, ctx.prePred.pred, acslProcessedSolution)
+                acslProcessedSolution = addClauses(postAssignmentClauses, ctx.postPred.pred, acslProcessedSolution)
 
                 val printProcessors = Seq(
-                  PointerPropProcessor,
-                  AssignmentProcessor,
                   TheoryOfHeapProcessor,
                   ADTSimplifier,
                   ADTExploder,
