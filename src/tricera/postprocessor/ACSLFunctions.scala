@@ -17,6 +17,9 @@ object ACSLExpression {
   val oldArrow = new IFunction("oldArrow", 2, false, false) // \old(p)->a
   val separated = new Predicate("\\separated", 2) // \separated(p1, p2)
 
+  val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer, oldArrow)
+  val predicates = Set(valid, separated)
+
   // Here a ConstantTerm is introduced as a container for the variable name
   def derefFunApp(
       derefFunction: IFunction,

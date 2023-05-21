@@ -115,44 +115,53 @@ class ExplicitPointerRemoverVisitor(cci: ContractConditionInfo)
       quantifierDepth: Int,
       subres: Seq[IExpression]
   ): IExpression = t match {
-    case IBinFormula(
-          IBinJunctor.And,
-          IEquation(v1: ISortedVariable, v2: ISortedVariable),
-          f
-        )
-        if cci.isPointer(v1, quantifierDepth) && cci.isPointer(
-          v2,
-          quantifierDepth
-        ) =>
-      t update subres
-    case IBinFormula(
-          IBinJunctor.And,
-          f,
-          IEquation(v1: ISortedVariable, v2: ISortedVariable)
-        )
-        if cci.isPointer(v1, quantifierDepth) && cci.isPointer(
-          v2,
-          quantifierDepth
-        ) =>
-      t update subres
-    case IBinFormula(IBinJunctor.And, IEquation(v: ISortedVariable, _), f)
-        if cci.isPointer(v, quantifierDepth) =>
-      f
-    case IBinFormula(IBinJunctor.And, IEquation(_, v: ISortedVariable), f)
-        if cci.isPointer(v, quantifierDepth) =>
-      f
-    case IBinFormula(IBinJunctor.And, f, IEquation(v: ISortedVariable, _))
-        if cci.isPointer(v, quantifierDepth) =>
-      f
-    case IBinFormula(IBinJunctor.And, f, IEquation(_, v: ISortedVariable))
-        if cci.isPointer(v, quantifierDepth) =>
-      f
-    case IIntFormula(_, v: ISortedVariable)
-        if cci.isPointer(v, quantifierDepth) =>
-      IBoolLit(true)
-    // need to be able to get type of any term to be exhaustive
+    case IBinFormula(IBinJunctor.And, f1, f2)
+        if ContainsExplicitPointerVisitor(f1, cci) =>
+      f2
+    case IBinFormula(IBinJunctor.And, f1, f2)
+        if ContainsExplicitPointerVisitor(f2, cci) =>
+      f1
     case _ =>
       t update subres
+  }
+}
+
+object ContainsExplicitPointerVisitor {
+  def apply(expr: IExpression, cci: ContractConditionInfo): Boolean = {
+    (new ContainsExplicitPointerVisitor(cci))(expr)
+  }
+}
+
+class ContainsExplicitPointerVisitor(cci: ContractConditionInfo) extends CollectingVisitor[Int, Boolean] {
+  def apply(expr: IExpression): Boolean = {
+    visit(expr, 0)
+  }
+
+  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult = {
+    t match {
+      case vb: IVariableBinder =>
+        UniSubArgs(quantifierDepth + 1)
+      
+      case IEquation(v1: ISortedVariable, v2: ISortedVariable) if cci.isPointer(v1, quantifierDepth) && cci.isPointer(v2, quantifierDepth) =>
+        ShortCutResult(false)
+      case TheoryOfHeapFunApp(_,_) =>
+        ShortCutResult(false)
+      case IFunApp(fun, _) if cci.isACSLFunction(fun) =>
+        ShortCutResult(false)
+      case IAtom(pred, _) if cci.isACSLPredicate(pred) =>
+        ShortCutResult(false)
+      case IBinFormula(IBinJunctor.And, _, _) => 
+        ShortCutResult(false)
+      case _ =>
+        KeepArg
+    }
+  }
+
+  override def postVisit(t: IExpression, quantifierDepth: Int, subres: Seq[Boolean]): Boolean = t match {
+    case v: ISortedVariable if cci.isPointer(v, quantifierDepth) =>
+      true
+    case _ => 
+      if (subres.isEmpty) false else subres.reduce(_ || _)
   }
 }
 
