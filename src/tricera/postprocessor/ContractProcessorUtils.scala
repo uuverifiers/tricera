@@ -107,6 +107,13 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
     acslContext.getStructMap.get(fun).isDefined
   }
 
+  def isACSLFunction(fun: IFunction): Boolean = {
+    ACSLExpression.functions.contains(fun)
+  }
+  def isACSLPredicate(pred: Predicate): Boolean = {
+    ACSLExpression.predicates.contains(pred)
+  }
+
   def isPrecondition: Boolean = {
     contractConditionType == Precondition
   }
@@ -180,12 +187,8 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
 
     if (input.startsWith(prefix) && input.endsWith(suffix)) {
       input.substring(prefix.length, input.length - suffix.length)
-    } else if (
-      !input.contains("(") && !input.contains(")") && !input.contains("\\")
-    ) {
-      input
     } else {
-      throw new IllegalArgumentException(s"Invalid input: $input")
+      input
     }
   }
 
