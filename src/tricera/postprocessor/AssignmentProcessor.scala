@@ -4,7 +4,12 @@ import tricera.postprocessor.ContractConditionType._
 import ap.parser._
 
 object AssignmentProcessor extends ContractProcessor {
-  def apply(expr: IExpression, valueSet: ValSet, separatedSet: Set[ISortedVariable], cci: ContractConditionInfo): Option[IFormula] = {
+  def apply(
+      expr: IExpression,
+      valueSet: ValSet,
+      separatedSet: Set[ISortedVariable],
+      cci: ContractConditionInfo
+  ): Option[IFormula] = {
     (new AssignmentProcessor(valueSet, separatedSet, cci)).visit(expr, 0)
   }
 
@@ -19,7 +24,10 @@ object AssignmentProcessor extends ContractProcessor {
     }
   }
 
-  def getClauses(expr: IExpression, cci: ContractConditionInfo): Option[IFormula] = {
+  def getClauses(
+      expr: IExpression,
+      cci: ContractConditionInfo
+  ): Option[IFormula] = {
     cci.contractConditionType match {
       case Precondition =>
         None
@@ -38,7 +46,7 @@ class AssignmentProcessor(
     cci: ContractConditionInfo
 ) extends CollectingVisitor[Int, Option[IFormula]] {
 
-  private def getAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
+  private def getReverseAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
     t match {
       case IFunApp(
             writeFun,
@@ -46,7 +54,7 @@ class AssignmentProcessor(
           ) if (cci.isWriteFun(writeFun)) =>
         val assignment =
           (pointer.asInstanceOf[ITerm], value.asInstanceOf[ITerm])
-        assignment +: getAssignments(heap)
+        assignment +: getReverseAssignments(heap)
       case _ => Seq()
     }
   }
@@ -76,8 +84,12 @@ class AssignmentProcessor(
       heapVar: ISortedVariable
   ): Option[IFormula] = {
     def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) = {
-      assignments.takeWhile { case (pointer, value) =>
-        separatedSet.exists(valueSet.areEqual(pointer, _))
+      if (separatedSet.isEmpty) {
+        Seq(assignments.head)
+      } else {
+        assignments.takeWhile { case (pointer, value) =>
+          separatedSet.exists(valueSet.areEqual(pointer, _))
+        }
       }
     }
 
@@ -94,7 +106,7 @@ class AssignmentProcessor(
         ._2
     }
 
-    val assignments = getAssignments(funApp)
+    val assignments = getReverseAssignments(funApp)
     val separatedAssignments = takeWhileSeparated(assignments)
     val currentAssignments = takeFirstAddressWrites(separatedAssignments)
       .map { case (pointer, value) =>
@@ -126,14 +138,14 @@ class AssignmentProcessor(
       // write(write(...write(@h, ptr1, val1)...)) -> read(@h, ptr1) == val1 && read(@h, ptr2) == val2 && ...
       // addresses must be separated and pointers valid
       case IEquation(
-            heapFunApp @ TheoryOfHeapFunApp(function, _),
+            heapFunApp @ IFunApp(function, _),
             Var(h)
           ) if cci.isHeap(h, quantifierDepth) =>
         extractEqualitiesFromWriteChain(heapFunApp, h)
       // other order..
       case IEquation(
             Var(h),
-            heapFunApp @ TheoryOfHeapFunApp(function, _)
+            heapFunApp @ IFunApp(function, _)
           ) if cci.isHeap(h, quantifierDepth) =>
         extractEqualitiesFromWriteChain(heapFunApp, h)
 
