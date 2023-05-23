@@ -8,8 +8,7 @@ import ap.SimpleAPI.TimeoutException
 import ap.theories._
 import ap.SimpleAPI
 
-object PostconditionSimplifier
-    extends ContractProcessor {
+object PostconditionSimplifier extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IExpression = {
@@ -24,28 +23,36 @@ object PostconditionSimplifier
   def apply(precond: IExpression, postcond: IExpression): IExpression = {
     val precondition = precond.asInstanceOf[IFormula]
     var postcondition = postcond.asInstanceOf[IFormula]
-    var i = 0
-    var cont = true
-    while (cont) {
-      ReplaceNthIFormulaVisitor(postcondition, i) match {
-        case (newPostcondition, Some(replacedFormula)) =>
-          isEquivalentPostcondition(
-            precondition,
-            postcondition,
-            newPostcondition.asInstanceOf[IFormula]
-          ) match {
-            case true =>
-              postcondition = newPostcondition.asInstanceOf[IFormula]
-              val removedIFormulas = IFormulaCounterVisitor(replacedFormula) - 1
-              i = i + 1 - removedIFormulas
-            case false =>
-              i = i + 1
-          }
-        case (_, None) =>
-          cont = false
+
+    def attemptReplacingIFormulasBy(replaceByFormula: IFormula) = {
+      var i = 0
+      var cont = true
+      while (cont) {
+        ReplaceNthIFormulaVisitor(postcondition, i, replaceByFormula) match {
+          case (newPostcondition, Some(replacedFormula)) =>
+            isEquivalentPostcondition(
+              precondition,
+              postcondition,
+              newPostcondition.asInstanceOf[IFormula]
+            ) match {
+              case true =>
+                postcondition = newPostcondition.asInstanceOf[IFormula]
+                val removedIFormulas =
+                  IFormulaCounterVisitor(replacedFormula) - 1
+                i = i + 1 - removedIFormulas
+              case false =>
+                i = i + 1
+            }
+          case (_, None) =>
+            cont = false
+        }
       }
+      // Note: Cleanup rules for false literals are not yet implemented in CleanupVisitor
+      postcondition = CleanupVisitor(postcondition).asInstanceOf[IFormula]
     }
-    CleanupVisitor(postcondition)
+    attemptReplacingIFormulasBy(IBoolLit(true))
+    attemptReplacingIFormulasBy(IBoolLit(false))
+    postcondition
   }
 
   def replaceVarsWithConstants(p: SimpleAPI, formula: IFormula): IFormula = {

@@ -10,15 +10,15 @@ import tricera.postprocessor.ContractConditionType._
 
 trait ExpressionUtils {
   def iterateUntilFixedPoint(
-        expr: IExpression,
-        apply: IExpression => IExpression
-    ): IExpression = {
-      val expressions: Stream[IExpression] = Stream.iterate(expr)(apply)
-      expressions
-        .zip(expressions.tail)
-        .collectFirst { case (a, b) if a == b => a }
-        .getOrElse(expr)
-    }
+      expr: IExpression,
+      apply: IExpression => IExpression
+  ): IExpression = {
+    val expressions: Stream[IExpression] = Stream.iterate(expr)(apply)
+    expressions
+      .zip(expressions.tail)
+      .collectFirst { case (a, b) if a == b => a }
+      .getOrElse(expr)
+  }
 }
 
 trait IdGenerator {
@@ -95,17 +95,22 @@ object CleanupVisitor extends CollectingVisitor[Unit, IExpression] {
 }
 
 // Returns a tuple (newExpression, replacedExpression) where n:th IFormula
-// in depth-first left-first order is replaced by a BoolLit(true) in
+// in depth-first left-first order is replaced by newFormula in
 // newExpression, and replacedExpression is the expression that was
 // substituted
 object ReplaceNthIFormulaVisitor {
-  def apply(expr: IExpression, n: Int): (IExpression, Option[IExpression]) = {
-    val replaceFormulaVisitor = new ReplaceNthIFormulaVisitor(n)
+  def apply(
+      expr: IExpression,
+      n: Int,
+      replaceByFormula: IFormula
+  ): (IExpression, Option[IExpression]) = {
+    val replaceFormulaVisitor: ReplaceNthIFormulaVisitor =
+      new ReplaceNthIFormulaVisitor(n, replaceByFormula)
     val newFormula = replaceFormulaVisitor.visit(expr, ())
     (newFormula, replaceFormulaVisitor.getReplacedFormula)
   }
 
-  class ReplaceNthIFormulaVisitor(n: Int)
+  class ReplaceNthIFormulaVisitor(n: Int, replaceByFormula: IFormula)
       extends CollectingVisitor[Unit, IExpression] {
     private var formulaCount = 0
     private var formula: Option[IExpression] = None
@@ -118,7 +123,7 @@ object ReplaceNthIFormulaVisitor {
       case f: IFormula if formulaCount == n =>
         formula = Some(f)
         formulaCount += 1
-        IBoolLit(true)
+        replaceByFormula
       case f: IFormula =>
         formulaCount += 1
         t.update(subres)
