@@ -114,7 +114,7 @@ class ExplicitPointerRemoverVisitor(cci: ContractConditionInfo)
       t: IExpression,
       quantifierDepth: Int,
       subres: Seq[IExpression]
-  ): IExpression = t match {
+  ): IExpression = t update subres match {
     case IBinFormula(IBinJunctor.And, f1, f2)
         if ContainsExplicitPointerVisitor(f1, cci) =>
       f2
@@ -132,35 +132,47 @@ object ContainsExplicitPointerVisitor {
   }
 }
 
-class ContainsExplicitPointerVisitor(cci: ContractConditionInfo) extends CollectingVisitor[Int, Boolean] {
+class ContainsExplicitPointerVisitor(cci: ContractConditionInfo)
+    extends CollectingVisitor[Int, Boolean] {
   def apply(expr: IExpression): Boolean = {
     visit(expr, 0)
   }
 
-  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult = {
+  override def preVisit(
+      t: IExpression,
+      quantifierDepth: Int
+  ): PreVisitResult = {
     t match {
       case vb: IVariableBinder =>
         UniSubArgs(quantifierDepth + 1)
-      
-      case IEquation(v1: ISortedVariable, v2: ISortedVariable) if cci.isPointer(v1, quantifierDepth) && cci.isPointer(v2, quantifierDepth) =>
+
+      case IEquation(v1: ISortedVariable, v2: ISortedVariable)
+          if cci.isPointer(v1, quantifierDepth) && cci.isPointer(
+            v2,
+            quantifierDepth
+          ) =>
         ShortCutResult(false)
-      case TheoryOfHeapFunApp(_,_) =>
+      case TheoryOfHeapFunApp(_, _) =>
         ShortCutResult(false)
       case IFunApp(fun, _) if cci.isACSLFunction(fun) =>
         ShortCutResult(false)
       case IAtom(pred, _) if cci.isACSLPredicate(pred) =>
         ShortCutResult(false)
-      case IBinFormula(IBinJunctor.And, _, _) => 
+      case IBinFormula(IBinJunctor.And, _, _) =>
         ShortCutResult(false)
       case _ =>
         KeepArg
     }
   }
 
-  override def postVisit(t: IExpression, quantifierDepth: Int, subres: Seq[Boolean]): Boolean = t match {
+  override def postVisit(
+      t: IExpression,
+      quantifierDepth: Int,
+      subres: Seq[Boolean]
+  ): Boolean = t match {
     case v: ISortedVariable if cci.isPointer(v, quantifierDepth) =>
       true
-    case _ => 
+    case _ =>
       if (subres.isEmpty) false else subres.reduce(_ || _)
   }
 }
