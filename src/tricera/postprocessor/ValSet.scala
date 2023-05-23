@@ -229,6 +229,8 @@ object ValSetReader {
         t: IExpression,
         quantifierDepth: Int
     ): PreVisitResult = t match {
+      case IBinFormula(IBinJunctor.Or, _, _) =>
+        ShortCutResult(ValSet.empty()) 
       case vb: IVariableBinder =>
         UniSubArgs(quantifierDepth + 1)
       case _ =>
