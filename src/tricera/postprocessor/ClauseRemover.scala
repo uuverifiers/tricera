@@ -13,10 +13,10 @@ object ClauseRemover extends ContractProcessor {
   }
 
   def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    val noTOHExpr = TheoryOfHeapRemoverVisitor(expr, cci)
-    val noTOHOrExplPtrExpr = ExplicitPointerRemover(noTOHExpr, cci)
-    val newContractCondition = TrivialEqualityRemover(noTOHOrExplPtrExpr, cci)
-    CleanupVisitor(newContractCondition)
+    val noTOHExpr = CleanupVisitor(TheoryOfHeapRemoverVisitor(expr, cci))
+    val noTOHOrExplPtrExpr = CleanupVisitor(ExplicitPointerRemover(noTOHExpr, cci))
+    val newContractCondition = CleanupVisitor(TrivialEqualityRemover(noTOHOrExplPtrExpr, cci))
+    newContractCondition
   }
 }
 
@@ -114,28 +114,30 @@ class ExplicitPointerRemoverVisitor(cci: ContractConditionInfo)
       t: IExpression,
       quantifierDepth: Int,
       subres: Seq[IExpression]
-  ): IExpression = t update subres match {
+  ): IExpression = {
+    t update subres match {
     case IBinFormula(IBinJunctor.And, f1, f2)
-        if ContainsExplicitPointerVisitor(f1, cci) =>
+        if ContainsExplicitPointerVisitor(f1, quantifierDepth, cci) =>
       f2
     case IBinFormula(IBinJunctor.And, f1, f2)
-        if ContainsExplicitPointerVisitor(f2, cci) =>
+        if ContainsExplicitPointerVisitor(f2, quantifierDepth, cci) =>
       f1
     case _ =>
       t update subres
+    }
   }
 }
 
 object ContainsExplicitPointerVisitor {
-  def apply(expr: IExpression, cci: ContractConditionInfo): Boolean = {
-    (new ContainsExplicitPointerVisitor(cci))(expr)
+  def apply(expr: IExpression, quantifierDepth: Int, cci: ContractConditionInfo): Boolean = {
+    (new ContainsExplicitPointerVisitor(cci))(expr, quantifierDepth)
   }
 }
 
 class ContainsExplicitPointerVisitor(cci: ContractConditionInfo)
     extends CollectingVisitor[Int, Boolean] {
-  def apply(expr: IExpression): Boolean = {
-    visit(expr, 0)
+  def apply(expr: IExpression, quantifierDepth: Int): Boolean = {
+    visit(expr, quantifierDepth)
   }
 
   override def preVisit(
