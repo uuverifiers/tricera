@@ -63,7 +63,7 @@ object HeapExtractor {
 class InvariantHeapExtractor(cci: ContractConditionInfo)
     extends CollectingVisitor[Unit, Option[HeapState]] {
   override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case IEquation(h: ISortedVariable, heap: HeapState) if cci.isHeap(h, 0) =>
+    case IEquation(h: ISortedVariable, heap: HeapState) if cci.isCurrentHeap(h, 0) =>
       ShortCutResult(Some(heap))
     case _ =>
       KeepArg

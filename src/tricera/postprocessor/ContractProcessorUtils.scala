@@ -147,7 +147,7 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
     getVarName(variable, quantifierDepth).exists(_ == "\\old(@h)")
   }
 
-  def isHeap(
+  def isCurrentHeap(
       variable: ISortedVariable,
       quantifierDepth: Int
   ): Boolean = {
