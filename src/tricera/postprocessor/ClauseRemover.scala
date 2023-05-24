@@ -95,7 +95,8 @@ object ExplicitPointerRemover extends ContractProcessor {
   }
 
   def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    (new ExplicitPointerRemoverVisitor(cci)).visit(expr, 0)
+    val newExpr = (new ExplicitPointerRemoverVisitor(cci)).visit(expr, 0)
+    CleanupVisitor(newExpr)
   }
 }
 
@@ -116,12 +117,8 @@ class ExplicitPointerRemoverVisitor(cci: ContractConditionInfo)
       subres: Seq[IExpression]
   ): IExpression = {
     t update subres match {
-    case IBinFormula(IBinJunctor.And, f1, f2)
-        if ContainsExplicitPointerVisitor(f1, quantifierDepth, cci) =>
-      f2
-    case IBinFormula(IBinJunctor.And, f1, f2)
-        if ContainsExplicitPointerVisitor(f2, quantifierDepth, cci) =>
-      f1
+    case f: IFormula if ContainsExplicitPointerVisitor(f, quantifierDepth, cci) =>
+      IBoolLit(true)
     case _ =>
       t update subres
     }
