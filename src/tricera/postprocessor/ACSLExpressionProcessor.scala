@@ -64,7 +64,7 @@ object ACSLExpressionProcessor
             if (cci.isGetter(getFun) &&
               cci.isReadFun(readFun) &&
               cci.isSelector(selector) &&
-              (cci.isHeap(h, quantifierDepth) ||
+              (cci.isCurrentHeap(h, quantifierDepth) ||
                 cci.isOldHeap(h, quantifierDepth))) =>
           cci.contractConditionType match {
             case Precondition =>
@@ -142,7 +142,7 @@ object ACSLExpressionProcessor
             )
             if (cci.isGetter(getFun) &&
               cci.isReadFun(readFun) &&
-              (cci.isHeap(h, quantifierDepth) ||
+              (cci.isCurrentHeap(h, quantifierDepth) ||
                 cci.isOldHeap(h, quantifierDepth))) => {
           cci.contractConditionType match {
             case Precondition =>

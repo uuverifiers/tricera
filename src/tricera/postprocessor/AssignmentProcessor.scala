@@ -140,13 +140,13 @@ class AssignmentProcessor(
       case IEquation(
             heapFunApp @ IFunApp(function, _),
             Var(h)
-          ) if cci.isHeap(h, quantifierDepth) =>
+          ) if cci.isCurrentHeap(h, quantifierDepth) =>
         extractEqualitiesFromWriteChain(heapFunApp, h)
       // other order..
       case IEquation(
             Var(h),
             heapFunApp @ IFunApp(function, _)
-          ) if cci.isHeap(h, quantifierDepth) =>
+          ) if cci.isCurrentHeap(h, quantifierDepth) =>
         extractEqualitiesFromWriteChain(heapFunApp, h)
 
       case _ => subres.collectFirst { case Some(h) => h }

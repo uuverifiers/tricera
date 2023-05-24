@@ -58,9 +58,9 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionIn
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: ISortedVariable, term) if !cci.isHeap(v, quantifierDepth) =>
+    case IEquation(v: ISortedVariable, term) if !cci.isCurrentHeap(v, quantifierDepth) =>
       ShortCutResult(t)
-    case IEquation(term, v: ISortedVariable) if !cci.isHeap(v, quantifierDepth) =>
+    case IEquation(term, v: ISortedVariable) if !cci.isCurrentHeap(v, quantifierDepth) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)
@@ -75,7 +75,7 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionIn
       quantifierDepth: Int,
       subres: Seq[IExpression]
   ): IExpression = t match {
-    case h: ISortedVariable if cci.isHeap(h, quantifierDepth) =>
+    case h: ISortedVariable if cci.isCurrentHeap(h, quantifierDepth) =>
       t update subres 
     case term: ITerm =>
       val res = t update subres
@@ -100,9 +100,9 @@ class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractCo
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: ISortedVariable, term) if !cci.isHeap(v, quantifierDepth) =>
+    case IEquation(v: ISortedVariable, term) if !cci.isCurrentHeap(v, quantifierDepth) =>
       ShortCutResult(t)
-    case IEquation(term, v: ISortedVariable) if !cci.isHeap(v, quantifierDepth) =>
+    case IEquation(term, v: ISortedVariable) if !cci.isCurrentHeap(v, quantifierDepth) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)

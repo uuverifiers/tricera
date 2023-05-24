@@ -220,9 +220,9 @@ class HeapEqualityRemover(cci: ContractConditionInfo)
       quantifierDepth: Int,
       subres: Seq[IExpression]
   ): IExpression = t match {
-    case IEquation(left: ISortedVariable, _) if cci.isHeap(left, quantifierDepth) =>
+    case IEquation(left: ISortedVariable, _) if cci.isCurrentHeap(left, quantifierDepth) =>
       IBoolLit(true)
-    case IEquation(_, right: ISortedVariable) if cci.isHeap(right, quantifierDepth) =>
+    case IEquation(_, right: ISortedVariable) if cci.isCurrentHeap(right, quantifierDepth) =>
       IBoolLit(true)
     case _ =>
       t update subres
