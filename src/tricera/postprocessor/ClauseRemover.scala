@@ -15,7 +15,8 @@ object ClauseRemover extends ContractProcessor {
   def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
     val noTOHExpr = CleanupVisitor(TheoryOfHeapRemoverVisitor(expr, cci))
     val noTOHOrExplPtrExpr = CleanupVisitor(ExplicitPointerRemover(noTOHExpr, cci))
-    val newContractCondition = CleanupVisitor(TrivialEqualityRemover(noTOHOrExplPtrExpr, cci))
+    val noTrivialEqExpr = CleanupVisitor(TrivialEqualityRemover(noTOHOrExplPtrExpr, cci))
+    val newContractCondition = CleanupVisitor(HeapEqualityRemover(noTrivialEqExpr, cci))
     newContractCondition
   }
 }
@@ -191,6 +192,37 @@ class TrivialEqualityRemover(cci: ContractConditionInfo)
       subres: Seq[IExpression]
   ): IExpression = t match {
     case IEquation(left, right) if left == right =>
+      IBoolLit(true)
+    case _ =>
+      t update subres
+  }
+}
+
+object HeapEqualityRemover {
+  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
+    (new HeapEqualityRemover(cci)).visit(expr, 0)
+  }
+}
+
+class HeapEqualityRemover(cci: ContractConditionInfo)
+    extends CollectingVisitor[Int, IExpression] {
+
+  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
+    t match {
+      case vb: IVariableBinder =>
+        UniSubArgs(quantifierDepth + 1)
+      case _ =>
+        KeepArg
+    }
+
+  override def postVisit(
+      t: IExpression,
+      quantifierDepth: Int,
+      subres: Seq[IExpression]
+  ): IExpression = t match {
+    case IEquation(left: ISortedVariable, _) if cci.isHeap(left, quantifierDepth) =>
+      IBoolLit(true)
+    case IEquation(_, right: ISortedVariable) if cci.isHeap(right, quantifierDepth) =>
       IBoolLit(true)
     case _ =>
       t update subres
