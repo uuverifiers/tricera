@@ -46,26 +46,6 @@ object ACSLExpressionProcessor
       t match {
         // NOTE: getSort and O_ are not theory of heap functions
 
-        // is_O_<sort>(read(@h, p)) -> \valid(p)
-        // FIX: ADT.CtorId(adt, sortNum) might match on default object
-        case Is_O_Sort(
-              TheoryOfHeapFunApp(
-                readFun,
-                Seq(Var(h), Var(p))
-              )
-            )
-            if (cci.isReadFun(readFun) &&
-              cci.isHeap(h, quantifierDepth)) => {
-          if (
-            cci.isPostcondition &&
-            cci.isParam(p, quantifierDepth)
-          ) {
-            t update subres
-          } else {
-            IAtom(ACSLExpression.valid, Seq(p))
-          }
-        }
-
         // get<sort>(field(read(h,p))) ~> p->field: how to tell whether an ADT function is a field selector?
         case IFunApp(
               selector: MonoSortedIFunction,
