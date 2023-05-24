@@ -991,7 +991,7 @@ class CCReader private (prog              : Program,
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        def getStructMap: Map[IFunction, CCStruct] = 
+        override val getStructMap: Map[IFunction, CCStruct] = 
           structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
         override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
@@ -4381,8 +4381,8 @@ private def collectVarDecls(dec                    : Dec,
             override def getOldHeapTerm: ITerm =
               getHeapTerm // todo: heap term for exit predicate?
             
-            def getStructMap: Map[IFunction, CCStruct] = 
-          structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+            override val getStructMap: Map[IFunction, CCStruct] = 
+              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(stm)
@@ -4463,8 +4463,8 @@ private def collectVarDecls(dec                    : Dec,
             override def getOldHeapTerm : ITerm =
               getHeapTerm // todo: heap term for exit predicate?
             
-            def getStructMap: Map[IFunction, CCStruct] = 
-          structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+            override val getStructMap: Map[IFunction, CCStruct] = 
+              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(loop_annot)
