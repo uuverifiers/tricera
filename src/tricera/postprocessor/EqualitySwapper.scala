@@ -85,7 +85,6 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionIn
         case Some(variable) =>
           val newVariable =
             VariableShiftVisitor(variable, 0, quantifierDepth)
-          println("replacing " + term + " by " + newVariable)
           newVariable
         case None =>
           res
