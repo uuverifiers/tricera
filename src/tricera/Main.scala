@@ -532,10 +532,26 @@ class Main (args: Array[String]) {
                 val contractInfo = ContractInfo(solution, fun, ctx)
                 val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
                 val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
+                println("----- Applying PointerPropProcessor to precondition of " + fun)
+                println("----- Precondition: \n" + preCCI.contractCondition)
                 val prePointerPropClauses = PointerPropProcessor.getClauses(preCCI.contractCondition, preCCI)
+                println("Result: \n" + prePointerPropClauses)
+
+                println("----- Applying PointerPropProcessor to postcondition of " + fun)
+                println("----- Postcondition: \n" + postCCI.contractCondition)
                 val postPointerPropClauses = PointerPropProcessor.getClauses(postCCI.contractCondition, postCCI)
+                println("----- Result: \n" + postPointerPropClauses)
+
+                println("----- Applying AssignmentProcessor to precondition of " + fun)
+                println("----- Precondition: \n" + preCCI.contractCondition)
                 val preAssignmentClauses = AssignmentProcessor.getClauses(preCCI.contractCondition, preCCI)
+                println("----- Result: \n" + preAssignmentClauses)
+
+                println("----- Applying AssignmentProcessor to postcondition of " + fun)
+                println("----- Postcondition: \n" + postCCI.contractCondition)
                 val postAssignmentClauses = AssignmentProcessor.getClauses(postCCI.contractCondition, postCCI)
+                println("----- Result: \n" + postAssignmentClauses)
+
                 
                 acslProcessedSolution = applyProcessor(PostconditionSimplifier, acslProcessedSolution)
                 acslProcessedSolution = addClauses(prePointerPropClauses, ctx.prePred.pred, acslProcessedSolution)
@@ -555,9 +571,13 @@ class Main (args: Array[String]) {
                 for (processor <- printProcessors) {
                   acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
                 }
-                
+                println("----- Applying ACSLLineariser to precondition: \n" + acslProcessedSolution(ctx.prePred.pred))
                 val fPre = ACSLLineariser asString acslProcessedSolution(ctx.prePred.pred)
+                println("----- Result: \n " + fPre)
+                
+                println("----- Applying ACSLLineariser to postcondition: \n" + acslProcessedSolution(ctx.postPred.pred))
                 val fPost = ACSLLineariser asString acslProcessedSolution(ctx.postPred.pred)
+                println("----- Result: \n " + fPost)
 
                 // todo: implement replaceArgs as a solution processor
                 // replaceArgs does a simple string replacement (see above def)

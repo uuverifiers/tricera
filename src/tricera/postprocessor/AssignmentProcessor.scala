@@ -121,6 +121,21 @@ class AssignmentProcessor(
     }
   }
 
+  def shiftFormula(
+      formula: Option[IFormula],
+      quantifierDepth: Int
+  ): Option[IFormula] = {
+    formula match {
+      case Some(f) =>
+        if (ContainsQuantifiedVisitor(f, quantifierDepth)) {
+          None
+        } else {
+          Some(VariableShiftVisitor(f, quantifierDepth, -quantifierDepth))
+        }
+      case None => None
+    }
+  }
+
   override def preVisit(
       t: IExpression,
       quantifierDepth: Int
@@ -141,13 +156,20 @@ class AssignmentProcessor(
             heapFunApp @ IFunApp(function, _),
             Var(h)
           ) if cci.isCurrentHeap(h, quantifierDepth) =>
-        extractEqualitiesFromWriteChain(heapFunApp, h)
+        shiftFormula(
+          extractEqualitiesFromWriteChain(heapFunApp, h),
+          quantifierDepth
+        )
+
       // other order..
       case IEquation(
             Var(h),
             heapFunApp @ IFunApp(function, _)
           ) if cci.isCurrentHeap(h, quantifierDepth) =>
-        extractEqualitiesFromWriteChain(heapFunApp, h)
+        shiftFormula(
+          extractEqualitiesFromWriteChain(heapFunApp, h),
+          quantifierDepth
+        )
 
       case _ => subres.collectFirst { case Some(h) => h }
     }
