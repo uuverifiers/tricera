@@ -1,6 +1,6 @@
 int main () {
-  float a = 4.0f;
-  float b = 2.0f;
-  assert(a+b== 6.0f);
+  float a = 0.5f;
+  float b = 0.75f;
+  assert(a+b== 1.25f);
   return 0;
 }

@@ -84,5 +84,8 @@ class FractionTest extends AnyFlatSpec {
   foo = floatToFraction("-2.35098856151e-38")
   assert(foo == ("-16777215", "713623846352979940529142984724747568191373312"))
 
+  foo = floatToFraction("0.0f")
+  assert(foo == ("0", "1"))
+
   println("ALL TESTS PASSED")
 }

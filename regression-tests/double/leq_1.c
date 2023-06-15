@@ -1,5 +1,6 @@
+//SAFE
 int main() {
-  double a = 2.3f;
-  double b = 2.25f;;
+  double a = 2.3;
+  double b = 2.25;;
   assert(b <= a);
 }

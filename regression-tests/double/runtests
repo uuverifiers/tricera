@@ -4,18 +4,18 @@ LAZABS=./tri
 
 TESTS="regression-tests/double/add_1.c \
        regression-tests/double/add_2.c \
+       regression-tests/double/add_3.c \
        regression-tests/double/div_1.c \
        regression-tests/double/div_2.c \
-       regression-tests/double/mul_1.c \
-       regression-tests/double/mul_2.c \
-       regression-tests/double/nan.c \
-       regression-tests/double/nan_range.c \
-       regression-tests/double/sub_1.c \
-       regression-tests/double/sub_2.c \
-       regression-tests/double/int_plus_double.c \
+       regression-tests/double/div_3.c \
        regression-tests/double/init_1.c \
        regression-tests/double/init_2.c \
-       regression-tests/double/init_3.c"
+       regression-tests/double/mul_1.c \
+       regression-tests/double/mul_2.c \
+       regression-tests/double/loop_1.c \
+       regression-tests/double/loop_2.c \
+       regression-tests/double/sub_1.c \
+       regression-tests/double/sub_2.c "
 
 for name in $TESTS; do
     echo

@@ -189,7 +189,6 @@ object CCBinaryExpressions {
       override def getIntRes   = lhsTerm <= rhsTerm
       override def getFloatRes = Rationals.leq(FloatADT.getData(lhsTerm), FloatADT.getData(rhsTerm))
       override def getDoubleRes = Rationals.leq(DoubleADT.getData(lhsTerm), DoubleADT.getData(rhsTerm))
-
       override def getLongDoubleRes = Rationals.leq(LongDoubleADT.getData(lhsTerm), LongDoubleADT.getData(rhsTerm))
     }
 
@@ -219,6 +218,23 @@ object CCBinaryExpressions {
         case(CCFloat, CCFloat) =>
           FloatADT.floatCtor(Rationals.plus(
             FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+
+          /* Semantics for addition when using the ADT
+          IExpression.ite(FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm),
+            FloatADT.floatCtor(Rationals.plus(
+              FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm))),
+
+            IExpression.ite((FloatADT.isPlusinf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm))
+              ||| (FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isPlusinf(rhs.toTerm))
+              ||| (FloatADT.isPlusinf(lhs.toTerm) &&& FloatADT.isPlusinf(rhs.toTerm)),
+              FloatADT.plusInf,
+
+              IExpression.ite((FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm))
+                ||| (FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isNeginf(rhs.toTerm))
+                ||| (FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isNeginf(rhs.toTerm)),
+                FloatADT.negInf, FloatADT.nan)))
+                */
+
         case _ =>
           throw new Exception("Unmatched types")
       }
@@ -249,68 +265,115 @@ object CCBinaryExpressions {
         case (CCFloat, CCFloat) =>
           FloatADT.floatCtor(Rationals.minus(
             FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
-        case _ =>
-          throw new Exception("Unmatched types")
 
-      }
+        /* Semantics for subtraction using the ADT
+        IExpression.ite(FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm),
+          FloatADT.floatCtor(Rationals.minus(
+            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm))),
 
-      override def getDoubleRes = (lhs.typ, rhs.typ) match {
-        case (CCDouble, CCDouble) =>
-          DoubleADT.doubleCtor(Rationals.minus(
-            DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
-        case _ =>
-          throw new Exception("Unmatched types")
-      }
+          IExpression.ite((FloatADT.isPlusinf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm))
+            ||| (FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isNeginf(rhs.toTerm)),
+            FloatADT.plusInf,
 
-      override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
-        case (CCLongDouble, CCLongDouble) =>
-          LongDoubleADT.longDoubleCtor(Rationals.minus(
-            LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
-        case _ =>
-          throw new Exception("Unmatched types")
-      }
+            IExpression.ite((FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm))
+              ||| (FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isPlusinf(rhs.toTerm))
+              ||| (FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isPlusinf(rhs.toTerm)),
+              FloatADT.negInf, FloatADT.nan)))
+         */
+
+      case _ =>
+        throw new Exception("Unmatched types")
+
     }
 
-    case class Times(_lhs: CCExpr, _rhs: CCExpr)
-        extends BinaryOperation(_lhs, _rhs) {
-      override def getIntRes = {
-        throwErrorIfPointerArithmetic(lhs, rhs)
-        ap.theories.nia.GroebnerMultiplication.mult(lhs.toTerm, rhs.toTerm)
-      }
-      override def getFloatRes = (lhs.typ, rhs.typ) match {
-        case (CCFloat, CCFloat) =>
-          FloatADT.floatCtor(Rationals.mul(
-            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
-        case _ =>
-          throw new Exception("Unmatched types")
-      }
-      override def getDoubleRes = (lhs.typ, rhs.typ) match {
-        case (CCDouble, CCDouble) =>
-          DoubleADT.doubleCtor(Rationals.mul(
-            DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
-        case _ =>
-          throw new Exception("Unmatched types")
-      }
-
-      override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
-        case (CCLongDouble, CCLongDouble) =>
-          LongDoubleADT.longDoubleCtor(Rationals.mul(
-            LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
-        case _ =>
-          throw new Exception("Unmatched types")
-      }
+    override def getDoubleRes = (lhs.typ, rhs.typ) match {
+      case (CCDouble, CCDouble) =>
+        DoubleADT.doubleCtor(Rationals.minus(
+          DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
+      case _ =>
+        throw new Exception("Unmatched types")
     }
 
-    case class Div(_lhs: CCExpr, _rhs: CCExpr)
-        extends BinaryOperation(_lhs, _rhs) {
-      override def getIntRes = {
-        throwErrorIfPointerArithmetic(lhs, rhs)
-        ap.theories.nia.GroebnerMultiplication.tDiv(lhs.toTerm, rhs.toTerm)
-      }
-      override def getFloatRes = (lhs.typ, rhs.typ) match {
-        case (CCFloat, CCFloat) =>
+    override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
+      case (CCLongDouble, CCLongDouble) =>
+        LongDoubleADT.longDoubleCtor(Rationals.minus(
+          LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
+      case _ =>
+        throw new Exception("Unmatched types")
+    }
+  }
+
+  case class Times(_lhs: CCExpr, _rhs: CCExpr)
+      extends BinaryOperation(_lhs, _rhs) {
+    override def getIntRes = {
+      throwErrorIfPointerArithmetic(lhs, rhs)
+      ap.theories.nia.GroebnerMultiplication.mult(lhs.toTerm, rhs.toTerm)
+    }
+    override def getFloatRes = (lhs.typ, rhs.typ) match {
+      case (CCFloat, CCFloat) =>
+        FloatADT.floatCtor(Rationals.mul(
+          FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+
+        /* Semantics for multiplication using the ADT
+        IExpression.ite(FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm),
+        FloatADT.floatCtor(Rationals.mul(
+          FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm))),
+
+          IExpression.ite((FloatADT.isPlusinf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm))
+            ||| (FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isPlusinf(rhs.toTerm))
+            ||| (FloatADT.isPlusinf(lhs.toTerm) &&& FloatADT.isPlusinf(rhs.toTerm))
+            ||| (FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isNeginf(rhs.toTerm)),
+            FloatADT.plusInf,
+
+            IExpression.ite((FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm))
+              ||| (FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isNeginf(rhs.toTerm))
+              ||| (FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isPlusinf(rhs.toTerm))
+              ||| (FloatADT.isPlusinf(lhs.toTerm) &&& FloatADT.isNeginf(rhs.toTerm)),
+              FloatADT.negInf, FloatADT.nan)))
+          */
+
+      case _ =>
+        throw new Exception("Unmatched types")
+    }
+    override def getDoubleRes = (lhs.typ, rhs.typ) match {
+      case (CCDouble, CCDouble) =>
+        DoubleADT.doubleCtor(Rationals.mul(
+          DoubleADT.getData(lhs.toTerm), DoubleADT.getData(rhs.toTerm)))
+      case _ =>
+        throw new Exception("Unmatched types")
+    }
+
+    override def getLongDoubleRes = (lhs.typ, rhs.typ) match {
+      case (CCLongDouble, CCLongDouble) =>
+        LongDoubleADT.longDoubleCtor(Rationals.mul(
+          LongDoubleADT.getData(lhs.toTerm), LongDoubleADT.getData(rhs.toTerm)))
+      case _ =>
+        throw new Exception("Unmatched types")
+    }
+  }
+
+  case class Div(_lhs: CCExpr, _rhs: CCExpr)
+      extends BinaryOperation(_lhs, _rhs) {
+    override def getIntRes = {
+      throwErrorIfPointerArithmetic(lhs, rhs)
+      ap.theories.nia.GroebnerMultiplication.tDiv(lhs.toTerm, rhs.toTerm)
+    }
+    override def getFloatRes = (lhs.typ, rhs.typ) match {
+      case (CCFloat, CCFloat) =>
+        FloatADT.floatCtor(Rationals.div(
+          FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+
+        /* Semantics for division using the ADT
+        IExpression.ite(FloatADT.isFloat(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm),
           FloatADT.floatCtor(Rationals.div(
-            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm)))
+            FloatADT.getData(lhs.toTerm), FloatADT.getData(rhs.toTerm))),
+
+          IExpression.ite((FloatADT.isPlusinf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm)),
+            FloatADT.plusInf,
+
+            IExpression.ite((FloatADT.isNeginf(lhs.toTerm) &&& FloatADT.isFloat(rhs.toTerm)),
+              FloatADT.negInf, FloatADT.nan)))
+          */
         case _ =>
           throw new Exception("Unmatched types")
       }

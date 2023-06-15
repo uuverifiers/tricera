@@ -1,6 +1,6 @@
 int main() {
-  double a = 0.0f;
-  assert(a == 0.0f);
+  long double a = 0.0l;
+  assert(a == 0.0l);
   return 0;
 
 }

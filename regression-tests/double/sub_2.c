@@ -1,6 +1,7 @@
+// UNSAFE
 int main() {
-  double a = 3.0f;
-  double b = 0.5f;
-  assert(a-b == 2.5f);
+  double a = 0.22;
+  double b = 0.1;
+  assert(a-b == 0.1);
   return 0;
 }

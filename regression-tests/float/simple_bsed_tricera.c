@@ -16,7 +16,6 @@ int batt_min_output;
 int batt_max_output;
 int batt_status_output;
 
-/*@contract@*/
 void modStatus(int idx) {
     if (idx == 0) {
       return_modStatus = mod0_status;
@@ -25,7 +24,6 @@ void modStatus(int idx) {
     }
 }
 
-/*@contract@*/
 void modMin(int idx) {
     if (idx == 0) {
       return_modMin = mod0_min;
@@ -34,7 +32,6 @@ void modMin(int idx) {
     }
 }
 
-/*@contract@*/
 void modMax(int idx) {
     if (idx == 0) {
       return_modMax = mod0_max;
@@ -43,7 +40,6 @@ void modMax(int idx) {
     }
 }
 
-/*@contract@*/
 void moduleDiag(int idx) {
   modMin(idx);
   modMax(idx);
@@ -74,8 +70,8 @@ void moduleDiag(int idx) {
 void batteryDiag(int dummy)
 {
     //Initializing the battery values
-    batt_max_output = -2147483648;
-    batt_min_output = 2147483647;
+    batt_max_output = -30000000000.5f;
+    batt_min_output = 30000000000.5f;
     batt_status_output = 0;
 
     //Run the diagnostics, one module at the time
@@ -83,7 +79,7 @@ void batteryDiag(int dummy)
     moduleDiag(1);
 }
 
-extern int non_det();
+int extern non_det();
 
 void main()
 {
@@ -97,9 +93,6 @@ void main()
   mod1_min = non_det();
   mod0_max = non_det();
   mod1_max = non_det();
-  batt_min_output = non_det();
-  batt_max_output = non_det();
-  batt_status_output = non_det();
 
   //Declare the paramters of the function to be called
   int dummy;

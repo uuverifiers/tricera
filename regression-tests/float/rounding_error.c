@@ -1,5 +1,6 @@
 int main() {
-  float f;
-  for(f = 0.0f; f != 0.3f; f += 0.1f);
+  float f = 0.0f;
+  for(int i = 0; f == 0.3f;i++) {
+  }
   assert(f == 0.3f);
 }
