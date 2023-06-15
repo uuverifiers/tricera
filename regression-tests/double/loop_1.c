@@ -1,11 +1,10 @@
-int N = _;
-
+//SAFE
 void main(void) {
   int i = 0;
   double x = 0.5;
   double y = x;
-  while (i < N) {
-    x = x*2.0f;
+  while (x < 3000.0) {
+    x = x*2.0;
     y = x;
     ++i;
   }

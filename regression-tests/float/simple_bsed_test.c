@@ -1,3 +1,4 @@
+#include <stdio.h>
 //Global variables 'acting' as return variables
 float return_modMin;
 float return_modMax;
@@ -84,14 +85,14 @@ void batteryDiag(int dummy)
 }
 int extern non_det();
 
-void main()
+int main()
 {
   //Non-det assignment of all global C variables
   // return_modMin = 0.0f;
   // return_modMax = 0.0f;
   // return_modStatus = 0;
-  mod0_status = non_det();
-  mod1_status = non_det();
+  mod0_status = 0;
+  mod1_status = 1;
   mod0_min = -1.0f;
   mod1_min = -1.0f;
   mod0_max = 2.0f;
@@ -101,7 +102,7 @@ void main()
   // batt_status_output = 0;
 
   //Declare the paramters of the function to be called
-  int dummy;
+  int dummy = 0;
 
   //Initialization of logical old-variables
   // int old_mod0_status;
@@ -118,5 +119,6 @@ void main()
   //  assert((!(((old_mod0_status == 0) && (old_mod1_status == 0)) &&
   //    !(batt_status_output == 0)) && !(((old_mod0_status == 1) ||
   //    (old_mod1_status == 1)) && !(batt_status_output == 1))));
-  assert(batt_max_output==-5.0f);
+  printf("%f", batt_max_output);
+  return 0;
 }

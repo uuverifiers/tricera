@@ -1,6 +1,7 @@
+//SAFE
 int main () {
-  double a = 4.0f;
-  double b = 2.0f;
-  assert(a*b== 8.0f);
+  double a = 0.5;
+  double b = 0.5;
+  assert(a*b== 0.25);
   return 0;
 }

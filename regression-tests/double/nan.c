@@ -1,3 +1,4 @@
+//UNSAFE IF NAN IS INCLUDED OTHERWISE SAFE
 int main()
 {
   double x = _;

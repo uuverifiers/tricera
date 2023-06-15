@@ -1,5 +1,5 @@
 int main() {
-  double a = 4.24242f;
-  assert(a == 4.24242f);
+  long double a = 4.24242l;
+  assert(a == 4.24242l);
   return 0;
 }

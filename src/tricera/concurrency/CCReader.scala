@@ -217,6 +217,11 @@ object CCReader {
         if (exponentInt < 0) {
           denominator = denominator * BigInt(2).pow(abs(exponentInt))
         }
+        // Case for when the float is 0
+        if (exponentInt == -pow(2, exponent.length() - 1).toInt + 1 && numerator == 1) {
+          numerator = 0
+          denominator = 1
+        }
         if (signBit == "1") {
           numerator = -numerator
         }
@@ -318,6 +323,11 @@ object CCReader {
       }
       if (exponentInt < 0) {
         denominator = denominator * BigInt(2).pow(abs(exponentInt))
+      }
+      // Case for when the float is 0
+      if (exponentInt == -pow(2, exponent.length() - 1).toInt + 1 && numerator == 1) {
+        numerator = 0
+        denominator = 1
       }
       if (signBit == "1") {
         numerator = -numerator
@@ -424,6 +434,11 @@ object CCReader {
         }
         if (exponentInt < 0) {
           denominator = denominator * BigInt(2).pow(abs(exponentInt))
+        }
+        // Case for when the float is 0
+        if (exponentInt == -pow(2, exponent.length() - 1).toInt + 1 && numerator == 1){
+          numerator = 0
+          denominator = 1
         }
         if (signBit == "1") {
           numerator = -numerator

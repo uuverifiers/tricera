@@ -2,12 +2,13 @@ int N = _;
 
 void main(void) {
   int i = 0;
-  double x = 0.5;
-  double y = x;
+  long double x = 0.5l;
+  long double y = x;
   while (i < N) {
-    x = x*2.0f;
-    y = x;
+    if(x == y) {
+        x = x+2.25l;
+    }
     ++i;
   }
-  assert(x==y+1.0f);
+  assert(x==y);
 }

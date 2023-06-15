@@ -1,13 +1,11 @@
-int N = _;
-
-void main(void) {
+void main() {
   int i = 0;
-  float x = 0.5;
+  float x = 0.5f;
   float y = x;
-  while (i < N) {
+  while (x < 3000.0f) {
     x = x*2.0f;
     y = x;
     ++i;
   }
-  assert(x==y+1.0f);
+  assert(x==y);
 }

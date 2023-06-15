@@ -1,11 +1,9 @@
-int N = _;
-
 void main(void) {
   int i = 0;
-  double x = 0.5;
-  double y = x;
-  while (i < N) {
-    x = x*2.0f;
+  long double x = 0.5l;
+  long double y = x;
+  while (x < 3000.0l) {
+    x = x*2.0l;
     y = x;
     ++i;
   }

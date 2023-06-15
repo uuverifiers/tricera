@@ -1,3 +1,4 @@
+//UNSAFE
 int N = _;
 
 void main(void) {
@@ -5,9 +6,10 @@ void main(void) {
   double x = 0.5;
   double y = x;
   while (i < N) {
-    x = x*2.0f;
-    y = x;
+    if(x == y) {
+        x = x+2.25;
+    }
     ++i;
   }
-  assert(x==y+1.0f);
+  assert(x==y);
 }

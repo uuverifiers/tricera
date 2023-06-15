@@ -1,35 +1,16 @@
-
 regression-tests/float/add_1.c
 SAFE
 
 regression-tests/float/add_2.c
 SAFE
 
+regression-tests/float/add_3.c
+UNSAFE
+
 regression-tests/float/div_1.c
 SAFE
 
 regression-tests/float/div_2.c
-SAFE
-
-regression-tests/float/mul_1.c
-SAFE
-
-regression-tests/float/mul_2.c
-SAFE
-
-regression-tests/float/nan.c
-UNSAFE
-
-regression-tests/float/nan_range.c
-SAFE
-
-regression-tests/float/sub_1.c
-SAFE
-
-regression-tests/float/sub_2.c
-SAFE
-
-regression-tests/float/int_plus_float.c
 SAFE
 
 regression-tests/float/init_1.c
@@ -38,5 +19,20 @@ SAFE
 regression-tests/float/init_2.c
 SAFE
 
-regression-tests/float/init_3.c
+regression-tests/float/loop_1.c
+SAFE
+
+regression-tests/float/loop_2.c
+UNSAFE
+
+regression-tests/float/mul_1.c
+SAFE
+
+regression-tests/float/mul_2.c
+UNSAFE
+
+regression-tests/float/sub_1.c
+SAFE
+
+regression-tests/float/sub_2.c
 UNSAFE
