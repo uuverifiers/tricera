@@ -532,32 +532,27 @@ class Main (args: Array[String]) {
                 val contractInfo = ContractInfo(solution, fun, ctx)
                 val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
                 val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
-                println("----- Applying PointerPropProcessor to precondition of " + fun)
-                println("----- Precondition: \n" + preCCI.contractCondition)
-                val prePointerPropClauses = PointerPropProcessor.getClauses(preCCI.contractCondition, preCCI)
-                println("Result: \n" + prePointerPropClauses)
-
-                println("----- Applying PointerPropProcessor to postcondition of " + fun)
-                println("----- Postcondition: \n" + postCCI.contractCondition)
-                val postPointerPropClauses = PointerPropProcessor.getClauses(postCCI.contractCondition, postCCI)
-                println("----- Result: \n" + postPointerPropClauses)
-
-                println("----- Applying AssignmentProcessor to precondition of " + fun)
-                println("----- Precondition: \n" + preCCI.contractCondition)
-                val preAssignmentClauses = AssignmentProcessor.getClauses(preCCI.contractCondition, preCCI)
-                println("----- Result: \n" + preAssignmentClauses)
-
-                println("----- Applying AssignmentProcessor to postcondition of " + fun)
-                println("----- Postcondition: \n" + postCCI.contractCondition)
-                val postAssignmentClauses = AssignmentProcessor.getClauses(postCCI.contractCondition, postCCI)
-                println("----- Result: \n" + postAssignmentClauses)
-
                 
                 acslProcessedSolution = applyProcessor(PostconditionSimplifier, acslProcessedSolution)
-                acslProcessedSolution = addClauses(prePointerPropClauses, ctx.prePred.pred, acslProcessedSolution)
-                acslProcessedSolution = addClauses(postPointerPropClauses, ctx.postPred.pred, acslProcessedSolution)
-                acslProcessedSolution = addClauses(preAssignmentClauses, ctx.prePred.pred, acslProcessedSolution)
-                acslProcessedSolution = addClauses(postAssignmentClauses, ctx.postPred.pred, acslProcessedSolution)
+
+                val heapPropProcessors = Seq(
+                  PointerPropProcessor,
+                  AssignmentProcessor
+                )
+
+                for (prsor <- heapPropProcessors) {
+                  println("----- Applying " + prsor + " to precondition of " + fun)
+                  println("----- Precondition: \n" + preCCI.contractCondition)
+                  val preClauses = prsor.getClauses(preCCI.contractCondition, preCCI)
+                  println("Result: \n" + preClauses)
+                  acslProcessedSolution = addClauses(preClauses, ctx.prePred.pred, acslProcessedSolution)
+
+                  println("----- Applying " + prsor + " to postcondition of " + fun)
+                  println("----- Postcondition: \n" + postCCI.contractCondition)
+                  val postClauses = prsor.getClauses(postCCI.contractCondition, postCCI)
+                  println("----- Result: \n" + postClauses)
+                  acslProcessedSolution = addClauses(postClauses, ctx.prePred.pred, acslProcessedSolution)
+                }
 
                 val printProcessors = Seq(
                   TheoryOfHeapProcessor,

@@ -3,7 +3,7 @@ package tricera.postprocessor
 import tricera.postprocessor.ContractConditionType._
 import ap.parser._
 
-object AssignmentProcessor extends ContractProcessor {
+object AssignmentProcessor extends ContractProcessor with ClauseCreator {
   def apply(
       expr: IExpression,
       valueSet: ValSet,

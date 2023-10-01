@@ -201,6 +201,10 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
   }
 }
 
+trait ClauseCreator {
+  def getClauses(expr: IExpression, cci: ContractConditionInfo): Option[IFormula]
+}
+
 trait ContractProcessor {
   def apply(
       solution: SolutionProcessor.Solution,

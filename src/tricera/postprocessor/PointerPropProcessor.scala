@@ -3,7 +3,7 @@ package tricera.postprocessor
 import ap.parser._
 import scala.collection.immutable.Stack
 
-object PointerPropProcessor extends ContractProcessor {
+object PointerPropProcessor extends ContractProcessor with ClauseCreator {
   def processContractCondition(cci: ContractConditionInfo) = {
     getSafePointers(cci.contractCondition, cci) match {
       case safePointers if safePointers.size >= 2 =>
