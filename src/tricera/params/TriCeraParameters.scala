@@ -222,6 +222,10 @@ class TriCeraParameters extends GlobalParameters {
     case "-statistics" :: rest => setLogLevel(1); parseArgs(rest)
     case logOption :: rest if (logOption startsWith "-log:") =>
       setLogLevel((logOption drop 5).toInt); parseArgs(rest)
+    case logPredsOption :: rest if (logPredsOption startsWith "-logPreds:") =>
+      logPredicates = logPredsOption.drop("-logPreds:".length)
+                                    .split(",").toSet
+      parseArgs(rest)
     case "-logSimplified" :: rest => printHornSimplified = true; parseArgs(rest)
     case "-dot" :: str :: rest => dotSpec = true; dotFile = str; parseArgs(rest)
     case "-pngNo" :: rest => pngNo = true; parseArgs(rest)
@@ -248,9 +252,15 @@ class TriCeraParameters extends GlobalParameters {
       " -ssol\t\tShow solution in SMT-LIB format\n" +
       " -inv\t\tTry to infer loop invariants\n" +
       " -acsl\t\tPrint inferred ACSL annotations\n" +
-      " -log\t\tDisplay progress and found invariants\n" +
-      " -log:n\t\tDisplay progress with verbosity n (currently 0 <= n <= 3)\n" +
-      " -statistics\tDisplay statistics (implied by -log)\n" +
+      " -log:n            Display progress based on verbosity level n (0 <= n <= 3)\n" +
+      "                     1: Statistics only\n" +
+      "                     2: Invariants included\n" +
+      "                     3: Includes counterexamples\n" +
+      " -statistics       Equivalent to -log:1; displays statistics only\n" +
+      " -log              Equivalent to -log:2; displays progress and invariants\n" +
+      " -logPreds:<preds> Log only predicates containing the specified substrings,\n" +
+      "                     separated by commas. E.g., -logPreds=p1,p2 logs any\n" +
+      "                     predicate with 'p1' or 'p2' in its name\n" +
       " -m:func\tUse function func as entry point (default: main)\n" +
       " -cpp\t\tExecute the C preprocessor (cpp) on the input file first, this will produce filename.i\n" +
       "\n" +
@@ -289,6 +299,9 @@ class TriCeraParameters extends GlobalParameters {
 //      " -pc\t\tPrint path constraint formula at return from entry function\n" (not currently correct)
     )
       false
+    case arg :: _ if arg.startsWith("-") =>
+      showHelp
+      throw new MainException(s"unrecognized option '$arg'")
     case fn :: rest =>
       fileName = fn; in = new FileInputStream(fileName); parseArgs(rest)
   }
