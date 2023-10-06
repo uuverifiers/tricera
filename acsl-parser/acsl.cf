@@ -104,29 +104,40 @@ RelOpGEQ. RelOp ::= ">=" ;
 RelOpGT.  RelOp ::= ">" ;
 RelOpLT.  RelOp ::= "<" ;
 
-PredTrue.             Predicate ::= "\\true" ;
-PredFalse.            Predicate ::= "\\false" ;
-PredRelOp.            Predicate ::= Term RelOp Term; -- FIXME: Chained relops allowed.
-PredApplication.      Predicate ::= Id "(" [Term] ")" ;
-PredParentheses.      Predicate ::= "(" Predicate ")" ;
-PredConjunction.      Predicate ::= Predicate "&&" Predicate ;
-PredDisjunction.      Predicate ::= Predicate "||" Predicate ;
-PredImplication.      Predicate ::= Predicate "==>" Predicate ;
-PredEquivalence.      Predicate ::= Predicate "<==>" Predicate ;
-PredNegation.         Predicate ::= "!" Predicate ;
-PredXOr.              Predicate ::= Predicate "^^" Predicate ;
-PredTernaryCond.      Predicate ::= Term "?" Predicate ":" Predicate ;
-PredTernaryCond2.     Predicate ::= Predicate "?" Predicate ":" Predicate ;
-PredLocalBinding.     Predicate ::= "\\let" Id "=" Term ";" Predicate ;
-PredLocalBinding2.    Predicate ::= "\\let" Id "=" Predicate ";" Predicate ;
-PredForAll.           Predicate ::= "\\forall" [Binder] ";" Predicate ;
-PredExists.           Predicate ::= "\\exists" [Binder] ";" Predicate ;
+-- In increasing order of precedence.
+-- See the ACSL standard for precedence and associativity.
+
+-- naming
 PredSyntacticNaming.  Predicate ::= Id ":" Predicate ;
 PredSyntacticNaming2. Predicate ::= String ":" Predicate ;
--- PredicateOld is extension for contracts.
--- Maybe want separate `ContractPredicate` for this?
-PredOld.              Predicate ::= "\\old" "(" Predicate ")" ;
-PredValid.            Predicate ::= "\\valid" "(" [Location] ")" ;
+
+-- binding
+PredForAll.           Predicate2 ::= "\\forall" [Binder] ";" Predicate2 ;
+PredExists.           Predicate2 ::= "\\exists" [Binder] ";" Predicate2 ;
+PredLocalBinding.     Predicate2 ::= "\\let" Id "=" Term ";" Predicate2 ;
+PredLocalBinding2.    Predicate2 ::= "\\let" Id "=" Predicate2 ";" Predicate ;
+
+-- ternary connective
+PredTernaryCond.      Predicate3 ::= Term "?" Predicate3 ":" Predicate4 ;
+PredTernaryCond2.     Predicate3 ::= Predicate3 "?" Predicate4 ":" Predicate5 ;
+
+-- logical connectives
+PredConjunction.      Predicate8 ::= Predicate9 "&&" Predicate8 ;
+PredXOr.              Predicate7 ::= Predicate8 "^^" Predicate7 ;
+PredDisjunction.      Predicate6 ::= Predicate7 "||" Predicate6 ;
+PredImplication.      Predicate5 ::= Predicate5 "==>" Predicate6 ;
+PredEquivalence.      Predicate4 ::= Predicate5 "<==>" Predicate4 ;
+
+PredTrue.             Predicate9 ::= "\\true" ;
+PredFalse.            Predicate9 ::= "\\false" ;
+PredRelOp.            Predicate9 ::= Term RelOp Term2; -- FIXME: Chained relops allowed.
+PredApplication.      Predicate9 ::= Id "(" [Term2] ")" ;
+PredParentheses.      Predicate9 ::= "(" Predicate8 ")" ;
+PredNegation.         Predicate9 ::= "!" Predicate8 ;
+PredOld.              Predicate9 ::= "\\old" "(" Predicate8 ")" ;
+PredValid.            Predicate9 ::= "\\valid" "(" [Location] ")" ;
+
+coercions Predicate 9;
 
 ---- Terms (2.1) -------------------------------------------
 LiteralTrue.   Literal ::= "\\true" ;
@@ -166,29 +177,39 @@ UnaryOpComplementation. UnaryOp ::= "~" ;
 UnaryOpPtrDeref.        UnaryOp ::= "*" ;
 UnaryOpAddressOf.       UnaryOp ::= "&" ;
 
-TermLiteral.                 Term ::= Literal ;
-TermIdent.                   Term ::= Id ;
-TermUnaryOp.                 Term ::= UnaryOp Term ;
-TermBinOp.                   Term ::= Term BinOp Term ;
-TermArrayAccess.             Term ::= Term "[" Term "]" ;
-TermArrayFunctionalModifier. Term ::= "{" Term "\\with" "[" Term "]" "=" Term "}" ;
-TermStructFieldAccess.       Term ::= Term "." Id ;
-TermFieldFunctionalModifier. Term ::= "{" Term "\\with" "." Id "=" Term "}" ;
-TermStructPtrFieldAccess.    Term ::= Term "->" Id ;
-TermTypeCast.                Term ::= "(" TypeExpr ")" Term ;
-TermFuncAppl.                Term ::= Id "(" [Term] ")" ;
-TermParentheses.             Term ::= "(" Term ")" ;
-TermTernaryCond.             Term ::= Term "?" Term ":" Term ;
-TermLocalBinding.            Term ::= "\\let" Id "=" Term ";" Term ;
-TermSizeOfTerm.              Term ::= "sizeof" "(" Term ")" ;
-TermSizeOfType.              Term ::= "sizeof" "(" CTypeSpecifier ")" ; -- FIXME: Should be CTypeExpr
-TermSyntacticNaming.         Term ::= Id ":" Term ;
-TermSyntacticNaming2.        Term ::= String ":" Term ;
--- TermOld and TermResult are extensions for contracts.
--- Maybe want separate `ContractTerm` for this?
-TermOld.                     Term ::= "\\old" "(" Term ")" ;
-TermResult.                  Term ::= "\\result" ;
-separator nonempty Term "," ;
+-- In increasing order of precedence
+
+-- naming
+TermSyntacticNaming.         Term ::= Id ":" Term2 ;
+TermSyntacticNaming2.        Term ::= String ":" Term2 ;
+
+-- binding
+TermLocalBinding.            Term2 ::= "\\let" Id "=" Term3 ";" Term2 ;
+
+--ternary connective
+TermTernaryCond.             Term3 ::= Term4 "?" Term5 ":" Term6 ;
+
+TermBinOp.                   Term4 ::= Term6 BinOp Term5 ;
+TermArrayFunctionalModifier. Term4 ::= "{" Term5 "\\with" "[" Term6 "]" "=" Term7 "}" ;
+TermFieldFunctionalModifier. Term4 ::= "{" Term5 "\\with" "." Id "=" Term6 "}" ;
+
+TermUnaryOp.                 Term5 ::= UnaryOp Term6 ;
+TermTypeCast.                Term5 ::= "(" TypeExpr ")" Term6 ;
+TermSizeOfTerm.              Term5 ::= "sizeof" "(" Term6 ")" ;
+TermSizeOfType.              Term5 ::= "sizeof" "(" CTypeSpecifier ")" ; -- FIXME: Should be CTypeExpr
+TermOld.                     Term5 ::= "\\old" "(" Term6 ")" ;
+TermParentheses.             Term5 ::= "(" Term6 ")" ;
+TermFuncAppl.                Term5 ::= Id "(" [Term2] ")" ;
+
+TermArrayAccess.             Term6 ::= Term7 "[" Term5 "]" ;
+TermStructFieldAccess.       Term6 ::= Term7 "." Id ;
+TermStructPtrFieldAccess.    Term6 ::= Term7 "->" Id ;
+
+TermLiteral.                 Term7 ::= Literal ;
+TermIdent.                   Term7 ::= Id ;
+TermResult.                  Term7 ::= "\\result" ;
+
+separator nonempty Term2 "," ;
 
 -- Binders (2.4) -------------------------------------------
 ABinder. Binder ::= TypeName [VariableIdent] ;
@@ -219,6 +240,8 @@ separator nonempty VariableIdent "," ;
 -- TODO: Missing a lot.
 TSetEmpty. TSet ::= "\\empty" ;
 TSetTerm. TSet ::= Term ;
+
+coercions Term 7;
 
 -- C Type Expressions (A.1) --------------------------------
 -- TODO: Missing a lot. 

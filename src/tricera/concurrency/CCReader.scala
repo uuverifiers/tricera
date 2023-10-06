@@ -878,6 +878,9 @@ class CCReader private (prog : Program,
         val contract = ACSLTranslator.translateACSL(
           "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
 
+        println(contract)
+        ???
+
         prePredsToReplace.add(funContext.prePred.pred)
         postPredsToReplace.add(funContext.postPred.pred)
         funToPreAtom.put(name, atom(funContext.prePred))
