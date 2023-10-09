@@ -428,7 +428,7 @@ class Main (args: Array[String]) {
                             acslArgNames : Seq[String],
                             replaceAlphabetic : Boolean = false) = {
               var s = f
-              for ((acslArg, ind)<- acslArgNames zipWithIndex) {
+              for ((acslArg, ind)<- acslArgNames.view.zipWithIndex.reverse) {
                 val replaceArg =
                   if (replaceAlphabetic)
                     lazabs.viewer.HornPrinter.getAlphabeticChar(ind)
