@@ -33,8 +33,6 @@ import ap.parser._
 import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
 
 object ADTExploder extends SolutionProcessor 
                       with ContractProcessor {
@@ -84,7 +82,7 @@ object ADTExploder extends SolutionProcessor
         val selectors = adt.selectors(ctorIndex)
         (for ((fieldTerm, selectorInd) <- selectorTerms zipWithIndex)
           yield selectors(selectorInd)(newRootTerm) ===
-            fieldTerm.asInstanceOf[ITerm]).reduce(_ &&& _)
+            fieldTerm).reduce(_ &&& _)
       }
 
       t match {

@@ -8,6 +8,7 @@ import ap.types.MonoSortedIFunction
 import _root_.tricera.concurrency.ccreader.CCHeapPointer
 import _root_.tricera.concurrency.ccreader.CCStackPointer
 import _root_.tricera.concurrency.ccreader.CCHeapArrayPointer
+import tricera.concurrency.ccreader.CCExceptions.TranslationException
 
 case class ContractInfo(
     solution: SolutionProcessor.Solution,
@@ -22,7 +23,10 @@ case class ContractInfo(
   val prePredACSLArgNames = context.prePredACSLArgNames
   val postPredACSLArgNames = context.postPredACSLArgNames
   val paramNames = acslContext.getParams.map(x => x.name)
-  val heapTheory = acslContext.getHeap
+  val heapTheory = if (!acslContext.isHeapEnabled) {
+    throw new TranslationException(
+      "Heap solution processor called with no heap.")
+  } else acslContext.getHeap
   val selectors = acslContext.getStructMap.values
     .map((struct) => struct.sels.map(_._1))
     .toSet

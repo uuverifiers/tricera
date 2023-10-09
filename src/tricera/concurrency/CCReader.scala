@@ -4008,13 +4008,16 @@ class CCReader private (prog : Program,
               }
             override def isHeapEnabled: Boolean = modelHeap
             override def getHeap: HeapObj =
-              if (modelHeap) heap else throw NeedsHeapModelException
+              if (modelHeap) heap
+              else throw new TranslationException("getHeap called with no heap!")
             override def getHeapTerm: ITerm =
               if (modelHeap) stmSymex.getValues.head.toTerm
-              else throw NeedsHeapModelException
-            override def getOldHeapTerm: ITerm =
-              getHeapTerm // todo: heap term for exit predicate?
-            
+              else throw new TranslationException("getHeapTerm called with no heap!")
+            override def getOldHeapTerm: ITerm = {
+              if (modelHeap) getHeapTerm
+              else throw new TranslationException("getOldHeapTerm called with no heap!")
+            } // todo: heap term for exit predicate?
+
             override val getStructMap: Map[IFunction, CCStruct] = 
               structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
