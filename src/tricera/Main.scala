@@ -626,19 +626,21 @@ class Main (args: Array[String]) {
                 }
 
                 var acslProcessedSolution = processedSolution
-                
-                val contractInfo = ContractInfo(solution, fun, ctx)
-                val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
-                val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
-                
-                acslProcessedSolution = applyProcessor(PostconditionSimplifier, acslProcessedSolution)
 
-                val heapPropProcessors = Seq(
+                if (modelledHeapRes) {
+                  acslProcessedSolution =
+                    applyProcessor(PostconditionSimplifier, acslProcessedSolution)
+                }
+                val heapPropProcessors = if (modelledHeapRes) Seq(
                   PointerPropProcessor,
                   AssignmentProcessor
-                )
+                ) else Nil
 
                 for (prsor <- heapPropProcessors) {
+                  val contractInfo = ContractInfo(solution, fun, ctx)
+                  val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
+                  val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
+
                   println("----- Applying " + prsor + " to precondition of " + fun)
                   println("----- Precondition: \n" + preCCI.contractCondition)
                   val preClauses = prsor.getClauses(preCCI.contractCondition, preCCI)
@@ -652,14 +654,19 @@ class Main (args: Array[String]) {
                   acslProcessedSolution = addClauses(postClauses, ctx.prePred.pred, acslProcessedSolution)
                 }
 
-                val printProcessors = Seq(
-                  TheoryOfHeapProcessor,
-                  ADTSimplifier,
-                  ADTExploder,
-                  ToVariableForm,
-                  ACSLExpressionProcessor,
-                  ClauseRemover
-                )
+                val printProcessors = {
+                  (if (modelledHeapRes) Seq(
+                    TheoryOfHeapProcessor,
+                    ADTSimplifier) else Nil) ++
+                  Seq(
+                    ADTExploder
+                    ) ++
+                  (if (modelledHeapRes) Seq(
+                    ToVariableForm,
+                    ACSLExpressionProcessor,
+                    ClauseRemover
+                    ) else Nil)
+                }
 
                 for (processor <- printProcessors) {
                   acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
