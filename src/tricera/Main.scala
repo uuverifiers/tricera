@@ -502,77 +502,73 @@ class Main (args: Array[String]) {
                    if maybeEnc.isEmpty ||
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
-
-                def applyProcessor(processor: ContractProcessor, 
-                                   solution: SolutionProcessor.Solution
-                                  ): SolutionProcessor.Solution = {
-                  println("----- Applying " + processor + " to " + fun + ".")
-                  val (newPrecondition, newPostcondition) = processor(solution, fun, ctx)
-                  println("----- Precondition: \n" + solution(ctx.prePred.pred))
-                  println("----- New Precondition: \n" + newPrecondition)
-                  println("----- Postcondition: \n" + solution(ctx.postPred.pred))
-                  println("----- New Postcondition: \n" + newPostcondition + "\n")
-                  solution + (ctx.prePred.pred -> newPrecondition) + (ctx.postPred.pred -> newPostcondition)
-                }
-
-                import ap.parser.IFormula
-                import ap.parser.IExpression.Predicate
-                def addClauses(clauses: Option[IFormula], predicate: Predicate, solution: SolutionProcessor.Solution): SolutionProcessor.Solution = {
-                  clauses match {
-                    case Some(clauseFormula) =>
-                      val newContractCondition = solution(predicate).asInstanceOf[IFormula] & clauseFormula
-                      solution + (predicate -> newContractCondition)
-                    case None =>
-                      solution
-                  }  
-                }
-
+                
                 var acslProcessedSolution = processedSolution
 
                 if (modelledHeapRes) {
+                  def applyProcessor(processor: ContractProcessor, 
+                                    solution: SolutionProcessor.Solution
+                                    ): SolutionProcessor.Solution = {
+                    println("----- Applying " + processor + " to " + fun + ".")
+                    val (newPrecondition, newPostcondition) = processor(solution, fun, ctx)
+                    println("----- Precondition: \n" + solution(ctx.prePred.pred))
+                    println("----- New Precondition: \n" + newPrecondition)
+                    println("----- Postcondition: \n" + solution(ctx.postPred.pred))
+                    println("----- New Postcondition: \n" + newPostcondition + "\n")
+                    solution + (ctx.prePred.pred -> newPrecondition) + (ctx.postPred.pred -> newPostcondition)
+                  }
+
+                  import ap.parser.IFormula
+                  import ap.parser.IExpression.Predicate
+                  def addClauses(clauses: Option[IFormula], predicate: Predicate, solution: SolutionProcessor.Solution): SolutionProcessor.Solution = {
+                    clauses match {
+                      case Some(clauseFormula) =>
+                        val newContractCondition = solution(predicate).asInstanceOf[IFormula] & clauseFormula
+                        solution + (predicate -> newContractCondition)
+                      case None =>
+                        solution
+                    }  
+                  }
+
                   acslProcessedSolution =
                     applyProcessor(PostconditionSimplifier, acslProcessedSolution)
-                }
-                val heapPropProcessors = if (modelledHeapRes) Seq(
-                  PointerPropProcessor,
-                  AssignmentProcessor
-                ) else Nil
 
-                for (prsor <- heapPropProcessors) {
-                  val contractInfo = ContractInfo(solution, fun, ctx)
-                  val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
-                  val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
+                  val heapPropProcessors = Seq(
+                    PointerPropProcessor,
+                    AssignmentProcessor
+                  )
 
-                  println("----- Applying " + prsor + " to precondition of " + fun)
-                  println("----- Precondition: \n" + preCCI.contractCondition)
-                  val preClauses = prsor.getClauses(preCCI.contractCondition, preCCI)
-                  println("Result: \n" + preClauses)
-                  acslProcessedSolution = addClauses(preClauses, ctx.prePred.pred, acslProcessedSolution)
+                  for (prsor <- heapPropProcessors) {
+                    val contractInfo = ContractInfo(solution, fun, ctx)
+                    val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
+                    val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
 
-                  println("----- Applying " + prsor + " to postcondition of " + fun)
-                  println("----- Postcondition: \n" + postCCI.contractCondition)
-                  val postClauses = prsor.getClauses(postCCI.contractCondition, postCCI)
-                  println("----- Result: \n" + postClauses)
-                  acslProcessedSolution = addClauses(postClauses, ctx.prePred.pred, acslProcessedSolution)
-                }
+                    println("----- Applying " + prsor + " to precondition of " + fun)
+                    println("----- Precondition: \n" + preCCI.contractCondition)
+                    val preClauses = prsor.getClauses(preCCI.contractCondition, preCCI)
+                    println("Result: \n" + preClauses)
+                    acslProcessedSolution = addClauses(preClauses, ctx.prePred.pred, acslProcessedSolution)
 
-                val printProcessors = {
-                  (if (modelledHeapRes) Seq(
+                    println("----- Applying " + prsor + " to postcondition of " + fun)
+                    println("----- Postcondition: \n" + postCCI.contractCondition)
+                    val postClauses = prsor.getClauses(postCCI.contractCondition, postCCI)
+                    println("----- Result: \n" + postClauses)
+                    acslProcessedSolution = addClauses(postClauses, ctx.prePred.pred, acslProcessedSolution)
+                  }
+
+                  val printHeapExprProcessors = Seq(
                     TheoryOfHeapProcessor,
-                    ADTSimplifier) else Nil) ++
-                  Seq(
-                    ADTExploder
-                    ) ++
-                  (if (modelledHeapRes) Seq(
+                    ADTSimplifier,
+                    ADTExploder,
                     ToVariableForm,
                     ACSLExpressionProcessor,
-                    ClauseRemover
-                    ) else Nil)
+                    ClauseRemover)
+
+                  for (processor <- printHeapExprProcessors) {
+                    acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
+                  }
                 }
 
-                for (processor <- printProcessors) {
-                  acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
-                }
                 println("----- Applying ACSLLineariser to precondition: \n" + acslProcessedSolution(ctx.prePred.pred))
                 val fPre = ACSLLineariser asString acslProcessedSolution(ctx.prePred.pred)
                 println("----- Result: \n " + fPre)
