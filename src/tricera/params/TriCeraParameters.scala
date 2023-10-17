@@ -314,8 +314,20 @@ class TriCeraParameters extends GlobalParameters {
     if (args isEmpty) {
       doNotExecute = true
       showHelp
-    } else if (!parseArgs(args)) {
+    } else if (!parseArgs(reconstructSpaceSeparatedArgs(args))) {
       doNotExecute = true
     }
+  }
+
+  private def reconstructSpaceSeparatedArgs(args: List[String]): List[String] = {
+    args.foldLeft((List[String](), Option.empty[String])) {
+      case ((acc, Some(buffer)), arg) => (acc :+ (buffer + " " + arg), None)
+      case ((acc, None), arg) =>
+        if (arg.endsWith("\\")) {
+          (acc, Some(arg.dropRight(1)))
+        } else {
+          (acc :+ arg, None)
+        }
+    }._1
   }
 }

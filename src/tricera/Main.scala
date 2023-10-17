@@ -142,11 +142,10 @@ class Main (args: Array[String]) {
       }
       catch {
         case _: Throwable =>
-          throw new Main.MainException("The preprocessor could not" +
-            " be executed. This might be due to TriCera preprocessor binary " +
-            "not being in the current directory. Alternatively, use the " +
-            "-noPP switch to disable the preprocessor.\n" +
-            "Preprocessor command: " + cmdLine
+          throw new Main.MainException("The C preprocessor could not" +
+            " be executed (option -cpp). This might be due cpp not being " +
+            "installed in the system..\n" +
+            "Attempted preprocessor command: " + cmdLine
           )
       }
       preprocessedFile.deleteOnExit()
