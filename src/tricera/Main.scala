@@ -34,7 +34,6 @@ import hornconcurrency.ParametricEncoder
 
 import java.io.{FileOutputStream, PrintStream}
 import lazabs.horn.bottomup.HornClauses.Clause
-import lazabs.horn.bottomup.Util.DagNode
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.Util.SourceInfo
@@ -388,11 +387,19 @@ class Main (args: Array[String]) {
     val verificationLoop =
       try {
         Console.withOut(outStream) {
-          new hornconcurrency.VerificationLoop(smallSystem, null,
-            printIntermediateClauseSets, fileName + ".smt2",
-            expectedStatus = expectedStatus, log = needFullSolution,
+          new hornconcurrency.VerificationLoop(
+            system = smallSystem,
+            initialInvariants = null,
+            printIntermediateClauseSets = printIntermediateClauseSets,
+            fileName = fileName + ".smt2",
+            expectedStatus = expectedStatus,
+            log = needFullSolution,
             templateBasedInterpolation = templateBasedInterpolation,
-            templateBasedInterpolationTimeout = templateBasedInterpolationTimeout)
+            templateBasedInterpolationTimeout = templateBasedInterpolationTimeout,
+            symbolicExecutionEngine = symexEngine,
+            symbolicExecutionDepth = symexMaxDepth,
+            logSymbolicExecution = log
+          )
         }
       } catch {
         case TimeoutException => {

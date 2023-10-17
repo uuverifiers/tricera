@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -92,7 +92,7 @@ class TriCeraParameters extends GlobalParameters {
 
   private val greeting =
     "TriCera v" + version + ".\n(C) Copyright " +
-      "2012-2022 Zafer Esen and Philipp Ruemmer\n" +
+      "2012-2023 Zafer Esen and Philipp Ruemmer\n" +
     "Contributors: Pontus Ernstedt, Hossein Hojjat"
 
   private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
@@ -236,11 +236,28 @@ class TriCeraParameters extends GlobalParameters {
     case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
-    case "-v" :: rest => println(version); false
-    case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +
+    case "-sym" :: rest      =>
+      symexEngine = GlobalParameters.SymexEngine.BreadthFirstForward
+      parseArgs(rest)
+    case symexOpt :: rest if (symexOpt.startsWith("-sym:")) =>
+      symexEngine = symexOpt.drop("-sym:".length) match {
+        case "dfs" => GlobalParameters.SymexEngine.DepthFirstForward
+        case "bfs" => GlobalParameters.SymexEngine.BreadthFirstForward
+        case _     =>
+          println("Unknown argument for -sym:, defaulting to bfs.")
+          GlobalParameters.SymexEngine.BreadthFirstForward
+      }
+      parseArgs(rest)
+    case symexDepthOpt :: rest if (symexDepthOpt.startsWith("-symDepth:")) =>
+      symexMaxDepth = Some(symexDepthOpt.drop("-symDepth:".length).toInt)
+      parseArgs(rest)
+    case arg :: rest if Set("-v", "--version").contains(arg) =>
+      println(version); false
+    case arg :: rest if Set("-h", "--help").contains(arg) =>
+      println(greeting + "\n\nUsage: tri [options] file\n\n" +
       "General options:\n" +
-      " -h\t\tShow this information\n" +
-      " -v\t\tPrint version number\n" +
+      " -h, --help\t\tShow this information\n" +
+      " -v, --version\tPrint version number\n" +
       " -arithMode:t\tInteger semantics: math (default), ilp32, lp64, llp64\n" +
       " -mathArrays:t\tUse mathematical arrays for modeling program arrays (no implicit memory safety properties))\n" +
       " -memtrack\tCheck that there are no memory leaks in the input program \n" +
@@ -254,8 +271,9 @@ class TriCeraParameters extends GlobalParameters {
       " -acsl\t\tPrint inferred ACSL annotations\n" +
       " -log:n            Display progress based on verbosity level n (0 <= n <= 3)\n" +
       "                     1: Statistics only\n" +
-      "                     2: Invariants included\n" +
-      "                     3: Includes counterexamples\n" +
+      "                     2: Include invariants\n" +
+      "                     3: Include counterexamples\n" +
+      "                     (When using -sym, n > 1 displays derived clauses.) \n" +
       " -statistics       Equivalent to -log:1; displays statistics only\n" +
       " -log              Equivalent to -log:2; displays progress and invariants\n" +
       " -logPreds:<preds> Log only predicates containing the specified substrings,\n" +
@@ -272,6 +290,12 @@ class TriCeraParameters extends GlobalParameters {
       " -varLines\tPrint program variables in clauses together with their line numbers (e.g., x:42)\n" +
       "\n" +
       "Horn engine options (Eldarica):\n" +
+      " -sym            (Experimental) Use symbolic execution with the default engine (bfs)\n" +
+      " -sym:x          Use symbolic execution where x : {dfs, bfs}\n" +
+      "                      dfs: depth-first forward (does not support non-linear clauses)\n" +
+      "                      bfs: breadth-first forward\n" +
+      " -symDepth:n     Set a max depth for symbolic execution (underapproximate)\n" +
+      "                     (currently only supported with bfs)\n" +
       " -disj\t\tUse disjunctive interpolation\n" +
       " -stac\t\tStatic acceleration of loops\n" +
       " -lbe\t\tDisable preprocessor (e.g., clause inlining)\n" +
