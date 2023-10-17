@@ -136,17 +136,14 @@ class Main (args: Array[String]) {
     val cppFileName = if (cPreprocessor) {
       val preprocessedFile = File.createTempFile("tri-", ".i")
       System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
-      val cmdLine = "cpp " + fileName + " -E -P -CC"
-      try {
-        cmdLine !
-      }
+      val cmdLine = Seq("cpp", fileName, "-E", "-P", "-CC")
+      try Process(cmdLine) !
       catch {
         case _: Throwable =>
           throw new Main.MainException("The C preprocessor could not" +
             " be executed (option -cpp). This might be due cpp not being " +
-            "installed in the system..\n" +
-            "Attempted preprocessor command: " + cmdLine
-          )
+            "installed in the system.\n" + "Attempted command: " +
+            cmdLine.mkString(" "))
       }
       preprocessedFile.deleteOnExit()
       preprocessedFile.getAbsolutePath
