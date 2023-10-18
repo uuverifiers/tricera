@@ -1,41 +1,42 @@
-regression-tests/double/add_1.c
+
+add_1.c
 SAFE
 
-regression-tests/double/add_2.c
+add_2.c
 UNSAFE
 
-regression-tests/double/add_3.c
+add_3.c
 UNSAFE
 
-regression-tests/double/div_1.c
+div_1.c
 SAFE
 
-regression-tests/double/div_2.c
+div_2.c
 UNSAFE
 
-regression-tests/double/div_3.c
+div_3.c
 SAFE
 
-regression-tests/double/init_1.c
+init_1.c
 SAFE
 
-regression-tests/double/init_2.c
+init_2.c
 SAFE
 
-regression-tests/double/mul_1.c
+mul_1.c
 SAFE
 
-regression-tests/double/mul_2.c
+mul_2.c
 UNSAFE
 
-regression-tests/double/loop_1.c
+loop_1.c
 SAFE
 
-regression-tests/double/loop_2.c
+loop_2.c
 UNSAFE
 
-regression-tests/double/sub_1.c
+sub_1.c
 SAFE
 
-regression-tests/double/sub_2.c
+sub_2.c
 UNSAFE

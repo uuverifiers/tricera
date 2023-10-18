@@ -17,4 +17,7 @@ set -e
 ./rundir math-arrays  "" -assert -dev -t:60
 ./rundir quantifiers "" -assert -dev -t:60
 ./rundir interpreted-predicates "" -assert -dev -t:60
+./rundir float "" -assert -dev -t:60
+./rundir double "" -assert -dev -t:60
+./rundir long_double "" -assert -dev -t:60
 #./rundir ParametricEncoder ""
