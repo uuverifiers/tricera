@@ -34,6 +34,7 @@ import hornconcurrency.ParametricEncoder
 
 import java.io.{FileOutputStream, PrintStream}
 import lazabs.horn.bottomup.HornClauses.Clause
+import lazabs.horn.bottomup.Util.DagNode
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.Util.SourceInfo
@@ -135,14 +136,18 @@ class Main (args: Array[String]) {
     val cppFileName = if (cPreprocessor) {
       val preprocessedFile = File.createTempFile("tri-", ".i")
       System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
-      val cmdLine = Seq("cpp", fileName, "-E", "-P", "-CC")
-      try Process(cmdLine) !
+      val cmdLine = "cpp " + fileName + " -E -P -CC"
+      try {
+        cmdLine !
+      }
       catch {
         case _: Throwable =>
-          throw new Main.MainException("The C preprocessor could not" +
-            " be executed (option -cpp). This might be due cpp not being " +
-            "installed in the system.\n" + "Attempted command: " +
-            cmdLine.mkString(" "))
+          throw new Main.MainException("The preprocessor could not" +
+            " be executed. This might be due to TriCera preprocessor binary " +
+            "not being in the current directory. Alternatively, use the " +
+            "-noPP switch to disable the preprocessor.\n" +
+            "Preprocessor command: " + cmdLine
+            )
       }
       preprocessedFile.deleteOnExit()
       preprocessedFile.getAbsolutePath
@@ -387,19 +392,11 @@ class Main (args: Array[String]) {
     val verificationLoop =
       try {
         Console.withOut(outStream) {
-          new hornconcurrency.VerificationLoop(
-            system = smallSystem,
-            initialInvariants = null,
-            printIntermediateClauseSets = printIntermediateClauseSets,
-            fileName = fileName + ".smt2",
-            expectedStatus = expectedStatus,
-            log = needFullSolution,
+          new hornconcurrency.VerificationLoop(smallSystem, null,
+            printIntermediateClauseSets, fileName + ".smt2",
+            expectedStatus = expectedStatus, log = needFullSolution,
             templateBasedInterpolation = templateBasedInterpolation,
-            templateBasedInterpolationTimeout = templateBasedInterpolationTimeout,
-            symbolicExecutionEngine = symexEngine,
-            symbolicExecutionDepth = symexMaxDepth,
-            logSymbolicExecution = log
-          )
+            templateBasedInterpolationTimeout = templateBasedInterpolationTimeout)
         }
       } catch {
         case TimeoutException => {
