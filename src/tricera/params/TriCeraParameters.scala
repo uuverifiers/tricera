@@ -126,7 +126,7 @@ class TriCeraParameters extends GlobalParameters {
   private val greeting =
     "TriCera v" + version + ".\n(C) Copyright " +
       "2012-2024 Zafer Esen and Philipp Ruemmer\n" +
-    "Contributors: Pontus Ernstedt, Hossein Hojjat"
+    "Contributors: Pontus Ernstedt, Hossein Hojjat, Oskar Soederberg"
 
   private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
     args match {
