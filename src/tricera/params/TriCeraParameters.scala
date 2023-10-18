@@ -96,6 +96,7 @@ class TriCeraParameters extends GlobalParameters {
   var useArraysForHeap : Boolean = false
 
   var devMode : Boolean = false
+  var printDebugMessages : Boolean = false
 
   var displayACSL = false
   var inferLoopInvariants = false
@@ -265,6 +266,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-assert" :: rest => TriCeraParameters.get.assertions = true; parseArgs(rest)
     case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
+    case "-debug" :: rest => printDebugMessages = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-sym" :: rest      =>
       symexEngine = GlobalParameters.SymexEngine.BreadthFirstForward
