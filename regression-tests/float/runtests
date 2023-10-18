@@ -1,20 +1,20 @@
 #!/bin/sh
 
-LAZABS=./tri
+LAZABS=../../tri
 
-TESTS="regression-tests/float/add_1.c \
-       regression-tests/float/add_2.c \
-       regression-tests/float/add_3.c \
-       regression-tests/float/div_1.c \
-       regression-tests/float/div_2.c \
-       regression-tests/float/init_1.c \
-       regression-tests/float/init_2.c \
-       regression-tests/float/loop_1.c \
-       regression-tests/float/loop_2.c \
-       regression-tests/float/mul_1.c \
-       regression-tests/float/mul_2.c \
-       regression-tests/float/sub_1.c \
-       regression-tests/float/sub_2.c "
+TESTS="add_1.c \
+       add_2.c \
+       add_3.c \
+       div_1.c \
+       div_2.c \
+       init_1.c \
+       init_2.c \
+       loop_1.c \
+       loop_2.c \
+       mul_1.c \
+       mul_2.c \
+       sub_1.c \
+       sub_2.c "
 
 for name in $TESTS; do
     echo
