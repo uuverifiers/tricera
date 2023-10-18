@@ -34,10 +34,9 @@ import hornconcurrency.ParametricEncoder
 
 import java.io.{FileOutputStream, PrintStream}
 import lazabs.horn.bottomup.HornClauses.Clause
-import lazabs.horn.bottomup.Util.DagNode
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
-import tricera.Util.SourceInfo
+import tricera.Util.{SourceInfo, printlnDebug}
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.CCClause
 import tricera.concurrency.ccreader.CCExceptions._
@@ -509,21 +508,32 @@ class Main (args: Array[String]) {
                   def applyProcessor(processor: ContractProcessor, 
                                     solution: SolutionProcessor.Solution
                                     ): SolutionProcessor.Solution = {
-                    println("----- Applying " + processor + " to " + fun + ".")
-                    val (newPrecondition, newPostcondition) = processor(solution, fun, ctx)
-                    println("----- Precondition: \n" + solution(ctx.prePred.pred))
-                    println("----- New Precondition: \n" + newPrecondition)
-                    println("----- Postcondition: \n" + solution(ctx.postPred.pred))
-                    println("----- New Postcondition: \n" + newPostcondition + "\n")
-                    solution + (ctx.prePred.pred -> newPrecondition) + (ctx.postPred.pred -> newPostcondition)
+                    printlnDebug(s"----- Applying $processor to $fun.")
+                    val (newPrecondition, newPostcondition) =
+                      processor(solution, fun, ctx)
+                    printlnDebug("----- Precondition:")
+                    printlnDebug(solution(ctx.prePred.pred).toString)
+                    printlnDebug("----- New Precondition:")
+                    printlnDebug(newPrecondition.toString)
+                    printlnDebug("----- Postcondition:")
+                    printlnDebug(solution(ctx.postPred.pred).toString)
+                    printlnDebug("----- New Postcondition:")
+                    printlnDebug(newPostcondition.toString)
+                    solution + (ctx.prePred.pred -> newPrecondition) +
+                      (ctx.postPred.pred -> newPostcondition)
                   }
 
                   import ap.parser.IFormula
                   import ap.parser.IExpression.Predicate
-                  def addClauses(clauses: Option[IFormula], predicate: Predicate, solution: SolutionProcessor.Solution): SolutionProcessor.Solution = {
+                  def addClauses(clauses: Option[IFormula],
+                                 predicate: Predicate,
+                                 solution: SolutionProcessor.Solution)
+                  : SolutionProcessor.Solution = {
                     clauses match {
                       case Some(clauseFormula) =>
-                        val newContractCondition = solution(predicate).asInstanceOf[IFormula] & clauseFormula
+                        val newContractCondition =
+                          solution(predicate).asInstanceOf[IFormula] &
+                          clauseFormula
                         solution + (predicate -> newContractCondition)
                       case None =>
                         solution
@@ -540,20 +550,36 @@ class Main (args: Array[String]) {
 
                   for (prsor <- heapPropProcessors) {
                     val contractInfo = ContractInfo(solution, fun, ctx)
-                    val preCCI = ContractConditionInfo(ctx.prePred.pred, contractInfo)
-                    val postCCI = ContractConditionInfo(ctx.postPred.pred, contractInfo)
+                    val preCCI =
+                      ContractConditionInfo(ctx.prePred.pred, contractInfo)
+                    val postCCI =
+                      ContractConditionInfo(ctx.postPred.pred, contractInfo)
 
-                    println("----- Applying " + prsor + " to precondition of " + fun)
-                    println("----- Precondition: \n" + preCCI.contractCondition)
-                    val preClauses = prsor.getClauses(preCCI.contractCondition, preCCI)
-                    println("Result: \n" + preClauses)
-                    acslProcessedSolution = addClauses(preClauses, ctx.prePred.pred, acslProcessedSolution)
+                    printlnDebug(s"----- Applying $prsor to precondition of $fun")
+                    printlnDebug("----- Precondition:")
+                    printlnDebug(preCCI.contractCondition.toString)
 
-                    println("----- Applying " + prsor + " to postcondition of " + fun)
-                    println("----- Postcondition: \n" + postCCI.contractCondition)
-                    val postClauses = prsor.getClauses(postCCI.contractCondition, postCCI)
-                    println("----- Result: \n" + postClauses)
-                    acslProcessedSolution = addClauses(postClauses, ctx.prePred.pred, acslProcessedSolution)
+                    val preClauses =
+                      prsor.getClauses(preCCI.contractCondition, preCCI)
+
+                    printlnDebug("Result:")
+                    printlnDebug(preClauses.toString)
+
+                    acslProcessedSolution = addClauses(
+                      preClauses, ctx.prePred.pred, acslProcessedSolution)
+
+                    printlnDebug(s"----- Applying $prsor to postcondition of $fun")
+                    printlnDebug("----- Postcondition:")
+                    printlnDebug(postCCI.contractCondition.toString)
+
+                    val postClauses =
+                      prsor.getClauses(postCCI.contractCondition, postCCI)
+
+                    printlnDebug("----- Result:")
+                    printlnDebug(postClauses.toString)
+
+                    acslProcessedSolution = addClauses(
+                      postClauses,ctx.prePred.pred, acslProcessedSolution)
                   }
 
                   val printHeapExprProcessors = Seq(
@@ -569,13 +595,20 @@ class Main (args: Array[String]) {
                   }
                 }
 
-                println("----- Applying ACSLLineariser to precondition: \n" + acslProcessedSolution(ctx.prePred.pred))
-                val fPre = ACSLLineariser asString acslProcessedSolution(ctx.prePred.pred)
-                println("----- Result: \n " + fPre)
-                
-                println("----- Applying ACSLLineariser to postcondition: \n" + acslProcessedSolution(ctx.postPred.pred))
+                printlnDebug("----- Applying ACSLLineariser to precondition:")
+                printlnDebug(acslProcessedSolution(ctx.prePred.pred).toString)
+
+                val fPre = ACSLLineariser asString
+                             acslProcessedSolution(ctx.prePred.pred)
+
+                printlnDebug("----- Result:")
+                printlnDebug(fPre.toString)
+                printlnDebug("----- Applying ACSLLineariser to postcondition:")
+                printlnDebug(acslProcessedSolution(ctx.postPred.pred).toString)
+
                 val fPost = ACSLLineariser asString acslProcessedSolution(ctx.postPred.pred)
-                println("----- Result: \n " + fPost)
+                printlnDebug("----- Result:")
+                printlnDebug(fPost)
 
                 // todo: implement replaceArgs as a solution processor
                 // replaceArgs does a simple string replacement (see above def)
@@ -611,10 +644,6 @@ class Main (args: Array[String]) {
         Safe
       case Right(cex) => {
         println("UNSAFE")
-
-        import hornconcurrency.VerificationLoop._
-        import tricera.Util.SourceInfo
-        import lazabs.horn.bottomup.HornClauses
 
       val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
           case (_, clause) =>
