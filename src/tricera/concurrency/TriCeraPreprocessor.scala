@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021-2022 Zafer Esen. All rights reserved.
+ * Copyright (c) 2021-2023 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,7 +32,7 @@ package tricera.concurrency
 import tricera.Main
 
 import sys.process._
-import java.nio.file.{Paths, Files}
+import java.nio.file.{Files, Paths}
 
 class TriCeraPreprocessor(val inputFilePath   : String,
                           val outputFilePath  : String,
@@ -50,21 +50,16 @@ class TriCeraPreprocessor(val inputFilePath   : String,
         "variable TRI_PP_PATH is exported and points to the preprocessor's" +
         " base directory")
   }
-  private val cmdLine = List(
-    ppPath,
-    inputFilePath,
-    "-o " + outputFilePath,
-    if(quiet) "-q" else "",
-    "-m " + entryFunction,
-    "--",
-    "-xc",
-    if(displayWarnings) "" else "-Wno-everything"
-    ).mkString(" ")
-  val returnCode =
-    try { cmdLine !}
+  private val cmdLine : Seq[String] =
+    Seq(ppPath.toString, inputFilePath,"-o", outputFilePath) ++
+    (if(quiet) Seq("-q") else Nil) ++
+    Seq("-m", entryFunction, "--", "-xc") ++
+    (if(displayWarnings) Nil else Seq("-Wno-everything"))
+  private val returnCode =
+    try { Process(cmdLine) ! }
     catch {
       case _: Throwable =>
-        throw new Main.MainException("The preprocessor could not" +
+        throw new Main.MainException("TriCera preprocessor could not" +
           " be executed. This might be due to TriCera preprocessor binary " +
           "not being in the current directory. Alternatively, use the " +
           "-noPP switch to disable the preprocessor.\n" +

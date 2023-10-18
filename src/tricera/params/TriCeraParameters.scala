@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -92,7 +92,7 @@ class TriCeraParameters extends GlobalParameters {
 
   private val greeting =
     "TriCera v" + version + ".\n(C) Copyright " +
-      "2012-2022 Zafer Esen and Philipp Ruemmer\n" +
+      "2012-2023 Zafer Esen and Philipp Ruemmer\n" +
     "Contributors: Pontus Ernstedt, Hossein Hojjat"
 
   private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
@@ -222,6 +222,10 @@ class TriCeraParameters extends GlobalParameters {
     case "-statistics" :: rest => setLogLevel(1); parseArgs(rest)
     case logOption :: rest if (logOption startsWith "-log:") =>
       setLogLevel((logOption drop 5).toInt); parseArgs(rest)
+    case logPredsOption :: rest if (logPredsOption startsWith "-logPreds:") =>
+      logPredicates = logPredsOption.drop("-logPreds:".length)
+                                    .split(",").toSet
+      parseArgs(rest)
     case "-logSimplified" :: rest => printHornSimplified = true; parseArgs(rest)
     case "-dot" :: str :: rest => dotSpec = true; dotFile = str; parseArgs(rest)
     case "-pngNo" :: rest => pngNo = true; parseArgs(rest)
@@ -232,11 +236,28 @@ class TriCeraParameters extends GlobalParameters {
     case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
-    case "-v" :: rest => println(version); false
-    case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +
+    case "-sym" :: rest      =>
+      symexEngine = GlobalParameters.SymexEngine.BreadthFirstForward
+      parseArgs(rest)
+    case symexOpt :: rest if (symexOpt.startsWith("-sym:")) =>
+      symexEngine = symexOpt.drop("-sym:".length) match {
+        case "dfs" => GlobalParameters.SymexEngine.DepthFirstForward
+        case "bfs" => GlobalParameters.SymexEngine.BreadthFirstForward
+        case _     =>
+          println("Unknown argument for -sym:, defaulting to bfs.")
+          GlobalParameters.SymexEngine.BreadthFirstForward
+      }
+      parseArgs(rest)
+    case symexDepthOpt :: rest if (symexDepthOpt.startsWith("-symDepth:")) =>
+      symexMaxDepth = Some(symexDepthOpt.drop("-symDepth:".length).toInt)
+      parseArgs(rest)
+    case arg :: rest if Set("-v", "--version").contains(arg) =>
+      println(version); false
+    case arg :: rest if Set("-h", "--help").contains(arg) =>
+      println(greeting + "\n\nUsage: tri [options] file\n\n" +
       "General options:\n" +
-      " -h\t\tShow this information\n" +
-      " -v\t\tPrint version number\n" +
+      " -h, --help\t\tShow this information\n" +
+      " -v, --version\tPrint version number\n" +
       " -arithMode:t\tInteger semantics: math (default), ilp32, lp64, llp64\n" +
       " -mathArrays:t\tUse mathematical arrays for modeling program arrays (no implicit memory safety properties))\n" +
       " -memtrack\tCheck that there are no memory leaks in the input program \n" +
@@ -248,9 +269,16 @@ class TriCeraParameters extends GlobalParameters {
       " -ssol\t\tShow solution in SMT-LIB format\n" +
       " -inv\t\tTry to infer loop invariants\n" +
       " -acsl\t\tPrint inferred ACSL annotations\n" +
-      " -log\t\tDisplay progress and found invariants\n" +
-      " -log:n\t\tDisplay progress with verbosity n (currently 0 <= n <= 3)\n" +
-      " -statistics\tDisplay statistics (implied by -log)\n" +
+      " -log:n            Display progress based on verbosity level n (0 <= n <= 3)\n" +
+      "                     1: Statistics only\n" +
+      "                     2: Include invariants\n" +
+      "                     3: Include counterexamples\n" +
+      "                     (When using -sym, n > 1 displays derived clauses.) \n" +
+      " -statistics       Equivalent to -log:1; displays statistics only\n" +
+      " -log              Equivalent to -log:2; displays progress and invariants\n" +
+      " -logPreds:<preds> Log only predicates containing the specified substrings,\n" +
+      "                     separated by commas. E.g., -logPreds=p1,p2 logs any\n" +
+      "                     predicate with 'p1' or 'p2' in its name\n" +
       " -m:func\tUse function func as entry point (default: main)\n" +
       " -cpp\t\tExecute the C preprocessor (cpp) on the input file first, this will produce filename.i\n" +
       "\n" +
@@ -262,6 +290,12 @@ class TriCeraParameters extends GlobalParameters {
       " -varLines\tPrint program variables in clauses together with their line numbers (e.g., x:42)\n" +
       "\n" +
       "Horn engine options (Eldarica):\n" +
+      " -sym            (Experimental) Use symbolic execution with the default engine (bfs)\n" +
+      " -sym:x          Use symbolic execution where x : {dfs, bfs}\n" +
+      "                      dfs: depth-first forward (does not support non-linear clauses)\n" +
+      "                      bfs: breadth-first forward\n" +
+      " -symDepth:n     Set a max depth for symbolic execution (underapproximate)\n" +
+      "                     (currently only supported with bfs)\n" +
       " -disj\t\tUse disjunctive interpolation\n" +
       " -stac\t\tStatic acceleration of loops\n" +
       " -lbe\t\tDisable preprocessor (e.g., clause inlining)\n" +
@@ -289,6 +323,9 @@ class TriCeraParameters extends GlobalParameters {
 //      " -pc\t\tPrint path constraint formula at return from entry function\n" (not currently correct)
     )
       false
+    case arg :: _ if arg.startsWith("-") =>
+      showHelp
+      throw new MainException(s"unrecognized option '$arg'")
     case fn :: rest =>
       fileName = fn; in = new FileInputStream(fileName); parseArgs(rest)
   }
@@ -301,8 +338,20 @@ class TriCeraParameters extends GlobalParameters {
     if (args isEmpty) {
       doNotExecute = true
       showHelp
-    } else if (!parseArgs(args)) {
+    } else if (!parseArgs(reconstructSpaceSeparatedArgs(args))) {
       doNotExecute = true
     }
+  }
+
+  private def reconstructSpaceSeparatedArgs(args: List[String]): List[String] = {
+    args.foldLeft((List[String](), Option.empty[String])) {
+      case ((acc, Some(buffer)), arg) => (acc :+ (buffer + " " + arg), None)
+      case ((acc, None), arg) =>
+        if (arg.endsWith("\\")) {
+          (acc, Some(arg.dropRight(1)))
+        } else {
+          (acc :+ arg, None)
+        }
+    }._1
   }
 }
