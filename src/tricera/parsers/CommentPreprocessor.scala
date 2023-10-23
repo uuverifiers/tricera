@@ -41,7 +41,7 @@ object CommentPreprocessor {
     var isInComment = false
 
     var line: String = reader.readLine
-    var newLine = new scala.collection.mutable.StringBuilder(line.length)
+    val newLine = new scala.collection.mutable.StringBuilder(line.length)
     var curInd = 0
 
     while (line != null) {
