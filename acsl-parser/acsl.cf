@@ -30,14 +30,18 @@
 -- Figure references are to ACSL Manual:
 -- https://frama-c.com/download/acsl.pdf
 
+-- This grammar merges Predicate and Term into Expr to avoid conflicts.
+
 --- Annotation ---------------------------------------------
 AnnotContract.  Annotation ::= "/*@" FunctionContract "*/";
 AnnotAssertion. Annotation ::= "/*@" Assertion "*/";
 LoopAnnot.      Annotation ::= "/*@" LoopInvariant "*/";
 
+entrypoints Annotation, FunctionContract, Assertion, LoopInvariant;
+
 ---- Assertions --------------------------------------------
-RegularAssertion1. Assertion ::= AssertionKind Predicate ";"  ;
-RegularAssertion2. Assertion ::= AssertionKind Predicate ;
+RegularAssertion. Assertion ::= AssertionKind Expr ;
+_.                Assertion ::= Assertion ";"  ;
 -- BehaviourAssertion. Assertion ::= for id ... (see Figure 2.9 in the ACSL standard)
 
 ---- Contracts (2.6) ---------------------------------------
@@ -51,16 +55,16 @@ SomeClauseKind. MaybeClauseKind ::= ClauseKind ;
 ClauseKindCheck. ClauseKind ::= "check" ;
 ClauseKindAdmit. ClauseKind ::= "admit" ;
 
-ARequiresClause. RequiresClause ::= MaybeClauseKind "requires" Predicate ;
+ARequiresClause. RequiresClause ::= MaybeClauseKind "requires" Expr ;
 terminator RequiresClause ";" ;
 
 NoTerminatesClause.   MaybeTerminatesClause ::= ;
 SomeTerminatesClause. MaybeTerminatesClause ::= TerminatesClause ;
-ATerminatesClause. TerminatesClause ::= "terminates" Predicate ";" ;
+ATerminatesClause. TerminatesClause ::= "terminates" Expr ";" ;
 
 NoDecreasesClause.   MaybeDecreasesClause ::= ;
 SomeDecreasesClause. MaybeDecreasesClause ::= DecreasesClause ;
-ADecreasesClause. DecreasesClause ::= "decreases" Term ";" ; -- TODO: ("for" ident)? 
+ADecreasesClause. DecreasesClause ::= "decreases" Expr ";" ; -- Term -- TODO: ("for" ident)? 
 
 SimpleClauseAssigns. SimpleClause ::= AssignsClause ;
 SimpleClauseEnsures. SimpleClause ::= EnsuresClause ;
@@ -78,14 +82,14 @@ LocationsNothing. Locations ::= "\\nothing" ;
 ALocation. Location ::= TSet ;
 separator nonempty Location "," ;
 
-AnEnsuresClause. EnsuresClause ::= MaybeClauseKind "ensures" Predicate ";" ;
+AnEnsuresClause. EnsuresClause ::= MaybeClauseKind "ensures" Expr ";" ;
 
 ANamedBehavior. NamedBehavior ::= "behavior" Id ":" BehaviorBody ;
 terminator NamedBehavior "" ;
 
 ABehaviorBody. BehaviorBody ::= [AssumesClause] [RequiresClause] [SimpleClause] ;
 
-AnAssumesClause. AssumesClause ::= "assumes" Predicate ;
+AnAssumesClause. AssumesClause ::= "assumes" Expr ;
 separator AssumesClause ";" ;
 
 CompletenessClauseComplete. CompletenessClause ::= "complete" "behaviors" [Id] ;
@@ -94,174 +98,140 @@ terminator CompletenessClause ";" ;
 
 ---- Loops -------------------------------------------------
 -- This is a bit simplified
-LoopInvSimple. LoopInvariant ::= "loop" "invariant" Predicate ";" ;
+LoopInvSimple. LoopInvariant ::= "loop" "invariant" Expr ";" ;
 
----- Predicates (2.2) --------------------------------------
-RelOpEQ.  RelOp ::= "==" ;
-RelOpNEQ. RelOp ::= "!=" ;
-RelOpLEQ. RelOp ::= "<=" ;
-RelOpGEQ. RelOp ::= ">=" ;
-RelOpGT.  RelOp ::= ">" ;
-RelOpLT.  RelOp ::= "<" ;
+---- Expressions (Predicates and Terms) (2.2) ---------------------------------
+
+-- Literals
+LitTrue.   Lit ::= "\\true" ;
+LitFalse.  Lit ::= "\\false" ;
+LitInt.    Lit ::= UnboundedInteger ;
+LitReal.   Lit ::= Double ;
+LitString. Lit ::= String ;
+LitChar.   Lit ::= Char ;
 
 -- In increasing order of precedence.
+-- Associtivities are given in parentheses.
 -- See the ACSL standard for precedence and associativity.
 
--- naming
-PredSyntacticNaming.  Predicate ::= Id ":" Predicate ;
-PredSyntacticNaming2. Predicate ::= String ":" Predicate ;
+-- naming (right)
+ENaming1.    Expr ::= Id ":" Expr ;
+ENaming2.    Expr ::= String ":" Expr ;
 
--- binding
-PredForAll.           Predicate2 ::= "\\forall" [Binder] ";" Predicate2 ;
-PredExists.           Predicate2 ::= "\\exists" [Binder] ";" Predicate2 ;
-PredLocalBinding.     Predicate2 ::= "\\let" Id "=" Term ";" Predicate2 ;
-PredLocalBinding2.    Predicate2 ::= "\\let" Id "=" Predicate2 ";" Predicate ;
+-- binding (left)
+EForAll.     Expr2 ::= "\\forall" [Binder] ";" Expr2 ;
+EExists.     Expr2 ::= "\\exists" [Binder] ";" Expr2 ;
+EBinding.    Expr2 ::= "\\let" Id "=" Expr2 ";" Expr ;
 
--- ternary connective
-PredTernaryCond.      Predicate3 ::= Term "?" Predicate3 ":" Predicate4 ;
-PredTernaryCond2.     Predicate3 ::= Predicate3 "?" Predicate4 ":" Predicate5 ;
+-- ternary connective (right)
+ETernary.    Expr3 ::= Expr3 "?" Expr4 ":" Expr5 ;
 
 -- logical connectives
-PredConjunction.      Predicate8 ::= Predicate9 "&&" Predicate8 ;
-PredXOr.              Predicate7 ::= Predicate8 "^^" Predicate7 ;
-PredDisjunction.      Predicate6 ::= Predicate7 "||" Predicate6 ;
-PredImplication.      Predicate5 ::= Predicate5 "==>" Predicate6 ;
-PredEquivalence.      Predicate4 ::= Predicate5 "<==>" Predicate4 ;
+EEquiv.      Expr4  ::= Expr5 "<==>" Expr4 ; -- (left)
+EImplies.    Expr5  ::= Expr5 "==>" Expr6 ;  -- (right)
+EOr.         Expr6  ::= Expr7 "||" Expr6 ;   -- (left)
+EXOr.        Expr7  ::= Expr8 "^^" Expr7 ;   -- (left)
+EAnd.        Expr8  ::= Expr9 "&&" Expr8 ;   -- (left)
 
-PredTrue.             Predicate9 ::= "\\true" ;
-PredFalse.            Predicate9 ::= "\\false" ;
-PredRelOp.            Predicate9 ::= Term RelOp Term2; -- FIXME: Chained relops allowed.
-PredApplication.      Predicate9 ::= Id "(" [Term2] ")" ;
-PredParentheses.      Predicate9 ::= "(" Predicate8 ")" ;
-PredNegation.         Predicate9 ::= "!" Predicate8 ;
-PredOld.              Predicate9 ::= "\\old" "(" Predicate8 ")" ;
-PredValid.            Predicate9 ::= "\\valid" "(" [Location] ")" ;
+-- bitwise operators
+EBitEquiv.   Expr9  ::= Expr10 "<-->" Expr9 ;  -- (left)
+EBitImplies. Expr10 ::= Expr10 "-->" Expr11 ;  -- (right)
+EBiteOr.     Expr11 ::= Expr12 "|" Expr11 ;    -- (left)
+EBitXOr.     Expr12 ::= Expr13 "^" Expr12 ;    -- (left)
+EBitAnd.     Expr13 ::= Expr14 "&" Expr13 ;    -- (left)
 
-coercions Predicate 9;
+-- Comparison (associativity -)
+EEq.         Expr14  ::= Expr14 "==" Expr15 ;
+ENeq.        Expr14  ::= Expr14 "!=" Expr15 ;
+ERelOp.      Expr15  ::= Expr15 RelOp Expr16; -- FIXME: Chained relops allowed.
 
----- Terms (2.1) -------------------------------------------
-LiteralTrue.   Literal ::= "\\true" ;
-LiteralFalse.  Literal ::= "\\false" ;
--- FIXME: Use C-specific literals.
-LiteralInt.    Literal ::= UnboundedInteger ;
-LiteralReal.   Literal ::= Double ;
-LiteralString. Literal ::= String ;
-LiteralChar.   Literal ::= Char ;
+-- Shift (left)
+ELeftShift.  Expr16  ::= Expr17 "<<" Expr16;
+ERightShift. Expr16  ::= Expr17 ">>" Expr16;
 
-BinOpPlus.         BinOp ::= "+" ;
-BinOpMinus.        BinOp ::= "-" ;
-BinOpMult.         BinOp ::= "*" ;
-BinOpDiv.          BinOp ::= "/" ;
-BinOpMod.          BinOp ::= "%" ;
-BinOpEQ.           BinOp ::= "==" ;
-BinOpNEQ.          BinOp ::= "!=" ;
-BinOpLEQ.          BinOp ::= "<=" ;
-BinOpGEQ.          BinOp ::= ">=" ;
-BinOpGT.           BinOp ::= ">" ;
-BinOpLT.           BinOp ::= "<" ;
-BinOpAnd.          BinOp ::= "&&" ;
-BinOpOr.           BinOp ::= "||" ;
-BinOpXOr.          BinOp ::= "^^" ;
-BinOpLShift.       BinOp ::= "<<" ;
-BinOpRShift.       BinOp ::= ">>" ;
-BinOpBitwiseAnd.   BinOp ::= "&" ;
-BinOpBitwiseOr.    BinOp ::= "|" ;
-BinOpBitwiseImpl.  BinOp ::= "-->" ;
-BinOpBitwiseEquiv. BinOp ::= "<-->" ;
-BinOpBitwiseXOr.   BinOp ::= "^" ;
+-- Additive (left)
+EPlus.       Expr17  ::= Expr18 "+" Expr17;
+EMinus.      Expr17  ::= Expr18 "-" Expr17;
 
-UnaryOpPlus.            UnaryOp ::= "+" ;
-UnaryOpMinus.           UnaryOp ::= "-" ;
-UnaryOpNegation.        UnaryOp ::= "!" ;
-UnaryOpComplementation. UnaryOp ::= "~" ;
-UnaryOpPtrDeref.        UnaryOp ::= "*" ;
-UnaryOpAddressOf.       UnaryOp ::= "&" ;
+-- Multiplicative (left)
+EMult.       Expr18  ::= Expr19 "*" Expr18;
+EDiv.        Expr18  ::= Expr19 "/" Expr18;
+EMod.        Expr18  ::= Expr19 "%" Expr18;
 
--- In increasing order of precedence
+-- Unary (right)
+EUnary.      Expr19 ::= UnaryOp Expr19 ;
 
--- naming
-TermSyntacticNaming.         Term ::= Id ":" Term2 ;
-TermSyntacticNaming2.        Term ::= String ":" Term2 ;
+-- StringInParen is "(" String ")".
+-- This is used to defer parsing of types to the parser.
+-- Note that sizeof can also take a term as argument.
+ETypeCast.   Expr19 ::= StringInParen Expr19 ;
+ESizeOf.     Expr19 ::= "sizeof" StringInParen ;
 
--- binding
-TermLocalBinding.            Term2 ::= "\\let" Id "=" Term3 ";" Term2 ;
+-- Selection (left)
+EArrayAccess.          Expr20 ::= Expr20 "[" Expr19 "]" ; -- Term[Term]
+EStructFieldAccess.    Expr20 ::= Expr20 "." Id ;        -- Term.Term
+EStructPtrFieldAccess. Expr20 ::= Expr20 "->" Id ;
 
---ternary connective
-TermTernaryCond.             Term3 ::= Term4 "?" Term5 ":" Term6 ;
+EArrayFunMod. Expr21 ::= "{" Expr21 "\\with" "[" Expr22 "]" "=" Expr23 "}" ;
+EFieldFunMod. Expr21 ::= "{" Expr21 "\\with" "." Id "=" Expr22 "}" ;
 
-TermBinOp.                   Term4 ::= Term6 BinOp Term5 ;
-TermArrayFunctionalModifier. Term4 ::= "{" Term5 "\\with" "[" Term6 "]" "=" Term7 "}" ;
-TermFieldFunctionalModifier. Term4 ::= "{" Term5 "\\with" "." Id "=" Term6 "}" ;
+EApplication. Expr22 ::= Id "(" [Expr2] ")" ;
+ExprOld.      Expr22 ::= "\\old" "(" Expr22 ")" ;
+ExprValid.    Expr22 ::= "\\valid" "(" [Location] ")" ;
 
-TermUnaryOp.                 Term5 ::= UnaryOp Term6 ;
-TermTypeCast.                Term5 ::= "(" TypeExpr ")" Term6 ;
-TermSizeOfTerm.              Term5 ::= "sizeof" "(" Term6 ")" ;
-TermSizeOfType.              Term5 ::= "sizeof" "(" CTypeSpecifier ")" ; -- FIXME: Should be CTypeExpr
-TermOld.                     Term5 ::= "\\old" "(" Term6 ")" ;
-TermParentheses.             Term5 ::= "(" Term6 ")" ;
-TermFuncAppl.                Term5 ::= Id "(" [Term2] ")" ;
+ELit.         Expr23 ::= Lit ;
+EIdent.       Expr23 ::= Id ;
+EResult.      Expr23 ::= "\\result" ;
 
-TermArrayAccess.             Term6 ::= Term7 "[" Term5 "]" ;
-TermStructFieldAccess.       Term6 ::= Term7 "." Id ;
-TermStructPtrFieldAccess.    Term6 ::= Term7 "->" Id ;
+separator nonempty Expr2 "," ;
+coercions Expr 23;
 
-TermLiteral.                 Term7 ::= Literal ;
-TermIdent.                   Term7 ::= Id ;
-TermResult.                  Term7 ::= "\\result" ;
+UnaryPlus.            UnaryOp ::= "+" ;
+UnaryMinus.           UnaryOp ::= "-" ;
+UnaryNegation.        UnaryOp ::= "!" ;
+UnaryComplementation. UnaryOp ::= "~" ;
+UnaryPtrDeref.        UnaryOp ::= "*" ;
+UnaryAddressOf.       UnaryOp ::= "&" ;
 
-separator nonempty Term2 "," ;
+RelOpLEQ.             RelOp ::= "<=" ;
+RelOpGEQ.             RelOp ::= ">=" ;
+RelOpGT.              RelOp ::= ">" ;
+RelOpLT.              RelOp ::= "<" ;
 
 -- Binders (2.4) -------------------------------------------
-ABinder. Binder ::= TypeName [VariableIdent] ;
+ABinder. Binder ::= Id [VarIdent] ; -- FIXME: Id should be TypeName
 separator nonempty Binder "," ;
 
-TypeNameLogic. TypeName ::= LogicTypeName ;
-TypeNameC.     TypeName ::= CTypeSpecifier ; -- FIXME: Should be CTypeName
+-- TypeNameLogic. TypeName ::= LogicTypeName ;
+-- TypeNameC.     TypeName ::= CTypeSpecifier ; -- FIXME: Should be CTypeName
+-- TypeNameId.    TypeName ::= Id ; -- Can be Logic/C type name
 
 -- NOTE: Referenced but not used in 2.4
-TypeExprLogic. TypeExpr ::= LogicTypeName ;
-TypeExprC.     TypeExpr ::= CTypeSpecifier ; -- FIXME: Should be CTypeExpr
+--TypeExprLogic. TypeExpr ::= LogicTypeName ;
+--TypeExprC.     TypeExpr ::= CTypeSpecifier ; -- FIXME: Should be CTypeExpr
 
-LogicTypeNameBuiltIn. LogicTypeName ::= BuiltInLogicType ;
-LogicTypeNameId.      LogicTypeName ::= Id ;
+-- LogicTypeNameBuiltIn. LogicTypeName ::= BuiltInLogicType ;
 
-BuiltInLogicTypeBoolean. BuiltInLogicType ::= "boolean" ;
-BuiltInLogicTypeInteger. BuiltInLogicType ::= "integer" ;
-BuiltInLogicTypeReal.    BuiltInLogicType ::= "real" ;
+-- BuiltInLogicTypeBoolean. BuiltInLogicType ::= "boolean" ;
+-- BuiltInLogicTypeInteger. BuiltInLogicType ::= "integer" ;
+-- BuiltInLogicTypeReal.    BuiltInLogicType ::= "real" ;
 
-VariableIdentId.          VariableIdent ::= Id ;
-VariableIdentPtrDeref.    VariableIdent ::= "*" VariableIdent ;
-VariableIdentArray.       VariableIdent ::= VariableIdent "[]";
-VariableIdentParentheses. VariableIdent ::= "(" VariableIdent ")";
+VarIdentId.          VarIdent3 ::= Id ;
+VarIdentArray.       VarIdent2  ::= VarIdent3 "[" "]";
+VarIdentPtrDeref.    VarIdent ::= "*" VarIdent2 ;
 
-separator nonempty VariableIdent "," ;
+
+coercions VarIdent 3 ;
+separator nonempty VarIdent "," ;
 
 -- Memory Location Sets (2.8) ------------------------------
 -- TODO: Missing a lot.
 TSetEmpty. TSet ::= "\\empty" ;
-TSetTerm. TSet ::= Term ;
-
-coercions Term 7;
-
--- C Type Expressions (A.1) --------------------------------
--- TODO: Missing a lot. 
-CTypeSpecifierVoid.     CTypeSpecifier ::= "void" ;
-CTypeSpecifierChar.     CTypeSpecifier ::= "char" ;
-CTypeSpecifierShort.    CTypeSpecifier ::= "short" ;
-CTypeSpecifierInt.      CTypeSpecifier ::= "int" ;
-CTypeSpecifierLong.     CTypeSpecifier ::= "long" ;
-CTypeSpecifierFloat.    CTypeSpecifier ::= "float" ;
-CTypeSpecifierDouble.   CTypeSpecifier ::= "double" ;
-CTypeSpecifierSigned.   CTypeSpecifier ::= "signed" ;
-CTypeSpecifierUnsigned. CTypeSpecifier ::= "unsigned" ;
-CTypeSpecifierStruct.   CTypeSpecifier ::= "struct" Id ;
-CTypeSpecifierUnion.    CTypeSpecifier ::= "union" Id ;
-CTypeSpecifierEnum.     CTypeSpecifier ::= "enum" Id ;
-CTypeSpecifierId.       CTypeSpecifier ::= Id ;
-
+TSetTerm. TSet ::= Expr ;
 
 ---- Tokens ------------------------------------------------ 
--- Taken from concorrentC.cf
-token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
-token UnboundedInteger ('0' | (["123456789"] digit *));
+position token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
 separator Id "," ;
+
+token UnboundedInteger ('0' | (["123456789"] digit *));
+token StringInParen '(' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* ')'
