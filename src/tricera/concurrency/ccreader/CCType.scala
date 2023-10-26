@@ -51,6 +51,7 @@ abstract sealed class CCType {
   def toSort: Sort = tricera.params.TriCeraParameters.get.arithMode match {
     case ArithmeticMode.Mathematical =>
       this match {
+        case CCBool                         => Sort.Bool
         case typ: CCArithType if typ.isUnsigned => Sort.Nat
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
@@ -65,6 +66,7 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.ILP32 =>
       this match {
+        case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(32)
@@ -84,6 +86,7 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.LP64 =>
       this match {
+        case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(64)
@@ -103,6 +106,7 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.LLP64 =>
       this match {
+        case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(32)
@@ -193,6 +197,12 @@ abstract class CCArithType extends CCType {
 case object CCVoid extends CCType {
   override def toString: String = "void"
   def shortName = "void"
+}
+
+// Logical type - only to be used in ghost code & annotations
+case object CCBool extends CCType {
+  override def toString: String = "boolean"
+  def shortName = "boolean"
 }
 
 case object CCInt extends CCArithType {

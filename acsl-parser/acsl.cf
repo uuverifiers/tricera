@@ -136,7 +136,7 @@ EAnd.        Expr8  ::= Expr9 "&&" Expr8 ;   -- (left)
 -- bitwise operators
 EBitEquiv.   Expr9  ::= Expr10 "<-->" Expr9 ;  -- (left)
 EBitImplies. Expr10 ::= Expr10 "-->" Expr11 ;  -- (right)
-EBiteOr.     Expr11 ::= Expr12 "|" Expr11 ;    -- (left)
+EBitOr.      Expr11 ::= Expr12 "|" Expr11 ;    -- (left)
 EBitXOr.     Expr12 ::= Expr13 "^" Expr12 ;    -- (left)
 EBitAnd.     Expr13 ::= Expr14 "&" Expr13 ;    -- (left)
 
@@ -176,8 +176,8 @@ EArrayFunMod. Expr21 ::= "{" Expr21 "\\with" "[" Expr22 "]" "=" Expr23 "}" ;
 EFieldFunMod. Expr21 ::= "{" Expr21 "\\with" "." Id "=" Expr22 "}" ;
 
 EApplication. Expr22 ::= Id "(" [Expr2] ")" ;
-ExprOld.      Expr22 ::= "\\old" "(" Expr22 ")" ;
-ExprValid.    Expr22 ::= "\\valid" "(" [Location] ")" ;
+EOld.         Expr22 ::= "\\old" "(" Expr22 ")" ;
+EValid.       Expr22 ::= "\\valid" "(" [Location] ")" ;
 
 ELit.         Expr23 ::= Lit ;
 EIdent.       Expr23 ::= Id ;
