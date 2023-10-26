@@ -52,6 +52,7 @@ abstract sealed class CCType {
     case ArithmeticMode.Mathematical =>
       this match {
         case CCBool                         => Sort.Bool
+        case CCMathInt                      => Sort.Integer
         case typ: CCArithType if typ.isUnsigned => Sort.Nat
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
@@ -68,6 +69,7 @@ abstract sealed class CCType {
       this match {
         case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
+        case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(32)
         case CCULong                        => UnsignedBVSort(32)
@@ -88,6 +90,7 @@ abstract sealed class CCType {
       this match {
         case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
+        case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(64)
         case CCULong                        => UnsignedBVSort(64)
@@ -108,6 +111,7 @@ abstract sealed class CCType {
       this match {
         case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
+        case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(32)
         case CCULong                        => UnsignedBVSort(32)
@@ -210,6 +214,12 @@ case object CCInt extends CCArithType {
   def shortName = "int"
   val UNSIGNED_RANGE: IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
   val isUnsigned:     Boolean  = false
+}
+
+// Logical type - only to be used in ghost code & annotations
+case object CCMathInt extends CCType {
+  override def toString: String = "integer"
+  def shortName = "integer"
 }
 
 case object CCUInt extends CCArithType {

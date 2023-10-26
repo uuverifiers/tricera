@@ -498,8 +498,7 @@ class Main (args: Array[String]) {
                   processor(processedSolution)() // will process all predicates
               }
 
-              println("\nInferred ACSL annotations")
-              println("="*80)
+              var printedACSLHeader = false
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
               for ((fun, ctx) <- contexts
                    if maybeEnc.isEmpty ||
@@ -515,6 +514,11 @@ class Main (args: Array[String]) {
                 val fPostWithArgs =
                   replaceArgs(fPost, ctx.postPredACSLArgNames)
 
+                if (!printedACSLHeader) {
+                  println("\nInferred ACSL annotations")
+                  println("=" * 80)
+                  printedACSLHeader = true
+                }
                 println("/* contracts for " + fun + " */")
                 println("/*@")
                 print(  "  requires "); println(fPreWithArgs + ";")
@@ -528,6 +532,11 @@ class Main (args: Array[String]) {
                     p._1.name.stripPrefix("inv_") == inv.pred.name).get._2
                   val fInvWithArgs =
                     replaceArgs(fInv, inv.argVars.map(_.name))
+                  if (!printedACSLHeader) {
+                    println("\nInferred ACSL annotations")
+                    println("=" * 80)
+                    printedACSLHeader = true
+                  }
                   println("\n/* loop invariant for the loop at line " +
                           srcInfo.line + " */")
                   println("/*@")
@@ -535,7 +544,9 @@ class Main (args: Array[String]) {
                   println("*/")
                 }
               }
-              println("="*80 + "\n")
+              if (printedACSLHeader) {
+                println("=" * 80 + "\n")
+              }
             }
           case None =>
         }

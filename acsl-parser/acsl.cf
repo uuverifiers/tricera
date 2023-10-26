@@ -280,12 +280,12 @@ NewFuncExpr.     CDirAbsDec ::= CDirAbsDec "(" CParamType ")" ;
 AllSpec.  CParamType ::= [CParamDecl] ;
 separator nonempty CParamDecl "," ;
 
-OnlyType.         CParamDecl ::= [CDeclSpec] ;
-TypeAndParam.     CParamDecl ::= [CDeclSpec] CDeclarator ;
-Abstract.         CParamDecl ::= [CDeclSpec] CAbsDec ;
+COnlyType.         CParamDecl ::= [CDeclSpec] ;
+CTypeAndParam.     CParamDecl ::= [CDeclSpec] CDeclarator ;
+CAbstract.         CParamDecl ::= [CDeclSpec] CAbsDec ;
 
-Type.             CDeclSpec ::= CTypeSpec ;
-SpecProp.         CDeclSpec ::= CTypeQual;
+CType.             CDeclSpec ::= CTypeSpec ;
+CSpecProp.         CDeclSpec ::= CTypeQual;
 
 BeginPointer.   CDeclarator ::= CPointer CDirectDeclarator ;
 NoPointer.      CDeclarator ::= CDirectDeclarator ;

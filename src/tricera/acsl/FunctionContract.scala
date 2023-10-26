@@ -44,12 +44,12 @@ class FunctionContract(
   val srcInfo       : SourceInfo,
   val postSrcInfo   : SourceInfo) extends ParsedAnnotation {
   override def toString : String = {
-    s"Pre:  $pre\n" +
-    s"Post: $post\n" +
-    s"Assigns (in asserts): $assignsAssert\n" +
-    s"Assigns (in assumes): $assignsAssume"
+    s"""|requires ${ap.SimpleAPI.pp(pre)}
+        |ensures  ${ap.SimpleAPI.pp(post)}
+        |assigns (in asserts) ${ap.SimpleAPI.pp(assignsAssert)}
+        |assigns (in assumes) ${ap.SimpleAPI.pp(assignsAssume)}
+        |""".stripMargin
   }
-
 }
 
 case class StatementAnnotation(f        : IFormula,
