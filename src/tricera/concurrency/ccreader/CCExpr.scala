@@ -92,6 +92,7 @@ case class CCTerm(t: ITerm, _typ: CCType, _srcInfo: Option[SourceInfo])
                         .asInstanceOf[CCHeapPointer]
                         .heap
                         .nullAddr())
+    case t if _typ == CCBool => t === ap.theories.ADT.BoolADT.True
     case t => !IExpression.eqZero(t)
   }
   def occurringConstants: Seq[IExpression.ConstantTerm] =

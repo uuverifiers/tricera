@@ -1,7 +1,7 @@
 
 
 CUP = java_cup.Main
-CUPFLAGS = -expect 400 -locations
+CUPFLAGS = -expect 7 -locations
 
 JLEX = JLex.Main
 
