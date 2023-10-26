@@ -33,7 +33,9 @@ import ap.basetypes.IdealInt
 import ap.parser.{IFormula, IIntLit, ITerm}
 import ap.theories.{Heap, ADT}
 import tricera.concurrency.CCReader._
-import tricera.concurrency.CCReader.FloatADT._
+import tricera.concurrency.FloatADT
+import tricera.concurrency.DoubleADT
+import tricera.concurrency.LongDoubleADT
 import ap.parser.IExpression.{Sort, _}
 import ap.theories.bitvectors.ModuloArithmetic._
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}

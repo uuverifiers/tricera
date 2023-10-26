@@ -34,6 +34,9 @@ import tricera.concurrency.CCReader._
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import IExpression._
 import ap.theories.rationals.Rationals
+import tricera.concurrency.FloatADT
+import tricera.concurrency.DoubleADT
+import tricera.concurrency.LongDoubleADT
 
 object CCBinaryExpressions {
   object BinaryOperators {

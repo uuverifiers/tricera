@@ -30,7 +30,7 @@
 package tricera.concurrency
 
 import org.scalatest.flatspec.AnyFlatSpec
-import tricera.concurrency.CCReader.Floats._
+import tricera.concurrency.Floats.floatToFraction
 class FractionTest extends AnyFlatSpec {
   // create a dummy file to create an instance of CCReader
 

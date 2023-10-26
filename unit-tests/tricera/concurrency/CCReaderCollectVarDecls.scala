@@ -30,7 +30,9 @@
 package tricera.concurrency
 
 import org.scalatest.flatspec.AnyFlatSpec
-import tricera.concurrency.CCReader
+import CCReader._
+import ccreader._
+import tricera.params.TriCeraParameters
 
 import scala.util.control._
 import scala.math.BigInt
