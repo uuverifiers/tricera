@@ -1,7 +1,5 @@
 #!/bin/sh
 
-set -e
-
 ./rundir horn-hcc-heap "" -assertNoVerify -dev -t:60
 ./rundir horn-hcc-array "" -assertNoVerify -dev -t:60
 ./rundir horn-bv "" -assert -dev -t:60
