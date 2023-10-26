@@ -161,11 +161,10 @@ EMod.        Expr18  ::= Expr19 "%" Expr18;
 -- Unary (right)
 EUnary.      Expr19 ::= UnaryOp Expr19 ;
 
--- StringInParen is "(" String ")".
--- This is used to defer parsing of types to the parser.
--- Note that sizeof can also take a term as argument.
-ETypeCast.   Expr19 ::= StringInParen Expr19 ;
-ESizeOf.     Expr19 ::= "sizeof" StringInParen ;
+-- FIXME: Test that sizeof can also take a term as argument.
+ETypeCast.   Expr19 ::= "(" TypeExpr ")" Expr19 ;
+ESizeOfTerm. Expr19 ::= "sizeof" "(" Expr19 ")" ;
+ESizeOfType. Expr19 ::= "sizeof" "(" CTypeExpr ")" ;
 
 -- Selection (left)
 EArrayAccess.          Expr20 ::= Expr20 "[" Expr19 "]" ; -- Term[Term]
@@ -176,7 +175,7 @@ EArrayFunMod. Expr21 ::= "{" Expr21 "\\with" "[" Expr22 "]" "=" Expr23 "}" ;
 EFieldFunMod. Expr21 ::= "{" Expr21 "\\with" "." Id "=" Expr22 "}" ;
 
 EApplication. Expr22 ::= Id "(" [Expr2] ")" ;
-EOld.         Expr22 ::= "\\old" "(" Expr22 ")" ;
+EOld.         Expr22 ::= "\\old" "(" Expr2 ")" ;
 EValid.       Expr22 ::= "\\valid" "(" [Location] ")" ;
 
 ELit.         Expr23 ::= Lit ;
@@ -199,27 +198,25 @@ RelOpGT.              RelOp ::= ">" ;
 RelOpLT.              RelOp ::= "<" ;
 
 -- Binders (2.4) -------------------------------------------
-ABinder. Binder ::= Id [VarIdent] ; -- FIXME: Id should be TypeName
+ABinder. Binder ::= TypeName [VarIdent] ;
 separator nonempty Binder "," ;
 
--- TypeNameLogic. TypeName ::= LogicTypeName ;
--- TypeNameC.     TypeName ::= CTypeSpecifier ; -- FIXME: Should be CTypeName
--- TypeNameId.    TypeName ::= Id ; -- Can be Logic/C type name
+TypeNameLogic. TypeName ::= LogicTypeName ;
+TypeNameC.     TypeName ::= CTypeName ;
 
 -- NOTE: Referenced but not used in 2.4
---TypeExprLogic. TypeExpr ::= LogicTypeName ;
---TypeExprC.     TypeExpr ::= CTypeSpecifier ; -- FIXME: Should be CTypeExpr
+TypeExprLogic. TypeExpr ::= LogicTypeName ;
+TypeExprC.     TypeExpr ::= CTypeExpr ;
 
--- LogicTypeNameBuiltIn. LogicTypeName ::= BuiltInLogicType ;
+LogicTypeNameBuiltIn. LogicTypeName ::= BuiltInLogicType ;
 
--- BuiltInLogicTypeBoolean. BuiltInLogicType ::= "boolean" ;
--- BuiltInLogicTypeInteger. BuiltInLogicType ::= "integer" ;
--- BuiltInLogicTypeReal.    BuiltInLogicType ::= "real" ;
+BuiltInLogicTypeBoolean. BuiltInLogicType ::= "boolean" ;
+BuiltInLogicTypeInteger. BuiltInLogicType ::= "integer" ;
+BuiltInLogicTypeReal.    BuiltInLogicType ::= "real" ;
 
 VarIdentId.          VarIdent3 ::= Id ;
 VarIdentArray.       VarIdent2  ::= VarIdent3 "[" "]";
 VarIdentPtrDeref.    VarIdent ::= "*" VarIdent2 ;
-
 
 coercions VarIdent 3 ;
 separator nonempty VarIdent "," ;
@@ -229,9 +226,80 @@ separator nonempty VarIdent "," ;
 TSetEmpty. TSet ::= "\\empty" ;
 TSetTerm. TSet ::= Expr ;
 
+-- C types
+ACTypeExpr. CTypeExpr ::= [CSpecQual] CMaybeAbsDec ;
+separator nonempty CSpecQual "" ;
+
+NoAbsDec.   CMaybeAbsDec ::= ;
+SomeAbsDec. CMaybeAbsDec ::= CAbsDec ;
+
+ACTypeName. CTypeName ::= [CDeclSpec] ;
+separator nonempty CDeclSpec "" ;
+
+CSpecQualTypeSpec. CSpecQual ::= CTypeSpec ; 
+CSpecQualTypeQual. CSpecQual ::= CTypeQual ; 
+
+CTypeQualConst.    CTypeQual ::= "const"    ;
+CTypeQualVolat.    CTypeQual ::= "volatile" ;
+
+CStruct.   CCollection ::= "struct" ;
+CUnion.    CCollection ::= "union"  ;
+CEnum.     CCollection ::= "enum"   ;
+
+Tvoid.        CTypeSpec ::= "void";
+Tchar.        CTypeSpec ::= "char";
+Tshort.       CTypeSpec ::= "short";
+Tint.         CTypeSpec ::= "int";
+Tlong.        CTypeSpec ::= "long";
+Tfloat.       CTypeSpec ::= "float";
+Tdouble.      CTypeSpec ::= "double";
+Tsigned.      CTypeSpec ::= "signed";
+Tunsigned.    CTypeSpec ::= "unsigned";
+Tcollection.  CTypeSpec ::= CCollection Id;
+
+PointerStart.    CAbsDec ::= CPointer ;
+Advanced.        CAbsDec ::= CDirAbsDec ;
+PointAdvanced.   CAbsDec ::= CPointer CDirAbsDec ;
+
+ACSinglePointer. CSinglePointer     ::= "*" [CTypeQual] ;
+separator CTypeQual "" ;
+
+ACPointer.       CPointer ::= [CSinglePointer] ;
+separator nonempty CSinglePointer "" ;
+
+WithinParentes.  CDirAbsDec ::= "(" CAbsDec ")" ;
+Array.           CDirAbsDec ::= "[" "]" ;
+InitiatedArray.  CDirAbsDec ::= "[" Expr "]" ;
+UnInitiated.     CDirAbsDec ::= CDirAbsDec "[" "]" ;
+Initiated.       CDirAbsDec ::= CDirAbsDec "[" Expr "]" ;
+OldFunction.     CDirAbsDec ::= "(" ")" ;
+NewFunction.     CDirAbsDec ::= "(" CParamType ")" ;
+OldFuncExpr.     CDirAbsDec ::= CDirAbsDec "(" ")" ;
+NewFuncExpr.     CDirAbsDec ::= CDirAbsDec "(" CParamType ")" ;
+
+AllSpec.  CParamType ::= [CParamDecl] ;
+separator nonempty CParamDecl "," ;
+
+OnlyType.         CParamDecl ::= [CDeclSpec] ;
+TypeAndParam.     CParamDecl ::= [CDeclSpec] CDeclarator ;
+Abstract.         CParamDecl ::= [CDeclSpec] CAbsDec ;
+
+Type.             CDeclSpec ::= CTypeSpec ;
+SpecProp.         CDeclSpec ::= CTypeQual;
+
+BeginPointer.   CDeclarator ::= CPointer CDirectDeclarator ;
+NoPointer.      CDeclarator ::= CDirectDeclarator ;
+
+Name.        CDirectDeclarator ::= Id ;
+ParenDecl.   CDirectDeclarator ::= "(" CDeclarator ")" ;
+InitArray.   CDirectDeclarator ::= CDirectDeclarator "[" Expr "]" ;
+Incomplete.  CDirectDeclarator ::= CDirectDeclarator "[" "]" ;
+MathArray.   CDirectDeclarator ::= CDirectDeclarator "[" "_" "]" ;
+NewFuncDec.  CDirectDeclarator ::= CDirectDeclarator "(" CParamType ")" ;
+OldFuncDec.  CDirectDeclarator ::= CDirectDeclarator "(" ")" ;
+
 ---- Tokens ------------------------------------------------ 
 position token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
 separator Id "," ;
 
 token UnboundedInteger ('0' | (["123456789"] digit *));
-token StringInParen '(' ((char - ["\"\\"]) | ('\\' ["\"\\tnrf"]))* ')'
