@@ -33,12 +33,11 @@ package tricera.acsl
 import tricera.acsl.{Absyn => AST}
 
 import collection.JavaConverters._
-import ap.parser.{IBoolLit, IConstant, IExpression, IFormula, IFormulaITE, IFunApp, IFunction, ISortedQuantified, ISortedVariable, ITerm, ITermITE}
+import ap.parser._
 import ap.theories.nia.GroebnerMultiplication._
 import ap.types.{Sort, SortedConstantTerm}
 import ap.theories.Heap
 import tricera.Util.{SourceInfo, getSourceInfo}
-import tricera.acsl.Absyn.{ACTypeName, ListBinder, LoopInvSimple}
 import tricera.concurrency.ccreader._
 import CCExceptions._
 
@@ -170,7 +169,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
                 stmCtx                  : StatementAnnotationContext)
   : LoopAnnotation = {
     loopInvariantAnnotation match {
-      case inv : LoopInvSimple =>
+      case inv : AST.LoopInvSimple =>
         val f = translate(inv.expr_)
         LoopAnnotation(f.toFormula)
     }
@@ -666,7 +665,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
 //    })
 //  }
 
-  private def bindersToConstants(binders : ListBinder) : Seq[(String, CCTerm)] = {
+  private def bindersToConstants(binders : AST.ListBinder) : Seq[(String, CCTerm)] = {
     binders.asScala.toList.map(_.asInstanceOf[AST.ABinder]).flatMap(b => {
       val ctyp : CCType = getType(b.typename_)
       val idents : Seq[AST.VarIdent] = b.listvarident_.asScala.toList
@@ -692,7 +691,7 @@ class ACSLTranslator(ctx   : ACSLTranslator.AnnotationContext) {
   }
 
   private def getType(typ : AST.CTypeName) : CCType = {
-    val declSpecs = typ.asInstanceOf[ACTypeName].listcdeclspec_.asScala.toList
+    val declSpecs = typ.asInstanceOf[AST.ACTypeName].listcdeclspec_.asScala.toList
     getType(for (specifier <- declSpecs.iterator;
                  if (specifier.isInstanceOf[AST.CType]))
             yield specifier.asInstanceOf[AST.CType].ctypespec_)
