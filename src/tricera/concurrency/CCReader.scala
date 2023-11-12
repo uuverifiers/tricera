@@ -4108,7 +4108,8 @@ class CCReader private (prog : Program,
                           compound : Compound_stm,
                           exit : CCPredicate) : Unit = compound match {
       case compound : ScompOne =>
-        output(addRichClause(Clause(atom(exit, allVarInits), List(), globalPreconditions),
+        output(addRichClause(Clause(atom(exit, allVarInits take exit.arity),
+                                    List(), globalPreconditions),
           Some(getSourceInfo(compound)))
         )
       case compound : ScompTwo => {
@@ -4185,7 +4186,8 @@ class CCReader private (prog : Program,
                           exit : CCPredicate) : Unit = compound match {
       case compound : ScompOne => {
         val vars = allFormalVarTerms
-        output(addRichClause(Clause(atom(exit, vars), List(atom(entry, vars)), true),
+        output(addRichClause(Clause(atom(exit, vars take exit.arity),
+                                    List(atom(entry, vars take entry.arity)), true),
           Some(getSourceInfo(compound))))
       }
       case compound : ScompTwo => {
@@ -4395,7 +4397,9 @@ class CCReader private (prog : Program,
         stm match {
           case stm : SselOne => {
             translate(stm.stm_, first, exit)
-            output(addRichClause(Clause(atom(exit, vars), List(atom(second, vars)), true),
+            output(addRichClause(
+              Clause(atom(exit, vars take exit.arity),
+                     List(atom(second, vars take second.arity)), true),
               Some(srcInfo1))) // todo: correct line no?
           }
           case stm : SselTwo => {
@@ -4486,7 +4490,7 @@ class CCReader private (prog : Program,
                 case _ => // nothing
               }
             }
-            val args = allFormalVarTerms take (rp.arity)
+            val args = allFormalVarTerms take rp.arity
             output(addRichClause(Clause(atom(rp, args),
                           List(atom(nextPred, allFormalVarTerms take nextPred.arity)),
                           true), srcInfo))
@@ -4506,7 +4510,7 @@ class CCReader private (prog : Program,
               localVars.addVar(rp.argVars.last)
               var nextPred = newPred(Nil, srcInfo)
               val args = symex.getValuesAsTerms ++ List(retValue.toTerm)
-              symex outputClause(atom(nextPred, args), srcInfo) //output one clause in case return expr modifies heap
+              symex outputClause(atom(nextPred, args take nextPred.arity), srcInfo) //output one clause in case return expr modifies heap
               val freeSymex = Symex(nextPred) // reinitialise init atom
               // free stack allocated arrays that use the theory of heap
               for (v <- localVars.getVarsInTopFrame) v.typ match {
@@ -4534,7 +4538,7 @@ class CCReader private (prog : Program,
       }
       case _ : SjumpAbort | _ : SjumpExit => { // abort() or exit(int status)
         output(addRichClause(Clause(atom(globalExitPred, Nil),
-                      List(atom(entry, allFormalVarTerms)),
+                      List(atom(entry, allFormalVarTerms take entry.arity)),
                       true), srcInfo))
       }
     }
