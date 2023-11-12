@@ -1050,8 +1050,11 @@ class CCReader private (prog : Program,
                   case _                                         => // nothing
                 }
                 assertionClauses +=
-                  addRichClause(((heap.read(args.head.term, addrVar.term) === defObj()) :- (atom(finalPred.pred, allFormalVarTerms.toList ++
-                    resVar.map(v => IConstant(v.term))) &&& excludedAddresses)),
+                  addRichClause(((heap.read(args.head.term, addrVar.term) === defObj()) :-
+                    (atom(finalPred,
+                       allFormalVarTerms.toList ++
+                       resVar.map(v => IConstant(v.term)) take finalPred.arity)
+                     &&& excludedAddresses)),
                     None) // todo: add proper line numbers for auto-added free assertions
               case _ => throw new TranslationException("Tried to add -memtrack" +
                 "assertion but could not find the heap term!")
@@ -2051,12 +2054,16 @@ class CCReader private (prog : Program,
     }
   }
 
-  private def atom(pred : Predicate, args : Seq[ITerm]) =
-    IAtom(pred, args take pred.arity)
-  private def atom(ccPred : CCPredicate, args : Seq[ITerm]) : IAtom =
-    atom(ccPred.pred, args)
+  private def atom(ccPred : CCPredicate, args : Seq[ITerm]) : IAtom = {
+    if (ccPred.arity != args.size) {
+      throw new TranslationException(getLineString(ccPred.srcInfo) +
+        s"$ccPred expects ${ccPred.arity} argument(s)" +
+        s", but got ${args.size}: " + args.mkString(", "))
+    }
+    IAtom(ccPred.pred, args)
+  }
   private def atom(ccPred : CCPredicate) : IAtom =
-    atom(ccPred.pred, ccPred.argVars.map(_.term))
+    atom(ccPred, ccPred.argVars.map(_.term))
 
   private class Symex private (oriInitPred : CCPredicate,
                                values : Buffer[CCExpr]) {
@@ -2213,7 +2220,7 @@ class CCReader private (prog : Program,
       if (oriInitPred == null)
         null
       else
-        atom(oriInitPred, allFormalVarTerms)
+        atom(oriInitPred, allFormalVarTerms take oriInitPred.arity)
     private def initPred = predCCPredMap(initAtom.pred)
 
     def initAtomArgs = if(initAtom != null) Some(initAtom.args) else None
@@ -2306,7 +2313,7 @@ class CCReader private (prog : Program,
       import HornClauses._
       if (initAtom == null)
         throw new TranslationException("too complicated initialiser")
-      val clause = asAtom(pred.pred) :- (initAtom &&& guard)
+      val clause = asAtom(pred) :- (initAtom &&& guard)
       addRichClause(clause, srcInfo)
     }
 
@@ -2317,7 +2324,7 @@ class CCReader private (prog : Program,
       val c = genClause(pred, srcInfo)
       if (!c.clause.hasUnsatConstraint)
         output(c, sync)
-      resetFields(pred.pred)
+      resetFields(pred)
     }
 
     def outputClause(headAtom : IAtom,
@@ -2328,8 +2335,8 @@ class CCReader private (prog : Program,
         output(addRichClause(clause, srcInfo))
     }
 
-    def resetFields(pred : Predicate) : Unit = {
-      initAtom = atom(pred, allFormalVarTerms)
+    def resetFields(pred : CCPredicate) : Unit = {
+      initAtom = atom(pred, allFormalVarTerms take pred.arity)
       guard = true
       touchedGlobalState = false
       assignedToStruct = false
@@ -2455,7 +2462,7 @@ class CCReader private (prog : Program,
     def getValuesAsTerms : Seq[ITerm] =
       for (expr <- values.toList) yield expr.toTerm
 
-    def asAtom(pred : Predicate) = atom(pred, getValuesAsTerms)
+    def asAtom(pred : CCPredicate) = atom(pred, getValuesAsTerms.take(pred.arity))
 
     def asLValue(exp : Exp) : String = exp match {
       case exp : Evar    => exp.cident_
@@ -3101,11 +3108,11 @@ class CCReader private (prog : Program,
           case "assert" | "static_assert" | "__VERIFIER_assert"
                           if (exp.listexp_.size == 1) => {
           val property = exp.listexp_.head match {
-            case atom : Efunkpar
-              if uninterpPredDecls contains (printer print atom.exp_) =>
-              val args = atom.listexp_.map(atomicEval).map(_.toTerm)
-              val pred = uninterpPredDecls(printer print atom.exp_)
-              IAtom(pred.pred, args)
+            case a : Efunkpar
+              if uninterpPredDecls contains (printer print a.exp_)      =>
+              val args = a.listexp_.map(atomicEval).map(_.toTerm)
+              val pred = uninterpPredDecls(printer print a.exp_)
+              atom(pred, args)
             case interpPred : Efunkpar
               if interpPredDefs contains(printer print interpPred.exp_) =>
               val args = interpPred.listexp_.map (atomicEval).map (_.toTerm)
@@ -3122,11 +3129,11 @@ class CCReader private (prog : Program,
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) => {
           val property = exp.listexp_.head match {
-            case atom : Efunkpar
-              if uninterpPredDecls contains(printer print atom.exp_) =>
-              val args = atom.listexp_.map(atomicEval).map(_.toTerm)
-              val pred = uninterpPredDecls(printer print atom.exp_)
-              IAtom(pred.pred, args)
+            case a : Efunkpar
+              if uninterpPredDecls contains(printer print a.exp_) =>
+              val args = a.listexp_.map(atomicEval).map(_.toTerm)
+              val pred = uninterpPredDecls(printer print a.exp_)
+              atom(pred, args)
             case interpPred : Efunkpar
               if interpPredDefs contains (printer print interpPred.exp_) =>
               val args = interpPred.listexp_.map(atomicEval).map(_.toTerm)
@@ -3519,7 +3526,7 @@ class CCReader private (prog : Program,
             pushFormalVal(CCInt, srcInfo)
           else
             pushFormalVal(typ, srcInfo)
-          resetFields(functionExit.pred)
+          resetFields(functionExit)
         }
         case None => (functionDecls get name) match {
           case Some((fundecl, typ)) => {
@@ -3797,7 +3804,7 @@ class CCReader private (prog : Program,
       // add a default return edge
       val rp = returnPred.get
       output(addRichClause(Clause(atom(rp, allFormalVarTerms take rp.arity),
-                    List(atom(finalPred, allFormalVarTerms)),
+                    List(atom(finalPred, allFormalVarTerms  take finalPred.arity)),
                     true), exitSrcInfo))
       postProcessClauses
     }
@@ -3891,19 +3898,20 @@ class CCReader private (prog : Program,
          yield p).toSet
 
       for ((Clause(IAtom(pred, _), _, _), _) <- clauses.iterator)
-        if (!(bodyPreds contains pred) && (usedJumpTargets contains pred))
-          throw new TranslationException("cannot goto label " +
-                                         usedJumpTargets(pred) +
-                                         ", which was eliminated due to " +
-                                         "atomic blocks")
+        if (!(bodyPreds contains pred) &&
+            (usedJumpTargets.exists(t => t._1.pred == pred)))
+          throw new TranslationException(
+            "cannot goto label" +
+            usedJumpTargets.find(t => t._1.pred == pred).get._2 +
+            "which was eliminated due to atomic blocks")
     }
 
     private val jumpLocs =
-      new ArrayBuffer[(String, Predicate, Seq[ITerm], Int, SourceInfo)]
+      new ArrayBuffer[(String, CCPredicate, Seq[ITerm], Int, SourceInfo)]
     private val labelledLocs =
-      new MHashMap[String, (Predicate, Seq[ITerm])]
+      new MHashMap[String, (CCPredicate, Seq[ITerm])]
     private val usedJumpTargets =
-      new MHashMap[Predicate, String]
+      new MHashMap[CCPredicate, String]
     private val atomicBlocks =
       new ArrayBuffer[(Int, Int)]
 
@@ -4082,7 +4090,7 @@ class CCReader private (prog : Program,
       case stm : SlabelOne => { // Labeled_stm ::= CIdent ":" Stm ;
         if (labelledLocs contains stm.cident_)
           throw new TranslationException("multiple labels " + stm.cident_)
-        labelledLocs.put(stm.cident_, (entry.pred, allFormalVarTerms))
+        labelledLocs.put(stm.cident_, (entry, allFormalVarTerms))
         translate(stm.stm_, entry, exit)
       }
       case stm : SlabelTwo => { // Labeled_stm ::= "case" Constant_expression ":" Stm ;
@@ -4113,7 +4121,7 @@ class CCReader private (prog : Program,
         var entryPred = newPred(Nil,
           if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
         var entryClause =
-          Clause(atom(entryPred, allVarInits), List(), globalPreconditions)
+          Clause(atom(entryPred, allVarInits take entryPred.arity), List(), globalPreconditions)
 
         while (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
           val decSymex = Symex(entryPred)
@@ -4214,8 +4222,9 @@ class CCReader private (prog : Program,
                 }
                 freeSymex.outputClause(exit, srcInfo)
               } else {
-                output(addRichClause(Clause(atom(exit, allFormalVarTerms),
-                  List(atom(prevPred, allFormalVarTerms)),
+                output(addRichClause(Clause(
+                  atom(exit, allFormalVarTerms take exit.arity),
+                  List(atom(prevPred, allFormalVarTerms take prevPred.arity)),
                   true), srcInfo))
               }
             }
@@ -4444,7 +4453,7 @@ class CCReader private (prog : Program,
       val srcInfo = Some(getSourceInfo(jump)) // todo: correct line no?
       jump match {
       case jump : SjumpOne => { // goto
-        jumpLocs += ((jump.cident_, entry.pred, allFormalVarTerms, clauses.size,
+        jumpLocs += ((jump.cident_, entry, allFormalVarTerms, clauses.size,
           getSourceInfo(jump)))
         // reserve space for the later jump clause
         output(CCClause(null, null))
@@ -4479,7 +4488,7 @@ class CCReader private (prog : Program,
             }
             val args = allFormalVarTerms take (rp.arity)
             output(addRichClause(Clause(atom(rp, args),
-                          List(atom(nextPred, allFormalVarTerms)),
+                          List(atom(nextPred, allFormalVarTerms take nextPred.arity)),
                           true), srcInfo))
           }
           case None =>
@@ -4510,7 +4519,7 @@ class CCReader private (prog : Program,
               }
               val retArgs = (freeSymex.getValuesAsTerms take (rp.arity - 1)) ++
                 Seq(freeSymex.getValuesAsTerms.last)
-              freeSymex outputClause(atom(rp.pred, retArgs), srcInfo)
+              freeSymex outputClause(atom(rp, retArgs), srcInfo)
               localVars.popFrame
             } else {
               val args = (symex.getValuesAsTerms take (rp.arity - 1)) ++
@@ -4562,7 +4571,8 @@ class CCReader private (prog : Program,
               throw new TranslationException(
                 "expressions with side-effects are not supported in \"within\"")
             import HornClauses._
-            timeInvariants += (cond :- atom(entry, allFormalVarTerms))
+            timeInvariants +=
+              (cond :- atom(entry, allFormalVarTerms take entry.arity))
             condSymex outputClause(first, srcInfo)
             translate(stm.stm_, first, exit)
           }
