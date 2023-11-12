@@ -1,18 +1,33 @@
 #!/bin/sh
 
-./rundir horn-hcc-heap "" -assertNoVerify -dev -t:60
-./rundir horn-hcc-array "" -assertNoVerify -dev -t:60
-./rundir horn-bv "" -assert -dev -t:60
-./rundir horn-hcc "" -assert -dev -t:60
-./rundir horn-hcc-2 "" -assert -dev -t:60
-./rundir horn-hcc-pointer "" -assert -dev -t:60
-./rundir horn-hcc-struct "" -assert -dev -t:60
-./rundir horn-hcc-enum "" -assert -dev -t:60
-./rundir horn-contracts "" -assert -dev -t:60
-./rundir acsl-contracts "" -assertNoVerify -t:60
-./rundir acsl-standalone "" -m:foo -assertNoVerify -cex -t:60
-./rundir uninterpreted-predicates "" -assert -dev -t:60
-./rundir math-arrays  "" -assert -dev -t:60
-./rundir quantifiers "" -assert -dev -t:60
-./rundir interpreted-predicates "" -assert -dev -t:60
-#./rundir ParametricEncoder ""
+ERRORS=0
+
+run_test() {
+    "$@"
+    if [ $? -ne 0 ]; then
+        ERRORS=1
+    fi
+}
+
+run_test ./rundir horn-hcc-heap "" -assertNoVerify -dev -t:60
+run_test ./rundir horn-hcc-array "" -assertNoVerify -dev -t:60
+run_test ./rundir horn-bv "" -assert -dev -t:60
+run_test ./rundir horn-hcc "" -assert -dev -t:60
+run_test ./rundir horn-hcc-2 "" -assert -dev -t:60
+run_test ./rundir horn-hcc-pointer "" -assert -dev -t:60
+run_test ./rundir horn-hcc-struct "" -assert -dev -t:60
+run_test ./rundir horn-hcc-enum "" -assert -dev -t:60
+run_test ./rundir horn-contracts "" -assert -dev -t:60
+run_test ./rundir acsl-contracts "" -assertNoVerify -t:60
+run_test ./rundir acsl-standalone "" -m:foo -assertNoVerify -cex -t:60
+run_test ./rundir uninterpreted-predicates "" -assert -dev -t:60
+run_test ./rundir math-arrays  "" -assert -dev -t:60
+run_test ./rundir quantifiers "" -assert -dev -t:60
+run_test ./rundir interpreted-predicates "" -assert -dev -t:60
+#run_test ./rundir ParametricEncoder ""
+
+if [ $ERRORS -ne 0 ]; then
+    exit 1
+fi
+
+exit 0
