@@ -34,9 +34,16 @@ import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 
-object ADTExploder extends SolutionProcessor {
+object ADTExploder extends SolutionProcessor 
+                      with ContractProcessor {
   def apply(expr : IExpression) : IExpression =
     Rewriter.rewrite(expr, explodeADTs)
+
+  def processContractCondition(
+      cci: ContractConditionInfo
+  ): IExpression = {
+    apply(cci.contractCondition)
+  }
 
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
@@ -75,7 +82,7 @@ object ADTExploder extends SolutionProcessor {
         val selectors = adt.selectors(ctorIndex)
         (for ((fieldTerm, selectorInd) <- selectorTerms zipWithIndex)
           yield selectors(selectorInd)(newRootTerm) ===
-            fieldTerm.asInstanceOf[ITerm]).reduce(_ &&& _)
+            fieldTerm).reduce(_ &&& _)
       }
 
       t match {
