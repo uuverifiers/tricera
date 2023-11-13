@@ -2601,6 +2601,18 @@ class CCReader private (prog : Program,
       res
     }
 
+    def atomicEvalFormula(exp : Exp) : CCFormula = {
+      val initSize         = values.size
+
+      inAtomicMode{
+        evalHelp(exp)(EvalSettings.default)
+      }
+
+      val res = popVal
+      assert(initSize == values.size)
+      CCFormula(res.toFormula, res.typ, res.srcInfo)
+    }
+
     // This function returns the actual term after an assignment is done.
     // E.g. for non ADT lhs, this is the same as the rhs,
     //      for ADT lhs, this is the lhs updated with the value of rhs.
@@ -3142,7 +3154,7 @@ class CCReader private (prog : Program,
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.f, (args.toList, 0))
             case _ =>
-              atomicEval(exp.listexp_.head).toFormula
+              atomicEvalFormula(exp.listexp_.head).f
           }
           addGuard(property)
           pushVal(CCFormula(true, CCInt, srcInfo))
