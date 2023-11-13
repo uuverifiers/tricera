@@ -3133,7 +3133,7 @@ class CCReader private (prog : Program,
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor (formula.f, (args.toList, 0) )
             case _ =>
-              atomicEval(exp.listexp_.head).toFormula
+              atomicEvalFormula(exp.listexp_.head).f
           }
           assertProperty(property, srcInfo)
           pushVal(CCFormula(true, CCInt, srcInfo))

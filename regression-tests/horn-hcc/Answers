@@ -147,20 +147,20 @@ SAFE
 function-in-assume-assert-1-false.c
 UNSAFE
 
------------------
+----------------
 Init:
-   main4(0, 1)   
------------------
-        |        
-        |        
-        V        
- main11(0, 1, 0) 
------------------
+  main4(0, 1)   
+----------------
+       |        
+       |        
+       V        
+ main9(0, 1, 1) 
+----------------
 Final:
- main11(0, 1, 0) 
------------------
+ main9(0, 1, 1) 
+----------------
 Failed assertion:
-false :- main11(x:10, y:11, __eval5_9:5), __eval5_9:5 = 0. (line 13)
+false :- main9(x:10, y:11, __eval5_7:5), __eval5_7:5 != 0. (line 13)
 
 
 function-in-assume-assert-1-true.c
@@ -169,20 +169,20 @@ SAFE
 function-in-assume-assert-2-false.c
 UNSAFE
 
------------------
+--------------------
 Init:
-   main4(2, 1)   
------------------
-        |        
-        |        
-        V        
- main17(2, 1, 0) 
------------------
+    main4(2, 1)     
+--------------------
+         |          
+         |          
+         V          
+ main13(2, 1, 2, 1) 
+--------------------
 Final:
- main17(2, 1, 0) 
------------------
+ main13(2, 1, 2, 1) 
+--------------------
 Failed assertion:
-false :- main17(x:10, y:11, __eval10_29:10), __eval10_29:10 = 0. (line 13)
+false :- main13(x:10, y:11, __eval10_13:10, __eval1_27:1), __eval10_13:10 != __eval1_27:1. (line 13)
 
 
 function-in-assume-assert-2-true.c
@@ -191,20 +191,20 @@ SAFE
 function-in-assume-assert-3-false.c
 UNSAFE
 
------------------
+--------------------
 Init:
-   main4(2, 1)   
------------------
-        |        
-        |        
-        V        
- main21(2, 1, 0) 
------------------
+    main4(2, 1)     
+--------------------
+         |          
+         |          
+         V          
+ main16(2, 1, 2, 1) 
+--------------------
 Final:
- main21(2, 1, 0) 
------------------
+ main16(2, 1, 2, 1) 
+--------------------
 Failed assertion:
-false :- main21(x:12, y:13, __eval12_33:12), __eval12_33:12 = 0. (line 15)
+false :- main16(x:12, y:13, __eval12_15:12, __eval1_31:1), __eval12_15:12 != __eval1_31:1. (line 15)
 
 
 function-in-assume-assert-3-true.c
