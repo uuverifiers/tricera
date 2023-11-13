@@ -324,15 +324,6 @@ valid-memsafety/valid-memtrack
 
 simple-alloca-memsafety2.c
 Warning: enabling heap model
-Warning: The following clause has different terms with the same name (term: a:2)
-false :- main2(@h), !is_O_Int(read(@h, nthAddrRange(a:2, 0))) & @h = @h & a:2 = AddrRange(nullAddr, 0) & @h = newBatchHeap(batchAlloc(@h, O_Int(_), 42)) & a:2 = newAddrRange(batchAlloc(@h, O_Int(_), 42)).
-
-Warning: The following clause has different terms with the same name (term: a:2)
-false :- main2(@h), is_O_Int(read(@h, nthAddrRange(a:2, 0))) & !within(a:2, nthAddrRange(a:2, 0)) & @h = @h & a:2 = AddrRange(nullAddr, 0) & @h = newBatchHeap(batchAlloc(@h, O_Int(_), 42)) & a:2 = newAddrRange(batchAlloc(@h, O_Int(_), 42)).
-
-Warning: The following clause has different terms with the same name (term: a:2)
-false :- main2(@h), is_O_Int(read(@h, nthAddrRange(a:2, 0))) & !is_O_Int(read(@h, nthAddrRange(a:2, 0))) & @h = @h & a:2 = AddrRange(nullAddr, 0) & @h = newBatchHeap(batchAlloc(@h, O_Int(_), 42)) & a:2 = newAddrRange(batchAlloc(@h, O_Int(_), 42)).
-
 SAFE
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
