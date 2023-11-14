@@ -1,0 +1,19 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="forall1-UB.c \
+  max_eq-UB.c \
+  min_eq-UB.c \
+  simple-max-false.c \
+  simple-max-true.c \
+  simple-sum-false.c \
+  simple-sum-true.c \
+  strategy-example-1-false.c \
+  strategy-example-1-true.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -heaparrays -onlyexq -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done

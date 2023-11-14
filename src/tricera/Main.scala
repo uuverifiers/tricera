@@ -399,7 +399,7 @@ class Main (args: Array[String]) {
     val executionResult = result match {
       case Left(res) =>
         println("SAFE")
-        if (runStats.usedExtendedQuantifiers) {
+        if (log && runStats.usedExtendedQuantifiers) {
           print("Search space sizes: ")
           println(runStats.extendedQuantifierSearchSpaceSizes.toSeq.
             sortBy(_._1).mkString(","))

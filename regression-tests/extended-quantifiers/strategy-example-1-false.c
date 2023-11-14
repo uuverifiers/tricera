@@ -8,11 +8,11 @@ void main(){
   int m = 0;
 
   for (int i = 0; i < N; ++i) {
-    int t = arr1[i];             // (stmt1)
-    int s = arr2[i];             // (stmt2)
+    int t = arr1[i];
+    int s = arr2[i];
     if (t > m)
       m = t;
   }
   arr1[N-1] = 42;
-  assert(m >= \max(arr1, 0, N));   // (stmt3)
+  assert(m >= \max(arr1, 0, N));
 }
