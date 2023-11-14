@@ -44,7 +44,7 @@ lazy val acslParser = (project in file("acsl-parser")).
 
 lazy val pp = taskKey[Unit]("")
 pp := {
-  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.1/tri-pp")
+  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.2/tri-pp")
   f #> file("tri-pp") !
 }
 def addExecutePermissions(file : File) {
@@ -101,7 +101,7 @@ settings(
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
 //  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.9-ext",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "1.0-ext",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "1.1-ext",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",

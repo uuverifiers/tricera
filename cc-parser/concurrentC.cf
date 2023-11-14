@@ -41,13 +41,18 @@ ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
 NoDeclarator.    Dec ::= [Declaration_specifier] [Extra_specifier] ";";
 Declarators.     Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
 PredDeclarator.  Dec ::= "/*$" [Pred_hint] "$*/";
+InterpPredDeclarator. Dec ::= "/*$" Pred_interp "$*/";
 
 
 separator nonempty Dec "";
 
 separator Pred_hint ",";
-PredicateHint. Pred_hint ::= CIdent "(" [Type_specifier] ")";
+PredicateHint. Pred_hint ::= CIdent "(" Parameter_type ")";
 separator nonempty Type_specifier ",";
+
+-- An interpreted predicate
+PredicateExp. Pred_interp ::= CIdent "(" Parameter_type ")" "{" Exp "}" ;
+
 
 AChan. Chan_def ::= "chan" [CIdent] ";" ;
 
@@ -225,15 +230,16 @@ NewFuncExpr.     Dir_abs_dec ::= Dir_abs_dec "(" Parameter_type ")" ;
 
 
 
-LabelS.      Stm ::= Labeled_stm ;
-CompS.       Stm ::= Compound_stm ;
-ExprS.       Stm ::= Expression_stm ;
-SelS.        Stm ::= Selection_stm ;
-IterS.       Stm ::= Iter_stm ;
-JumpS.       Stm ::= Jump_stm ;
-DecS.        Stm ::= Dec ; -- beyond ANSI-C
-AtomicS.     Stm ::= Atomic_stm ;
-AnnotationS. Stm ::= Annotation ;
+LabelS.         Stm ::= Labeled_stm ;
+CompS.          Stm ::= Compound_stm ;
+ExprS.          Stm ::= Expression_stm ;
+SelS.           Stm ::= Selection_stm ;
+IterS.          Stm ::= Iter_stm ;
+JumpS.          Stm ::= Jump_stm ;
+DecS.           Stm ::= Dec ; -- beyond ANSI-C
+AtomicS.        Stm ::= Atomic_stm ;
+AnnotationS.    Stm ::= Annotation ;
+AnnotatedIterS. Stm ::= Annotation Iter_stm ;
 
 SlabelOne.   Labeled_stm ::= CIdent ":" Stm ;
 SlabelTwo.   Labeled_stm ::= "case" Constant_expression ":" Stm ;

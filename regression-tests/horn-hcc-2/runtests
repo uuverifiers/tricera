@@ -36,4 +36,4 @@ done
 
 echo
 echo hints4.hcc
-$LAZABS -statistics -abstract:off "$@" hints4.hcc 2>&1 | grep 'SAFE\|CEGAR iterations'
+$LAZABS -log:1 -abstract:off "$@" hints4.hcc 2>&1 | grep 'SAFE\|CEGAR iterations'

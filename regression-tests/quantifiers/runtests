@@ -2,14 +2,10 @@
 
 LAZABS=../../tri
 
-TESTS="ext-exist-1-true.c \
-  ext-exist-1-false.c \
-  ext-forall-1-true.c \
-  ext-forall-1-false.c \
-  ext-forall-2-UB-true.c"
+TESTS="ext-univ-1-safe.hcc ext-univ-2-safe.hcc ext-univ-3-nonzero-lo-safe.hcc ext-univ-4-empty-safe.hcc ext-univ-5-cmpN-safe.hcc ext-univ-1-unsafe.hcc"
 
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -heaparrays -onlyexq "$@" $name 2>&1 | grep -v 'at '
+    $LAZABS -cex -abstract:off -mathArrays "$@" $name 2>&1 | grep -v 'at '
 done

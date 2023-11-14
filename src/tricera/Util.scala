@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2021-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,12 +28,14 @@
  */
 
 package tricera
-import ap.parser.{CollectingVisitor, ConstantSubstVisitor, ExpressionReplacingVisitor, IAtom, IBinJunctor, IConstant, IEquation, IExpression, IFormula, IFormulaITE, IFunApp, IFunction, IIntFormula, IIntRelation, INot, ITerm, IVariableBinder, LineariseVisitor, SymbolCollector, Transform2NNF}
+import ap.parser.IExpression.ConstantTerm
+import ap.parser._
 import ap.terfor.preds.Predicate
 import ap.theories.{ExtArray, Theory}
-import ap.types.MonoSortedIFunction
+import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import lazabs.horn.bottomup.HornClauses
-import tricera.concurrency.CCReader.TranslationException
+import lazabs.horn.bottomup.HornClauses.Clause
+import tricera.concurrency.ccreader.CCExceptions._
 import tricera.concurrency.concurrent_c.Absyn._
 import tricera.params.TriCeraParameters
 
@@ -114,7 +116,15 @@ object Util {
 
   def getLineString(exp: Exp): String = {
     val sourceInfo = getSourceInfo(exp)
-    "At line " + sourceInfo.line + " (offset " + sourceInfo.offset + "): "
+    getLineString(Some(sourceInfo))
+  }
+
+  def getLineString(maybeSourceInfo : Option[SourceInfo]) : String = {
+    maybeSourceInfo match {
+      case Some(sourceInfo) =>
+        "At line " + sourceInfo.line + " (offset " + sourceInfo.offset + "): "
+      case None => ""
+    }
   }
 
   /**
@@ -218,9 +228,10 @@ object Util {
   * */
 
   def show[D](d : Dag[D], name : String,
-              relatedAssertionSourceInfos : Seq[SourceInfo],
+              clauseSrcInfos : Map[Clause, Seq[SourceInfo]], // todo: this is actually a bit overkill, we do not need the rich clause, only used in assertions (for others we look at predicate lines)
               predArgNames : IExpression.Predicate => Seq[String],
-              predSrcInfos : IExpression.Predicate => Option[SourceInfo]) : Unit = {
+              predSrcInfos : IExpression.Predicate => Option[SourceInfo],
+              isUnintPred  : Predicate => Boolean) : Unit = {
     if (!TriCeraParameters.get.pngNo) {
       val runTime = Runtime.getRuntime
       val filename = if (TriCeraParameters.get.dotSpec)
@@ -229,15 +240,15 @@ object Util {
         "dag-graph-" + name + ".dot"
       val dotOutput = new java.io.FileOutputStream(filename)
       Console.withOut(dotOutput) {
-        dotPrint(d, relatedAssertionSourceInfos,
-                 predArgNames, predSrcInfos)
+        dotPrint(d, clauseSrcInfos, predArgNames, predSrcInfos, isUnintPred)
       }
       dotOutput.close
 
       if (TriCeraParameters.get.eogCEX) {
         var proc = runTime.exec( "dot -Tpng " + filename + " -o " + filename + ".png" )
         proc.waitFor
-        proc = runTime.exec( "eog " + filename + ".png")
+        val imageViewer = if (System.getProperty("os.name") == "Mac OS X") "open -a Preview" else "eog"
+        proc = runTime.exec( imageViewer + " " + filename + ".png")
         //    proc.waitFor
       }
     }
@@ -275,9 +286,10 @@ object Util {
   }
 
   def dotPrint[D](dag : Dag[D],
-                  relatedAssertionSourceInfos : Seq[SourceInfo],
+                  clauseSrcInfos : Map[Clause, Seq[SourceInfo]],
                   predArgNames : IExpression.Predicate => Seq[String],
-                  predSrcInfos : IExpression.Predicate => Option[SourceInfo]) : Unit = {
+                  predSrcInfos : IExpression.Predicate => Option[SourceInfo],
+                  isUnintPred  : Predicate => Boolean) : Unit = {
 
     val argColorMap = new MHashMap[String, String]
 
@@ -296,70 +308,80 @@ object Util {
 
     println("digraph dag {")
 
-    for ((DagNode(d, children, next), i) <- dag.subdagIterator.zipWithIndex) {
-      d match {
-        case pair : (IAtom, HornClauses.Clause) =>
-          val (atom : IAtom, clause : HornClauses.Clause) = pair
-          atom.pred match {
-            case HornClauses.FALSE =>
-              //println("" + i + "[label=\"" + clause.toPrologString + "\"];")
-              println("" + i + "[shape=box, color=\"red\", label=\"" + "false" +
-                (if(relatedAssertionSourceInfos.nonEmpty) {
-                  "\n(related assertion(s) at line(s): " +
-                    relatedAssertionSourceInfos.map(_.line).mkString(",") + ")"
-                } else {
-                  ""
-                }) + "\"];")
+    for ((curNode@DagNode(d@(atom@IAtom(_, _), clause@HornClauses.Clause(_,_,_)), children, next), i) <- dag.subdagIterator.zipWithIndex) {
+      val srcInfos = clauseSrcInfos(clause)
+      val clauseLine =
+        (if (srcInfos.nonEmpty) {
+          " (" +
+            (if(srcInfos.length > 1) "lines " else "line ") +
+            srcInfos.map(_.line).distinct.mkString(",") + ")"
+        } else {
+          ""
+        })
+      atom.pred match {
+        case HornClauses.FALSE =>
+          //println("" + i + "[label=\"" + clause.toPrologString + "\"];")
+          println("" + i + "[shape=box, color=\"red\", label=\"" + "false" +
+            (if (clauseLine != "") "\n" + clauseLine else "") +
+            "\"];")
+        case _ =>
+          // atom.args contains values, clause.head.args contains names
+          val curArgs = predArgNames(clause.head.pred) //clause.head.args.map(_ toString)
+          val curArgValues = curArgs.zip(atom.args.map(_ toString)).toMap
+
+          val unintPredArgs = new MArray[String]
+          val prevArgs = new MArray[String]
+          val prevArgValues = new MHashMap[String, String]
+          for(child <- children) curNode.subdagIterator.toList(child) match {
+            case DagNode((IAtom(pred, args), HornClauses.Clause(headAtom, _, _)), _, _) =>
+              prevArgs ++= predArgNames(headAtom.pred)
+              prevArgValues ++= prevArgs zip args.map(_ toString)
+              if(isUnintPred(pred))
+                predArgNames(headAtom.pred).foreach(unintPredArgs +=)
             case _ =>
-              // atom.args contains values, clause.head.args contains names
-              val curArgs = predArgNames(clause.head.pred) //clause.head.args.map(_ toString)
-              val curArgValues = curArgs.zip(atom.args.map(_ toString)).toMap
+          }
 
-              val prevArgs      = new MArray[String]
-              val prevArgValues = new MHashMap[String, String]
-              next match {
-                case DagNode((IAtom(pred, args), HornClauses.Clause(headAtom, _, _)), _, _) =>
-                  prevArgs ++= predArgNames(headAtom.pred)
-                  prevArgValues ++= prevArgs zip args.map(_ toString)
-                case _ =>
-              }
+          updateColors(curArgs ++ prevArgs)
 
-              updateColors(curArgs ++ prevArgs)
-
-              val expiredArgs = prevArgs diff curArgs
-              val expiredArgStrings = expiredArgs.map(a => getGraphVizColored(a))
-              val newArgs = curArgs diff prevArgs
-              val newArgStrings =
-                newArgs.map(arg => getGraphVizColored(arg) + " = " + curArgValues(arg))
-              val changedArgs = (curArgs diff expiredArgs).filter( arg =>
+          val expiredArgs =
+            if (isUnintPred(atom.pred)) Nil
+            else (prevArgs diff curArgs) diff unintPredArgs
+          val expiredArgStrings = expiredArgs.map(a => getGraphVizColored(a))
+          val newArgs =
+            if (isUnintPred(atom.pred)) Nil else curArgs diff prevArgs
+          val newArgStrings =
+            newArgs.map(arg => getGraphVizColored(arg) + " = " + curArgValues(arg))
+          val changedArgs =
+            if(isUnintPred(atom.pred)) curArgs
+            else (curArgs diff expiredArgs).filter(arg =>
                 prevArgValues.contains(arg) &&
                   prevArgValues(arg) != curArgValues(arg))
-              val changedArgStrings =
-                changedArgs.map(arg => getGraphVizColored(arg) + " = " + curArgValues(arg))
+          val changedArgStrings =
+            changedArgs.map(arg => getGraphVizColored(arg) + " = " + curArgValues(arg))
 
-              def getString(s : Seq[String], seqName : String,
-                            newLine : Boolean = false) : String = {
-                if(s.nonEmpty) {
-                  (if (newLine) "<BR/>" else "") +
-                  "(" + seqName + ": " + s.mkString(", ") + ")"
-                }
-                else ""
-              }
-
-              println("" + i + "[shape=box, label=<" + atom.pred +
-                (predSrcInfos(atom.pred) match {
-                  case Some(srcInfo) => " (near line " + srcInfo.line + ")"
-                  case None => ""
-                }) + "<BR/>" +
-                getString(changedArgStrings, "changed args") +
-                getString(newArgStrings, "new args",
-                  newLine=changedArgStrings.nonEmpty) +
-                getString(expiredArgStrings, "expired args",
-                  newLine=changedArgStrings.nonEmpty || newArgStrings.nonEmpty) + ">];")
+          def getString(s: Seq[String], seqName: String,
+                        newLine: Boolean = false): String = {
+            if (s.nonEmpty) {
+              (if (newLine) "<BR/>" else "") +
+                "(" + seqName + ": " + s.mkString(", ") + ")"
+            }
+            else ""
           }
-        case _ =>
-          // should not trigger unless DAG contents are changed from Eldarica
-          println("" + i + "[label=\"" + d + "\"];")
+
+          println("" + i + "[shape=box, label=<" + atom.pred + clauseLine +
+//            (predSrcInfos(atom.pred) match {
+//              case Some(srcInfo) => " (near line " + srcInfo.line + ")"
+//              case None => ""
+//            }) +
+            "<BR/>" +
+            getString(changedArgStrings, if (isUnintPred(atom.pred)) "args" else "changed args") +
+            getString(newArgStrings, "new args",
+              newLine = changedArgStrings.nonEmpty) +
+            getString(expiredArgStrings, "expired args",
+              newLine = changedArgStrings.nonEmpty || newArgStrings.nonEmpty) + ">];")
+        //        case _ =>
+        //          // should not trigger unless DAG contents are changed from Eldarica
+        //          println("" + i + "[label=\"" + d + "\"];")
       }
 
       case class ConstantTermExt(_name : String)
@@ -376,10 +398,26 @@ object Util {
 
       def getConstrString(ind : Int) : String =
         dag(ind) match {
-          case (_, HornClauses.Clause(_, _, constraint)) =>
-            val c = constraint.andSimplify(true)
+          case (_, clause@HornClauses.Clause(_, body, constraint)) =>
+            val constantToBodyArg = new MHashMap[ConstantTerm, IConstant]
+            for (atom <- body;
+                 (IConstant(arg), i) <- atom.args.zipWithIndex) {
+              for (const <- clause.constantsSorted.filter(const => const == arg)) {
+                val newConst =
+                  const match {
+                    case SortedConstantTerm(_, sort) =>
+                      new SortedConstantTerm(predArgNames(atom.pred)(i), sort)
+                    case _: ConstantTerm =>
+                      new ConstantTerm(predArgNames(atom.pred)(i))
+                  }
+                constantToBodyArg += ((const, IConstant(newConst)))
+              }
+            }
+
+            val c = ConstantSubstVisitor(constraint.andSimplify(true), constantToBodyArg)
+
             val conjuncts =
-              LineariseVisitor(Transform2NNF(getColoredConstraint(constraint)), IBinJunctor.And)
+              LineariseVisitor(Transform2NNF(getColoredConstraint(c)), IBinJunctor.And)
             val constrString = (for (conjunct <- conjuncts) yield {
               class GeqAtom(left : ITerm, right : ITerm)
                 extends IAtom(new Predicate(" &ge; ", 2), Seq(left, right)) {
@@ -418,14 +456,49 @@ object Util {
               val enriched = EnrichingVisitor.visit(conjunct, ())
 
               enriched
-            }).filter(_.toString.nonEmpty).mkString(" /\\ ")
-            if (constrString == "true") "" else constrString
+            }).filter(c => c != IExpression.i(true) && c.toString.nonEmpty).
+              mkString(" /\\ ")
+            constrString
           case _ => ""
         }
 
-      for (c <- children) {
-        println("" + (i + c) + "->" + i +
+
+      //      val additionalStr: String =
+      //        (for ((child, bAtom) <- (children zip body).drop(1)) yield {
+      //          val argNames = predArgNames(bAtom.pred)
+      //          (for((a, b) <- bAtom.args zip argNames
+      //               if (dagNode2Context contains dag(ind)) &&
+      //                 (dagNode2Context(dag(ind)).newArgsRaw contains a.toString)) yield {
+      //            a + "=" + b
+      //          }).mkString("<br />")
+      //          //              dag(child) match {
+      //          //                case (atom, _) =>
+      //          //
+      //          //                  println(bAtom)
+      //          //                case _ =>
+      //          //              }
+      //        }).mkString("<br />")
+
+      // if we have a non-linear clause, introduce an additional node for incoming
+      // edges
+      if (children.length > 1) {
+        val newInd = dag.size + i
+        println("" + newInd + "[shape=point, color=\"black\", label=\"\"];")
+
+        val childExprs = new MArray[IExpression]
+
+        for (c <- children) {
+          println("" + (i + c) + "->" + newInd +
+            "[ label=<" + getConstrString(i + c) + ">]" + ";") // dir=none to remove arrows
+        }
+
+        println("" + newInd + "->" + i +
           "[ label=<" + getConstrString(i) + ">]" + ";")
+      } else {
+        for (c <- children) {
+          println("" + (i + c) + "->" + i +
+            "[ label=<" + getConstrString(i) + ">]" + ";")
+        }
       }
     }
     println("}")
@@ -446,6 +519,6 @@ object Util {
         case _ => subres.flatten.toList
       }
     }
-}
+  }
 ////////////////////////////////////////////////////////////////////////////////
 }

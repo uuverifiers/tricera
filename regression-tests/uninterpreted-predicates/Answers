@@ -11,3 +11,25 @@ Warning: no definition of function "nondet" available
 Warning: no definition of function "nondet" available
 Warning: no definition of function "nondet" available
 SAFE
+
+unint-pred-simple-false.c
+UNSAFE
+
+-----------
+Init:
+   main2   
+-----------
+     |     
+     |     
+     V     
+ main5(42) 
+-----------
+Final:
+ main5(42) 
+-----------
+Failed assertion:
+false :- main5(x:5), x:5 != 43. (line 7)
+
+
+unint-pred-simple-true.c
+SAFE

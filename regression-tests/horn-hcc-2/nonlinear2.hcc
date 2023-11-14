@@ -3,7 +3,7 @@
 
 int nondet();
 
-void main(void) {
+int main(void) {
   int x = nondet();
   assume(x >= 1);
   assume(x <= 100);

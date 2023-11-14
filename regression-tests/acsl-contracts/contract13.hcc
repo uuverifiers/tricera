@@ -1,7 +1,7 @@
 /*@
   requires \valid(p, q);
-  ensures ((\result == *p) || (\result == *q));
-  ensures \result >= (*p);
+  ensures \result == *p || \result == *q;
+  ensures \result >= *p;
   ensures \result >= (*q);
 */
 int max(int* p, int* q) {

@@ -1,0 +1,12 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="simple-invariant-false.c simple-invariant-true.c \
+       simple-invariant-false.c simple-loop-invariant-true.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex "$@" $name 2>&1 | grep -v 'at '
+done

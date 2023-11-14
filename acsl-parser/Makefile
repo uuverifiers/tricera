@@ -1,7 +1,7 @@
 
 
 CUP = java_cup.Main
-CUPFLAGS = -expect 400 -locations
+CUPFLAGS = -expect 7 -locations
 
 JLEX = JLex.Main
 
@@ -18,7 +18,7 @@ JLEX_PATH:=/usr/share/java/JLex.jar
 CLASSPATH:=$(CLASSPATH):$(PARSER_BASEDIR)/../cc-parser/lib/java-cup-11b.jar:$(PARSER_BASEDIR):$(JLEX_PATH)
 
 JAVAC:=javac
-#JAVAC_FLAGS:=-target 1.5
+JAVAC_FLAGS:=-target 1.8 -source 1.8
 
 JAVA:=java
 JAVA_FLAGS:=

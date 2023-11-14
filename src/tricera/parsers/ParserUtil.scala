@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2021-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,10 +30,10 @@
 package tricera.parsers
 
 import ap.parser.Parser2InputAbsy.CRRemover2
-import tricera.concurrency.CCReader.ParseException
 import tricera.concurrency.concurrent_c
 import tricera.concurrency.concurrent_c.Absyn.{Afunc, Exp, ExprS, NewFunc, Progr, ScompTwo, SexprTwo}
 import tricera.concurrency.concurrent_c.{Yylex, parser}
+import tricera.concurrency.ccreader.CCExceptions._
 
 object ParserUtil {
   def parseWithEntry[T](input : java.io.Reader,

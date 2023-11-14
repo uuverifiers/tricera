@@ -38,11 +38,12 @@ TriCera has a [web interface](http://logicrunch.it.uu.se:4096/~zafer/tricera/) w
 TriCera is under development, and bug reports are welcome!
 
 # Related papers
+* The most recent paper describing TriCera: [TriCera: Verifying C Programs Using the Theory of Heaps](https://repositum.tuwien.at/handle/20.500.12708/81374)
 * The thesis work which led to the creation of TriCera: [Extension of the ELDARICA C model checker with heap memory
 ](http://uu.diva-portal.org/smash/record.jsf?dswid=3650&pid=diva2%3A1373067)
-* The paper presenting the underlying Horn solver: [The ELDARICA Horn Solver](https://ieeexplore.ieee.org/document/8603013)
-* An extended technical report introducing the heap theory used in encoding the heap: [A Theory of Heap for Constrained Horn Clauses (Extended Technical Report)](https://arxiv.org/abs/2104.04224).
-* The decision procedure for the heap theory implemented in [Princess](http://www.philipp.ruemmer.org/princess.shtml): [Reasoning in the Theory of Heap: Satisfiability and Interpolation](https://link.springer.com/chapter/10.1007%2F978-3-030-68446-4_9).
+* The paper presenting Eldarica (Horn solver back-end of TriCera): [The ELDARICA Horn Solver](https://ieeexplore.ieee.org/document/8603013)
+* The paper introducing the theory of heaps TriCera uses to encode the heap: [AN SMT-LIB Theory of Heaps](http://ceur-ws.org/Vol-3185/paper1180.pdf).
+* The decision procedure for the theory of heaps implemented in [Princess](http://www.philipp.ruemmer.org/princess.shtml): [Reasoning in the Theory of Heap: Satisfiability and Interpolation](https://link.springer.com/chapter/10.1007%2F978-3-030-68446-4_9).
 * 
 # Some of the keywords TriCera accepts
 * `assert(condition)`: verify that a condition holds at this point in the program.

@@ -1,5 +1,5 @@
 /**
-  * Copyright (c) 2011-2022 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
+  * Copyright (c) 2011-2023 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
   * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without
@@ -30,13 +30,17 @@
 
 package tricera
 
+import hornconcurrency.ParametricEncoder
 import lazabs.horn.extendedquantifiers.ExtendedQuantifier
 
 import java.io.{FileOutputStream, PrintStream}
+import lazabs.horn.bottomup.HornClauses.Clause
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
+import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
-import tricera.concurrency.CCReader.{ParseException, TranslationException}
+import tricera.concurrency.CCReader.CCClause
+import tricera.concurrency.ccreader.CCExceptions._
 
 import sys.process._
 
@@ -86,7 +90,7 @@ class Main (args: Array[String]) {
   lazabs.GlobalParameters.parameters.value = params
   import params._
 
-  if (in == null) {
+  if (in == null && !params.doNotExecute) {
     showHelp
     printError("no input file given")
   }
@@ -96,7 +100,7 @@ class Main (args: Array[String]) {
   private val preprocessTimer = new Timer
 
   def run(stoppingCond: => Boolean) : ExecutionSummary = try {
-    if (params.showedHelp) // Exit early if we showed the help
+    if (params.doNotExecute) // Exit early if we showed the help
       return ExecutionSummary(DidNotExecute)
     programTimer.start()
 
@@ -132,18 +136,14 @@ class Main (args: Array[String]) {
     val cppFileName = if (cPreprocessor) {
       val preprocessedFile = File.createTempFile("tri-", ".i")
       System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
-      val cmdLine = "cpp " + fileName + " -E -P"
-      try {
-        cmdLine !
-      }
+      val cmdLine = Seq("cpp", fileName, "-E", "-P", "-CC")
+      try Process(cmdLine) !
       catch {
         case _: Throwable =>
-          throw new Main.MainException("The preprocessor could not" +
-            " be executed. This might be due to TriCera preprocessor binary " +
-            "not being in the current directory. Alternatively, use the " +
-            "-noPP switch to disable the preprocessor.\n" +
-            "Preprocessor command: " + cmdLine
-          )
+          throw new Main.MainException("The C preprocessor could not" +
+            " be executed (option -cpp). This might be due cpp not being " +
+            "installed in the system.\n" + "Attempted command: " +
+            cmdLine.mkString(" "))
       }
       preprocessedFile.deleteOnExit()
       preprocessedFile.getAbsolutePath
@@ -278,7 +278,7 @@ class Main (args: Array[String]) {
       new java.io.FileReader(new java.io.File(ppFileName))))
     val (reader, modelledHeapRes) =
       try {
-        CCReader(bufferedReader, funcName, arithMode, shouldTrackMemory)
+        CCReader(bufferedReader, funcName, shouldTrackMemory)
       } catch {
         case e: ParseException if !devMode =>
           return ExecutionSummary(ParseError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
@@ -305,8 +305,11 @@ class Main (args: Array[String]) {
     }
 
     import tricera.acsl.Encoder
-    val enc : Encoder = new Encoder(reader)
-    val system = enc.encode
+
+    val (system, maybeEnc : Option[Encoder]) = if (reader.funToContract.nonEmpty) {
+      val enc = new Encoder(reader)
+      (enc.encode, Some(enc))
+    } else (reader.system, None)
 
     def checkForSameNamedTerms = {
       val clausesWithSameNamedTerms =
@@ -347,15 +350,26 @@ class Main (args: Array[String]) {
     modelledHeap = modelledHeapRes
 
     if (prettyPrint) {
-      tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext)
+      val clauseToSrcInfo : Map[Clause, Option[SourceInfo]] =
+      (system.processes.flatMap(_._1.map(_._1)) ++
+        system.assertions).map(reader.getRichClause).filter(_.nonEmpty).map(c =>
+        (c.get.clause, c.get.srcInfo)).toMap
+      tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext, clauseToSrcInfo)
     }
 
-    val smallSystem = system.mergeLocalTransitions
+    val (smallSystem, mergedToOriginal) = system.mergeLocalTransitionsWithBackMapping
+
+//    mergedToOriginal.foreach{
+//      case (c, cs) =>
+//        println(c.toPrologString)
+//        cs.foreach(origC => println("  " + origC.toPrologString))
+//        println("-"*80)
+//    }
 
     if (prettyPrint) {
       println
       println("After simplification:")
-      tricera.concurrency.ReaderMain.printClauses(smallSystem, reader.PredPrintContext)
+      tricera.concurrency.ReaderMain.printClauses(smallSystem, reader.PredPrintContext, Map())
     }
 
     if(smtPrettyPrint)
@@ -374,11 +388,19 @@ class Main (args: Array[String]) {
     val verificationLoop =
       try {
         Console.withOut(outStream) {
-          new hornconcurrency.VerificationLoop(smallSystem, null,
-            printIntermediateClauseSets, fileName + ".smt2",
-            expectedStatus = expectedStatus, log = needFullSolution,
+          new hornconcurrency.VerificationLoop(
+            system = smallSystem,
+            initialInvariants = null,
+            printIntermediateClauseSets = printIntermediateClauseSets,
+            fileName = fileName + ".smt2",
+            expectedStatus = expectedStatus,
+            log = needFullSolution,
             templateBasedInterpolation = templateBasedInterpolation,
-            templateBasedInterpolationTimeout = templateBasedInterpolationTimeout)
+            templateBasedInterpolationTimeout = templateBasedInterpolationTimeout,
+            symbolicExecutionEngine = symexEngine,
+            symbolicExecutionDepth = symexMaxDepth,
+            logSymbolicExecution = log
+          )
         }
       } catch {
         case TimeoutException => {
@@ -495,12 +517,12 @@ class Main (args: Array[String]) {
                   processor(processedSolution)() // will process all predicates
               }
 
-              println("\nInferred ACSL annotations")
-              println("="*80)
+              var printedACSLHeader = false
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
               for ((fun, ctx) <- contexts
-                   if !enc.prePredsToReplace.contains(ctx.prePred.pred) &&
-                     !enc.postPredsToReplace.contains(ctx.postPred.pred)) {
+                   if maybeEnc.isEmpty ||
+                      !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
+                      !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
                 val fPre = ACSLLineariser asString processedSolution(ctx.prePred.pred)
                 val fPost = ACSLLineariser asString processedSolution(ctx.postPred.pred)
 
@@ -511,6 +533,11 @@ class Main (args: Array[String]) {
                 val fPostWithArgs =
                   replaceArgs(fPost, ctx.postPredACSLArgNames)
 
+                if (!printedACSLHeader) {
+                  println("\nInferred ACSL annotations")
+                  println("=" * 80)
+                  printedACSLHeader = true
+                }
                 println("/* contracts for " + fun + " */")
                 println("/*@")
                 print(  "  requires "); println(fPreWithArgs + ";")
@@ -524,6 +551,11 @@ class Main (args: Array[String]) {
                     p._1.name.stripPrefix("inv_") == inv.pred.name).get._2
                   val fInvWithArgs =
                     replaceArgs(fInv, inv.argVars.map(_.name))
+                  if (!printedACSLHeader) {
+                    println("\nInferred ACSL annotations")
+                    println("=" * 80)
+                    printedACSLHeader = true
+                  }
                   println("\n/* loop invariant for the loop at line " +
                           srcInfo.line + " */")
                   println("/*@")
@@ -531,7 +563,9 @@ class Main (args: Array[String]) {
                   println("*/")
                 }
               }
-              println("="*80 + "\n")
+              if (printedACSLHeader) {
+                println("=" * 80 + "\n")
+              }
             }
           case None =>
         }
@@ -556,42 +590,57 @@ class Main (args: Array[String]) {
         }
 
         import hornconcurrency.VerificationLoop._
+        import tricera.Util.SourceInfo
         import lazabs.horn.bottomup.HornClauses
-        val cexClauses: Seq[HornClauses.Clause] = cex._1.lastOption match {
-          case Some(c: CEXLocalStep) => Seq(c.clause)
-          case Some(c: CEXInit) => Seq(c.clauses.last) // todo: correct?
-          case _ => Nil // todo: others?
-        }
-        val relatedAssertions =
-          (for (c <- cexClauses) yield
-            reader.getRelatedAssertions(c.head.pred)).flatten
+
+      val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
+          case (_, clause) =>
+            val richClauses : Seq[CCClause]= mergedToOriginal get clause match {
+              case Some(clauses) =>
+                for (Some(richClause) <- clauses map reader.getRichClause) yield
+                  richClause
+              case None =>
+                reader.getRichClause(clause) match {
+                  case None => Nil
+                  case Some(richClause) => Seq(richClause)
+                }
+            }
+            (clause -> richClauses)
+        }.toMap
 
         if (plainCEX) {
           if (cex._1 == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
-            println("(An assertion has failed in the background clauses, " +
-              "counterexample is not available.)")
+            println("This counterexample cannot be printed in the " +
+                    "console, use -eogCEX for a graphical view.")
           }
           else {
             println
-            //reader.printPredsWithArgNames
             hornconcurrency.VerificationLoop.prettyPrint(cex)
-            println("\nRelated assertions: ")
-            for (assertion <- relatedAssertions) {
-              val assertionSource = assertion.srcInfo match {
-                case Some(srcInfo) =>
-                  "(assertion source: line " + srcInfo.line + ") "
-                case None => ""
+            if (system.processes.size == 1 &&
+                system.processes.head._2 == ParametricEncoder.Singleton) { // todo: print failed assertion for concurrent systems
+              val violatedAssertionClause = cex._2.head._2
+              clauseToUnmergedRichClauses get violatedAssertionClause match {
+                case Some(richClauses) if richClauses != Nil =>
+                  assert(richClauses.size == 1)
+                  println("Failed assertion:\n" + richClauses.head.toString)
+                  println
+                case None                                    =>
               }
-              println(" " + assertion.clause.toPrologString + " " +
-                assertionSource)
             }
           }
         }
         if (!pngNo) { // dotCEX and maybe eogCEX
-          Util.show(cex._2, "cex",
-            relatedAssertions.filter(c => c.srcInfo.nonEmpty).map(_.srcInfo.get),
-            reader.PredPrintContext.predArgNames,
-            reader.PredPrintContext.predSrcInfo)
+          if(system.processes.size == 1 &&
+             system.processes.head._2 == ParametricEncoder.Singleton) {
+            Util.show(cex._2, "cex",
+                      clauseToUnmergedRichClauses.map(c => (c._1 ->
+                                                            c._2.filter(_.srcInfo.nonEmpty).map(_.srcInfo.get))),
+                      reader.PredPrintContext.predArgNames,
+                      reader.PredPrintContext.predSrcInfo,
+                      reader.PredPrintContext.isUninterpretedPredicate)
+          } else {
+            println("Cannot display -eogCEX for concurrent processes, try -cex.")
+          }
         }
         Unsafe
       }

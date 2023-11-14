@@ -12,7 +12,10 @@ TESTS="test1.hcc test2.hcc test3.hcc test4.hcc \
        atomic3d.hcc \
        diamond_true-unreach-call1.c unsigned1.hcc \
        literals.c predicates.hcc predicates2.hcc down_true-unreach-call.i.c \
-       ternary-bug.c assert-ite-1.c assert-ite-2.c"
+       ternary-bug.c assert-ite-1.c assert-ite-2.c \
+       function-in-assume-assert-1-false.c function-in-assume-assert-1-true.c \
+       function-in-assume-assert-2-false.c function-in-assume-assert-2-true.c \
+       function-in-assume-assert-3-false.c function-in-assume-assert-3-true.c "
 
 for name in $TESTS; do
     echo

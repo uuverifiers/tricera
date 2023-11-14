@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2021-2022 Pontus Ernstedt. All rights reserved.
+ * Copyright (c) 2021-2022 Pontus Ernstedt
+ *                    2023 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,6 +31,7 @@
 package tricera.acsl
 
 import ap.parser.IFormula
+import tricera.Util.SourceInfo
 
 trait ParsedAnnotation
 
@@ -38,15 +40,19 @@ class FunctionContract(
   val pre  : IFormula,
   val post : IFormula,
   val assignsAssert : IFormula,
-  val assignsAssume : IFormula) extends ParsedAnnotation {
+  val assignsAssume : IFormula,
+  val srcInfo       : SourceInfo,
+  val postSrcInfo   : SourceInfo) extends ParsedAnnotation {
   override def toString : String = {
-    s"Pre:  $pre\n" +
-    s"Post: $post\n" +
-    s"Assigns (in asserts): $assignsAssert\n" +
-    s"Assigns (in assumes): $assignsAssume"
+    s"""|requires ${ap.SimpleAPI.pp(pre)}
+        |ensures  ${ap.SimpleAPI.pp(post)}
+        |assigns (in asserts) ${ap.SimpleAPI.pp(assignsAssert)}
+        |assigns (in assumes) ${ap.SimpleAPI.pp(assignsAssume)}
+        |""".stripMargin
   }
-
 }
 
 case class StatementAnnotation(f        : IFormula,
                                isAssert : Boolean) extends ParsedAnnotation
+
+case class LoopAnnotation(invariant : IFormula) extends ParsedAnnotation

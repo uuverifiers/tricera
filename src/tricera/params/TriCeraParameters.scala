@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -90,18 +90,22 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  private val greeting =
-    "TriCera v0.2.\n(C) Copyright 2012-2022 Zafer Esen, Hossein Hojjat, and Philipp Ruemmer\n" +
-    "Contributors: Pontus Ernstedt."
+  private val version = "0.2"
 
-  private def parseArgs(args: List[String]): Boolean = args match {
+  private val greeting =
+    "TriCera v" + version + ".\n(C) Copyright " +
+      "2012-2023 Zafer Esen and Philipp Ruemmer\n" +
+    "Contributors: Pontus Ernstedt, Hossein Hojjat"
+
+  private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
+    args match {
     case Nil => true
     //case "-c" :: rest => drawCFG = true; arguments(rest)
     //case "-r" :: rest => drawRTree = true; arguments(rest)
     case "-f" :: rest => absInFile = true; parseArgs(rest)
     case "-p" :: rest => prettyPrint = true; parseArgs(rest)
     case "-pDot" :: rest => prettyPrint = true; prettyPrintDot = true; parseArgs(rest)
-    case "-pc" :: rest => printPathConstraints = true; parseArgs(rest)
+//    case "-pc" :: rest => printPathConstraints = true; parseArgs(rest)
     case "-printPP" :: rest => printPP = true; parseArgs(rest)
     case "-dumpPP" :: rest => dumpPP = true; parseArgs(rest)
     case ppLogOption :: rest if (ppLogOption startsWith "-logPP:") =>
@@ -111,8 +115,6 @@ class TriCeraParameters extends GlobalParameters {
     case "-dumpClauses" :: rest => printIntermediateClauseSets = true; parseArgs(rest)
     case "-sp" :: rest => smtPrettyPrint = true; parseArgs(rest)
     //      case "-pnts" :: rest => ntsPrint = true; arguments(rest)
-    case "-horn" :: rest => horn = true; parseArgs(rest)
-    case "-glb" :: rest => global = true; parseArgs(rest)
     case "-disj" :: rest => disjunctive = true; parseArgs(rest)
     case "-sol" :: rest => displaySolutionProlog = true; parseArgs(rest)
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
@@ -120,7 +122,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
     case "-memtrack" :: rest => shouldTrackMemory = true; parseArgs(rest)
-    case "-heaparrays" :: rest => useArraysForHeap = true; parseArgs(rest)
+    case "-mathArrays" :: rest => useArraysForHeap = true; parseArgs(rest)
     case "-onlyexq" :: rest => onlyExtQuans = true; parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
@@ -223,6 +225,10 @@ class TriCeraParameters extends GlobalParameters {
     case "-statistics" :: rest => setLogLevel(1); parseArgs(rest)
     case logOption :: rest if (logOption startsWith "-log:") =>
       setLogLevel((logOption drop 5).toInt); parseArgs(rest)
+    case logPredsOption :: rest if (logPredsOption startsWith "-logPreds:") =>
+      logPredicates = logPredsOption.drop("-logPreds:".length)
+                                    .split(",").toSet
+      parseArgs(rest)
     case "-logSimplified" :: rest => printHornSimplified = true; parseArgs(rest)
     case "-dot" :: str :: rest => dotSpec = true; dotFile = str; parseArgs(rest)
     case "-pngNo" :: rest => pngNo = true; parseArgs(rest)
@@ -233,73 +239,123 @@ class TriCeraParameters extends GlobalParameters {
     case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
-    case "-h" :: rest => println(greeting + "\n\nUsage: tri [options] file\n\n" +
+    case "-sym" :: rest      =>
+      symexEngine = GlobalParameters.SymexEngine.BreadthFirstForward
+      parseArgs(rest)
+    case symexOpt :: rest if (symexOpt.startsWith("-sym:")) =>
+      symexEngine = symexOpt.drop("-sym:".length) match {
+        case "dfs" => GlobalParameters.SymexEngine.DepthFirstForward
+        case "bfs" => GlobalParameters.SymexEngine.BreadthFirstForward
+        case _     =>
+          println("Unknown argument for -sym:, defaulting to bfs.")
+          GlobalParameters.SymexEngine.BreadthFirstForward
+      }
+      parseArgs(rest)
+    case symexDepthOpt :: rest if (symexDepthOpt.startsWith("-symDepth:")) =>
+      symexMaxDepth = Some(symexDepthOpt.drop("-symDepth:".length).toInt)
+      parseArgs(rest)
+    case arg :: rest if Set("-v", "--version").contains(arg) =>
+      println(version); false
+    case arg :: rest if Set("-h", "--help").contains(arg) =>
+      println(greeting + "\n\nUsage: tri [options] file\n\n" +
       "General options:\n" +
-      " -h\t\tShow this information\n" +
-      " -assert\tEnable assertions in TriCera\n" +
-      " -assertNoVerify\t\tEnable assertions, but do not verify solutions \n" +
-      " -log\t\tDisplay progress and found invariants\n" +
-      " -log:n\t\tDisplay progress with verbosity n (currently 0 <= n <= 3)\n" +
-      " -statistics\tDisplay statistics (implied by -log)\n" +
+      " -h, --help\t\tShow this information\n" +
+      " -v, --version\tPrint version number\n" +
+      " -arithMode:t\tInteger semantics: math (default), ilp32, lp64, llp64\n" +
+      " -mathArrays:t\tUse mathematical arrays for modeling program arrays (no implicit memory safety properties))\n" +
+      " -memtrack\tCheck that there are no memory leaks in the input program \n" +
       " -t:time\tSet timeout (in seconds)\n" +
       " -cex\t\tShow textual counterexamples\n" +
       " -dotCEX\tOutput counterexample in dot format\n" +
-      " -eogCEX\tDisplay counterexample using eog\n" +
-      " -cexAsserts\tDisplay related assertions for counterexamples\n" +
-      " -m:func\tUse function func as entry point (default: main)\n" +
-      "\n" +
-      "Horn engine:\n" +
-      " -horn\t\tEnable this engine\n" +
-      " -p\t\tPretty Print Horn clauses\n" +
-      " -pDot\t\tPretty Print Horn clauses, output in dot format and display it\n" +
-      " -pc\t\tPrint path constraint formula at return from entry function\n" +
-      " -printPP\t\tPrint the output of the TriCera preprocessor to stdout\n" +
-      " -dumpPP\t\tDump the output of the TriCera preprocessor to file (input file name + .tri) \n" +
-      " -logPP:n\t\tDisplay TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +
-      " -noPP\t\tTurn off the TriCera preprocessor (typedefs are not allowed in this mode) \n" +
-      " -cpp\t\tExecute the C preprocessor (cpp) on the input file first, this will produce filename.i" +
-      " -sp\t\tPretty print the Horn clauses in SMT-LIB format\n" +
-      " -dumpClauses\tWrite the Horn clauses in SMT-LIB format to input filename.smt2\n" +
+      " -eogCEX\tDisplay counterexample using eog on Linux and Preview on macOS\n" +
       " -sol\t\tShow solution in Prolog format\n" +
       " -ssol\t\tShow solution in SMT-LIB format\n" +
       " -inv\t\tTry to infer loop invariants\n" +
       " -acsl\t\tPrint inferred ACSL annotations\n" +
-      " -varLines\t\tPrint program variables together with their line numbers (e.g., x:42)\n" +
-      " -memtrack\t\tCheck that there are no memory leaks in the input program \n" +
+      " -log:n            Display progress based on verbosity level n (0 <= n <= 3)\n" +
+      "                     1: Statistics only\n" +
+      "                     2: Include invariants\n" +
+      "                     3: Include counterexamples\n" +
+      "                     (When using -sym, n > 1 displays derived clauses.) \n" +
+      " -statistics       Equivalent to -log:1; displays statistics only\n" +
+      " -log              Equivalent to -log:2; displays progress and invariants\n" +
+      " -logPreds:<preds> Log only predicates containing the specified substrings,\n" +
+      "                     separated by commas. E.g., -logPreds=p1,p2 logs any\n" +
+      "                     predicate with 'p1' or 'p2' in its name\n" +
+      " -m:func\tUse function func as entry point (default: main)\n" +
+      " -cpp\t\tExecute the C preprocessor (cpp) on the input file first, this will produce filename.i\n" +
+      "\n" +
+      "Horn clauses:\n" +
+      " -p\t\tPretty-print Horn clauses\n" +
+      " -pDot\t\tPretty-print Horn clauses, output in dot format and display it\n" +
+      " -sp\t\tPretty-print the Horn clauses in SMT-LIB format\n" +
+      " -dumpClauses\tWrite the Horn clauses in SMT-LIB format to input filename.smt2\n" +
+      " -varLines\tPrint program variables in clauses together with their line numbers (e.g., x:42)\n" +
+      "\n" +
+      "Horn engine options (Eldarica):\n" +
+      " -sym            (Experimental) Use symbolic execution with the default engine (bfs)\n" +
+      " -sym:x          Use symbolic execution where x : {dfs, bfs}\n" +
+      "                      dfs: depth-first forward (does not support non-linear clauses)\n" +
+      "                      bfs: breadth-first forward\n" +
+      " -symDepth:n     Set a max depth for symbolic execution (underapproximate)\n" +
+      "                     (currently only supported with bfs)\n" +
       " -disj\t\tUse disjunctive interpolation\n" +
       " -stac\t\tStatic acceleration of loops\n" +
       " -lbe\t\tDisable preprocessor (e.g., clause inlining)\n" +
       " -arrayQuans:n\tIntroduce n quantifiers for each array argument (default: 1)\n" +
       " -noSlicing\tDisable slicing of clauses\n" +
       " -hints:f\tRead initial predicates and abstraction templates from a file\n" +
-      //          " -glb\t\tUse the global approach to solve Horn clauses (outdated)\n" +
       "\n" +
       //          " -abstract\tUse interpolation abstraction for better interpolants (default)\n" +
-      " -pHints\t\tPrint initial predicates and abstraction templates\n" +
       " -abstract:t\tInterp. abstraction: off, manual, term, oct,\n" +
       "            \t                     relEqs (default), relIneqs\n" +
       " -abstractTO:t\tTimeout (s) for abstraction search (default: 2.0)\n" +
       " -abstractPO\tRun with and w/o interpolation abstraction in parallel\n" +
       " -splitClauses:n\tAggressiveness when splitting disjunctions in clauses\n" +
       "                \t                     (0 <= n <= 2, default: 1)\n" +
-
+      " -pHints\t\tPrint initial predicates and abstraction templates\n" +
       "\n" +
-      "C/C++/TA front-end:\n" +
-      " -arithMode:t\tInteger semantics: math (default), ilp32, lp64, llp64\n" +
-      " -pIntermediate\tDump Horn clauses encoding concurrent programs\n"
+      "TriCera preprocessor:\n" +
+      " -printPP\tPrint the output of the TriCera preprocessor to stdout\n" +
+      " -dumpPP\tDump the output of the TriCera preprocessor to file (input file name + .tri) \n" +
+      " -logPP:n\tDisplay TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +
+      " -noPP\t\tTurn off the TriCera preprocessor (typedefs are not allowed in this mode) \n" +
+      "\n" +
+      "Debugging:\n" +
+      " -assert\t\tEnable assertions in TriCera\n" +
+      " -assertNoVerify\tEnable assertions, but do not verify solutions \n"
+//      " -pc\t\tPrint path constraint formula at return from entry function\n" (not currently correct)
     )
       false
+    case arg :: _ if arg.startsWith("-") =>
+      showHelp
+      throw new MainException(s"unrecognized option '$arg'")
     case fn :: rest =>
       fileName = fn; in = new FileInputStream(fileName); parseArgs(rest)
   }
 
-  var showedHelp : Boolean = false
-  def showHelp : Unit = {
-    showedHelp = true
+  var doNotExecute : Boolean = false
+  def showHelp : Unit =
     parseArgs(List("-h"))
-  }
 
   def apply(args: List[String]): Unit = {
-    if (!parseArgs(args)) showHelp
+    if (args isEmpty) {
+      doNotExecute = true
+      showHelp
+    } else if (!parseArgs(reconstructSpaceSeparatedArgs(args))) {
+      doNotExecute = true
+    }
+  }
+
+  private def reconstructSpaceSeparatedArgs(args: List[String]): List[String] = {
+    args.foldLeft((List[String](), Option.empty[String])) {
+      case ((acc, Some(buffer)), arg) => (acc :+ (buffer + " " + arg), None)
+      case ((acc, None), arg) =>
+        if (arg.endsWith("\\")) {
+          (acc, Some(arg.dropRight(1)))
+        } else {
+          (acc :+ arg, None)
+        }
+    }._1
   }
 }

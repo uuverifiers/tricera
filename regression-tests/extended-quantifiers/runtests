@@ -15,5 +15,5 @@ TESTS="forall1-UB.c \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -heaparrays -onlyexq -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $LAZABS -cex -mathArrays -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done

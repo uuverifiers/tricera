@@ -16,10 +16,9 @@ Init:
 Final:
  main6(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
 --------------------------------------------------------------------------
+Failed assertion:
+false :- main6(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line 6)
 
-Related assertions: 
- false :- main6(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (assertion source: line 6) 
- false :- main6(@h, a:6, n:9), is_O_Int(read(@h, nthAddrRange(a:6, n:9))) & !within(a:6, nthAddrRange(a:6, n:9)). (assertion source: line 6) 
 valid-memsafety
   expected verdict matches the result!
 
@@ -34,10 +33,9 @@ Init:
 Final:
  main2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
 -------------------------------------------------------------------------------------
+Failed assertion:
+false :- main2(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, 42))). (line 4)
 
-Related assertions: 
- false :- main2(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, 42))). (assertion source: line 4) 
- false :- main2(@h, a:4), is_O_Int(read(@h, nthAddrRange(a:4, 42))) & !within(a:4, nthAddrRange(a:4, 42)). (assertion source: line 4) 
 valid-memsafety
   expected verdict matches the result!
 
@@ -58,11 +56,9 @@ Init:
 Final:
  main6(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
 --------------------------------------------------------------------------
+Failed assertion:
+false :- main6(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line 6)
 
-Related assertions: 
- false :- main6(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (assertion source: line 6) 
- false :- main6(@h, a:6, n:9), is_O_Int(read(@h, nthAddrRange(a:6, n:9))) & !within(a:6, nthAddrRange(a:6, n:9)). (assertion source: line 6) 
- false :- main6(@h, a:6, n:9), is_O_Int(read(@h, nthAddrRange(a:6, n:9))) & !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (assertion source: line 12) 
 valid-memsafety
   expected verdict matches the result!
 
@@ -77,11 +73,9 @@ Init:
 Final:
  main2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
 -------------------------------------------------------------------------------------
+Failed assertion:
+false :- main2(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, -1*1))). (line 4)
 
-Related assertions: 
- false :- main2(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, -1*1))). (assertion source: line 4) 
- false :- main2(@h, a:4), is_O_Int(read(@h, nthAddrRange(a:4, -1*1))) & !within(a:4, nthAddrRange(a:4, -1*1)). (assertion source: line 4) 
- false :- main2(@h, a:4), is_O_Int(read(@h, nthAddrRange(a:4, -1*1))) & !is_O_Int(read(@h, nthAddrRange(a:4, -1*1))). (assertion source: line 7) 
 valid-memsafety
   expected verdict matches the result!
 
@@ -148,11 +142,9 @@ Init:
 Final:
  main11(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
 ----------------------------------------------------------------------------
+Failed assertion:
+false :- main11(s:14, i:18), select(data(s:14), i:18) = i:18. (line 19)
 
-Related assertions: 
- false :- main11(s:14, i:18), i:18 < 0 | 4 - i:18 < 1. (assertion source: line 19) 
- false :- main11(s:14, i:18), i:18 < 0 | 4 - i:18 < 1. (assertion source: line 19) 
- false :- main11(s:14, i:18), select(data(s:14), i:18) = i:18. (assertion source: line 19) 
 
 pointer-arith-1-safe.c
 Warning: enabling heap model
@@ -184,13 +176,9 @@ Init:
 Final:
  main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
 -------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line 6)
 
-Related assertions: 
- false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), !within(p:6, nthAddrRange(p:6, 0)). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), is_O_Int(read(@h, nthAddrRange(p:6, 0))) & !within(p:6, nthAddrRange(p:6, 0)). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), is_O_Int(read(@h, nthAddrRange(p:6, 0))) & getInt(read(@h, nthAddrRange(p:6, 0))) != 0. (assertion source: line 8) 
 
 pointer-arith-2-safe.c
 Warning: enabling heap model
@@ -222,13 +210,9 @@ Init:
 Final:
  main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
 -------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line 6)
 
-Related assertions: 
- false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), !within(p:6, nthAddrRange(p:6, 0)). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), is_O_Int(read(@h, nthAddrRange(p:6, 0))) & !within(p:6, nthAddrRange(p:6, 0)). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), is_O_Int(read(@h, nthAddrRange(p:6, 0))) & getInt(read(@h, nthAddrRange(p:6, 0))) != 0. (assertion source: line 8) 
 
 pointer-arith-3-safe.c
 Warning: enabling heap model
@@ -260,13 +244,9 @@ Init:
 Final:
  main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
 -------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line 6)
 
-Related assertions: 
- false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), !within(p:6, nthAddrRange(p:6, 0)). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), is_O_Int(read(@h, nthAddrRange(p:6, 0))) & !within(p:6, nthAddrRange(p:6, 0)). (assertion source: line 6) 
- false :- main9(@h, a:1, n:4, p:6, i:7), is_O_Int(read(@h, nthAddrRange(p:6, 0))) & getInt(read(@h, nthAddrRange(p:6, 0))) != 0. (assertion source: line 8) 
 
 global-struct-array-1.c
 Warning: enabling heap model
@@ -294,13 +274,9 @@ Init:
 Final:
    main4(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(21)))), AddrRange(nthAddr(1), 2))   
 --------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main4(@h, sArr:5), is_O_S(read(@h, nthAddrRange(sArr:5, 1))) & f(getS(read(@h, nthAddrRange(sArr:5, 1)))) != 1. (line 10)
 
-Related assertions: 
- false :- main4(@h, sArr:5), !is_O_S(read(@h, nthAddrRange(sArr:5, 1))). (assertion source: line 5) 
- false :- main4(@h, sArr:5), !within(sArr:5, nthAddrRange(sArr:5, 1)). (assertion source: line 5) 
- false :- main4(@h, sArr:5), !is_O_S(read(@h, nthAddrRange(sArr:5, 1))). (assertion source: line 5) 
- false :- main4(@h, sArr:5), is_O_S(read(@h, nthAddrRange(sArr:5, 1))) & !within(sArr:5, nthAddrRange(sArr:5, 1)). (assertion source: line 5) 
- false :- main4(@h, sArr:5), is_O_S(read(@h, nthAddrRange(sArr:5, 1))) & f(getS(read(@h, nthAddrRange(sArr:5, 1)))) != 1. (assertion source: line 10) 
 
 array-of-ptr-1.c
 Warning: enabling heap model
@@ -328,9 +304,9 @@ Init:
 Final:
  main1(newBatchHeap(batchAlloc(emptyHeap, O_Int(11), 3)), AddrRange(nthAddr(1), 3)) 
 ------------------------------------------------------------------------------------
+Failed assertion:
+false :- main1(@h, a:1), read(@h, __eval) != defObj.
 
-Related assertions: 
- false :- main1(@h, a:1), read(@h, __eval4) != defObj. 
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
 
@@ -348,15 +324,6 @@ valid-memsafety/valid-memtrack
 
 simple-alloca-memsafety2.c
 Warning: enabling heap model
-Warning: The following clause has different terms with the same name (term: a:2)
-false :- main5(@h, __eval12), !is_O_Int(read(@h, nthAddrRange(a:2, 0))) & @h = @h & a:2 = AddrRange(nullAddr, 0) & @h = newBatchHeap(batchAlloc(@h, O_Int(_), 42)) & a:2 = newAddrRange(batchAlloc(@h, O_Int(_), 42)).
-
-Warning: The following clause has different terms with the same name (term: a:2)
-false :- main5(@h, __eval12), is_O_Int(read(@h, nthAddrRange(a:2, 0))) & !within(a:2, nthAddrRange(a:2, 0)) & @h = @h & a:2 = AddrRange(nullAddr, 0) & @h = newBatchHeap(batchAlloc(@h, O_Int(_), 42)) & a:2 = newAddrRange(batchAlloc(@h, O_Int(_), 42)).
-
-Warning: The following clause has different terms with the same name (term: a:2)
-false :- main5(@h, __eval12), is_O_Int(read(@h, nthAddrRange(a:2, 0))) & !is_O_Int(read(@h, nthAddrRange(a:2, 0))) & @h = @h & a:2 = AddrRange(nullAddr, 0) & @h = newBatchHeap(batchAlloc(@h, O_Int(_), 42)) & a:2 = newAddrRange(batchAlloc(@h, O_Int(_), 42)).
-
 SAFE
 valid-memsafety/valid-memtrack
   expected verdict matches the result!
