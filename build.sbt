@@ -99,9 +99,22 @@ settings(
                                         case "2.12.8" => "-opt:_"
                                       }}).value,
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
-//  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.9-ext",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "1.1-ext",
+
+// jitpack resolver should be removed before merge into master.
+  resolvers += "jitpack" at "https://jitpack.io",
+
+// Uncomment the following two dependencies if you publishLocal Eldarica
+// and horn-concurrency, but do not push this change to the repo.
+//  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "1.1-ext",
+//  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.9-ext" exclude(
+//    "net.sf.squirrel-sql.thirdparty-non-maven","java-cup"),
+
+// Comment the following two dependencies if you publishLocal Eldarica
+// and horn-concurrency, but do not push this change to the repo.
+  libraryDependencies += "com.github.uuverifiers" % "horn-concurrency" % "extquans-SNAPSHOT",
+  libraryDependencies += "com.github.zafer-esen" % "eldarica" % "master-SNAPSHOT" exclude(
+    "net.sf.squirrel-sql.thirdparty-non-maven","java-cup"),
+
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",
