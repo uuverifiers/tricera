@@ -31,7 +31,8 @@ lazy val ccParser = (project in file("cc-parser")).
   settings(parserSettings: _*).
   settings(
     name := "TriCera-CC-parser",
-    packageBin in Compile := baseDirectory.value / "cc-parser.jar"
+    packageBin in Compile := baseDirectory.value / "cc-parser.jar",
+    unmanagedJars in Compile += baseDirectory.value / "cc-parser.jar"
   ).disablePlugins(AssemblyPlugin)
 
 lazy val acslParser = (project in file("acsl-parser")).
@@ -39,7 +40,8 @@ lazy val acslParser = (project in file("acsl-parser")).
   settings(parserSettings: _*).
   settings(
     name := "TriCera-ACSL-parser",
-    packageBin in Compile := baseDirectory.value / "acsl-parser.jar"
+    packageBin in Compile := baseDirectory.value / "acsl-parser.jar",
+    unmanagedJars in Compile += baseDirectory.value / "acsl-parser.jar"
   ).disablePlugins(AssemblyPlugin)
 
 lazy val pp = taskKey[Unit]("")
