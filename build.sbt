@@ -25,12 +25,19 @@ lazy val parserSettings = Seq(
 )
 
 // Parser generation
+val downloadJarsTask = taskKey[Unit]("Downloads the necessary JAR files using make.")
 
 lazy val ccParser = (project in file("cc-parser")).
   settings(commonSettings: _*).
   settings(parserSettings: _*).
   settings(
     name := "TriCera-CC-parser",
+    downloadJarsTask := {
+      val s: TaskStreams = streams.value
+      s.log.info("Downloading parser dependencies...")
+      Process("make download-jars", baseDirectory.value).!
+    },
+    (compile in Compile) := ((compile in Compile) dependsOn downloadJarsTask).value,
     packageBin in Compile := baseDirectory.value / "cc-parser.jar",
     unmanagedJars in Compile += baseDirectory.value / "cc-parser.jar"
   ).disablePlugins(AssemblyPlugin)

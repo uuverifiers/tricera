@@ -1,6 +1,6 @@
-PARSER_BASEDIR=$(shell pwd)
-PARSER_BINDIR=$(PARSER_BASEDIR)/bin
-PARSER_LIBDIR = $(PARSER_BASEDIR)/lib
+CCPARSER_BASEDIR=$(shell pwd)
+PARSER_BINDIR=$(CCPARSER_BASEDIR)/bin
+PARSER_LIBDIR = $(CCPARSER_BASEDIR)/lib
 
 CUP = java_cup.Main
 CUPFLAGS = -expect 100 -locations
@@ -23,44 +23,18 @@ JAVA:=java
 JAVA_FLAGS:=
 
 .PHONY: all
-all: $(CUP_JAR) $(JFLEX_PLUGIN_JAR) cc-parser.jar tricera/concurrency/concurrent_c/Test.class
+all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class
 
-$(PARSER_LIBDIR):
-	@mkdir -p $@
-
-$(CUP_JAR): | $(PARSER_LIBDIR)
-	@echo "Looking for cup jar at $(CUP_JAR)"
-	@if [ ! -f $(CUP_JAR) ]; then \
-			echo "not found, downloading..."; \
-	    mvn org.apache.maven.plugins:maven-dependency-plugin:2.10:get \
-	        -DremoteRepositories=https://repo.maven.apache.org/maven2/ \
-	        -Dartifact=com.github.vbmacher:java-cup:11b-20160615-2 \
-	        -Dtransitive=false \
-	        -Ddest=$(CUP_JAR); \
-	else \
-			echo "found, skipping download."; \
-	fi
-
-$(JFLEX_PLUGIN_JAR): | $(PARSER_LIBDIR)
-	@echo "Looking for JFlex plugin jar at $(JFLEX_PLUGIN_JAR)"
-	@if [ ! -f $(JFLEX_PLUGIN_JAR) ]; then \
-	    echo "not found, downloading..."; \
-	    mvn org.apache.maven.plugins:maven-dependency-plugin:2.10:get \
-	        -DremoteRepositories=https://repo.maven.apache.org/maven2/ \
-	        -Dartifact=de.jflex:jflex:1.9.1 \
-	        -Dtransitive=false \
-	        -Ddest=$(JFLEX_PLUGIN_JAR); \
-	else \
-			echo "found, skipping download."; \
-	fi
+include $(CCPARSER_BASEDIR)/download_jars.mk
 
 cc-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/sym.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Yylex.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/parser.class
-	cd $(PARSER_BINDIR) && jar cf $(PARSER_BASEDIR)/cc-parser.jar tricera
+	cd $(PARSER_BINDIR) && jar cf $(CCPARSER_BASEDIR)/cc-parser.jar tricera
 
 
 $(PARSER_BINDIR):
 	mkdir $(PARSER_BINDIR)
 
+.PHONY: clean
 clean:
 #	rm -rf parser.jar
 	rm -rf $(PARSER_BINDIR)
