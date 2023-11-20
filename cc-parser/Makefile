@@ -1,6 +1,6 @@
-CCPARSER_BASEDIR=$(shell pwd)
-PARSER_BINDIR=$(CCPARSER_BASEDIR)/bin
-PARSER_LIBDIR = $(CCPARSER_BASEDIR)/lib
+PARSER_BASEDIR=$(shell pwd)
+PARSER_LIBDIR=$(PARSER_BASEDIR)/../lib
+PARSER_BINDIR=$(PARSER_BASEDIR)/bin
 
 CUP = java_cup.Main
 CUPFLAGS = -expect 100 -locations
@@ -25,10 +25,10 @@ JAVA_FLAGS:=
 .PHONY: all
 all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class
 
-include $(CCPARSER_BASEDIR)/download_jars.mk
+include $(PARSER_BASEDIR)/download_jars.mk
 
 cc-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/sym.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Yylex.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/parser.class
-	cd $(PARSER_BINDIR) && jar cf $(CCPARSER_BASEDIR)/cc-parser.jar tricera
+	cd $(PARSER_BINDIR) && jar cf $(PARSER_BASEDIR)/cc-parser.jar tricera
 
 
 $(PARSER_BINDIR):

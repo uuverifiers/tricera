@@ -1,6 +1,5 @@
 PARSER_BASEDIR=$(shell pwd)
-CCPARSER_BASEDIR=$(PARSER_BASEDIR)/../cc-parser
-PARSER_LIBDIR=$(CCPARSER_BASEDIR)/lib
+PARSER_LIBDIR=$(PARSER_BASEDIR)/../lib
 PARSER_BINDIR=$(PARSER_BASEDIR)/bin
 
 CUP = java_cup.Main
@@ -26,7 +25,7 @@ JAVA_FLAGS:=
 .PHONY: all
 all: download-jars acsl-parser.jar tricera/acsl/Test.class
 
-include $(CCPARSER_BASEDIR)/download_jars.mk
+include $(PARSER_BASEDIR)/../cc-parser/download_jars.mk
 
 acsl-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class $(PARSER_BINDIR)/tricera/acsl/sym.class $(PARSER_BINDIR)/tricera/acsl/Yylex.class $(PARSER_BINDIR)/tricera/acsl/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/acsl/parser.class
 	cd $(PARSER_BINDIR) && jar cf $(PARSER_BASEDIR)/acsl-parser.jar tricera

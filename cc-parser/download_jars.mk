@@ -1,7 +1,4 @@
-PARSER_LIBDIR = $(CCPARSER_BASEDIR)/lib
-
 CUP_JAR = $(PARSER_LIBDIR)/java-cup-11b.jar
-CUP_RUNTIME_JAR = $(PARSER_LIBDIR)/java-cup-runtime-11b.jar
 JFLEX_PLUGIN_JAR = $(PARSER_LIBDIR)/jflex-1.9.1.jar
 
 .PHONY: download-jars
@@ -21,19 +18,6 @@ $(CUP_JAR): | $(PARSER_LIBDIR)
 	        -Ddest=$(CUP_JAR); \
 	else \
 			echo "CUP JAR found, skipping download."; \
-	fi
-
-$(CUP_RUNTIME_JAR): | $(PARSER_LIBDIR)
-	@echo "Looking for CUP Runtime JAR at $(CUP_RUNTIME_JAR)..."
-	@if [ ! -f $(CUP_RUNTIME_JAR) ]; then \
-			echo "CUP Runtime JAR not found, downloading..."; \
-	    mvn org.apache.maven.plugins:maven-dependency-plugin:2.10:get \
-	        -DremoteRepositories=https://repo.maven.apache.org/maven2/ \
-	        -Dartifact=com.github.vbmacher:java-cup-runtime:11b-20160615-2 \
-	        -Dtransitive=false \
-	        -Ddest=$(CUP_RUNTIME_JAR); \
-	else \
-			echo "CUP Runtime JAR found, skipping download."; \
 	fi
 
 $(JFLEX_PLUGIN_JAR): | $(PARSER_LIBDIR)
