@@ -1,21 +1,20 @@
-
+PARSER_BASEDIR=$(shell pwd)
+PARSER_BINDIR=$(PARSER_BASEDIR)/bin
+PARSER_LIBDIR = $(PARSER_BASEDIR)/../cc-parser/lib
 
 CUP = java_cup.Main
 CUPFLAGS = -expect 7 -locations
+CUP_JAR = $(PARSER_LIBDIR)/java-cup-11b.jar
 
-JLEX = JLex.Main
+JFLEX = jflex.Main
+JFLEX_PLUGIN_JAR = $(PARSER_LIBDIR)/jflex-1.9.1.jar
 
 LATEX = latex
 DVIPS = dvips
 DVIPDF = dvipdfm
 
-
-PARSER_BASEDIR=$(shell pwd)
-PARSER_BINDIR=$(PARSER_BASEDIR)/bin
-
-
-JLEX_PATH:=/usr/share/java/JLex.jar
-CLASSPATH:=$(CLASSPATH):$(PARSER_BASEDIR)/../cc-parser/lib/java-cup-11b.jar:$(PARSER_BASEDIR):$(JLEX_PATH)
+CLASSPATH:=$(CLASSPATH):$(CUP_JAR):$(JFLEX_PLUGIN_JAR)
+export CLASSPATH
 
 JAVAC:=javac
 JAVAC_FLAGS:=-target 1.8 -source 1.8
@@ -23,16 +22,40 @@ JAVAC_FLAGS:=-target 1.8 -source 1.8
 JAVA:=java
 JAVA_FLAGS:=
 
+.PHONY: all
+all: $(CUP_JAR) $(JFLEX_PLUGIN_JAR) acsl-parser.jar tricera/acsl/Test.class
 
-export CLASSPATH
+$(PARSER_LIBDIR):
+	@mkdir -p $@
 
+$(CUP_JAR): | $(PARSER_LIBDIR)
+	@echo "Looking for cup jar at $(CUP_JAR)"
+	@if [ ! -f $(CUP_JAR) ]; then \
+			echo "not found, downloading..."; \
+	    mvn org.apache.maven.plugins:maven-dependency-plugin:2.10:get \
+	        -DremoteRepositories=https://repo.maven.apache.org/maven2/ \
+	        -Dartifact=com.github.vbmacher:java-cup:11b-20160615-2 \
+	        -Dtransitive=false \
+	        -Ddest=$(CUP_JAR); \
+	else \
+			echo "found, skipping download."; \
+	fi
 
-all: acsl-parser.jar tricera/acsl/Test.class
-
+$(JFLEX_PLUGIN_JAR): | $(PARSER_LIBDIR)
+	@echo "Looking for JFlex plugin jar at $(JFLEX_PLUGIN_JAR)"
+	@if [ ! -f $(JFLEX_PLUGIN_JAR) ]; then \
+	    echo "not found, downloading..."; \
+	    mvn org.apache.maven.plugins:maven-dependency-plugin:2.10:get \
+	        -DremoteRepositories=https://repo.maven.apache.org/maven2/ \
+	        -Dartifact=de.jflex:jflex:1.9.1 \
+	        -Dtransitive=false \
+	        -Ddest=$(JFLEX_PLUGIN_JAR); \
+	else \
+			echo "found, skipping download."; \
+	fi
 
 acsl-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class $(PARSER_BINDIR)/tricera/acsl/sym.class $(PARSER_BINDIR)/tricera/acsl/Yylex.class $(PARSER_BINDIR)/tricera/acsl/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/acsl/parser.class
 	cd $(PARSER_BINDIR) && jar cf $(PARSER_BASEDIR)/acsl-parser.jar tricera
-
 
 $(PARSER_BINDIR):
 	mkdir $(PARSER_BINDIR)
@@ -46,10 +69,10 @@ clean:
 
 # just any of the files that is created by bnfc
 acsl.tex: acsl.cf
-	bnfc -p tricera --java -l acsl.cf
+	bnfc -p tricera --java --jflex -l acsl.cf
 
 $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.java: acsl.cf
-	bnfc -p tricera --java -l acsl.cf
+	bnfc -p tricera --java --jflex -l acsl.cf
 
 $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class: $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.java
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/Absyn/*.java
@@ -61,7 +84,7 @@ tricera/acsl/Yylex.java: tricera/acsl/Yylex
 #       quote dashes "-"
 #	sed 's/\\\+-/\\+\\-/g' <tricera/acsl/Yylex >tricera/acsl/Yylex.temp
 #	mv tricera/acsl/Yylex.temp tricera/acsl/Yylex
-	${JAVA} ${JAVA_FLAGS} ${JLEX} tricera/acsl/Yylex
+	${JAVA} ${JAVA_FLAGS} ${JFLEX} tricera/acsl/Yylex
 
 tricera/acsl/sym.java tricera/acsl/parser.java: tricera/acsl/_cup.cup
 	${JAVA} ${JAVA_FLAGS} ${CUP} ${CUPFLAGS} tricera/acsl/_cup.cup
