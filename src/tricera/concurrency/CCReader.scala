@@ -115,8 +115,8 @@ object CCReader {
     override def toString : String =
       clause.toPrologString + (srcInfo match {
         case None => ""
-        case Some(SourceInfo(line, col, offset)) =>
-          s" (line $line)"
+        case Some(SourceInfo(line, col)) =>
+          s" (line:$line col:$col)"
       })
   }
 
@@ -195,16 +195,21 @@ class CCReader private (prog : Program,
       variableHints += List()
       super.addVar(v)
     }
+    def update(idx : Int, elem : CCVar) {
+      vars.update(idx, elem)
+    }
     def pop(n : Int) = {
       localVars trimEnd n
       variableHints trimEnd n
       assert(variableHints.size == size + globalVars.size)
     }
 
-    def remove(n : Int): Unit = {
+    def lastOption : Option[CCVar] = vars.lastOption
+    def last : CCVar = vars.last
+    def remove(n : Int): CCVar = {
       assume(n >= 0 && n < size)
-      vars.remove(n)
       variableHints.remove(n + globalVars.size)
+      vars.remove(n)
     }
     def trimEnd(n: Int) = vars trimEnd n
     def pushFrame = frameStack push size
@@ -852,8 +857,7 @@ class CCReader private (prog : Program,
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        override val annotationBeginSourceInfo : SourceInfo =
-          SourceInfo(fun.line_num, fun.col_num, fun.offset)
+        override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
 
         override val annotationNumLines : Int = // todo: this is currently incorrect - to be fixed!
           functionAnnotations(fun).head._1 match {
@@ -1494,12 +1498,11 @@ class CCReader private (prog : Program,
                 .listparameter_declaration_
               val argTypesAndNames : Seq[(CCType, String)] =
                 collectArgTypesAndNames(decList, predHint.cident_)
-              val srcInfo =
-                SourceInfo(predHint.line_num, predHint.col_num, predHint.offset)
+              val srcInfo = Some(getSourceInfo(predHint))
               val argCCVars = // needed for adding to predCCPredMap, used in printing
                 argTypesAndNames.map{case (argType, argName) =>
-                  new CCVar(argName, Some(srcInfo), argType)}
-              val hintPred = newPred(predHint.cident_, argCCVars, Some(srcInfo))
+                  new CCVar(argName, srcInfo, argType)}
+              val hintPred = newPred(predHint.cident_, argCCVars, srcInfo)
               uninterpPredDecls += ((predHint.cident_, hintPred))
           }
         }
@@ -1662,9 +1665,9 @@ class CCReader private (prog : Program,
         } else {
           val (directDecl, isPointer, sourceInfo) = maybeDecl.get match {
             case decl: NoPointer => (decl.direct_declarator_, false,
-              Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
+              Some(getSourceInfo(decl)))
             case decl: BeginPointer => (decl.direct_declarator_, true,
-              Some(SourceInfo(decl.line_num, decl.col_num, decl.offset)))
+              Some(getSourceInfo(decl)))
           }
           directDecl match {
             case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
@@ -1883,8 +1886,7 @@ class CCReader private (prog : Program,
         case s : Plain => {
           val ind = nextInd
           nextInd = nextInd + 1
-          val v = new CCVar(s.cident_,
-            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt)
+          val v = new CCVar(s.cident_, Some(getSourceInfo(s)), CCInt)
           localVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
@@ -1900,7 +1902,7 @@ class CCReader private (prog : Program,
           }
           nextInd = ind + 1
           val v = new CCVar(s.cident_,
-            Some(SourceInfo(s.line_num, s.col_num, s.offset)), CCInt)
+            Some(getSourceInfo(s)), CCInt)
           localVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
@@ -2691,25 +2693,22 @@ class CCReader private (prog : Program,
     private def evalHelp(exp : Exp)
                         (implicit evalSettings : EvalSettings)
     : Unit = exp match {
-      case exp : Ecomma => {
+      case exp : Ecomma =>
         evalHelp(exp.exp_1)
         popVal
         maybeOutputClause(Some(getSourceInfo(exp)))
         evalHelp(exp.exp_2)
-      }
       case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign] &&
-                             isClockVariable(exp.exp_1)) => {
+                             isClockVariable(exp.exp_1)) =>
         evalHelp(exp.exp_2)
         maybeOutputClause(Some(getSourceInfo(exp)))
         setValue(asLValue(exp.exp_1), translateClockValue(topVal))
-      }
       case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign] &&
-                             isDurationVariable(exp.exp_1)) => {
+                             isDurationVariable(exp.exp_1)) =>
         evalHelp(exp.exp_2)
         maybeOutputClause(Some(getSourceInfo(exp)))
         setValue(asLValue(exp.exp_1), translateDurationValue(topVal))
-      }
-      case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => {
+      case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] =>
         // if lhs is array pointer, an alloc rhs evaluation should produce an
         // AddressRange even if the allocation size is only 1.
         evalHelp(exp.exp_2) //first evaluate rhs and push
@@ -2781,8 +2780,7 @@ class CCReader private (prog : Program,
           setValue(lhsName, actualLhsTerm)
         }
         pushVal(rhsVal)
-      }
-      case exp : Eassign => {
+      case exp : Eassign =>
         evalHelp(exp.exp_1)
         val lhsVal = topVal
         maybeOutputClause(Some(getSourceInfo(exp)))
@@ -2845,9 +2843,8 @@ class CCReader private (prog : Program,
             getActualAssignedTerm(lhsVal, newVal),
             isIndirection(exp.exp_1)) // todo get rid of indirections?
         }
-      }
-      case exp : Econdition => { // exp_1 ? exp_2 : exp_3
-        val srcInfo = getSourceInfo(exp)
+      case exp : Econdition => // exp_1 ? exp_2 : exp_3
+        val srcInfo = Some(getSourceInfo(exp))
         if(evalSettings.noClausesForExprs) {
           val oldSize = clauses.size
           val cond = eval(exp.exp_1)
@@ -2857,14 +2854,14 @@ class CCReader private (prog : Program,
             throw new TranslationException("This ternary expression must be " +
                                            "side effect free: " +
                                            printer.print(exp) + " at line " +
-                                           srcInfo.line)
+                                           srcInfo.get.line)
           // throw exceptioon if t1.typ != t2.typ
           if(t1.typ != t2.typ)
             throw new TranslationException("Unsupported operation: ternary " +
               "expression with different types: " + printer.print(exp) +
-              " at line " + srcInfo.line)
+              " at line " + srcInfo.get.line)
           pushVal(CCTerm(IExpression.ite(cond.toFormula, t1.toTerm, t2.toTerm),
-                         t1.typ, Some(srcInfo) ))
+                         t1.typ, srcInfo))
         } else { // evalSettings.noExtraClauseForTernaryExp == false
           val cond = eval(exp.exp_1).toFormula
           saveState
@@ -2876,65 +2873,63 @@ class CCReader private (prog : Program,
           restoreState
           addGuard(~cond)
           evalHelp(exp.exp_3)
-          outputClause(intermediatePred, Some(srcInfo))
+          localVars.update(localVars.size - 1,
+            new CCVar(s"ite_${srcInfo.get.line}_${srcInfo.get.col}",
+                      localVars.last.srcInfo, localVars.last.typ))
+          outputClause(intermediatePred, srcInfo)
         }
-      }
-      case exp : Elor => {
+      case exp : Elor =>
+        val srcInfo = Some(getSourceInfo(exp))
         evalHelp(exp.exp_1)
-        maybeOutputClause(Some(getSourceInfo(exp)))
+        maybeOutputClause(srcInfo)
         val cond = popVal.toFormula
 
         saveState
         addGuard(~cond)
         val newGuard = guard
         evalHelp(exp.exp_2)
-        maybeOutputClause(Some(getSourceInfo(exp)))
+        maybeOutputClause(srcInfo)
 
         // check whether the second expression had side-effects
         if ((guard eq newGuard) && atomValuesUnchanged) {
           val cond2 = popVal.toFormula
           restoreState
-          pushVal(CCFormula(cond ||| cond2, CCInt,
-            Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))))
+          pushVal(CCFormula(cond ||| cond2, CCInt, srcInfo))
         } else {
-          outputClause(Some(getSourceInfo(exp)))
+          outputClause(srcInfo)
           val intermediatePred = initPred
 
           restoreState
           addGuard(cond)
-          pushVal(CCFormula(true, CCInt,
-            Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))))
-          outputClause(intermediatePred, Some(getSourceInfo(exp)))
+          pushVal(CCFormula(true, CCInt, srcInfo))
+          outputClause(intermediatePred, srcInfo)
         }
-      }
-      case exp : Eland => {
+      case exp : Eland =>
+        val srcInfo = Some(getSourceInfo(exp))
         evalHelp(exp.exp_1)
-        maybeOutputClause(Some(getSourceInfo(exp)))
+        maybeOutputClause(srcInfo)
         val cond = popVal.toFormula
 
         saveState
         addGuard(cond)
         val newGuard = guard
         evalHelp(exp.exp_2)
-        maybeOutputClause(Some(getSourceInfo(exp)))
+        maybeOutputClause(srcInfo)
 
         // check whether the second expression had side-effects
         if ((guard eq newGuard) && atomValuesUnchanged) {
           val cond2 = popVal.toFormula
           restoreState
-          pushVal(CCFormula(cond &&& cond2, CCInt,
-            Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))))
+          pushVal(CCFormula(cond &&& cond2, CCInt, srcInfo))
         } else {
-          outputClause(Some(getSourceInfo(exp)))
+          outputClause(srcInfo)
           val intermediatePred = initPred
 
           restoreState
           addGuard(~cond)
-          pushVal(CCFormula(false, CCInt,
-            Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))))
-          outputClause(intermediatePred, Some(getSourceInfo(exp)))
+          pushVal(CCFormula(false, CCInt, srcInfo))
+          outputClause(intermediatePred, srcInfo)
         }
-      }
       case exp : Ebitor =>
         val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
         pushVal(BinaryOperators.BitwiseOr(lhs, rhs).expr)
@@ -3003,8 +2998,8 @@ class CCReader private (prog : Program,
             getActualAssignedTerm(lhsVal, topVal),
             isIndirection(preExp)) // todo get rid of indirection?
         }
-      case exp : Epreop => {
-        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+      case exp : Epreop =>
+        val srcInfo = Some(getSourceInfo(exp))
         evalHelp(exp.exp_)
         exp.unary_operator_ match {
           case _ : Address    =>
@@ -3029,7 +3024,7 @@ class CCReader private (prog : Program,
                     // and create a stack pointer to it (but this needs to be done during preprocessing,
                     //otherwise when we evaluate this we would be pushing two terms instead of one)
                     val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
-                    maybeOutputClause(Some(getSourceInfo(exp)))
+                    maybeOutputClause(srcInfo)
                     assert(c.args.size == 1)
                     val readObj = c.args.head
                     val resSort = c.fun.asInstanceOf[MonoSortedIFunction].resSort
@@ -3064,7 +3059,7 @@ class CCReader private (prog : Program,
                   //newTerm
                   throw new TranslationException(
                     "Function contracts are currently not supported together " +
-                    s"with stack pointers (line ${exp.line_num})")
+                    s"with stack pointers (at ${exp.line_num}:${exp.col_num})")
                 } else {
                   val ind = values.indexWhere(v => v == topVal)
                   assert(ind > -1 && ind < values.size - 1) // todo
@@ -3094,13 +3089,12 @@ class CCReader private (prog : Program,
           case _ : Logicalneg =>
             pushVal(CCFormula(~popVal.toFormula, CCInt, srcInfo))
         }
-      }
-//      case exp : Ebytesexpr.  Exp15 ::= "sizeof" Exp15;
-//      case exp : Ebytestype.  Exp15 ::= "sizeof" "(" Type_name ")";
-//      case exp : Earray.      Exp16 ::= Exp16 "[" Exp "]" ;
+//    case exp : Ebytesexpr.  Exp15 ::= "sizeof" Exp15;
+//    case exp : Ebytestype.  Exp15 ::= "sizeof" "(" Type_name ")";
+//    case exp : Earray.      Exp16 ::= Exp16 "[" Exp "]" ;
 
-      case exp : Efunk => {
-        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+      case exp : Efunk =>
+        val srcInfo = Some(getSourceInfo(exp))
         // inline the called function
         printer print exp.exp_ match {
           case "__VERIFIER_error" | "reach_error" => {
@@ -3108,17 +3102,16 @@ class CCReader private (prog : Program,
             pushVal(CCFormula(true, CCInt, srcInfo))
           }
           case name => {
-            outputClause(Some(getSourceInfo(exp)))
+            outputClause(srcInfo)
             handleFunction(name, initPred, 0)
           }
         }
-      }
 
       case exp : Efunkpar =>
-        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+        val srcInfo = Some(getSourceInfo(exp))
         (printer print exp.exp_) match {
           case "assert" | "static_assert" | "__VERIFIER_assert"
-                          if (exp.listexp_.size == 1) => {
+                          if (exp.listexp_.size == 1) =>
           val property = exp.listexp_.head match {
             case a : Efunkpar
               if uninterpPredDecls contains (printer print a.exp_)      =>
@@ -3137,9 +3130,8 @@ class CCReader private (prog : Program,
           }
           assertProperty(property, srcInfo)
           pushVal(CCFormula(true, CCInt, srcInfo))
-        }
         case "assume" | "__VERIFIER_assume"
-                          if (exp.listexp_.size == 1) => {
+                          if (exp.listexp_.size == 1) =>
           val property = exp.listexp_.head match {
             case a : Efunkpar
               if uninterpPredDecls contains(printer print a.exp_) =>
@@ -3158,8 +3150,7 @@ class CCReader private (prog : Program,
           }
           addGuard(property)
           pushVal(CCFormula(true, CCInt, srcInfo))
-        }
-        case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) => {
+        case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) =>
           val name = printer print exp.listexp_.head
           (channels get name) match {
             case Some(chan) => {
@@ -3174,9 +3165,8 @@ class CCReader private (prog : Program,
               throw new TranslationException(
                 name + " is not a declared channel")
           }
-        }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
-          if !TriCeraParameters.parameters.value.useArraysForHeap => { // todo: proper alloca and calloc
+          if !TriCeraParameters.parameters.value.useArraysForHeap => // todo: proper alloca and calloc
           if (!modelHeap)
             throw NeedsHeapModelException
           val (typ, allocSize) = exp.listexp_(0) match {
@@ -3219,9 +3209,8 @@ class CCReader private (prog : Program,
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
                 // todo: optimise constant size allocations > 1?
           }
-        }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
-          if TriCeraParameters.parameters.value.useArraysForHeap => {
+          if TriCeraParameters.parameters.value.useArraysForHeap =>
           val (typ, allocSize) = exp.listexp_(0) match {
             case exp : Ebytestype =>
               (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
@@ -3262,7 +3251,6 @@ class CCReader private (prog : Program,
           }, arrType, srcInfo)
 
           pushVal(arrayTerm)
-        }
         case "realloc" =>
           if (!modelHeap)
             throw NeedsHeapModelException
@@ -3273,7 +3261,7 @@ class CCReader private (prog : Program,
           val t = atomicEval(exp.listexp_.head)
           heapFree(t)
           pushVal(CCTerm(0, CCVoid, srcInfo)) // free returns no value, pushing dummy
-        case name => {
+        case name =>
           // then we inline the called function
 
           // evaluate the arguments
@@ -3321,18 +3309,17 @@ class CCReader private (prog : Program,
           val functionEntry = initPred
 
           handleFunction(name, functionEntry, argCount)
-        }
       }
 
-      case exp : Eselect => {
-        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+      case exp : Eselect =>
+        val srcInfo = Some(getSourceInfo(exp))
         val evaluatingLhs_pre = evaluatingLhs
         evaluatingLhs = false
         val subexpr = eval(exp.exp_)
         evaluatingLhs = evaluatingLhs_pre
         val fieldName = exp.cident_
         subexpr.typ match {
-          case structType : CCStruct => { // todo a better way
+          case structType : CCStruct => // todo a better way
             if(!structType.contains(fieldName))
               throw new TranslationException(fieldName + " is not a member of "
                 + structType + "!")
@@ -3344,15 +3331,13 @@ class CCReader private (prog : Program,
             }*/
             val sel = structType.getADTSelector(ind)
             pushVal(CCTerm(sel(subexpr.toTerm), fieldType, srcInfo))
-          }
           case _ =>
             throw new TranslationException("Trying to access field '." +
               fieldName + "' of a variable which is not a struct.")
         }
-      }
 
-      case exp : Epoint => {
-        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+      case exp : Epoint =>
+        val srcInfo = Some(getSourceInfo(exp))
         val evaluatingLhs_pre = evaluatingLhs
         evaluatingLhs = false
         val subexpr = eval(exp.exp_)
@@ -3379,7 +3364,6 @@ class CCReader private (prog : Program,
         val fieldType = structType.getFieldType(ind)
         val sel = structType.getADTSelector(ind)
         pushVal(CCTerm(sel(term.toTerm), fieldType, srcInfo))
-      }
 
       case _ : Epostinc | _ : Epostdec=>
         val (postExp, op) = exp match {
@@ -3399,7 +3383,7 @@ class CCReader private (prog : Program,
             isIndirection(postExp)) // todo get rid of indirection?
         }
 
-      case exp : Evar => {
+      case exp : Evar =>
         val name = exp.cident_
         pushVal(lookupVarNoException(name) match {
           case -1 =>
@@ -3411,16 +3395,15 @@ class CCReader private (prog : Program,
           case ind =>
             getValue(ind, false)
         })
-      }
 
       case exp : Econst => evalHelp(exp.constant_)
       case exp : Estring => // todo: implement this properly
         warn("ignoring string argument")
-        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+        val srcInfo = Some(getSourceInfo(exp))
         pushVal(CCTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
 
       case exp : Earray =>
-        val srcInfo = Some(SourceInfo(exp.line_num, exp.col_num, exp.offset))
+        val srcInfo = Some(getSourceInfo(exp))
         val arrayTerm : CCExpr = eval(exp.exp_1)
         val index : CCExpr = eval(exp.exp_2)
 
@@ -3453,7 +3436,7 @@ class CCReader private (prog : Program,
                                functionEntry : CCPredicate,
                                argCount : Int) =
       functionContexts get name match {
-        case Some(ctx) => {
+        case Some(ctx) =>
           // use the contract of the function
 //          assert(!(pointerArgs exists (_.isInstanceOf[CCStackPointer])),
 //                 "function contracts do not support pointer arguments yet")
@@ -3494,8 +3477,7 @@ class CCReader private (prog : Program,
             case Seq(v) => pushVal(CCTerm(v.term, v.typ, v.srcInfo))
             case Seq()  => pushVal(CCTerm(0, CCVoid, None)) // push a dummy result
           }
-        }
-        case None => {
+        case None =>
           uninterpPredDecls get name match {
             case Some(predDecl) =>
               //val argNames = PredPrintContextPrintContext.predArgNames(predDecl.pred)
@@ -3513,14 +3495,13 @@ class CCReader private (prog : Program,
               // pointer arguments are saved and passed on
               callFunctionInlining(name, functionEntry, args)
           }
-        }
       }
 
     private def callFunctionInlining(name : String,
                                      functionEntry : CCPredicate,
                                      pointerArgs : List[CCType] = Nil) =
       (functionDefs get name) match {
-        case Some(fundef) => {
+        case Some(fundef) =>
           val typ = getType(fundef)
           val isNoReturn = typ == CCVoid
           val exitVar =
@@ -3539,13 +3520,11 @@ class CCReader private (prog : Program,
           else
             pushFormalVal(typ, srcInfo)
           resetFields(functionExit)
-        }
         case None => (functionDecls get name) match {
-          case Some((fundecl, typ)) => {
+          case Some((fundecl, typ)) =>
             if (!(name contains "__VERIFIER_nondet" ))
               warn("no definition of function \"" + name + "\" available")
             pushFormalVal(typ, Some(getSourceInfo(fundecl)))
-          }
           case None =>
             throw new TranslationException(
               "Function " + name + " is not declared")
@@ -3590,57 +3569,52 @@ class CCReader private (prog : Program,
 
     ////////////////////////////////////////////////////////////////////////////
 
-    private def evalHelp(constant : Constant) : Unit = constant match {
+    private def evalHelp(constant : Constant) : Unit = {
+      val srcInfo = Some(getSourceInfo(constant))
+      constant match {
 //      case constant : Efloat.        Constant ::= Double;
-      case constant : Echar =>
-        pushVal(CCTerm(IdealInt(constant.char_.toInt), CCInt, Some(
-          SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Eunsigned =>
-        pushVal(CCTerm(IdealInt(
-          constant.unsigned_.substring(0,
-          constant.unsigned_.size - 1)), CCUInt, Some(
-          SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Elong =>
-        pushVal(CCTerm(IdealInt(
-          constant.long_.substring(0, constant.long_.size - 1)), CCLong, Some(
-          SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Eunsignlong =>
-        pushVal(CCTerm(IdealInt(
-          constant.unsignedlong_.substring(0,
-          constant.unsignedlong_.size - 2)), CCULong, Some(
-          SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Ehexadec =>
-        pushVal(CCTerm(IdealInt(constant.hexadecimal_ substring 2, 16), CCInt,
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Ehexaunsign =>
-        pushVal(CCTerm(IdealInt(constant.hexunsigned_.substring(2,
-                                constant.hexunsigned_.size - 1), 16), CCUInt,
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Ehexalong =>
-        pushVal(CCTerm(IdealInt(constant.hexlong_.substring(2,
-                                constant.hexlong_.size - 1), 16), CCLong,
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Ehexaunslong =>
-        pushVal(CCTerm(IdealInt(constant.hexunslong_.substring(2,
-                                constant.hexunslong_.size - 2), 16), CCULong,
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant : Eoctal =>
-        pushVal(CCTerm(IdealInt(constant.octal_, 8), CCInt,
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
+        case constant : Echar =>
+          pushVal(CCTerm(IdealInt(constant.char_.toInt), CCInt, srcInfo))
+        case constant : Eunsigned =>
+          pushVal(CCTerm(IdealInt(
+            constant.unsigned_.substring(
+              0, constant.unsigned_.size - 1)), CCUInt, srcInfo))
+        case constant : Elong =>
+          pushVal(CCTerm(IdealInt(
+            constant.long_.substring(
+              0, constant.long_.size - 1)), CCLong, srcInfo))
+        case constant : Eunsignlong =>
+          pushVal(CCTerm(IdealInt(
+            constant.unsignedlong_.substring(
+              0, constant.unsignedlong_.size - 2)), CCULong, srcInfo))
+        case constant : Ehexadec =>
+          pushVal(CCTerm(IdealInt(
+            constant.hexadecimal_ substring 2, 16), CCInt, srcInfo))
+        case constant : Ehexaunsign =>
+          pushVal(CCTerm(IdealInt(constant.hexunsigned_.substring(
+            2, constant.hexunsigned_.size - 1), 16), CCUInt, srcInfo))
+        case constant : Ehexalong =>
+          pushVal(CCTerm(IdealInt(constant.hexlong_.substring(
+            2, constant.hexlong_.size - 1), 16), CCLong, srcInfo))
+        case constant : Ehexaunslong =>
+          pushVal(CCTerm(IdealInt(constant.hexunslong_.substring(
+            2, constant.hexunslong_.size - 2), 16), CCULong, srcInfo))
+        case constant : Eoctal =>
+          pushVal(CCTerm(IdealInt(constant.octal_, 8), CCInt, srcInfo))
 //      case constant : Eoctalunsign.  Constant ::= OctalUnsigned;
-      case constant : Eoctallong =>
-        pushVal(CCTerm(IdealInt(constant.octallong_.substring(0,
-                                constant.octallong_.size - 1), 8), CCLong,
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
+        case constant : Eoctallong =>
+          pushVal(CCTerm(IdealInt(constant.octallong_.substring(
+            0, constant.octallong_.size - 1), 8), CCLong, srcInfo))
 //      case constant : Eoctalunslong. Constant ::= OctalUnsLong;
 //      case constant : Ecdouble.      Constant ::= CDouble;
 //      case constant : Ecfloat.       Constant ::= CFloat;
 //      case constant : Eclongdouble.  Constant ::= CLongDouble;
-      case constant : Eint =>
-        pushVal(CCTerm(IExpression.i(IdealInt(constant.unboundedinteger_)), CCInt,
-          Some(SourceInfo(constant.line_num, constant.col_num, constant.offset))))
-      case constant => throw new TranslationException("Unimplemented type: " +
-        constant.getClass)
+        case constant : Eint =>
+          pushVal(CCTerm(IExpression.i(IdealInt(
+            constant.unboundedinteger_)), CCInt, srcInfo))
+        case constant => throw new TranslationException(
+          "Unimplemented type: " + constant.getClass)
+      }
     }
   }
 
@@ -3726,7 +3700,7 @@ class CCReader private (prog : Program,
           decList(ind) match {
             case _ : OnlyType =>
               // ignore, a void argument implies that there are no arguments
-            case argDec : TypeAndParam => {
+            case argDec : TypeAndParam =>
               val name = getName(argDec.declarator_)
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
@@ -3746,13 +3720,11 @@ class CCReader private (prog : Program,
                   }
                 case _ => typ
               }
-              val declaredVar = new CCVar(name,
-                Some(SourceInfo(argDec.line_num, argDec.col_num, argDec.offset)),
-                actualType)
+              val declaredVar =
+                new CCVar(name, Some(getSourceInfo(argDec)), actualType)
               localVars addVar declaredVar
-            }
 
-            case argDec : TypeHintAndParam => {
+            case argDec : TypeHintAndParam =>
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
                 case _: BeginPointer if pointerArgs.nonEmpty => pointerArgs(ind)
@@ -3760,11 +3732,10 @@ class CCReader private (prog : Program,
                 case _ => typ
               }
               val declaredVar = new CCVar(getName(argDec.declarator_),
-                Some(SourceInfo(argDec.line_num, argDec.col_num, argDec.offset)),
-                actualType)
+                                          Some(getSourceInfo(argDec)),
+                                          actualType)
               localVars addVar declaredVar
               processHints(argDec.listannotation_)
-            }
 //            case argDec : Abstract =>
           }
 //      case dec : OldFuncDef =>
@@ -4312,9 +4283,7 @@ class CCReader private (prog : Program,
         val first = newPred(Nil, entry.srcInfo)
 
         if (TriCeraParameters.get.inferLoopInvariants)
-          addLoopInvariant(entry,
-            SourceInfo(stm.line_num, stm.col_num, stm.offset)) // todo: expand util for extracting srcInfo from stmt
-
+          addLoopInvariant(entry, getSourceInfo(stm))
         val condSymex = Symex(entry)
         implicit val evalSettings = condSymex.EvalSettings.default
         val cond = (condSymex eval stm.exp_).toFormula
@@ -4327,11 +4296,11 @@ class CCReader private (prog : Program,
       case stm : SiterTwo => {
         // do ... while loop
 
-        val srcInfo = getSourceInfo(stm)
-        val first = newPred(Nil, Some(srcInfo))
+        val srcInfo = Some(getSourceInfo(stm))
+        val first = newPred(Nil, srcInfo)
 
         if (TriCeraParameters.get.inferLoopInvariants)
-          addLoopInvariant(first, srcInfo) // todo: expand util for extracting srcInfo from stmt
+          addLoopInvariant(first, srcInfo.get)
 
         withinLoop(first, exit) {
           translate(stm.stm_, entry, first)
@@ -4340,14 +4309,14 @@ class CCReader private (prog : Program,
         val condSymex = Symex(first)
         implicit val evalSettings = condSymex.EvalSettings.default
         val cond = (condSymex eval stm.exp_).toFormula
-        condSymex.outputITEClauses(cond, entry, exit, Some(srcInfo))
+        condSymex.outputITEClauses(cond, entry, exit, srcInfo)
       }
 
       case _ : SiterThree | _ : SiterFour => {
         // for loop
 
-        val srcInfo = getSourceInfo(stm)
-        val first, second, third = newPred(Nil, Some(srcInfo)) // todo: line no might not be correct
+        val srcInfo = Some(getSourceInfo(stm))
+        val first, second, third = newPred(Nil, srcInfo) // todo: line no might not be correct
 
         val (initStm, condStm, body) = stm match {
           case stm : SiterThree =>
@@ -4357,9 +4326,9 @@ class CCReader private (prog : Program,
         }
 
         if (TriCeraParameters.get.inferLoopInvariants)
-          addLoopInvariant(first, srcInfo) // todo: expand util for extracting srcInfo from stmt
+          addLoopInvariant(first, srcInfo.get)
 
-        symexFor(entry, initStm)._1 outputClause(first, Some(srcInfo))
+        symexFor(entry, initStm)._1 outputClause(first, srcInfo)
 
         val (condSymex, condExpr) = symexFor(first, condStm)
         val cond : IFormula = condExpr match {
@@ -4367,7 +4336,7 @@ class CCReader private (prog : Program,
           case None       => true
         }
 
-        condSymex.outputITEClauses(cond, second, exit, Some(srcInfo))
+        condSymex.outputITEClauses(cond, second, exit, srcInfo)
 
         import HornClauses._
         withinLoop(third, exit) {
@@ -4376,12 +4345,12 @@ class CCReader private (prog : Program,
 
         stm match {
           case stm : SiterThree =>
-            output(addRichClause(first(allFormalVars) :- third(allFormalVarTerms),
-              Some(srcInfo)))
+            output(addRichClause(
+              first(allFormalVars) :- third(allFormalVarTerms), srcInfo))
           case stm : SiterFour  => {
             val incSymex = Symex(third)
             incSymex.eval(stm.exp_)(incSymex.EvalSettings.default)
-            incSymex outputClause (first, Some(srcInfo))
+            incSymex outputClause (first, srcInfo)
           }
         }
       }
@@ -4396,23 +4365,23 @@ class CCReader private (prog : Program,
         val (cond, srcInfo1, srcInfo2) = stm match {
           case stm : SselOne =>
             ((condSymex eval stm.exp_).toFormula,
-              getSourceInfo(stm), getSourceInfo(stm))
+              Some(getSourceInfo(stm)), Some(getSourceInfo(stm)))
           case stm : SselTwo =>
             ((condSymex eval stm.exp_).toFormula,
-              getSourceInfo(stm.stm_1), getSourceInfo(stm.stm_2))
+              Some(getSourceInfo(stm.stm_1)), Some(getSourceInfo(stm.stm_2)))
         }
-        val first = newPred(Nil, Some(srcInfo1))
-        val second = newPred(Nil, Some(srcInfo2))
+        val first = newPred(Nil, srcInfo1)
+        val second = newPred(Nil, srcInfo2)
         val vars = allFormalVarTerms
 
-        condSymex.outputITEClauses(cond, first, second, Some(srcInfo2)) // todo: correct line no?
+        condSymex.outputITEClauses(cond, first, second, srcInfo2) // todo: correct line no?
         stm match {
           case stm : SselOne => {
             translate(stm.stm_, first, exit)
             output(addRichClause(
               Clause(atom(exit, vars take exit.arity),
                      List(atom(second, vars take second.arity)), true),
-              Some(srcInfo1))) // todo: correct line no?
+              srcInfo1)) // todo: correct line no?
           }
           case stm : SselTwo => {
             translate(stm.stm_1, first, exit)
@@ -4449,8 +4418,7 @@ class CCReader private (prog : Program,
           case Seq() =>
             // add an assertion that we never try to jump to a case that
             // does not exist. TODO: add a parameter for this?
-            selectorSymex assertProperty(or(guards),
-              Some(SourceInfo(stm.line_num, stm.col_num, stm.offset)))
+            selectorSymex assertProperty(or(guards), Some(getSourceInfo(stm)))
           case Seq((_, target)) => {
             selectorSymex.saveState
             selectorSymex addGuard ~or(guards)

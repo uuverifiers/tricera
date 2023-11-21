@@ -78,8 +78,7 @@ object ACSLTranslator {
                                    srcInfo : SourceInfo) : SourceInfo = {
     val begin = ctx.annotationBeginSourceInfo
     SourceInfo(line   = begin.line + srcInfo.line,
-               col    = srcInfo.col ,
-               offset = begin.offset + srcInfo.offset)
+               col    = srcInfo.col)
   }
 
   def translateACSL(annot : String,
