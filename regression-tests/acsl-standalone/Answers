@@ -5,20 +5,20 @@ SAFE
 inc_unsafe.c
 UNSAFE
 
----------------
+------------------
 Init:
-  foo0(0, 0)   
----------------
-       |       
-       |       
-       V       
- foo1(0, 0, 0) 
----------------
+   foo1_1(0, 0)   
+------------------
+        |         
+        |         
+        V         
+ foo6_10(0, 0, 0) 
+------------------
 Final:
- foo1(0, 0, 0) 
----------------
+ foo6_10(0, 0, 0) 
+------------------
 Failed assertion:
-false :- foo1(x, x_old, _res1), _res1 < 1. (line 3)
+false :- foo6_10(x, x_old, _res1), _res1 < 1. (line:3 col:19)
 
 
 mc91_safe.c
@@ -27,30 +27,30 @@ SAFE
 mc91_unsafe.c
 UNSAFE
 
--------------------
+------------------------
 Init:
-   foo0(90, 90)    
--------------------
-         |         
-         |         
-         V         
-   foo3(90, 90)    
--------------------
-         |         
-         |         
-         V         
- foo4(90, 90, 102) 
--------------------
-         |         
-         |         
-         V         
- foo1(90, 90, 92)  
--------------------
+     foo1_1(90, 90)     
+------------------------
+           |            
+           |            
+           V            
+    foo8_10(90, 90)     
+------------------------
+           |            
+           |            
+           V            
+ foo9_12_0(90, 90, 102) 
+------------------------
+           |            
+           |            
+           V            
+  foo9_12(90, 90, 92)   
+------------------------
 Final:
- foo1(90, 90, 92)  
--------------------
+  foo9_12(90, 90, 92)   
+------------------------
 Failed assertion:
-false :- foo1(n, n_old, _res1), !((100 < n_old | _res1 = 91) & (n_old - 101 < 1 | _res1 = n_old - 10)). (line 2)
+false :- foo9_12(n, n_old, _res1), !((100 < n_old | _res1 = 91) & (n_old - 101 < 1 | _res1 = n_old - 10)). (line:2 col:4)
 
 
 incdec_safe.c
@@ -59,25 +59,25 @@ SAFE
 incdec_unsafe.c
 UNSAFE
 
-----------------
+----------------------
 Init:
-   foo0(0, 0)   
-----------------
-       |        
-       |        
-       V        
- foo2(0, 0, -1) 
-----------------
-       |        
-       |        
-       V        
- foo1(0, 0, 1)  
-----------------
+    foo15_1(0, 0)     
+----------------------
+          |           
+          |           
+          V           
+ foo19_10_0(0, 0, -1) 
+----------------------
+          |           
+          |           
+          V           
+  foo19_10(0, 0, 1)   
+----------------------
 Final:
- foo1(0, 0, 1)  
-----------------
+  foo19_10(0, 0, 1)   
+----------------------
 Failed assertion:
-false :- foo1(n, n_old, _res3), _res3 != n_old. (line 16)
+false :- foo19_10(n, n_old, _res3), _res3 != n_old. (line:16 col:4)
 
 
 getptr_safe.c
@@ -88,15 +88,15 @@ getptr_unsafe.c
 Warning: enabling heap model
 UNSAFE
 
-----------------------------------------------------
+------------------------------------------------------
 Init:
- foo0(emptyHeap, nthAddr(0), emptyHeap, nthAddr(0)) 
-----------------------------------------------------
+ foo1_1(emptyHeap, nthAddr(0), emptyHeap, nthAddr(0)) 
+------------------------------------------------------
 Final:
- foo0(emptyHeap, nthAddr(0), emptyHeap, nthAddr(0)) 
-----------------------------------------------------
+ foo1_1(emptyHeap, nthAddr(0), emptyHeap, nthAddr(0)) 
+------------------------------------------------------
 Failed assertion:
-false :- foo0(@h, p, @h_old, p_old), !is_O_Int(read(@h, p)). (line 4)
+false :- foo1_1(@h, p, @h_old, p_old), !is_O_Int(read(@h, p)). (line:4 col:9)
 
 
 assigns_safe.c
@@ -107,20 +107,20 @@ assigns_unsafe.c
 Warning: enabling heap model
 UNSAFE
 
---------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
 Init:
-   foo0(newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1))   
---------------------------------------------------------------------------------------------------------------
-                                                      |                                                       
-                                                      |                                                       
-                                                      V                                                       
- foo1(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), 42) 
---------------------------------------------------------------------------------------------------------------
+   foo1_1(newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1))    
+-----------------------------------------------------------------------------------------------------------------
+                                                        |                                                        
+                                                        |                                                        
+                                                        V                                                        
+ foo8_10(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), 42) 
+-----------------------------------------------------------------------------------------------------------------
 Final:
- foo1(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), 42) 
---------------------------------------------------------------------------------------------------------------
+ foo8_10(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(1), newHeap(alloc(emptyHeap, O_Int(47))), nthAddr(1), 42) 
+-----------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- foo1(@h, p, @h_old, p_old, _res1), !(_res1 = 42 & @h = @h_old). (line 4)
+false :- foo8_10(@h, p, @h_old, p_old, _res1), !(_res1 = 42 & @h = @h_old). (line:4 col:20)
 
 
 maxptr_safe.c
@@ -131,25 +131,25 @@ maxptr_unsafe.c
 Warning: enabling heap model
 UNSAFE
 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
-  foo0(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2))   
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                           |                                                                                           
-                                                                                           |                                                                                           
-                                                                                           V                                                                                           
-  foo2(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2))   
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                           |                                                                                           
-                                                                                           |                                                                                           
-                                                                                           V                                                                                           
- foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), 5) 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   foo1_1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2))    
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                             |                                                                                             
+                                                                                             |                                                                                             
+                                                                                             V                                                                                             
+   foo8_17(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2))   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                             |                                                                                             
+                                                                                             |                                                                                             
+                                                                                             V                                                                                             
+ foo11_12(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), 5) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- foo1(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), 5) 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ foo11_12(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(4))), O_Int(3))), nthAddr(1), nthAddr(2), 5) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- foo1(@h, p, q, @h_old, p_old, q_old, _res1), !((_res1 = getInt(read(@h, p_old)) | _res1 = getInt(read(@h, q_old))) & _res1 >= getInt(read(@h, p_old)) & _res1 >= getInt(read(@h, q_old))). (line 3)
+false :- foo11_12(@h, p, q, @h_old, p_old, q_old, _res1), !((_res1 = getInt(read(@h, p_old)) | _res1 = getInt(read(@h, q_old))) & _res1 >= getInt(read(@h, p_old)) & _res1 >= getInt(read(@h, q_old))). (line:3 col:25)
 
 
 old_safe.c
@@ -160,25 +160,25 @@ old_unsafe.c
 Warning: enabling heap model
 UNSAFE
 
---------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------
 Init:
- foo0(newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1)) 
---------------------------------------------------------------------------------------------------------------------
-                                                         |                                                          
-                                                         |                                                          
-                                                         V                                                          
- foo3(newHeap(alloc(emptyHeap, O_Int(42))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1)) 
---------------------------------------------------------------------------------------------------------------------
-                                                         |                                                          
-                                                         |                                                          
-                                                         V                                                          
-  foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))  
---------------------------------------------------------------------------------------------------------------------
+ foo4_1(newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1)) 
+----------------------------------------------------------------------------------------------------------------------
+                                                          |                                                           
+                                                          |                                                           
+                                                          V                                                           
+  foo(newHeap(alloc(emptyHeap, O_Int(42))), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))   
+----------------------------------------------------------------------------------------------------------------------
+                                                          |                                                           
+                                                          |                                                           
+                                                          V                                                           
+ foo10_8(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))  
+----------------------------------------------------------------------------------------------------------------------
 Final:
-  foo1(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))  
---------------------------------------------------------------------------------------------------------------------
+ foo10_8(newHeap(alloc(emptyHeap, O_Int(42))), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), -42, nthAddr(1))  
+----------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- foo1(@h, g, p, @h_old, g_old, p_old), g != g_old + getInt(read(@h_old, p_old)). (line 6)
+false :- foo10_8(@h, g, p, @h_old, g_old, p_old), g != g_old + getInt(read(@h_old, p_old)). (line:6 col:22)
 
 
 dblptr-assigns_safe.c
@@ -189,25 +189,25 @@ dblptr-assigns_unsafe.c
 Warning: enabling heap model
 UNSAFE
 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
- foo0(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2))  
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                                                                   |                                                                                                                                   
-                                                                                                                                   |                                                                                                                                   
-                                                                                                                                   V                                                                                                                                   
- foo3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(42))), 0, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2))  
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                                                                   |                                                                                                                                   
-                                                                                                                                   |                                                                                                                                   
-                                                                                                                                   V                                                                                                                                   
- foo1(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Addr(nthAddr(1)))), O_Int(42))), 42, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2)) 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  foo5_1(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2))  
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                    |                                                                                                                                     
+                                                                                                                                    |                                                                                                                                     
+                                                                                                                                    V                                                                                                                                     
+   foo(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(42))), 0, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2))    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                    |                                                                                                                                     
+                                                                                                                                    |                                                                                                                                     
+                                                                                                                                    V                                                                                                                                     
+ foo14_9(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Addr(nthAddr(1)))), O_Int(42))), 42, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- foo1(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Addr(nthAddr(1)))), O_Int(42))), 42, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2)) 
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ foo14_9(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Addr(nthAddr(1)))), O_Int(42))), 42, nthAddr(3), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(50))), O_Addr(nthAddr(1)))), O_Int(51))), 0, nthAddr(3), nthAddr(2)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- foo1(@h, g, p, q, @h_old, g_old, p_old, q_old), !(!(_p != q_old & _p != p_old) | read(@h, _p) = read(@h_old, _p)). (line 6)
+false :- foo14_9(@h, g, p, q, @h_old, g_old, p_old, q_old), !(!(_p != q_old & _p != p_old) | read(@h, _p) = read(@h_old, _p)). (line:6 col:4)
 
 
 swap_safe.c
@@ -218,28 +218,28 @@ swap_unsafe.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
-  foo0(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2))   
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                                                     |                                                                                                                     
-                                                                                                                     |                                                                                                                     
-                                                                                                                     V                                                                                                                     
- foo3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), 7) 
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                                                     |                                                                                                                     
-                                                                                                                     |                                                                                                                     
-                                                                                                                     V                                                                                                                     
-       foo4(newHeap(alloc(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 2)), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), 7)        
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                                                     |                                                                                                                     
-                                                                                                                     |                                                                                                                     
-                                                                                                                     V                                                                                                                     
-  foo1(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(9))), O_Int(7))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2))   
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   foo3_1(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2))   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                      |                                                                                                                       
+                                                                                                                      |                                                                                                                       
+                                                                                                                      V                                                                                                                       
+ foo10_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), 7) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                      |                                                                                                                       
+                                                                                                                      |                                                                                                                       
+                                                                                                                      V                                                                                                                       
+         foo(newHeap(alloc(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 2)), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2), 7)          
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                      |                                                                                                                       
+                                                                                                                      |                                                                                                                       
+                                                                                                                      V                                                                                                                       
+  foo12_8(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(9))), O_Int(7))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2))   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
-  foo1(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(9))), O_Int(7))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2))   
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  foo12_8(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(9))), O_Int(7))), O_Int(0))), nthAddr(1), nthAddr(2), newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(7))), O_Int(9))), O_Int(0))), nthAddr(1), nthAddr(2))   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- foo1(@h, a, b, @h_old, a_old, b_old), !(getInt(read(@h, a_old)) = getInt(read(@h_old, b_old)) & getInt(read(@h, b_old)) = getInt(read(@h, a_old)) & (!(_p != a_old & _p != b_old) | read(@h, _p) = read(@h_old, _p))). (line 6)
+false :- foo12_8(@h, a, b, @h_old, a_old, b_old), !(getInt(read(@h, a_old)) = getInt(read(@h_old, b_old)) & getInt(read(@h, b_old)) = getInt(read(@h, a_old)) & (!(_p != a_old & _p != b_old) | read(@h, _p) = read(@h_old, _p))). (line:6 col:19)
 

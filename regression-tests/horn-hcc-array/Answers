@@ -4,20 +4,20 @@ Warning: enabling heap model
 Warning: no definition of function "nondet" available
 UNSAFE
 
---------------------------------------------------------------------------
+---------------------------------------------------------------------------
 Init:
-                main2(emptyHeap, AddrRange(nthAddr(0), 0))                
---------------------------------------------------------------------------
-                                    |                                     
-                                    |                                     
-                                    V                                     
- main6(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
---------------------------------------------------------------------------
+               main9_3(emptyHeap, AddrRange(nthAddr(0), 0))                
+---------------------------------------------------------------------------
+                                     |                                     
+                                     |                                     
+                                     V                                     
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
+---------------------------------------------------------------------------
 Final:
- main6(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
---------------------------------------------------------------------------
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
+---------------------------------------------------------------------------
 Failed assertion:
-false :- main6(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line 6)
+false :- main_2(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line:6 col:5)
 
 valid-memsafety
   expected verdict matches the result!
@@ -26,15 +26,15 @@ out-of-bounds-line2.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
 Init:
- main2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
--------------------------------------------------------------------------------------
+ main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
+-----------------------------------------------------------------------------------------
 Final:
- main2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
--------------------------------------------------------------------------------------
+ main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
+-----------------------------------------------------------------------------------------
 Failed assertion:
-false :- main2(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, 42))). (line 4)
+false :- main7_3_1(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, 42))). (line:4 col:5)
 
 valid-memsafety
   expected verdict matches the result!
@@ -44,20 +44,20 @@ Warning: enabling heap model
 Warning: no definition of function "nondet" available
 UNSAFE
 
---------------------------------------------------------------------------
+---------------------------------------------------------------------------
 Init:
-                main2(emptyHeap, AddrRange(nthAddr(0), 0))                
---------------------------------------------------------------------------
-                                    |                                     
-                                    |                                     
-                                    V                                     
- main6(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
---------------------------------------------------------------------------
+               main9_3(emptyHeap, AddrRange(nthAddr(0), 0))                
+---------------------------------------------------------------------------
+                                     |                                     
+                                     |                                     
+                                     V                                     
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
+---------------------------------------------------------------------------
 Final:
- main6(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
---------------------------------------------------------------------------
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), AddrRange(nthAddr(1), 1), 1) 
+---------------------------------------------------------------------------
 Failed assertion:
-false :- main6(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line 6)
+false :- main_2(@h, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line:6 col:5)
 
 valid-memsafety
   expected verdict matches the result!
@@ -66,15 +66,15 @@ out-of-bounds-line4.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------
 Init:
- main2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
--------------------------------------------------------------------------------------
+ main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
+---------------------------------------------------------------------------------------
 Final:
- main2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
--------------------------------------------------------------------------------------
+ main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), AddrRange(nthAddr(1), 42)) 
+---------------------------------------------------------------------------------------
 Failed assertion:
-false :- main2(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, -1*1))). (line 4)
+false :- main7_3(@h, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, -1*1))). (line:4 col:5)
 
 valid-memsafety
   expected verdict matches the result!
@@ -110,40 +110,40 @@ SAFE
 array-inside-struct-1.c
 UNSAFE
 
-----------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 Init:
-                             main3(S(const(4)))                             
-----------------------------------------------------------------------------
-                                     |                                      
-                                     |                                      
-                                     V                                      
-                           main7(S(const(4)), 0)                            
-----------------------------------------------------------------------------
-                                     |                                      
-                                     |                                      
-                                     V                                      
-                     main7(S(store(const(4), 0, 0)), 1)                     
-----------------------------------------------------------------------------
-                                     |                                      
-                                     |                                      
-                                     V                                      
-              main7(S(store(store(const(4), 0, 0), 1, 1)), 2)               
-----------------------------------------------------------------------------
-                                     |                                      
-                                     |                                      
-                                     V                                      
-        main7(S(store(store(store(const(4), 0, 0), 1, 1), 2, 2)), 3)        
-----------------------------------------------------------------------------
-                                     |                                      
-                                     |                                      
-                                     V                                      
- main11(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
-----------------------------------------------------------------------------
+                              main15_3(S(const(4)))                              
+---------------------------------------------------------------------------------
+                                        |                                        
+                                        |                                        
+                                        V                                        
+                           main15_36_1(S(const(4)), 0)                           
+---------------------------------------------------------------------------------
+                                        |                                        
+                                        |                                        
+                                        V                                        
+                    main15_36_1(S(store(const(4), 0, 0)), 1)                     
+---------------------------------------------------------------------------------
+                                        |                                        
+                                        |                                        
+                                        V                                        
+              main15_36_1(S(store(store(const(4), 0, 0), 1, 1)), 2)              
+---------------------------------------------------------------------------------
+                                        |                                        
+                                        |                                        
+                                        V                                        
+       main15_36_1(S(store(store(store(const(4), 0, 0), 1, 1), 2, 2)), 3)        
+---------------------------------------------------------------------------------
+                                        |                                        
+                                        |                                        
+                                        V                                        
+ main18_36_3(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
+---------------------------------------------------------------------------------
 Final:
- main11(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
-----------------------------------------------------------------------------
+ main18_36_3(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
+---------------------------------------------------------------------------------
 Failed assertion:
-false :- main11(s:14, i:18), select(data(s:14), i:18) = i:18. (line 19)
+false :- main18_36_3(s:14, i:18), select(data(s:14), i:18) = i:18. (line:19 col:5)
 
 
 pointer-arith-1-safe.c
@@ -154,30 +154,30 @@ pointer-arith-1-unsafe.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Init:
-                                   main3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                   
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
--------------------------------------------------------------------------------------------------------------------
+                                    main5_3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                     
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+------------------------------------------------------------------------------------------------------------------------
 Final:
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
--------------------------------------------------------------------------------------------------------------------
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line 6)
+false :- main7_36_2(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line:6 col:7)
 
 
 pointer-arith-2-safe.c
@@ -188,30 +188,30 @@ pointer-arith-2-unsafe.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Init:
-                                   main3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                   
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
--------------------------------------------------------------------------------------------------------------------
+                                    main5_3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                     
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+------------------------------------------------------------------------------------------------------------------------
 Final:
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
--------------------------------------------------------------------------------------------------------------------
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
+------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line 6)
+false :- main7_36_2(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line:6 col:7)
 
 
 pointer-arith-3-safe.c
@@ -222,60 +222,60 @@ pointer-arith-3-unsafe.c
 Warning: enabling heap model
 UNSAFE
 
--------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Init:
-                                   main3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                   
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
-               main4(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2)                
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 0) 
--------------------------------------------------------------------------------------------------------------------
-                                                         |                                                         
-                                                         |                                                         
-                                                         V                                                         
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
--------------------------------------------------------------------------------------------------------------------
+                                    main5_3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                     
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+                  main(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2)                   
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 0) 
+------------------------------------------------------------------------------------------------------------------------
+                                                           |                                                            
+                                                           |                                                            
+                                                           V                                                            
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
+------------------------------------------------------------------------------------------------------------------------
 Final:
- main9(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
--------------------------------------------------------------------------------------------------------------------
+ main7_36_2(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
+------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main9(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line 6)
+false :- main7_36_2(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line:6 col:7)
 
 
 global-struct-array-1.c
 Warning: enabling heap model
 UNSAFE
 
---------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------
 Init:
-   main2(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2))   
---------------------------------------------------------------------------------------------------------
-                                                   |                                                    
-                                                   |                                                    
-                                                   V                                                    
-   main3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2))   
---------------------------------------------------------------------------------------------------------
-                                                   |                                                    
-                                                   |                                                    
-                                                   V                                                    
- main5(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2), 20) 
---------------------------------------------------------------------------------------------------------
-                                                   |                                                    
-                                                   |                                                    
-                                                   V                                                    
-   main4(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(21)))), AddrRange(nthAddr(1), 2))   
---------------------------------------------------------------------------------------------------------
+   main8_3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2))   
+----------------------------------------------------------------------------------------------------------
+                                                    |                                                     
+                                                    |                                                     
+                                                    V                                                     
+    main(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2))     
+----------------------------------------------------------------------------------------------------------
+                                                    |                                                     
+                                                    |                                                     
+                                                    V                                                     
+ main9_3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2), 20) 
+----------------------------------------------------------------------------------------------------------
+                                                    |                                                     
+                                                    |                                                     
+                                                    V                                                     
+   main_1(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(21)))), AddrRange(nthAddr(1), 2))    
+----------------------------------------------------------------------------------------------------------
 Final:
-   main4(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(21)))), AddrRange(nthAddr(1), 2))   
---------------------------------------------------------------------------------------------------------
+   main_1(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(21)))), AddrRange(nthAddr(1), 2))    
+----------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main4(@h, sArr:5), is_O_S(read(@h, nthAddrRange(sArr:5, 1))) & f(getS(read(@h, nthAddrRange(sArr:5, 1)))) != 1. (line 10)
+false :- main_1(@h, sArr:5), is_O_S(read(@h, nthAddrRange(sArr:5, 1))) & f(getS(read(@h, nthAddrRange(sArr:5, 1)))) != 1. (line:10 col:3)
 
 
 array-of-ptr-1.c
@@ -292,20 +292,20 @@ simple-dynamic-memsafety2.c
 Warning: enabling heap model
 UNSAFE
 
-------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
 Init:
-                     main2(emptyHeap, AddrRange(nthAddr(0), 0))                     
-------------------------------------------------------------------------------------
-                                         |                                          
-                                         |                                          
-                                         V                                          
- main1(newBatchHeap(batchAlloc(emptyHeap, O_Int(11), 3)), AddrRange(nthAddr(1), 3)) 
-------------------------------------------------------------------------------------
+                      main4_3(emptyHeap, AddrRange(nthAddr(0), 0))                       
+-----------------------------------------------------------------------------------------
+                                            |                                            
+                                            |                                            
+                                            V                                            
+ main4_26_0(newBatchHeap(batchAlloc(emptyHeap, O_Int(11), 3)), AddrRange(nthAddr(1), 3)) 
+-----------------------------------------------------------------------------------------
 Final:
- main1(newBatchHeap(batchAlloc(emptyHeap, O_Int(11), 3)), AddrRange(nthAddr(1), 3)) 
-------------------------------------------------------------------------------------
+ main4_26_0(newBatchHeap(batchAlloc(emptyHeap, O_Int(11), 3)), AddrRange(nthAddr(1), 3)) 
+-----------------------------------------------------------------------------------------
 Failed assertion:
-false :- main1(@h, a:1), read(@h, __eval) != defObj.
+false :- main4_26_0(@h, a:1), read(@h, __eval) != defObj.
 
 valid-memsafety/valid-memtrack
   expected verdict matches the result!

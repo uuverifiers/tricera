@@ -2,20 +2,20 @@
 simple-invariant-false.c
 UNSAFE
 
-----------
+------------
 Init:
- main3(3) 
-----------
-    |     
-    |     
-    V     
- main4(3) 
-----------
+ main9_3(3) 
+------------
+     |      
+     |      
+     V      
+  main(3)   
+------------
 Final:
- main4(3) 
-----------
+  main(3)   
+------------
 Failed assertion:
-false :- main4(x:8), x:8 != 42. (line 10)
+false :- main(x:8), x:8 != 42. (line:10 col:3)
 
 
 simple-invariant-true.c
@@ -24,20 +24,20 @@ SAFE
 simple-invariant-false.c
 UNSAFE
 
-----------
+------------
 Init:
- main3(3) 
-----------
-    |     
-    |     
-    V     
- main4(3) 
-----------
+ main9_3(3) 
+------------
+     |      
+     |      
+     V      
+  main(3)   
+------------
 Final:
- main4(3) 
-----------
+  main(3)   
+------------
 Failed assertion:
-false :- main4(x:8), x:8 != 42. (line 10)
+false :- main(x:8), x:8 != 42. (line:10 col:3)
 
 
 simple-loop-invariant-true.c

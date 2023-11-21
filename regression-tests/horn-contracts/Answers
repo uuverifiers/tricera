@@ -28,30 +28,30 @@ Inferred ACSL annotations
 contract2b.hcc
 UNSAFE
 
----------------
+------------------
 Init:
- main3(-10, 5) 
----------------
-       |       
-       |       
-       V       
- main4(-10, 5) 
----------------
-       |       
-       |       
-       V       
- main5(-4, 5)  
----------------
-       |       
-       |       
-       V       
- main7(-4, 5)  
----------------
+ main15_3(-10, 5) 
+------------------
+        |         
+        |         
+        V         
+   main(-10, 5)   
+------------------
+        |         
+        |         
+        V         
+  main_1(-4, 5)   
+------------------
+        |         
+        |         
+        V         
+  main_2(-4, 5)   
+------------------
 Final:
- main7(-4, 5)  
----------------
+  main_2(-4, 5)   
+------------------
 Failed assertion:
-false :- main7(g:2, y:14), g:2 < 0. (line 18)
+false :- main_2(g:2, y:14), g:2 < 0. (line:18 col:3)
 
 
 contract3.hcc
@@ -96,24 +96,21 @@ Inferred ACSL annotations
 fib.hcc
 UNSAFE
 
-----------
+---------------
 Init:
-  main2   
-----------
-    |     
-    |     
-    V     
- main3(8) 
-----------
+   main12_3    
+---------------
+       |       
+       |       
+       V       
+ main12_3_1(8) 
+---------------
 Final:
- main3(8) 
-----------
+ main12_3_1(8) 
+---------------
 Failed assertion:
-false :- main3(x:12), x:12 != 0. (line 14)
+false :- main12_3_1(x:12), x:12 != 0. (line:14 col:3)
 
 
 stackptr.hcc
 Warning: enabling heap model
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Function contracts are currently not supported together with stack pointers (line 10)
-(error "Function contracts are currently not supported together with stack pointers (line 10)")
-Other Error: Function contracts are currently not supported together with stack pointers (line 10)

@@ -55,20 +55,20 @@ SAFE
 inits3.hcc
 UNSAFE
 
--------------
+---------------
 Init:
- main2(1, 0) 
--------------
-      |      
-      |      
-      V      
- main3(1, 0) 
--------------
+ main7_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+  main(1, 0)   
+---------------
 Final:
- main3(1, 0) 
--------------
+  main(1, 0)   
+---------------
 Failed assertion:
-false :- main3(g:3, h:4), g:3 != 0. (line 8)
+false :- main(g:3, h:4), g:3 != 0. (line:8 col:3)
 
 
 shadowing.hcc
@@ -122,20 +122,20 @@ SAFE
 ternary-bug.c
 UNSAFE
 
-----------------
+---------------
 Init:
-  main3(1, 0)   
-----------------
-       |        
-       |        
-       V        
- main5(1, 0, 0) 
-----------------
+ main3_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+ main(1, 0, 0) 
+---------------
 Final:
- main5(1, 0, 0) 
-----------------
+ main(1, 0, 0) 
+---------------
 Failed assertion:
-false :- main5(x:2, y:2, z:3). (line 5)
+false :- main(x:2, y:2, z:3). (line:5 col:3)
 
 
 assert-ite-1.c
@@ -147,20 +147,20 @@ SAFE
 function-in-assume-assert-1-false.c
 UNSAFE
 
-----------------
+------------------
 Init:
-  main4(0, 1)   
-----------------
-       |        
-       |        
-       V        
- main9(0, 1, 1) 
-----------------
+  main12_3(0, 1)  
+------------------
+        |         
+        |         
+        V         
+ main5_1(0, 1, 1) 
+------------------
 Final:
- main9(0, 1, 1) 
-----------------
+ main5_1(0, 1, 1) 
+------------------
 Failed assertion:
-false :- main9(x:10, y:11, __eval5_7:5), __eval5_7:5 != 0. (line 13)
+false :- main5_1(x:10, y:11, __eval5_7:5), __eval5_7:5 != 0. (line:13 col:3)
 
 
 function-in-assume-assert-1-true.c
@@ -169,20 +169,20 @@ SAFE
 function-in-assume-assert-2-false.c
 UNSAFE
 
---------------------
+-----------------------
 Init:
-    main4(2, 1)     
---------------------
-         |          
-         |          
-         V          
- main13(2, 1, 2, 1) 
---------------------
+    main12_3(2, 1)     
+-----------------------
+           |           
+           |           
+           V           
+ main13_16(2, 1, 2, 1) 
+-----------------------
 Final:
- main13(2, 1, 2, 1) 
---------------------
+ main13_16(2, 1, 2, 1) 
+-----------------------
 Failed assertion:
-false :- main13(x:10, y:11, __eval10_13:10, __eval1_27:1), __eval10_13:10 != __eval1_27:1. (line 13)
+false :- main13_16(x:10, y:11, __eval10_13:10, ite_13_16:1), __eval10_13:10 != ite_13_16:1. (line:13 col:3)
 
 
 function-in-assume-assert-2-true.c
@@ -191,20 +191,20 @@ SAFE
 function-in-assume-assert-3-false.c
 UNSAFE
 
---------------------
+-----------------------
 Init:
-    main4(2, 1)     
---------------------
-         |          
-         |          
-         V          
- main16(2, 1, 2, 1) 
---------------------
+    main14_3(2, 1)     
+-----------------------
+           |           
+           |           
+           V           
+ main15_16(2, 1, 2, 1) 
+-----------------------
 Final:
- main16(2, 1, 2, 1) 
---------------------
+ main15_16(2, 1, 2, 1) 
+-----------------------
 Failed assertion:
-false :- main16(x:12, y:13, __eval12_15:12, __eval1_31:1), __eval12_15:12 != __eval1_31:1. (line 15)
+false :- main15_16(x:12, y:13, __eval12_15:12, ite_15_16:1), __eval12_15:12 != ite_15_16:1. (line:15 col:3)
 
 
 function-in-assume-assert-3-true.c

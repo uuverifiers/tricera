@@ -2,43 +2,43 @@
 enum1.hcc
 UNSAFE
 
-----------
+------------
 Init:
- main3(3) 
-----------
+ main9_3(3) 
+------------
 Final:
- main3(3) 
-----------
+ main9_3(3) 
+------------
 Failed assertion:
-false :- main3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line 9)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3)
 
 
 enum1-trailing-comma.hcc
 UNSAFE
 
-----------
+------------
 Init:
- main3(3) 
-----------
+ main9_3(3) 
+------------
 Final:
- main3(3) 
-----------
+ main9_3(3) 
+------------
 Failed assertion:
-false :- main3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line 9)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3)
 
 
 enum2.hcc
 UNSAFE
 
-----------
+------------
 Init:
- main3(2) 
-----------
+ main9_3(2) 
+------------
 Final:
- main3(2) 
-----------
+ main9_3(2) 
+------------
 Failed assertion:
-false :- main3(x:8), x:8 != 0 & x:8 != 1. (line 9)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1. (line:9 col:3)
 
 
 enum3.hcc

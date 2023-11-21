@@ -487,8 +487,17 @@ class CCReader private (prog : Program,
 
   private def newPred(extraArgs : Seq[CCVar],
                       srcInfo : Option[SourceInfo]) : CCPredicate = {
-    val res = newPred(prefix + locationCounter, allFormalVars ++ extraArgs, srcInfo)
-    locationCounter = locationCounter + 1
+    val predNameSuffix = srcInfo match {
+      case Some(SourceInfo(line, col)) => s"${line}_$col"
+      case None => ""
+    }
+    val predName =
+      if (predicateHints.exists(_._1.name == prefix + predNameSuffix)) {
+        val s = prefix + predNameSuffix + "_" + locationCounter
+        locationCounter = locationCounter + 1
+        s
+      } else prefix + predNameSuffix
+    val res = newPred(predName, allFormalVars ++ extraArgs, srcInfo)
 
     val hints = for (s <- variableHints; p <- s) yield p
     val allHints =

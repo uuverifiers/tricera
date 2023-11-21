@@ -15,20 +15,20 @@ SAFE
 unint-pred-simple-false.c
 UNSAFE
 
------------
+------------
 Init:
-   main2   
------------
-     |     
-     |     
-     V     
- main5(42) 
------------
+  main4_3   
+------------
+     |      
+     |      
+     V      
+ main_1(42) 
+------------
 Final:
- main5(42) 
------------
+ main_1(42) 
+------------
 Failed assertion:
-false :- main5(x:5), x:5 != 43. (line 7)
+false :- main_1(x:5), x:5 != 43. (line:7 col:3)
 
 
 unint-pred-simple-true.c
