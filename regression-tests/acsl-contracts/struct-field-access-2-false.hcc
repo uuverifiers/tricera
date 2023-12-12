@@ -6,7 +6,7 @@ struct S {
 /*@
   requires s.f1 > s.f2;
   ensures \result.f2 == 42;
-  ensures \result.f1 == \old(s).f1
+  ensures \result.f1 == \old(s).f1;
 */
 struct S foo(struct S s) {
   s.f2 = 42;

@@ -90,3 +90,15 @@ SAFE
 contract27.hcc
 Warning: enabling heap model
 SAFE
+
+struct-field-access-1-true.hcc
+SAFE
+
+struct-field-access-2-false.hcc
+UNSAFE
+
+struct-field-access-3-true.hcc
+SAFE
+
+struct-field-access-4-false.hcc
+UNSAFE
