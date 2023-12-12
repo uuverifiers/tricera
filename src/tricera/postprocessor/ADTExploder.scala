@@ -42,8 +42,7 @@ object ADTExploder extends SolutionProcessor {
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
     def getADTTerm(t : IExpression) : Option[ADTTerm] = {
       t match {
-        case f @ IFunApp(fun, _) if fun.isInstanceOf[MonoSortedIFunction] &&
-          fun.asInstanceOf[MonoSortedIFunction].resSort.isInstanceOf[ADTProxySort] =>
+        case f @ IFunApp(fun, _) if ADT.Constructor.unapply(fun).nonEmpty =>
           val sortedFun = fun.asInstanceOf[MonoSortedIFunction]
           val adtSort = sortedFun.resSort.asInstanceOf[ADT.ADTProxySort]
           Some(ADTTerm(f, adtSort))
