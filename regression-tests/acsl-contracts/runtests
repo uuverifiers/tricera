@@ -28,7 +28,11 @@ TESTS="contract1.hcc  \
        contract24.hcc \
        contract25.hcc \
        contract26.hcc \
-       contract27.hcc"
+       contract27.hcc \
+       struct-field-access-1-true.hcc \
+       struct-field-access-2-false.hcc \
+       struct-field-access-3-true.hcc \
+       struct-field-access-4-false.hcc"
 
 for name in $TESTS; do
     echo
