@@ -1,0 +1,21 @@
+struct S {
+    int f1;
+    int f2;
+};
+
+/*@
+  requires s.f1 > s.f2;
+  ensures \result.f2 == 42;
+  ensures \result.f1 == \old(s).f1;
+*/
+struct S foo(struct S s) {
+  s.f2 = 42;
+  return s;
+}
+
+
+void main()
+{
+  struct S s = { 2 , 1 };
+  foo(s);
+}

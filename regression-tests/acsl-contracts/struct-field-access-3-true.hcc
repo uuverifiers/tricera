@@ -1,0 +1,31 @@
+struct S3{
+    int a;
+};
+struct S2{
+    int a;
+    struct S3 s3;
+};
+struct S1{
+    int a;
+    struct S2 s2;
+};
+
+/*@
+  requires s.a == 1 && s.s2.a == 3 
+    && s.s2.s3.a == 42;
+  ensures \result.s2 == \old(s).s2;
+*/
+struct S1 foo(struct S1 s) {
+  s.a = 0; // does not affect the postcondition
+  return s;
+}
+
+
+void main()
+{
+  struct S1 s1;
+  s1.s2.s3.a = 42;
+  s1.s2.a = 3;
+  s1.a = 1;
+  foo(s1);
+}
