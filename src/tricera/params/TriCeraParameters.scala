@@ -61,6 +61,8 @@ class TriCeraParameters extends GlobalParameters {
 
   var shouldTrackMemory : Boolean = false
 
+  var ignoreExplicitAsserts : Boolean = false
+
   var useArraysForHeap : Boolean = false
 
   var devMode : Boolean = false

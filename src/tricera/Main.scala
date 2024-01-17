@@ -33,6 +33,7 @@ package tricera
 import hornconcurrency.ParametricEncoder
 
 import java.io.{FileOutputStream, PrintStream}
+import scala.collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
 import lazabs.horn.bottomup.HornClauses.Clause
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
@@ -40,6 +41,7 @@ import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.CCClause
 import tricera.concurrency.ccreader.CCExceptions._
+import tricera.properties
 
 import sys.process._
 
@@ -209,9 +211,10 @@ class Main (args: Array[String]) {
     case class BMPropertyFile(property_file: String,
                               expected_verdict: Option[Boolean] = None,
                               subproperty: Option[String] = None) {
+      // Do not turn below defs into vals or add any vals, this will break the
+      // YAML parser.
       def isReachSafety = property_file.contains("unreach-call")
-
-      def isMemSafety = property_file.contains("valid-memsafety")
+      def isMemSafety   = property_file.contains("valid-memsafety")
     }
     case class BenchmarkInfo(format_version: String,
                              input_files: String,
@@ -221,7 +224,7 @@ class Main (args: Array[String]) {
       import java.nio.file.{Paths, Files}
       val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
       if (Files.exists(Paths.get(yamlFileName))) {
-        // println("Accompanying yaml file found")
+        Console.withOut(outStream){println("Accompanying YAML file detected.")}
         import net.jcazevedo.moultingyaml._
         object BenchmarkYamlProtocol extends DefaultYamlProtocol {
           implicit val propFormat = yamlFormat3(BMPropertyFile)
@@ -235,41 +238,69 @@ class Main (args: Array[String]) {
         Some(yamlAst.convertTo[BenchmarkInfo])
       } else None
     } catch {
-      case _: Throwable => Util.warn(
-        "could not parse the accompanying Yaml(.yml) file, ignoring it...")
+      case e: Throwable =>
+        Util.warn(
+        "Could not parse the accompanying YAML (.yml) file, ignoring it...")
         None
     }
 
-    val bmTracks: List[(BenchmarkTrack, Option[Boolean])] = bmInfo match {
-      case Some(info) =>
-        for (p <- info.properties if p.isMemSafety || p.isReachSafety) yield {
-          val track =
-            if (p.isReachSafety)
-              Reachability
-            else //(p.isMemSafety)
-              p.subproperty match {
-                case Some("valid-free") => MemSafety(Some(ValidFree))
-                case Some("valid-deref") => MemSafety(Some(ValidDeref))
-                case Some("valid-memtrack") => MemSafety(Some(MemTrack))
-                case _ => MemSafety(None)
-              }
-          (track, p.expected_verdict)
-        }
-      case None => Nil
+    val (propertiesToCheck  : Set[properties.Property],
+         propertyToExpected : Map[properties.Property, Boolean]) = {
+      val props          = new MHashSet[properties.Property]
+      val propToExpected = new MHashMap[properties.Property, Boolean]
+      bmInfo match {
+        case Some(info) =>
+          for (p <- info.properties if p.isMemSafety || p.isReachSafety) {
+            // Currently, only reach safety and (some( memory safety properties
+            // are supported.
+            val prop =
+              if (p.isReachSafety) {
+                properties.Reachability
+              } else //(p.isMemSafety)
+                  p.subproperty match {
+                    case Some("valid-free") => properties.MemValidFree
+                    case Some("valid-deref") => properties.MemValidDeref
+                    case Some("valid-memtrack") => properties.MemValidTrack
+                    case Some("valid-cleanup") => properties.MemValidCleanup
+                    case Some(prop) => throw new Exception(
+                      s"Unknown sub-property $prop for the Memory Safety category.")
+                    case None => throw new Exception(
+                      "A sub-property must be specified for Memory Safety.")
+                    // TODO: is this really the case?
+                  }
+            props += prop
+            if(p.expected_verdict.nonEmpty)
+              propToExpected += prop -> p.expected_verdict.get
+          }
+        case None =>
+          /**
+           * If no properties are specified, only check explicit assertions.
+           * @todo Better handling of which properties to check.
+           */
+          props += properties.Reachability
+      }
+      (props.toSet, propToExpected.toMap)
     }
 
-    if (bmInfo.nonEmpty && bmTracks.isEmpty) {
+    Console.withOut(outStream){
+      println("Checked properties:")
+      for (prop <- propertiesToCheck) {
+        print(s"  $prop")
+        propertyToExpected get prop match {
+          case Some(expected) => println(s" (expected: $expected)")
+          case None           => println
+        }
+      }
+      println
+    }
+
+    if (bmInfo.nonEmpty && propertiesToCheck.isEmpty) {
       return ExecutionSummary(DidNotExecute, preprocessTime = preprocessTimer.s)
       //throw new MainException("An associated property file (.yml) is " +
       //  "found, however TriCera currently can only check for unreach-call" +
       //  " and a subset of valid-memsafety properties.")
     }
 
-    if (bmTracks.exists(t => t._1 match {
-      case MemSafety(Some(MemTrack)) => true
-      case MemSafety(Some(ValidFree)) => true
-      case _ => false
-    })) shouldTrackMemory = true
     // todo: pass string to TriCera instead of writing to and passing file?
 
     // todo: add a switch for this, also benchmark/profile
@@ -277,12 +308,12 @@ class Main (args: Array[String]) {
       new java.io.FileReader(new java.io.File(ppFileName))))
     val (reader, modelledHeapRes) =
       try {
-        CCReader(bufferedReader, funcName, shouldTrackMemory)
+        CCReader(bufferedReader, funcName, propertiesToCheck)
       } catch {
         case e: ParseException if !devMode =>
-          return ExecutionSummary(ParseError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
+          return ExecutionSummary(ParseError(e.getMessage), Map(), modelledHeap, 0, preprocessTimer.s)
         case e: TranslationException if !devMode =>
-          return ExecutionSummary(TranslationError(e.getMessage), Nil, modelledHeap, 0, preprocessTimer.s)
+          return ExecutionSummary(TranslationError(e.getMessage), Map(), modelledHeap, 0, preprocessTimer.s)
         case e: Throwable => throw e
       }
 
@@ -375,12 +406,18 @@ class Main (args: Array[String]) {
       tricera.concurrency.ReaderMain.printSMTClauses(smallSystem)
 
     if(prettyPrint || smtPrettyPrint || printPathConstraints)
-      return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
+      return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
+    /**
+     * Expected status is printed in SMT files when they are dumped.
+     * @todo Better handling of expected status.
+     *       1) checking multiple properties at once, combine the properties
+     *       2) checking one property at a time, use only that property's expected
+     */
     val expectedStatus =
       // sat if no tracks are false, unsat otherwise
-      if (bmTracks.nonEmpty) {
-        if (bmTracks.forall { track => !track._2.contains(false) }) "sat"
+      if (propertyToExpected.nonEmpty) {
+        if (propertyToExpected.forall(_._2)) "sat"
         else "unsat"
       } else "unknown"
 
@@ -415,7 +452,7 @@ class Main (args: Array[String]) {
     val result = verificationLoop.result
 
     if (printIntermediateClauseSets)
-      return ExecutionSummary(DidNotExecute, Nil, modelledHeap, 0, preprocessTimer.s)
+      return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
     val executionResult = result match {
       case Left(res) =>
@@ -611,22 +648,15 @@ class Main (args: Array[String]) {
       }
     }
 
-    def getExpectedVerdict (expected : Option[Boolean]) : Boolean =
-      expected match {
-        case Some(verdict) => verdict
-        case None => throw new MainException("Benchmark information provided" +
-          "with no expected verdict!")
-      }
     def printVerdictComparison(comparison : Boolean) : Unit =
       if (comparison) println("  expected verdict matches the result!")
       else println("  expected verdict mismatch!")
 
-    val trackResult = for (track <- bmTracks) yield {
-      println(track._1)
-      val expectedVerdict = getExpectedVerdict(track._2)
-      val verdictMatches =  expectedVerdict == result.isLeft
+    val trackResult = for ((prop, expected) <- propertyToExpected) yield {
+      println(prop)
+      val verdictMatches =  expected == result.isLeft
       printVerdictComparison(verdictMatches)
-      (track._1, expectedVerdict)
+      (prop, expected)
     }
 
     ExecutionSummary(executionResult, trackResult, modelledHeap,
@@ -642,30 +672,30 @@ class Main (args: Array[String]) {
 
   } catch {
     case TimeoutException | StoppedException =>
-      ExecutionSummary(Timeout, Nil, modelledHeap,
+      ExecutionSummary(Timeout, Map(), modelledHeap,
         programTimer.s, preprocessTimer.s)
     // nothing
     case _: java.lang.OutOfMemoryError =>
       printError(OutOfMemory.toString)
-      ExecutionSummary(OutOfMemory, Nil, modelledHeap,
+      ExecutionSummary(OutOfMemory, Map(), modelledHeap,
         programTimer.s, preprocessTimer.s)
     case t: java.lang.StackOverflowError =>
       if(devMode)
         t.printStackTrace
       printError(StackOverflow.toString)
-      ExecutionSummary(StackOverflow, Nil, modelledHeap,
+      ExecutionSummary(StackOverflow, Map(), modelledHeap,
         programTimer.s, preprocessTimer.s)
     case t: Exception =>
       if(devMode)
         t.printStackTrace
       printError(t.getMessage)
-      ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
+      ExecutionSummary(OtherError(t.getMessage), Map(), modelledHeap,
         programTimer.s, preprocessTimer.s)
     case t: AssertionError =>
       printError(t.getMessage)
       if(devMode)
         t.printStackTrace
-      ExecutionSummary(OtherError(t.getMessage), Nil, modelledHeap,
+      ExecutionSummary(OtherError(t.getMessage), Map(), modelledHeap,
         programTimer.s, preprocessTimer.s )
   }
 

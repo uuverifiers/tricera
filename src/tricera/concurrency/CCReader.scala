@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -50,6 +50,7 @@ import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
+import tricera.properties
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -60,7 +61,9 @@ object CCReader {
   private[concurrency] val GTU = new CCVar("_GTU", None, CCInt)
 
   def apply(input : java.io.Reader, entryFunction : String,
-            trackMemorySafety : Boolean = false) : (CCReader, Boolean) = { // second ret. arg is true if modelled heap
+            propertiesToCheck : Set[properties.Property] = Set(
+              properties.Reachability))
+  : (CCReader, Boolean) = { // second ret. arg is true if modelled heap
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
 //    println(printer print prog)
@@ -68,7 +71,7 @@ object CCReader {
     var reader : CCReader = null
     while (reader == null)
       try {
-        reader = new CCReader(prog, entryFunction, trackMemorySafety)
+        reader = new CCReader(prog, entryFunction, propertiesToCheck)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -109,9 +112,8 @@ object CCReader {
     val Mathematical, ILP32, LP64, LLP64 = Value
   }
   //////////////////////////////////////////////////////////////////////////////
-
-  case class CCClause (clause : HornClauses.Clause,
-                       srcInfo : Option[SourceInfo]) { // todo: what else would be useful?
+  class CCClause(val clause  : HornClauses.Clause,
+                 val srcInfo : Option[SourceInfo]) {
     override def toString : String =
       clause.toPrologString + (srcInfo match {
         case None => ""
@@ -119,6 +121,16 @@ object CCReader {
           s" (line:$line col:$col)"
       })
   }
+  object CCClause {
+    def unapply(clause : CCClause)
+    : Option[(HornClauses.Clause, Option[SourceInfo])] =
+      Some((clause.clause, clause.srcInfo))
+  }
+
+  class CCAssertionClause(clause   : HornClauses.Clause,
+                          srcInfo  : Option[SourceInfo],
+                          val property : properties.Property)
+  extends CCClause(clause, srcInfo)
 
   // a wrapper for IExpression.Predicate that keeps more info about arguments
   case class CCPredicate(pred : Predicate, argVars : Seq[CCVar],
@@ -147,9 +159,9 @@ object CCReader {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class CCReader private (prog : Program,
-                        entryFunction : String,
-                        trackMemorySafety : Boolean) {
+class CCReader private (prog              : Program,
+                        entryFunction     : String,
+                        propertiesToCheck : Set[properties.Property]) {
 
   import CCReader._
 
@@ -337,7 +349,7 @@ class CCReader private (prog : Program,
   private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
   private val functionClauses =
     new MHashMap[String, Seq[(Clause, ParametricEncoder.Synchronisation)]]
-  private val functionAssertionClauses = new MHashMap[String, Seq[CCClause]]
+  private val functionAssertionClauses = new MHashMap[String, Seq[CCAssertionClause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
   private val structDefs    = new MHashMap[String, CCStruct]
@@ -364,10 +376,21 @@ class CCReader private (prog : Program,
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private[tricera] def addRichClause (clause : Clause,
-                     srcInfo : Option[SourceInfo]) : CCClause = {
-    val richClause = CCClause(clause, srcInfo)
-    clauseToRichClause += ((clause, richClause))
+  private[tricera]
+  def addRichClause(clause  : Clause,
+                    srcInfo : Option[SourceInfo]) : CCClause = {
+    val richClause = new CCClause(clause, srcInfo)
+    clauseToRichClause += clause -> richClause
+    richClause
+  }
+
+  private[tricera]
+  def addAssertionClause(clause       : Clause,
+                         srcInfo      : Option[SourceInfo],
+                         propertyType : properties.Property)
+  : CCAssertionClause = {
+    val richClause = new CCAssertionClause(clause, srcInfo, propertyType)
+    clauseToRichClause += clause -> richClause
     richClause
   }
 
@@ -376,7 +399,7 @@ class CCReader private (prog : Program,
   private val processes =
     new ArrayBuffer[(ParametricEncoder.Process, ParametricEncoder.Replication)]
 
-  private val assertionClauses = new ArrayBuffer[CCClause]
+  private val assertionClauses = new ArrayBuffer[CCAssertionClause]
   private val timeInvariants = new ArrayBuffer[Clause]
 
   private val clauses =
@@ -442,7 +465,8 @@ class CCReader private (prog : Program,
                     " in one step")
                 val newAssertionClause = merge(c.clause, currentClause.clause)
                 if (!newAssertionClause.hasUnsatConstraint)
-                  assertionClauses += addRichClause(newAssertionClause, c.srcInfo)
+                  assertionClauses += addAssertionClause(
+                    newAssertionClause, c.srcInfo, c.property)
               }
           }
           case None =>
@@ -1044,15 +1068,21 @@ class CCReader private (prog : Program,
 
           functionExitPreds += ((f.name, finalPred))
 
-          // add an assertion to track memory safety (i.e., no memory leaks)
-          // currently this is only added to the exit point of the entry function,
-          if (modelHeap && trackMemorySafety) {
+          /**
+           * We add an assertion that all pointers that are in scope at the
+           * exit of `entryFunction` are freed.
+           * @todo if `entryFunction != "main"`, the pointer might be in the
+           *       return value, hence no memory leak. In that case, this
+           *       assertion will still fail, it should be relaxed.
+          */
+          if (modelHeap &&
+              propertiesToCheck.contains(properties.MemValidCleanup)) {
             import HornClauses._
             import IExpression._
             finalPred match {
               case CCPredicate(_, args, _) if args.head.sort == heap.HeapSort =>
                 // passing sort as CCVoid as it is not important
-                val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid), None)  // todo: add proper line numbers for auto-added free assertions
+                val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid), None)
                 val resVar = getResVar(args.last.typ)
                 var excludedAddresses = i(true)
                 for (arg <- args) arg.typ match {
@@ -1060,17 +1090,17 @@ class CCReader private (prog : Program,
                     if arr.arrayLocation == ArrayLocation.Global =>
                     excludedAddresses = excludedAddresses &&&
                       !heap.within(arg.term, addrVar.term)
-                  case _                                         => // nothing
+                  case _ => // nothing
                 }
                 assertionClauses +=
-                  addRichClause(((heap.read(args.head.term, addrVar.term) === defObj()) :-
+                  addAssertionClause(((heap.read(args.head.term, addrVar.term) === defObj()) :-
                     (atom(finalPred,
                        allFormalVarTerms.toList ++
                        resVar.map(v => IConstant(v.term)) take finalPred.arity)
                      &&& excludedAddresses)),
-                    None) // todo: add proper line numbers for auto-added free assertions
-              case _ => throw new TranslationException("Tried to add -memtrack" +
-                "assertion but could not find the heap term!")
+                    None, properties.MemValidCleanup)
+              case _ =>
+                assert(false, "Could not find the heap term!")
             }
           }
 
@@ -2090,7 +2120,8 @@ class CCReader private (prog : Program,
 
     //todo:Heap get rid of this or change name
     def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = true,
-                 assumeMemSafety : Boolean = true) : CCTerm = {
+                 assumeMemSafety : Boolean = true)
+    : CCTerm = {
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
         case _ => throw new TranslationException(
@@ -2098,8 +2129,10 @@ class CCReader private (prog : Program,
       }
       val readObj = heap.read(getValue(heapTermName).toTerm, ptrExpr.toTerm)
       if (assertMemSafety)
-        assertProperty(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)),
-          ptrExpr.srcInfo) // todo: add tester methods for user ADT sorts?
+        assertProperty(
+          heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)),
+          ptrExpr.srcInfo, properties.MemValidDeref)
+      // todo: add tester methods for user ADT sorts?
       // also add memory safety assumptions to the clause
       if (assertMemSafety && assumeMemSafety)
         addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
@@ -2136,7 +2169,8 @@ class CCReader private (prog : Program,
         CCHeapPointer(heap, arrType.elementType), arrExpr.srcInfo)
       val readValue = heapRead(readAddress, assertMemSafety, assumeMemSafety)
       if (assertIndexWithinBounds)
-        assertProperty(heap.within(arrExpr.toTerm, readAddress.toTerm), arrExpr.srcInfo)
+        assertProperty(heap.within(arrExpr.toTerm, readAddress.toTerm),
+                       arrExpr.srcInfo, properties.MemValidDeref)
       readValue
     }
 
@@ -2168,7 +2202,8 @@ class CCReader private (prog : Program,
         val (writtenObj, sort) = getObjAndSort(lhs)
 
         assertProperty(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)),
-          rhs.srcInfo) // todo: add tester methods for user ADT sorts?
+          rhs.srcInfo, properties.MemValidDeref)
+        // todo: add tester methods for user ADT sorts?
         // also add memory safety assumptions to the clause
         if (assumeMemSafety)
           addGuard(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)))
@@ -2190,6 +2225,9 @@ class CCReader private (prog : Program,
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), None)) // todo: src info?
     }
 
+    /**
+     * `free` is encoded by writing [[defObj]] to the pointed location.
+     */
     def heapFree(t : CCExpr) = {
       t.typ match {
         case p : CCHeapPointer =>
@@ -2367,11 +2405,12 @@ class CCReader private (prog : Program,
       outputClause(elsePred, srcInfo)
     }
 
-    def assertProperty(property : IFormula,
-                       srcInfo : Option[SourceInfo]) : Unit = {
+    def assertProperty(property     : IFormula,
+                       srcInfo      : Option[SourceInfo],
+                       propertyType : properties.Property) : Unit = {
       import HornClauses._
       val clause = (property :- (initAtom &&& guard))
-      assertionClauses += addRichClause(clause, srcInfo)
+      assertionClauses += addAssertionClause(clause, srcInfo, propertyType)
     }
 
     def addValue(t : CCExpr) = {
@@ -3107,7 +3146,7 @@ class CCReader private (prog : Program,
         // inline the called function
         printer print exp.exp_ match {
           case "__VERIFIER_error" | "reach_error" => {
-            assertProperty(false, srcInfo)
+            assertProperty(false, srcInfo, properties.Reachability)
             pushVal(CCFormula(true, CCInt, srcInfo))
           }
           case name => {
@@ -3120,24 +3159,26 @@ class CCReader private (prog : Program,
         val srcInfo = Some(getSourceInfo(exp))
         (printer print exp.exp_) match {
           case "assert" | "static_assert" | "__VERIFIER_assert"
-                          if (exp.listexp_.size == 1) =>
-          val property = exp.listexp_.head match {
-            case a : Efunkpar
-              if uninterpPredDecls contains (printer print a.exp_)      =>
-              val args = a.listexp_.map(atomicEval).map(_.toTerm)
-              val pred = uninterpPredDecls(printer print a.exp_)
-              atom(pred, args)
-            case interpPred : Efunkpar
-              if interpPredDefs contains(printer print interpPred.exp_) =>
-              val args = interpPred.listexp_.map (atomicEval).map (_.toTerm)
-              val formula = interpPredDefs (printer print interpPred.exp_)
-              // the formula refers to pred arguments as IVariable(index)
-              // we need to subsitute those for the actual arguments
-              VariableSubstVisitor (formula.f, (args.toList, 0) )
-            case _ =>
-              atomicEvalFormula(exp.listexp_.head).f
+                          if exp.listexp_.size == 1 =>
+          if (propertiesToCheck contains properties.Reachability) {
+            val property = exp.listexp_.head match {
+              case a : Efunkpar
+                if uninterpPredDecls contains(printer print a.exp_) =>
+                val args = a.listexp_.map(atomicEval).map(_.toTerm)
+                val pred = uninterpPredDecls(printer print a.exp_)
+                atom(pred, args)
+              case interpPred : Efunkpar
+                if interpPredDefs contains(printer print interpPred.exp_) =>
+                val args    = interpPred.listexp_.map(atomicEval).map(_.toTerm)
+                val formula = interpPredDefs(printer print interpPred.exp_)
+                // the formula refers to pred arguments as IVariable(index)
+                // we need to subsitute those for the actual arguments
+                VariableSubstVisitor(formula.f, (args.toList, 0))
+              case _ =>
+                atomicEvalFormula(exp.listexp_.head).f
+            }
+            assertProperty(property, srcInfo, properties.Reachability)
           }
-          assertProperty(property, srcInfo)
           pushVal(CCFormula(true, CCInt, srcInfo))
         case "assume" | "__VERIFIER_assume"
                           if (exp.listexp_.size == 1) =>
@@ -3264,12 +3305,26 @@ class CCReader private (prog : Program,
           if (!modelHeap)
             throw NeedsHeapModelException
           throw new TranslationException("realloc is not supported.")
-        case "free" => // todo: what about trying to free unallocated or already freed addresses?
+        case "free" =>
           if (!modelHeap)
             throw NeedsHeapModelException
-          val t = atomicEval(exp.listexp_.head)
-          heapFree(t)
-          pushVal(CCTerm(0, CCVoid, srcInfo)) // free returns no value, pushing dummy
+          val ptrExpr = atomicEval(exp.listexp_.head)
+          if (propertiesToCheck contains properties.MemValidFree) {
+            /**
+             * Add an assertion that `ptrExpr` is safe to free.
+             * Checking [[Heap.isAlloc]] is not sufficient: freed locations are
+             * marked by writing the default object to them, so we need to check
+             * that read(h, p) =/= defObj. A free is also valid when
+             * p is nullAddr.
+             */
+              val readObj = heap.read(
+                getValue(heapTermName).toTerm, ptrExpr.toTerm)
+              assertProperty(ptrExpr.toTerm === heap.nullAddr() |||
+                             readObj =/= heap._defObj,
+                             srcInfo, properties.MemValidFree)
+            }
+          heapFree(ptrExpr)
+          pushVal(CCTerm(0, CCVoid, srcInfo)) // free returns no value, push dummy
         case name =>
           // then we inline the called function
 
@@ -3426,7 +3481,8 @@ class CCReader private (prog : Program,
             array.sizeExpr match {
               case Some(expr) =>
                 assertProperty((index.toTerm >= 0) &&&
-                  (index.toTerm < expr.toTerm), srcInfo)
+                  (index.toTerm < expr.toTerm), srcInfo,
+                               properties.MemValidDeref)
               case _ => // no safety assertion needed for mathematical arrays
             }
             pushVal(readValue)
@@ -3474,7 +3530,7 @@ class CCReader private (prog : Program,
           val preAtom  = ctx.prePred(prePredArgs)
           val postAtom = ctx.postPred(postPredArgs)
 
-          assertProperty(preAtom, None) // todo: mark pre atom assertions
+          assertProperty(preAtom, None, properties.FunctionPrecondition)
 
           addGuard(postAtom)
 
@@ -3492,7 +3548,6 @@ class CCReader private (prog : Program,
               //val argNames = PredPrintContextPrintContext.predArgNames(predDecl.pred)
               var argTerms : List[ITerm] = List()
               for (_ <- 0 until argCount) {
-                val argName =
                 argTerms = popVal.toTerm :: argTerms
               }
               pushVal(CCFormula(predDecl(argTerms), CCInt, None)) // todo:srcInfo
@@ -3992,7 +4047,8 @@ class CCReader private (prog : Program,
             "/*@" + annot + "*/", new LocalContext()) match {
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
-                stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)))
+                stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
+                                        properties.Reachability)
               } else
                 warn("Ignoring annotation: " + annot)
             case _ => warn("Ignoring annotation: " + annot)
@@ -4128,7 +4184,9 @@ class CCReader private (prog : Program,
         output(addRichClause(entryClause, entryPred.srcInfo))
 
         translateStmSeq(stmsIt, entryPred, exit,
-                        freeArraysOnStack = trackMemorySafety && modelHeap)
+                        freeArraysOnStack = propertiesToCheck.exists(
+                          p => p == properties.MemValidTrack ||
+                               p == properties.MemValidCleanup) && modelHeap)
         localVars popFrame
       }
     }
@@ -4187,7 +4245,9 @@ class CCReader private (prog : Program,
 
         val stmsIt = compound.liststm_.iterator
         translateStmSeq(stmsIt, entry, exit,
-                        freeArraysOnStack = trackMemorySafety && modelHeap)
+                        freeArraysOnStack = propertiesToCheck.exists(
+                          p => p == properties.MemValidTrack ||
+                               p == properties.MemValidCleanup) && modelHeap)
         localVars popFrame
       }
     }
@@ -4427,7 +4487,9 @@ class CCReader private (prog : Program,
           case Seq() =>
             // add an assertion that we never try to jump to a case that
             // does not exist. TODO: add a parameter for this?
-            selectorSymex assertProperty(or(guards), Some(getSourceInfo(stm)))
+            selectorSymex assertProperty(
+              or(guards), Some(getSourceInfo(stm)),
+              properties.SwitchCaseValidJump)
           case Seq((_, target)) => {
             selectorSymex.saveState
             selectorSymex addGuard ~or(guards)
@@ -4449,7 +4511,7 @@ class CCReader private (prog : Program,
         jumpLocs += ((jump.cident_, entry, allFormalVarTerms, clauses.size,
           getSourceInfo(jump)))
         // reserve space for the later jump clause
-        output(CCClause(null, null))
+        output(new CCClause(null, null))
       }
       case jump : SjumpTwo => { // continue
         if (innermostLoopCont == null)
@@ -4467,7 +4529,9 @@ class CCReader private (prog : Program,
         returnPred match {
           case Some(rp) => {
             var nextPred = entry
-            if (modelHeap && trackMemorySafety) {
+            if (modelHeap && propertiesToCheck.exists(
+              p => p == properties.MemValidTrack ||
+                   p == properties.MemValidCleanup)) {
               // free stack allocated arrays that use the theory of heap
               val freeSymex = Symex(entry)
               for (v <- localVars.getVarsInTopFrame) v.typ match {
@@ -4494,7 +4558,9 @@ class CCReader private (prog : Program,
         val retValue = symex eval jump.exp_
         returnPred match {
           case Some(rp) => {
-            if (modelHeap && trackMemorySafety) {
+            if (modelHeap && propertiesToCheck.exists(
+              p => p == properties.MemValidTrack ||
+                   p == properties.MemValidCleanup)) {
               localVars.pushFrame
               localVars.addVar(rp.argVars.last)
               var nextPred = newPred(Nil, srcInfo)
