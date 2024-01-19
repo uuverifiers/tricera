@@ -41,7 +41,6 @@ import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.CCClause
 import tricera.concurrency.ccreader.CCExceptions._
-import tricera.properties
 
 import sys.process._
 
@@ -310,11 +309,13 @@ class Main (args: Array[String]) {
       try {
         CCReader(bufferedReader, funcName, propertiesToCheck)
       } catch {
-        case e: ParseException if !devMode =>
-          return ExecutionSummary(ParseError(e.getMessage), Map(), modelledHeap, 0, preprocessTimer.s)
-        case e: TranslationException if !devMode =>
-          return ExecutionSummary(TranslationError(e.getMessage), Map(), modelledHeap, 0, preprocessTimer.s)
-        case e: Throwable => throw e
+        case e : ParseException if !devMode =>
+          return ExecutionSummary(ParseError(e.getMessage), Map(),
+                                  modelledHeap, 0, preprocessTimer.s)
+        case e : TranslationException if !devMode =>
+          return ExecutionSummary(TranslationError(e.getMessage), Map(),
+                                  modelledHeap, 0, preprocessTimer.s)
+        case e : Throwable => throw e
       }
 
     if (printPathConstraints) {
@@ -649,14 +650,14 @@ class Main (args: Array[String]) {
     }
 
     def printVerdictComparison(comparison : Boolean) : Unit =
-      if (comparison) println("  expected verdict matches the result!")
-      else println("  expected verdict mismatch!")
+      if (comparison) println("  expected verdict matches the result.")
+      else println("  expected verdict mismatch.")
 
     val trackResult = for ((prop, expected) <- propertyToExpected) yield {
-      println(prop)
+//      println(prop)
       val verdictMatches =  expected == result.isLeft
-      printVerdictComparison(verdictMatches)
-      (prop, expected)
+//      printVerdictComparison(verdictMatches)
+      (prop, verdictMatches)
     }
 
     ExecutionSummary(executionResult, trackResult, modelledHeap,

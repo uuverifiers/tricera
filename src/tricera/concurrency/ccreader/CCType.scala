@@ -468,11 +468,11 @@ case class CCHeapPointer(heap: Heap, typ: CCType) extends CCPointer(typ) {
   override def toString: String = typ.shortName + " pointer to heap"
 }
 
-// arrays on the heap do not get automatically freed.
-// global arrays get automatically freed (as they are not really on the heap)
-//   when the main function returns.
-// "alloca" and stack arrays get automatically freed when the calling
-// function returns.
+/**
+ * `Heap`   : arrays allocated via memory allocation functions.
+ * `Stack`  : arrays declared on the stack, or allocated via `alloca`.
+ * `Global` : global arrays.
+ */
 object ArrayLocation extends Enumeration {
   type ArrayLocation = Value
   val Global, Stack, Heap = Value

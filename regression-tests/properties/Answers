@@ -1,0 +1,44 @@
+
+valid-free-10-true.c
+Warning: enabling heap model
+SAFE
+
+valid-free-3-true.c
+Warning: enabling heap model
+SAFE
+
+valid-free-7-false.c
+Warning: enabling heap model
+UNSAFE
+
+valid-free-11-true.c
+Warning: enabling heap model
+SAFE
+
+valid-free-4-false.c
+Warning: enabling heap model
+UNSAFE
+
+valid-free-8-false.c
+Warning: enabling heap model
+UNSAFE
+
+valid-free-1-true.c
+Warning: enabling heap model
+SAFE
+
+valid-free-5-false.c
+Warning: enabling heap model
+UNSAFE
+
+valid-free-9-false.c
+Warning: enabling heap model
+UNSAFE
+
+valid-free-2-false.c
+Warning: enabling heap model
+UNSAFE
+
+valid-free-6-true.c
+Warning: enabling heap model
+SAFE
