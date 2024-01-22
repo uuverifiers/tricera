@@ -26,13 +26,11 @@ When using a binary release, one can instead also call
 
 `java -jar target/scala-2.*/TriCera-assembly*.jar regression-tests/horn-contracts/fib.hcc`
 
-This currently does not work - will be updated: ~~You can use the script tri-client instead of tri in order to run TriCera in a server-client mode, which significantly speeds up processing of multiple problems.~~
-
 A full list of options can be obtained by calling ./tri -h.
 In particular, the options `-cex` can be used to show a counterexample when the program is unsafe, and `-log:n` (n in 1..3) can be used to show the solution when the program is safe.
 
 # Try it out online
-TriCera has a [web interface](http://logicrunch.it.uu.se:4096/~zafer/tricera/) where you can try it out, which also contains many examples.
+TriCera has a [web interface](https://eldarica.org/tricera/) where you can try it out, which also contains many examples.
 
 # Bug reports
 TriCera is under development, and bug reports are welcome!
