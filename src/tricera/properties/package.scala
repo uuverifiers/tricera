@@ -35,7 +35,7 @@ package tricera
  */
 package object properties {
   sealed trait Property
-  sealed trait PartialProperty extends Property
+  sealed trait SubProperty extends Property
 
   //////////////////////////////////////////////////////////////////////////////
   // Explicit assertions
@@ -49,13 +49,12 @@ package object properties {
 
   //////////////////////////////////////////////////////////////////////////////
   // Memory-safety properties
-  // Memory Safety category is composed of multiple disjoint partial properties.
 
   /**
-   * All partial properties related to memory safety. Note that
-   * [[MemValidCleanup]] subsumes [[MemValidTrack]], they are not disjoint.
+   * All properties related to memory safety. Note that [[MemValidCleanup]]
+   * is stronger than [[MemValidTrack]].
    */
-  val memorySafetyProperties : Set[PartialProperty] = Set(
+  val memorySafetyProperties : Set[SubProperty] = Set(
     MemValidFree, MemValidDeref, MemValidTrack, MemValidCleanup)
 
   /**
@@ -63,10 +62,8 @@ package object properties {
    *   - no double free,
    *   - no free on non-null, unallocated pointers,
    *   - no free on non-heap variables.
-   *   @todo Our current implementation will consider free on null-pointer as
-   *         an error, fix!
    */
-  case object MemValidFree extends PartialProperty {
+  case object MemValidFree extends SubProperty {
     override def toString : String = "valid-free"
   }
 
@@ -76,33 +73,38 @@ package object properties {
    *   - no out-of-bounds array access,
    *   - type safety
    */
-  case object MemValidDeref extends PartialProperty {
+  case object MemValidDeref extends SubProperty {
     override def toString : String = "valid-deref"
   }
 
   /**
-   * All allocated memory is tracked, i.e., no memory leaks. An any reachable
+   * All allocated memory is tracked, i.e., no memory leaks. In any reachable
    * program path,
    *   - every allocated heap memory associated with a pointer going out of
    *   scope is freed.
    *   - no reassigning a valid heap pointer (pointing to allocating memory),
    *   when only that pointer holds a reference to that memory.
-   * It should be noted that programs terminating with allocated memory does not
-   * violate this property (but it violates [[MemValidCleanup]]).
+   * @note Programs terminating with allocated memory does not violate this
+   *       property, but it violates [[MemValidCleanup]].
+   * @note If there are pointers going out of scope due to a `return` from main,
+   *       those will violate this property.
+   *       See [[https://gitlab.com/sosy-lab/software/cpachecker/-/issues/657]].
    *
-   * @todo We do not ensure memory safety in all cases that pointers can
-   *       go out of scope, only function exits, fix!
-   * @todo We do not check the latter property at all!
+   * @todo This property is currently not directly checked by TriCera,
+   *       it checks [[MemValidCleanup]] only.
    */
-  case object MemValidTrack extends PartialProperty {
+  case object MemValidTrack extends SubProperty {
     override def toString : String = "valid-memtrack"
   }
 
   /**
    * All allocated memory is deallocated before the program terminates.
-   * This property subsumes [[MemValidTrack]].
+   * This property is stronger than [[MemValidTrack]].
+   * I.e., if [[MemValidCleanup]] is true, then [[MemValidTrack]] is also true.
+   *       If [[MemValidCleanup]] is false, no conclusion can be drawn for
+   *       [[MemValidTrack]].
    */
-  case object MemValidCleanup extends PartialProperty {
+  case object MemValidCleanup extends SubProperty {
     override def toString : String = "valid-memcleanup"
   }
 
