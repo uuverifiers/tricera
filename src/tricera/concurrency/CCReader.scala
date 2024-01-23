@@ -193,6 +193,7 @@ class CCReader private (prog              : Program,
     }
     def size : Int = vars.size
     def lastIndexWhere(name : String) = vars lastIndexWhere(_.name == name)
+    def lastIndexWhere(v : CCVar) = vars lastIndexWhere(_ == v)
     def contains (c : ConstantTerm) = vars exists (_.term == c)
     def iterator = vars.iterator
     def formalVars = vars.toList
@@ -683,8 +684,18 @@ class CCReader private (prog              : Program,
 
   if (modelHeap) {
     GlobalVars addVar heapVar
-
     GlobalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None)
+    variableHints += List()
+  }
+
+  /**
+   * For checking [[properties.MemValidCleanup]], a prophecy variable is used.
+   */
+  private val memCleanupProphecyVar =
+    new CCVar("@v_cleanup", None, CCHeapPointer(heap, CCVoid))
+  if (propertiesToCheck contains properties.MemValidCleanup) {
+    GlobalVars addVar memCleanupProphecyVar
+    GlobalVars.inits += CCTerm(heap.nullAddr(), memCleanupProphecyVar.typ, None)
     variableHints += List()
   }
 
@@ -776,10 +787,11 @@ class CCReader private (prog              : Program,
     // if while adding glboal variables we have changed the heap, the heap term
     // needs to be reinitialised as well. Happens with global array allocations.
     if (modelHeap) {
-      val initialisedHeapValue = globalVarSymex.getValues.head
-      val initialHeapValue = IConstant(GlobalVars.vars.head.term)
+      val heapInd = GlobalVars.lastIndexWhere(heapVar)
+      val initialisedHeapValue = globalVarSymex.getValues(heapInd)
+      val initialHeapValue = IConstant(GlobalVars.vars(heapInd).term)
       if (modelHeap && initialisedHeapValue.toTerm != initialHeapValue) {
-        GlobalVars.inits(0) = initialisedHeapValue
+        GlobalVars.inits(heapInd) = initialisedHeapValue
       }
     }
 
@@ -1072,38 +1084,38 @@ class CCReader private (prog              : Program,
           functionExitPreds += ((f.name, finalPred))
 
           /**
-           * We add an assertion that all pointers that are in scope at the
-           * exit of `entryFunction` are freed.
-           * @todo if `entryFunction != "main"`, the pointer might be in the
-           *       return value, hence no memory leak. In that case, this
-           *       assertion will still fail, it should be relaxed.
+           * Add an assertion that all pointers that are in scope at the
+           * exit of `entryFunction` are freed using the prophecy variable.
+           * This ensures [[properties.MemValidCleanup]].
           */
           if (modelHeap &&
               propertiesToCheck.contains(properties.MemValidCleanup)) {
+            val heapInd = GlobalVars.lastIndexWhere(heapVar)
+            val cleanupVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+
+            if (heapInd == -1 || cleanupVarInd == -1) {
+              assert(false, "Could not find the heap term or the mem-cleanup" +
+                            "prophecy variable term!")
+            }
+
             import HornClauses._
             import IExpression._
             finalPred match {
-              case CCPredicate(_, args, _) if args.head.sort == heap.HeapSort =>
-                // passing sort as CCVoid as it is not important
-                val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid), None)
+              case CCPredicate(_, args, _)
+                if args(heapInd).sort == heap.HeapSort &&
+                   args(cleanupVarInd).sort == heap.AddressSort =>
+
                 val resVar = getResVar(args.last.typ)
-                var excludedAddresses = i(true)
-                for (arg <- args) arg.typ match {
-                  case arr: CCHeapArrayPointer
-                    if arr.arrayLocation == ArrayLocation.Global =>
-                    excludedAddresses = excludedAddresses &&&
-                      !heap.within(arg.term, addrVar.term)
-                  case _ => // nothing
-                }
                 assertionClauses +=
-                  addAssertionClause(((heap.read(args.head.term, addrVar.term) === defObj()) :-
-                    (atom(finalPred,
-                       allFormalVarTerms.toList ++
-                       resVar.map(v => IConstant(v.term)) take finalPred.arity)
-                     &&& excludedAddresses)),
+                  addAssertionClause(
+                    (args(cleanupVarInd).term === heap.nullAddr()) :-
+                     atom(finalPred,
+                          allFormalVarTerms.toList ++
+                          resVar.map(v => IConstant(v.term)) take finalPred.arity),
                     None, properties.MemValidCleanup)
               case _ =>
-                assert(false, "Could not find the heap term!")
+                assert(false, s"$finalPred does not contain the heap variable or" +
+                              s"the memory cleanup prophecy variable!")
             }
           }
 
@@ -1438,11 +1450,12 @@ class CCReader private (prog              : Program,
                             "size specified in an intialized array expression!")
                       }
                       import IExpression._
+                      val heapInd = GlobalVars.lastIndexWhere(heapVar)
                       val initHeapTerm =
-                        if (values.getValues.head.toTerm == IConstant(heapTerm)) {
-                          CCTerm(GlobalVars.inits.head.toTerm, CCHeap(heap), srcInfo)
+                        if (values.getValues(heapInd).toTerm == IConstant(heapTerm)) {
+                          CCTerm(GlobalVars.inits(heapInd).toTerm, CCHeap(heap), srcInfo)
                         } else
-                          CCTerm(values.getValues.head.toTerm, CCHeap(heap), srcInfo)
+                          CCTerm(values.getValues(heapInd).toTerm, CCHeap(heap), srcInfo)
                       val objTerm = CCTerm(arrayPtr.elementType.getZeroInit,
                         arrayPtr.elementType, srcInfo)
                       val arrayTerm =
@@ -1481,11 +1494,12 @@ class CCReader private (prog              : Program,
                   val objValue = if (global) typ.elementType.getZeroInit
                   else typ.elementType.getNonDet
                   val objTerm = CCTerm(objValue, typ.elementType, srcInfo)
+                  val heapInd = GlobalVars.lastIndexWhere(heapVar)
                   val initHeapTerm =
-                    if (values.getValues.head.toTerm == IConstant(heapTerm)) {
-                      CCTerm(GlobalVars.inits.head.toTerm, CCHeap(heap), srcInfo)
+                    if (values.getValues(heapInd).toTerm == IConstant(heapTerm)) {
+                      CCTerm(GlobalVars.inits(heapInd).toTerm, CCHeap(heap), srcInfo)
                     } else
-                      CCTerm(values.getValues.head.toTerm, CCHeap(heap), srcInfo)
+                      CCTerm(values.getValues(heapInd).toTerm, CCHeap(heap), srcInfo)
                   val addressRangeValue = varDec.initArrayExpr match {
                     case Some(expr) =>
                       val arraySize =
@@ -2256,6 +2270,19 @@ class CCReader private (prog              : Program,
                            readObj =/= heap._defObj,
                            srcInfo, properties.MemValidFree)
           }
+          if (propertiesToCheck contains properties.MemValidCleanup) {
+            /**
+             * Set [[memCleanupProphecyVar]] back to NULL, if the freed address
+             * is the same as the one stored.
+             */
+            val prophInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+            val prophOldVal = getValues(prophInd).toTerm
+            setValue(prophInd, CCTerm(
+              IExpression.ite(prophOldVal === t.toTerm,
+                              heap.nullAddr(),
+                              prophOldVal), memCleanupProphecyVar.typ, None),
+                     false)
+          }
           heapWrite(termToFree, CCTerm(p.heap._defObj, p, srcInfo))
         case p : CCHeapArrayPointer =>
           import IExpression._
@@ -2297,6 +2324,19 @@ class CCReader private (prog              : Program,
                 assertProperty(IExpression.i(false),
                                srcInfo, properties.MemValidFree)
             }
+          }
+          if (propertiesToCheck contains properties.MemValidCleanup) {
+            /**
+             * Set [[memCleanupProphecyVar]] back to NULL, if the beginning of
+             * the freed address block is the same as the one stored.
+             */
+            val prophInd    = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+            val prophOldVal = getValues(prophInd).toTerm
+            setValue(prophInd, CCTerm(
+              IExpression.ite(prophOldVal === heap.nth(t.toTerm, 0),
+                              heap.nullAddr(),
+                              prophOldVal), memCleanupProphecyVar.typ, None),
+                     false)
           }
           heapBatchWrite(getValue(heapTermName).toTerm, t.toTerm, defObj())
         case _ =>
@@ -3302,17 +3342,67 @@ class CCReader private (prog              : Program,
                * checking memory properties (e.g., only heap allocated memory
                * can be freed).
                */
-              pushVal(heapAlloc(objectTerm))
+              val allocatedAddr = heapAlloc(objectTerm)
+
+              if (propertiesToCheck contains properties.MemValidCleanup) {
+                /**
+                 * Nondeterministically write the address to the prophecy
+                 * variable [[memCleanupProphecyVar]].
+                 * I.e., nondet ==> prophTerm = allocatedAddr
+                 */
+                val prophVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+                val nondetTerm = IConstant(
+                  getFreshEvalVar(CCBool, None, name = "nondet").term)
+                setValue(prophVarInd,
+                         CCTerm(
+                           IExpression.ite(
+                             nondetTerm === ADT.BoolADT.True,
+                             allocatedAddr.toTerm,
+                             getValues(prophVarInd).toTerm
+                             ), memCleanupProphecyVar.typ, None),
+                         isIndirection = false)
+              }
+
+              pushVal(allocatedAddr)
             case CCTerm(sizeExp, typ, srcInfo) if typ.isInstanceOf[CCArithType] =>
               val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
-//              LocalVars.incrementLastFrame
-              // todo: values addGuard ?
-              pushVal(CCTerm(addressRangeValue, CCHeapArrayPointer(heap, typ, arrayLoc), srcInfo))
+              val allocatedBlock =
+                CCTerm(addressRangeValue,
+                       CCHeapArrayPointer(heap, typ, arrayLoc), srcInfo)
+
+              if (arrayLoc == ArrayLocation.Heap &&
+                  propertiesToCheck.contains(properties.MemValidCleanup)) {
+                /**
+                 * Nondeterministically write the address to the prophecy
+                 * variable [[memCleanupProphecyVar]]. Here a corner case to
+                 * consider is when sizeExp is not > 0, in which case no memory
+                 * is allocated, hence no need to change the value of the
+                 * prophecy variable.
+                 * I.e., (nondet & sizeExp > 0) ==> prophTerm = allocatedAddr
+                 */
+                val prophVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+                val nondetTerm  = IConstant(
+                  getFreshEvalVar(CCBool, None, name = "nondet").term)
+                setValue(prophVarInd,
+                         CCTerm(
+                           IExpression.ite(
+                             nondetTerm === ADT.BoolADT.True & sizeExp > 0,
+                             heap.nth(allocatedBlock.toTerm, 0),
+                             getValues(prophVarInd).toTerm
+                             ), memCleanupProphecyVar.typ, None),
+                         isIndirection = false)
+              }
+              pushVal(allocatedBlock)
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
                 // todo: optimise constant size allocations > 1?
           }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
           if TriCeraParameters.parameters.value.useArraysForHeap =>
+          /**
+           * @todo Support checking [[properties.MemValidCleanup]] when using
+           *       arrays to model heaps.
+           */
+
           val (typ, allocSize) = exp.listexp_(0) match {
             case exp : Ebytestype =>
               (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
@@ -4071,7 +4161,8 @@ class CCReader private (prog              : Program,
             override def getHeap: HeapObj =
               if (modelHeap) heap else throw NeedsHeapModelException
             override def getHeapTerm: ITerm =
-              if (modelHeap) stmSymex.getValues.head.toTerm
+              if (modelHeap)
+                stmSymex.getValues(GlobalVars.lastIndexWhere(heapVar)).toTerm
               else throw NeedsHeapModelException
             override def getOldHeapTerm: ITerm =
               getHeapTerm // todo: heap term for exit predicate?
@@ -4137,7 +4228,8 @@ class CCReader private (prog              : Program,
             override def getHeap : HeapObj =
               if (modelHeap) heap else throw NeedsHeapModelException
             override def getHeapTerm : ITerm =
-              if (modelHeap) stmSymex.getValues.head.toTerm
+              if (modelHeap)
+                stmSymex.getValues(GlobalVars.lastIndexWhere(heapVar)).toTerm
               else throw NeedsHeapModelException
             override def getOldHeapTerm : ITerm =
               getHeapTerm // todo: heap term for exit predicate?

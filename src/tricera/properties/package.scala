@@ -51,13 +51,6 @@ package object properties {
   // Memory-safety properties
 
   /**
-   * All properties related to memory safety. Note that [[MemValidCleanup]]
-   * is stronger than [[MemValidTrack]].
-   */
-  val memorySafetyProperties : Set[SubProperty] = Set(
-    MemValidFree, MemValidDeref, MemValidTrack, MemValidCleanup)
-
-  /**
    * All (reachable) `free` invocations are valid, i.e.,
    *   - no double free,
    *   - no free on non-null, unallocated pointers,
@@ -104,7 +97,7 @@ package object properties {
    *       If [[MemValidCleanup]] is false, no conclusion can be drawn for
    *       [[MemValidTrack]].
    */
-  case object MemValidCleanup extends SubProperty {
+  case object MemValidCleanup extends Property {
     override def toString : String = "valid-memcleanup"
   }
 

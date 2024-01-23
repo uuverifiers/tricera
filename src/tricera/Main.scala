@@ -214,6 +214,7 @@ class Main (args: Array[String]) {
       // YAML parser.
       def isReachSafety = property_file.contains("unreach-call")
       def isMemSafety   = property_file.contains("valid-memsafety")
+      def isMemCleanup  = property_file.contains("valid-memcleanup")
     }
     case class BenchmarkInfo(format_version: String,
                              input_files: String,
@@ -249,24 +250,27 @@ class Main (args: Array[String]) {
       val propToExpected = new MHashMap[properties.Property, Boolean]
       bmInfo match {
         case Some(info) =>
-          for (p <- info.properties if p.isMemSafety || p.isReachSafety) {
+          for (p <- info.properties if p.isMemSafety || p.isReachSafety ||
+                                       p.isMemCleanup) {
             // Currently, only reach safety and (some( memory safety properties
             // are supported.
             val prop =
               if (p.isReachSafety) {
                 properties.Reachability
-              } else //(p.isMemSafety)
+              } else if(p.isMemSafety) {
                   p.subproperty match {
-                    case Some("valid-free") => properties.MemValidFree
-                    case Some("valid-deref") => properties.MemValidDeref
+                    case Some("valid-free")     => properties.MemValidFree
+                    case Some("valid-deref")    => properties.MemValidDeref
                     case Some("valid-memtrack") => properties.MemValidTrack
-                    case Some("valid-cleanup") => properties.MemValidCleanup
                     case Some(prop) => throw new Exception(
                       s"Unknown sub-property $prop for the Memory Safety category.")
                     case None => throw new Exception(
                       "A sub-property must be specified for Memory Safety.")
                     // TODO: is this really the case?
                   }
+              } else { //(p.isMemCleanup)
+                properties.MemValidCleanup
+              }
             props += prop
             if(p.expected_verdict.nonEmpty)
               propToExpected += prop -> p.expected_verdict.get
