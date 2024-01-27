@@ -81,10 +81,12 @@ false :- foo19_10(n, n_old, _res3), _res3 != n_old. (line:16 col:4)
 
 
 getptr_safe.c
+Warning: A property file exists, but properties are also specified in the command-line. Ignoring the property file and checking for properties: {unreach-call,valid-deref,valid-memtrack,valid-free}
 Warning: enabling heap model
 SAFE
 
 getptr_unsafe.c
+Warning: A property file exists, but properties are also specified in the command-line. Ignoring the property file and checking for properties: {unreach-call,valid-deref,valid-memtrack,valid-free}
 Warning: enabling heap model
 UNSAFE
 

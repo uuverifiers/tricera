@@ -28,7 +28,7 @@ Final:
  main_1(42) 
 ------------
 Failed assertion:
-false :- main_1(x:5), x:5 != 43. (line:7 col:3)
+false :- main_1(x:5), x:5 != 43. (line:7 col:3) (property: unreach-call)
 
 
 unint-pred-simple-true.c

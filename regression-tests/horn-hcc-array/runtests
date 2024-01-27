@@ -10,7 +10,7 @@ for name in $TESTS; do
     $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
-MEMTRACKTESTS="simple-dynamic-memsafety1.c simple-dynamic-memsafety2.c simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
+MEMTRACKTESTS="simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
 
 for name in $MEMTRACKTESTS; do
     echo

@@ -1,11 +1,10 @@
 format_version: '2.0'
 
-input_files: 'memtrack-03.c'
+input_files: 'typecastSafe-001.c'
 
 properties:
   - property_file: ../properties/valid-memsafety.prp
-    expected_verdict: false
-    subproperty: valid-memtrack
+    expected_verdict: true
 
 options:
   language: C

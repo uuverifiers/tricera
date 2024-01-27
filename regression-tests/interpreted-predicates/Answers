@@ -15,7 +15,7 @@ Final:
   main(3)   
 ------------
 Failed assertion:
-false :- main(x:8), x:8 != 42. (line:10 col:3)
+false :- main(x:8), x:8 != 42. (line:10 col:3) (property: unreach-call)
 
 
 simple-invariant-true.c
@@ -37,7 +37,7 @@ Final:
   main(3)   
 ------------
 Failed assertion:
-false :- main(x:8), x:8 != 42. (line:10 col:3)
+false :- main(x:8), x:8 != 42. (line:10 col:3) (property: unreach-call)
 
 
 simple-loop-invariant-true.c

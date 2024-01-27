@@ -35,8 +35,8 @@ import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 
 object ADTExploder extends SolutionProcessor {
-  def apply(expr : IExpression) : IExpression =
-    Rewriter.rewrite(expr, explodeADTs)
+  def apply(expr : IFormula) : IFormula =
+    Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
 
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {

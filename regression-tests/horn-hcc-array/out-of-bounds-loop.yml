@@ -5,7 +5,7 @@ input_files: 'out-of-bounds-loop.c'
 properties:
   - property_file: ../properties/valid-memsafety.prp
     expected_verdict: false
-    subproperty: valid-memtrack
+    subproperty: valid-deref
 
 options:
   language: C

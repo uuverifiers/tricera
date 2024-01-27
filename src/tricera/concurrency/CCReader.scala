@@ -781,9 +781,12 @@ class CCReader private (prog              : Program,
           // nothing
       }
 
-    // prevent time variables and heap variable from being initialised twice
+    // prevent time variables, heap variable, and global ghost variables
+    // from being initialised twice
+    // TODO: This is very brittle and unintuitive - come up with a better solution.
     GlobalVars.inits ++= (globalVarSymex.getValues drop
-      (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0))
+      (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0) +
+      (if (propertiesToCheck.contains(properties.MemValidCleanup)) 1 else 0))
     // if while adding glboal variables we have changed the heap, the heap term
     // needs to be reinitialised as well. Happens with global array allocations.
     if (modelHeap) {
@@ -854,7 +857,8 @@ class CCReader private (prog              : Program,
       val prePredArgACSLNames = allFormalVars map (_.name)
       val postPredACSLArgNames =
         allFormalVars.map(v => "\\old(" + v.name + ")") ++
-        GlobalVars.vars.map(v => v.name) ++ Seq("\\result")
+        GlobalVars.vars.map(v => v.name) ++
+        (if(postResVar nonEmpty) Seq("\\result") else Nil)
 
       val postOldVarsMap: Map[String, CCVar] =
       (allFormalVars.map(_ name) zip oldVars).toMap

@@ -33,7 +33,7 @@ import ap.parser._
 import IExpression.Predicate
 
 object SolutionProcessor {
-  type Solution = Map[Predicate, IExpression]
+  type Solution = Map[Predicate, IFormula]
 }
 
 trait SolutionProcessor {
@@ -55,8 +55,8 @@ trait SolutionProcessor {
 
   /**
    * This is the function that should be implemented in new solution processors
-   * @param expr : IExpression to process
-   * @return     : processed IExpression
+   * @param expr : IFormula to process
+   * @return     : processed IFormula
    */
-  def apply(expr : IExpression) : IExpression
+  def apply(expr : IFormula) : IFormula
 }

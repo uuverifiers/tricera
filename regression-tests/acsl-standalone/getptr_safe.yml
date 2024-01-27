@@ -1,11 +1,10 @@
 format_version: '2.0'
 
-input_files: 'memtrack-04.c'
+input_files: 'getptr_safe.c'
 
 properties:
   - property_file: ../properties/valid-memsafety.prp
     expected_verdict: true
-    subproperty: valid-memtrack
 
 options:
   language: C

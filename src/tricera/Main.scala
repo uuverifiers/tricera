@@ -30,11 +30,15 @@
 
 package tricera
 
+import ap.parser.IExpression.{ConstantTerm, Predicate}
+import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
+import ap.types.{Sort, SortedConstantTerm}
 import hornconcurrency.ParametricEncoder
 
 import java.io.{FileOutputStream, PrintStream}
 import scala.collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
 import lazabs.horn.bottomup.HornClauses.Clause
+import lazabs.horn.bottomup.HornTranslator
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.Util.SourceInfo
@@ -254,7 +258,8 @@ class Main (args: Array[String]) {
         if (checkValidFree) Some(properties.MemValidFree) else None,
         if (checkValidDeref) Some(properties.MemValidDeref) else None,
         if (checkMemCleanup) Some(properties.MemValidCleanup) else None,
-        if (checkReachSafety) Some(properties.Reachability) else None).flatten
+        if (checkReachSafety) Some(properties.Reachability) else None).flatten ++
+        (if (checkMemSafety) memSafetyProperties else Set[properties.Property]())
 
       if (cliProps.nonEmpty && bmInfo.nonEmpty) {
         Util.warn("A property file exists, but properties are also " +
@@ -488,34 +493,30 @@ class Main (args: Array[String]) {
             import lazabs.horn.bottomup.HornPredAbs
             import lazabs.ast.ASTree.Parameter
 
-            def replaceArgs(f : String,
-                            acslArgNames : Seq[String],
-                            replaceAlphabetic : Boolean = false) = {
-              var s = f
-              for ((acslArg, ind)<- acslArgNames zipWithIndex) {
-                val replaceArg =
-                  if (replaceAlphabetic)
-                    lazabs.viewer.HornPrinter.getAlphabeticChar(ind)
-                  else "_" + ind
-                s = s.replace(replaceArg, acslArg)
+            def clausifySolution(predAndSol  : (Predicate, IFormula),
+                                 argNames    : Seq[String],
+                                 newPredName : Option[String] = None) : Clause = {
+              val (pred, sol) = predAndSol
+              val predArgs = for (predArgName <- argNames) yield
+                IConstant(new ConstantTerm(predArgName))
+              val constraint  = VariableSubstVisitor.visit(
+                sol, (predArgs.toList, 0)).asInstanceOf[IFormula]
+              val newPred = newPredName match {
+                case Some(newName) => new Predicate(newName, pred.arity)
+                case None => pred
               }
-              s
+              Clause(IAtom(newPred, predArgs), Nil, constraint)
             }
 
             if(displaySolutionProlog) {
-              // todo: replace args with actual ones from the clauses
               println("\nSolution (Prolog)")
               println("="*80)
               val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
               for((pred,sol) <- sortedSol) {
-                val cl = HornClause(RelVar(pred.name.stripPrefix("inv_"),
-                  (0 until pred.arity).map(p =>
-                    Parameter("_" + p,lazabs.types.IntegerType())).toList),
-                  List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
-                    Map[ap.terfor.ConstantTerm,String]().empty,false))))
-                println(replaceArgs(lazabs.viewer.HornPrinter.print(cl),
-                                    reader.PredPrintContext.predArgNames(pred),
-                                    replaceAlphabetic = true))
+                val predArgNames = reader.PredPrintContext.predArgNames(pred)
+                val solClause = clausifySolution(
+                  (pred, sol), predArgNames, Some(pred.name.stripPrefix("inv_")))
+                println(solClause.toPrologString)
               }
               println("="*80 + "\n")
             }
@@ -565,15 +566,18 @@ class Main (args: Array[String]) {
                    if maybeEnc.isEmpty ||
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
-                val fPre = ACSLLineariser asString processedSolution(ctx.prePred.pred)
-                val fPost = ACSLLineariser asString processedSolution(ctx.postPred.pred)
-
                 // todo: implement replaceArgs as a solution processor
-                // replaceArgs does a simple string replacement (see above def)
-                val fPreWithArgs =
-                  replaceArgs(fPre, ctx.prePredACSLArgNames)
-                val fPostWithArgs =
-                  replaceArgs(fPost, ctx.postPredACSLArgNames)
+                def funContractToACSLString(fPred    : Predicate,
+                                            argNames : Seq[String]) : String = {
+                  val fPredToSol  = fPred -> processedSolution(fPred)
+                  val fPredClause = clausifySolution(fPredToSol, argNames)
+                  ACSLLineariser asString fPredClause.constraint
+                }
+                val fPreACSLString = funContractToACSLString(
+                  ctx.prePred.pred, ctx.prePredACSLArgNames)
+
+                val fPostACSLString = funContractToACSLString(
+                  ctx.postPred.pred, ctx.postPredACSLArgNames)
 
                 if (!printedACSLHeader) {
                   println("\nInferred ACSL annotations")
@@ -582,17 +586,17 @@ class Main (args: Array[String]) {
                 }
                 println("/* contracts for " + fun + " */")
                 println("/*@")
-                print(  "  requires "); println(fPreWithArgs + ";")
-                print(  "  ensures "); println(fPostWithArgs + ";")
+                print(  "  requires "); println(fPreACSLString + ";")
+                print(  "  ensures "); println(fPostACSLString + ";")
                 println("*/")
               }
               if(loopInvariants nonEmpty) {
                 println("/* loop invariants */")
                 for ((name, (inv, srcInfo)) <- loopInvariants) {
-                  val fInv = ACSLLineariser asString processedSolution.find(p =>
-                    p._1.name.stripPrefix("inv_") == inv.pred.name).get._2
-                  val fInvWithArgs =
-                    replaceArgs(fInv, inv.argVars.map(_.name))
+                  val fInvSol = processedSolution.find(
+                    p => p._1.name.stripPrefix("inv_") == inv.pred.name).get
+                  val fInvString = ACSLLineariser asString clausifySolution(
+                    fInvSol, inv.argVars.map(_.name), Some(name)).constraint
                   if (!printedACSLHeader) {
                     println("\nInferred ACSL annotations")
                     println("=" * 80)
@@ -601,7 +605,7 @@ class Main (args: Array[String]) {
                   println("\n/* loop invariant for the loop at line " +
                           srcInfo.line + " */")
                   println("/*@")
-                  print(  "  loop invariant "); println(fInvWithArgs + ";")
+                  print(  "  loop invariant "); println(fInvString + ";")
                   println("*/")
                 }
               }

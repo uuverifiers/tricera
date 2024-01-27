@@ -10,7 +10,7 @@ Final:
  main9_3(3) 
 ------------
 Failed assertion:
-false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3) (property: unreach-call)
 
 
 enum1-trailing-comma.hcc
@@ -24,7 +24,7 @@ Final:
  main9_3(3) 
 ------------
 Failed assertion:
-false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3) (property: unreach-call)
 
 
 enum2.hcc
@@ -38,7 +38,7 @@ Final:
  main9_3(2) 
 ------------
 Failed assertion:
-false :- main9_3(x:8), x:8 != 0 & x:8 != 1. (line:9 col:3)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1. (line:9 col:3) (property: unreach-call)
 
 
 enum3.hcc

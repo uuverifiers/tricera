@@ -228,7 +228,7 @@ Final:
  main12_7(2, 4) 
 ----------------
 Failed assertion:
-false :- main12_7(x:7, y:10). (line:13 col:5)
+false :- main12_7(x:7, y:10). (line:13 col:5) (property: unreach-call)
 
 
 typedef1.hcc
@@ -250,7 +250,7 @@ Final:
    main(0, 0)   
 ----------------
 Failed assertion:
-false :- main(x:4, y:5), y:5 < 1. (line:19 col:3)
+false :- main(x:4, y:5), y:5 < 1. (line:19 col:3) (property: unreach-call)
 
 
 switch2.hcc
