@@ -2145,14 +2145,15 @@ class CCReader private (prog              : Program,
           "Can only read from heap pointers! (" + ptrExpr + ")")
       }
       val readObj = heap.read(getValue(heapTermName).toTerm, ptrExpr.toTerm)
-      if (assertMemSafety)
+      if (assertMemSafety && propertiesToCheck.contains(properties.MemValidDeref)) {
         assertProperty(
           heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)),
           ptrExpr.srcInfo, properties.MemValidDeref)
-      // todo: add tester methods for user ADT sorts?
-      // also add memory safety assumptions to the clause
-      if (assertMemSafety && assumeMemSafety)
-        addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
+        // todo: add tester methods for user ADT sorts?
+        // also add memory safety assumptions to the clause
+        if (assumeMemSafety)
+          addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
+      }
       CCTerm(objectGetter(readObj), typ, ptrExpr.srcInfo)
     }
     def heapAlloc(value : CCTerm) : CCTerm = {
@@ -2185,7 +2186,8 @@ class CCReader private (prog              : Program,
       val readAddress = CCTerm(heap.nth(arrExpr.toTerm, index.toTerm),
         CCHeapPointer(heap, arrType.elementType), arrExpr.srcInfo)
       val readValue = heapRead(readAddress, assertMemSafety, assumeMemSafety)
-      if (assertIndexWithinBounds)
+      if (assertIndexWithinBounds &&
+          propertiesToCheck.contains(properties.MemValidDeref))
         assertProperty(heap.within(arrExpr.toTerm, readAddress.toTerm),
                        arrExpr.srcInfo, properties.MemValidDeref)
       readValue
@@ -2204,7 +2206,8 @@ class CCReader private (prog              : Program,
                   assumeMemSafety : Boolean = false) = {
       val newHeap = heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), rhs.srcInfo))
-      if (assertMemSafety) {
+      if (assertMemSafety &&
+          propertiesToCheck.contains(properties.MemValidDeref)) {
         def getObjAndSort(f : IFunApp) : (IFunApp, Sort) = {
           if (objectGetters contains f.fun) {
             val sort = f.fun.asInstanceOf[MonoSortedIFunction].resSort
@@ -3607,7 +3610,8 @@ class CCReader private (prog              : Program,
             val readValue = CCTerm(array.arrayTheory.
               select(arrayTerm.toTerm, index.toTerm), array.elementType, srcInfo)
             array.sizeExpr match {
-              case Some(expr) =>
+              case Some(expr)
+                if propertiesToCheck contains properties.MemValidDeref =>
                 assertProperty((index.toTerm >= 0) &&&
                   (index.toTerm < expr.toTerm), srcInfo,
                                properties.MemValidDeref)

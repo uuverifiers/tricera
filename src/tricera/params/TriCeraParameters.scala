@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -59,9 +59,27 @@ class TriCeraParameters extends GlobalParameters {
 
   var showVarLineNumbersInTerms : Boolean = false
 
-  var shouldTrackMemory : Boolean = false
+  /**
+   * Properties that TriCera should check.
+   * Note that reach safety will be checked by default when no other properties
+   * are specified. If any other property is specified, reach safety is not
+   * checked unless explicitly specified.
+   */
+  var checkReachSafety : Boolean = false
+  var checkMemTrack    : Boolean = false
+  var checkValidDeref  : Boolean = false
+  var checkValidFree   : Boolean = false
+  var checkMemCleanup  : Boolean = false
 
-  var ignoreExplicitAsserts : Boolean = false
+  /**
+   * If set, will check all properties in [[memSafetyProperties]].
+   * This set should reflect the memsafety category of SV-COMP.
+   */
+  var checkMemSafety : Boolean = false
+  val memSafetyProperties = {
+    import tricera.properties._
+    Set(MemValidDeref, MemValidTrack, MemValidFree)
+  }
 
   var useArraysForHeap : Boolean = false
 
@@ -94,7 +112,7 @@ class TriCeraParameters extends GlobalParameters {
 
   private val greeting =
     "TriCera v" + version + ".\n(C) Copyright " +
-      "2012-2023 Zafer Esen and Philipp Ruemmer\n" +
+      "2012-2024 Zafer Esen and Philipp Ruemmer\n" +
     "Contributors: Pontus Ernstedt, Hossein Hojjat"
 
   private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
@@ -121,7 +139,6 @@ class TriCeraParameters extends GlobalParameters {
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
-    case "-memtrack" :: rest => shouldTrackMemory = true; parseArgs(rest)
     case "-mathArrays" :: rest => useArraysForHeap = true; parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
@@ -253,77 +270,94 @@ class TriCeraParameters extends GlobalParameters {
     case symexDepthOpt :: rest if (symexDepthOpt.startsWith("-symDepth:")) =>
       symexMaxDepth = Some(symexDepthOpt.drop("-symDepth:".length).toInt)
       parseArgs(rest)
+
+    case "-reachsafety"      :: rest => checkReachSafety = true; parseArgs(rest)
+    case "-memsafety"        :: rest => checkMemSafety = true; parseArgs(rest)
+    case "-valid-memtrack"   :: rest => checkMemTrack = true; parseArgs(rest)
+    case "-valid-deref"      :: rest => checkValidDeref = true; parseArgs(rest)
+    case "-valid-free"       :: rest => checkValidFree = true; parseArgs(rest)
+    case "-valid-memcleanup" :: rest => checkMemCleanup = true; parseArgs(rest)
+
     case arg :: rest if Set("-v", "--version").contains(arg) =>
       println(version); false
     case arg :: rest if Set("-h", "--help").contains(arg) =>
       println(greeting + "\n\nUsage: tri [options] file\n\n" +
-      "General options:\n" +
-      " -h, --help\t\tShow this information\n" +
-      " -v, --version\tPrint version number\n" +
-      " -arithMode:t\tInteger semantics: math (default), ilp32, lp64, llp64\n" +
-      " -mathArrays:t\tUse mathematical arrays for modeling program arrays (no implicit memory safety properties))\n" +
-      " -memtrack\tCheck that there are no memory leaks in the input program \n" +
-      " -t:time\tSet timeout (in seconds)\n" +
-      " -cex\t\tShow textual counterexamples\n" +
-      " -dotCEX\tOutput counterexample in dot format\n" +
-      " -eogCEX\tDisplay counterexample using eog on Linux and Preview on macOS\n" +
-      " -sol\t\tShow solution in Prolog format\n" +
-      " -ssol\t\tShow solution in SMT-LIB format\n" +
-      " -inv\t\tTry to infer loop invariants\n" +
-      " -acsl\t\tPrint inferred ACSL annotations\n" +
-      " -log:n            Display progress based on verbosity level n (0 <= n <= 3)\n" +
-      "                     1: Statistics only\n" +
-      "                     2: Include invariants\n" +
-      "                     3: Include counterexamples\n" +
-      "                     (When using -sym, n > 1 displays derived clauses.) \n" +
-      " -statistics       Equivalent to -log:1; displays statistics only\n" +
-      " -log              Equivalent to -log:2; displays progress and invariants\n" +
-      " -logPreds:<preds> Log only predicates containing the specified substrings,\n" +
-      "                     separated by commas. E.g., -logPreds=p1,p2 logs any\n" +
-      "                     predicate with 'p1' or 'p2' in its name\n" +
-      " -m:func\tUse function func as entry point (default: main)\n" +
-      " -cpp\t\tExecute the C preprocessor (cpp) on the input file first, this will produce filename.i\n" +
-      "\n" +
-      "Horn clauses:\n" +
-      " -p\t\tPretty-print Horn clauses\n" +
-      " -pDot\t\tPretty-print Horn clauses, output in dot format and display it\n" +
-      " -sp\t\tPretty-print the Horn clauses in SMT-LIB format\n" +
-      " -dumpClauses\tWrite the Horn clauses in SMT-LIB format to input filename.smt2\n" +
-      " -varLines\tPrint program variables in clauses together with their line numbers (e.g., x:42)\n" +
-      "\n" +
-      "Horn engine options (Eldarica):\n" +
-      " -sym            (Experimental) Use symbolic execution with the default engine (bfs)\n" +
-      " -sym:x          Use symbolic execution where x : {dfs, bfs}\n" +
-      "                      dfs: depth-first forward (does not support non-linear clauses)\n" +
-      "                      bfs: breadth-first forward\n" +
-      " -symDepth:n     Set a max depth for symbolic execution (underapproximate)\n" +
-      "                     (currently only supported with bfs)\n" +
-      " -disj\t\tUse disjunctive interpolation\n" +
-      " -stac\t\tStatic acceleration of loops\n" +
-      " -lbe\t\tDisable preprocessor (e.g., clause inlining)\n" +
-      " -arrayQuans:n\tIntroduce n quantifiers for each array argument (default: 1)\n" +
-      " -noSlicing\tDisable slicing of clauses\n" +
-      " -hints:f\tRead initial predicates and abstraction templates from a file\n" +
-      "\n" +
-      " -abstract:t\tInterp. abstraction: off, manual, term, oct,\n" +
-      "            \t                     relEqs (default), relIneqs\n" +
-      " -abstractTO:t\tTimeout (s) for abstraction search (default: 2.0)\n" +
-      " -abstractPO\tRun with and w/o interpolation abstraction in parallel\n" +
-      " -splitClauses:n\tAggressiveness when splitting disjunctions in clauses\n" +
-      "                \t                     (0 <= n <= 2, default: 1)\n" +
-      " -pHints\t\tPrint initial predicates and abstraction templates\n" +
-      "\n" +
-      "TriCera preprocessor:\n" +
-      " -printPP\tPrint the output of the TriCera preprocessor to stdout\n" +
-      " -dumpPP\tDump the output of the TriCera preprocessor to file (input file name + .tri) \n" +
-      " -logPP:n\tDisplay TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)\n" +
-      " -noPP\t\tTurn off the TriCera preprocessor (typedefs are not allowed in this mode) \n" +
-      "\n" +
-      "Debugging:\n" +
-      " -assert\t\tEnable assertions in TriCera\n" +
-      " -assertNoVerify\tEnable assertions, but do not verify solutions \n"
-//      " -pc\t\tPrint path constraint formula at return from entry function\n" (not currently correct)
-    )
+  """General options:
+    |-h, --help         Show this information
+    |-v, --version      Print version number
+    |-arithMode:t       Integer semantics: math (default), ilp32, lp64, llp64
+    |-mathArrays:t      Use mathematical arrays for modeling program arrays (ignores memsafety properties)
+    |-t:time            Set timeout (in seconds)
+    |-cex               Show textual counterexamples
+    |-dotCEX            Output counterexample in dot format
+    |-eogCEX            Display counterexample using eog on Linux and Preview on macOS
+    |-sol               Show solution in Prolog format
+    |-ssol              Show solution in SMT-LIB format
+    |-inv               Try to infer loop invariants
+    |-acsl              Print inferred ACSL annotations
+    |-log:n             Display progress based on verbosity level n (0 <= n <= 3)
+    |                     1: Statistics only
+    |                     2: Include invariants
+    |                     3: Include counterexamples
+    |                     (When using -sym, n > 1 displays derived clauses.)
+    |-statistics        Equivalent to -log:1; displays statistics only
+    |-log               Equivalent to -log:2; displays progress and invariants
+    |-logPreds:<preds>  Log only predicates containing the specified substrings,
+    |                     separated by commas. E.g., -logPreds=p1,p2 logs any
+    |                     predicate with 'p1' or 'p2' in its name
+    |-m:func            Use function func as entry point (default: main)
+    |-cpp               Execute the C preprocessor (cpp) on the input file first, this will produce filename.i
+
+    |Checked properties:
+    |-reachsafety       Enables checking of explicitly specified properties via assert statements.
+    |                   (Enabled by default unless other properties are specified.)
+    |-memsafety         Enables checking of all memory safety properties, reflecting the
+    |                   memsafety category of SV-COMP. Includes valid-deref, valid-memtrack,
+    |                   and valid-free checks.
+    |-valid-memtrack    Checks that all allocated memory is tracked.
+    |-valid-deref       Checks the validity of pointer dereferences and array accesses.
+    |-valid-free        Checks that all occurrences of 'free' are valid.
+    |-valid-memcleanup  Checks that all allocated memory is deallocated before program termination.
+
+    |Horn clauses:
+    |-p                 Pretty-print Horn clauses
+    |-pDot              Pretty-print Horn clauses, output in dot format and display it
+    |-sp                Pretty-print the Horn clauses in SMT-LIB format
+    |-dumpClauses       Write the Horn clauses in SMT-LIB format to input filename.smt2
+    |-varLines          Print program variables in clauses together with their line numbers (e.g., x:42)
+
+    |Horn engine options (Eldarica):
+    |-sym               (Experimental) Use symbolic execution with the default engine (bfs)
+    |-sym:x             Use symbolic execution where x : {dfs, bfs}
+    |                     dfs: depth-first forward (does not support non-linear clauses)
+    |                     bfs: breadth-first forward
+    |-symDepth:n        Set a max depth for symbolic execution (underapproximate)
+    |                     (currently only supported with bfs)
+    |-disj              Use disjunctive interpolation
+    |-stac              Static acceleration of loops
+    |-lbe               Disable preprocessor (e.g., clause inlining)
+    |-arrayQuans:n      Introduce n quantifiers for each array argument (default: 1)
+    |-noSlicing         Disable slicing of clauses
+    |-hints:f           Read initial predicates and abstraction templates from a file
+
+    |-abstract:t        Interp. abstraction: off, manual, term, oct,
+    |                     relEqs (default), relIneqs
+    |-abstractTO:t      Timeout (s) for abstraction search (default: 2.0)
+    |-abstractPO        Run with and w/o interpolation abstraction in parallel
+    |-splitClauses:n    Aggressiveness when splitting disjunctions in clauses
+    |                     (0 <= n <= 2, default: 1)
+    |-pHints            Print initial predicates and abstraction templates
+
+    |TriCera preprocessor:
+    |-printPP           Print the output of the TriCera preprocessor to stdout
+    |-dumpPP            Dump the output of the TriCera preprocessor to file (input file name + .tri)
+    |-logPP:n           Display TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)
+    |-noPP              Turn off the TriCera preprocessor (typedefs are not allowed in this mode)
+
+    |Debugging:
+    |-assert            Enable assertions in TriCera
+    |-assertNoVerify    Enable assertions, but do not verify solutions
+    |""".stripMargin)
       false
     case arg :: _ if arg.startsWith("-") =>
       showHelp

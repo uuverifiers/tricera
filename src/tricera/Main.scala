@@ -1,5 +1,5 @@
 /**
-  * Copyright (c) 2011-2023 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
+  * Copyright (c) 2011-2024 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
   * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without
@@ -244,45 +244,64 @@ class Main (args: Array[String]) {
         None
     }
 
-    val (propertiesToCheck  : Set[properties.Property],
+    /**
+     * Properties to check and their expected status, if any.
+     */
+    val (propertiesToCheck : Set[properties.Property],
          propertyToExpected : Map[properties.Property, Boolean]) = {
-      val props          = new MHashSet[properties.Property]
-      val propToExpected = new MHashMap[properties.Property, Boolean]
-      bmInfo match {
-        case Some(info) =>
-          for (p <- info.properties if p.isMemSafety || p.isReachSafety ||
-                                       p.isMemCleanup) {
-            // Currently, only reach safety and (some( memory safety properties
-            // are supported.
-            val prop =
-              if (p.isReachSafety) {
-                properties.Reachability
-              } else if(p.isMemSafety) {
-                  p.subproperty match {
-                    case Some("valid-free")     => properties.MemValidFree
-                    case Some("valid-deref")    => properties.MemValidDeref
-                    case Some("valid-memtrack") => properties.MemValidTrack
-                    case Some(prop) => throw new Exception(
-                      s"Unknown sub-property $prop for the Memory Safety category.")
-                    case None => throw new Exception(
-                      "A sub-property must be specified for Memory Safety.")
-                    // TODO: is this really the case?
-                  }
-              } else { //(p.isMemCleanup)
-                properties.MemValidCleanup
+      val cliProps : Set[properties.Property] = Set(
+        if (checkMemTrack) Some(properties.MemValidTrack) else None,
+        if (checkValidFree) Some(properties.MemValidFree) else None,
+        if (checkValidDeref) Some(properties.MemValidDeref) else None,
+        if (checkMemCleanup) Some(properties.MemValidCleanup) else None,
+        if (checkReachSafety) Some(properties.Reachability) else None).flatten
+
+      if (cliProps.nonEmpty && bmInfo.nonEmpty) {
+        Util.warn("A property file exists, but properties are also " +
+                  "specified in the command-line. Ignoring the property file " +
+                  s"and checking for properties: {${cliProps.mkString(",")}}")
+        (cliProps, Map.empty[properties.Property, Boolean])
+      } else if (bmInfo.nonEmpty) {
+        // SV-COMP style property specification.
+        val props = bmInfo.get.properties.flatMap{p =>
+          val verdictOption = p.expected_verdict
+          p match {
+            case _ if p.isReachSafety =>
+              verdictOption.map(properties.Reachability -> _)
+
+            case _ if p.isMemSafety =>
+              val initialSubProps = memSafetyProperties.map(_ -> true).toMap
+              // At most one sub-property is expected to not hold, if any.
+              val updatedSubProps = verdictOption match {
+                case Some(false) => p.subproperty match {
+                  case Some("valid-free")     =>
+                    initialSubProps.updated(properties.MemValidFree, false)
+                  case Some("valid-deref")    =>
+                    initialSubProps.updated(properties.MemValidDeref, false)
+                  case Some("valid-memtrack") =>
+                    initialSubProps.updated(properties.MemValidTrack, false)
+                  case Some(prop) => throw new Exception(
+                    s"Unknown sub-property $prop for the memsafety category.")
+                  case None => throw new Exception(
+                    "The failing sub-property must be specified for memsafety.")
+                }
+                case _ => initialSubProps
               }
-            props += prop
-            if(p.expected_verdict.nonEmpty)
-              propToExpected += prop -> p.expected_verdict.get
+              updatedSubProps
+            case _ if p.isMemCleanup =>
+              verdictOption.map(properties.MemValidCleanup -> _)
+
+            case _ => None
           }
-        case None =>
-          /**
-           * If no properties are specified, only check explicit assertions.
-           * @todo Better handling of which properties to check.
-           */
-          props += properties.Reachability
+        }.toMap
+
+        val propsSet : Set[properties.Property] = props.keys.toSet
+        (propsSet, props)
+      } else {
+        // No property file: use CLI properties. If none, use Reachability.
+        (if (cliProps nonEmpty) cliProps else Set(properties.Reachability),
+          Map[properties.Property, Boolean]())
       }
-      (props.toSet, propToExpected.toMap)
     }
 
     Console.withOut(outStream){
