@@ -50,7 +50,7 @@ import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
-import tricera.properties
+import tricera.{Util, properties}
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -95,6 +95,9 @@ object CCReader {
 
     try { entry(p) } catch {
       case e : Exception =>
+        Util.warn(
+"""The input program could not be parsed. If 'main' is not the entry point to
+   |the program, use the option '-m:entry-function-name' to specify the entry point.""".stripMargin)
         throw new ParseException(
              "At line " + String.valueOf(l.line_num()) +
              ", near \"" + l.buff() + "\" :" +
