@@ -32,19 +32,19 @@ package tricera
 
 import ap.parser.IExpression.{ConstantTerm, Predicate}
 import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
-import ap.types.{Sort, SortedConstantTerm}
 import hornconcurrency.ParametricEncoder
 
 import java.io.{FileOutputStream, PrintStream}
-import scala.collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
+import java.nio.file.{Paths, Files}
+
 import lazabs.horn.bottomup.HornClauses.Clause
-import lazabs.horn.bottomup.HornTranslator
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.CCClause
 import tricera.concurrency.ccreader.CCExceptions._
+import tricera.parsers.YAMLParser._
 
 import sys.process._
 
@@ -209,44 +209,16 @@ class Main (args: Array[String]) {
     }
     preprocessTimer.stop()
 
-    // check if an accompanying .yml file exists (SV-COMP style)
-    case class BMOption(language: String, data_model: String)
-    case class BMPropertyFile(property_file: String,
-                              expected_verdict: Option[Boolean] = None,
-                              subproperty: Option[String] = None) {
-      // Do not turn below defs into vals or add any vals, this will break the
-      // YAML parser.
-      def isReachSafety = property_file.contains("unreach-call")
-      def isMemSafety   = property_file.contains("valid-memsafety")
-      def isMemCleanup  = property_file.contains("valid-memcleanup")
-    }
-    case class BenchmarkInfo(format_version: String,
-                             input_files: String,
-                             properties: List[BMPropertyFile],
-                             options: BMOption)
-    val bmInfo: Option[BenchmarkInfo] = try {
-      import java.nio.file.{Paths, Files}
-      val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
+    // Check if an accompanying .yml file exists (SV-COMP style).
+    val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
+    val bmInfo : Option[BenchmarkInfo] =
       if (Files.exists(Paths.get(yamlFileName))) {
-        Console.withOut(outStream){println("Accompanying YAML file detected.")}
-        import net.jcazevedo.moultingyaml._
-        object BenchmarkYamlProtocol extends DefaultYamlProtocol {
-          implicit val propFormat = yamlFormat3(BMPropertyFile)
-          implicit val optFormat = yamlFormat2(BMOption)
-          implicit val bmInfoFormat = yamlFormat4(BenchmarkInfo)
-        }
-        import BenchmarkYamlProtocol._
-        val src = scala.io.Source.fromFile(yamlFileName)
-        val yamlAst = src.mkString.stripMargin.parseYaml
-        src.close
-        Some(yamlAst.convertTo[BenchmarkInfo])
+        Console.withOut(outStream){println("Accompanying YAML file found.")}
+        val info = extractBenchmarkInfo(yamlFileName)
+        if (info isEmpty) Util.warn(
+          "Could not parse the accompanying YAML (.yml) file, ignoring it.")
+        info
       } else None
-    } catch {
-      case e: Throwable =>
-        Util.warn(
-        "Could not parse the accompanying YAML (.yml) file, ignoring it...")
-        None
-    }
 
     /**
      * Properties to check and their expected status, if any.
@@ -263,8 +235,7 @@ class Main (args: Array[String]) {
 
       if (cliProps.nonEmpty && bmInfo.nonEmpty) {
         Util.warn("A property file exists, but properties are also " +
-                  "specified in the command-line. Ignoring the property file " +
-                  s"and checking for properties: {${cliProps.mkString(",")}}")
+                  "specified in the command-line. Ignoring the property file.")
         (cliProps, Map.empty[properties.Property, Boolean])
       } else if (bmInfo.nonEmpty) {
         // SV-COMP style property specification.
