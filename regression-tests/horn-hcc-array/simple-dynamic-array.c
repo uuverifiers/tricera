@@ -5,4 +5,5 @@ void main() {
   a[0] = 1;
   a[1] = 2;
   assert((a[0] + a[1]) == 3);
+  free(a);
 }

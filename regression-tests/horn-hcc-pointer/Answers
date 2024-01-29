@@ -6,7 +6,6 @@ fields.hcc
 SAFE
 
 fields-nested.hcc
-UNSAFE
 
 -----------------------------------------------------------------
 Init:
@@ -26,8 +25,9 @@ Final:
  main_4(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
 -----------------------------------------------------------------
 Failed assertion:
-false :- main_4(s1:9, s2:9, x1:21), a(b(s1:9)) != a(b(s1:9)) | a(b(s1:9)) != 2 | a(b(s2:9)) != 5. (line:23 col:5)
+false :- main_4(s1:9, s2:9, x1:21), a(b(s1:9)) != a(b(s1:9)) | a(b(s1:9)) != 2 | a(b(s2:9)) != 5. (line:23 col:5) (property: user-assertion)
 
+UNSAFE
 
 struct-pointer.hcc
 SAFE
@@ -52,9 +52,7 @@ cast-stack-heap-01.c
 SAFE
 
 ptrptr-bug-1.c
-Warning: enabling heap model
 SAFE
 
 ptrptr-bug-2.c
-Warning: enabling heap model
 SAFE

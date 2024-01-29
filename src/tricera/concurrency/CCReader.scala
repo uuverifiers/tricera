@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -50,6 +50,7 @@ import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
+import tricera.{Util, properties}
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -60,7 +61,9 @@ object CCReader {
   private[concurrency] val GTU = new CCVar("_GTU", None, CCInt)
 
   def apply(input : java.io.Reader, entryFunction : String,
-            trackMemorySafety : Boolean = false) : (CCReader, Boolean) = { // second ret. arg is true if modelled heap
+            propertiesToCheck : Set[properties.Property] = Set(
+              properties.Reachability))
+  : (CCReader, Boolean) = { // second ret. arg is true if modelled heap
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
 //    println(printer print prog)
@@ -68,14 +71,13 @@ object CCReader {
     var reader : CCReader = null
     while (reader == null)
       try {
-        reader = new CCReader(prog, entryFunction, trackMemorySafety)
+        reader = new CCReader(prog, entryFunction, propertiesToCheck)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
           useTime = true
         }
         case NeedsHeapModelException => {
-          warn("enabling heap model")
           modelHeap = true
         }
       }
@@ -92,6 +94,9 @@ object CCReader {
 
     try { entry(p) } catch {
       case e : Exception =>
+        Util.warn(
+"""The input program could not be parsed. If 'main' is not the entry point to
+   |the program, use the option '-m:entry-function-name' to specify the entry point.""".stripMargin)
         throw new ParseException(
              "At line " + String.valueOf(l.line_num()) +
              ", near \"" + l.buff() + "\" :" +
@@ -109,15 +114,27 @@ object CCReader {
     val Mathematical, ILP32, LP64, LLP64 = Value
   }
   //////////////////////////////////////////////////////////////////////////////
-
-  case class CCClause (clause : HornClauses.Clause,
-                       srcInfo : Option[SourceInfo]) { // todo: what else would be useful?
+  class CCClause(val clause  : HornClauses.Clause,
+                 val srcInfo : Option[SourceInfo]) {
     override def toString : String =
       clause.toPrologString + (srcInfo match {
         case None => ""
         case Some(SourceInfo(line, col)) =>
           s" (line:$line col:$col)"
       })
+  }
+  object CCClause {
+    def unapply(clause : CCClause)
+    : Option[(HornClauses.Clause, Option[SourceInfo])] =
+      Some((clause.clause, clause.srcInfo))
+  }
+
+  class CCAssertionClause(clause   : HornClauses.Clause,
+                          srcInfo  : Option[SourceInfo],
+                          val property : properties.Property)
+  extends CCClause(clause, srcInfo) {
+    override def toString : String =
+      super.toString + s" (property: $property)"
   }
 
   // a wrapper for IExpression.Predicate that keeps more info about arguments
@@ -147,9 +164,9 @@ object CCReader {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class CCReader private (prog : Program,
-                        entryFunction : String,
-                        trackMemorySafety : Boolean) {
+class CCReader private (prog              : Program,
+                        entryFunction     : String,
+                        propertiesToCheck : Set[properties.Property]) {
 
   import CCReader._
 
@@ -178,6 +195,7 @@ class CCReader private (prog : Program,
     }
     def size : Int = vars.size
     def lastIndexWhere(name : String) = vars lastIndexWhere(_.name == name)
+    def lastIndexWhere(v : CCVar) = vars lastIndexWhere(_ == v)
     def contains (c : ConstantTerm) = vars exists (_.term == c)
     def iterator = vars.iterator
     def formalVars = vars.toList
@@ -185,10 +203,10 @@ class CCReader private (prog : Program,
     def formalTypes = vars.map(_.typ).toList
   }
 
-  private object globalVars extends CCVars {
+  private object GlobalVars extends CCVars {
     val inits = new ArrayBuffer[CCExpr]
   }
-  private object localVars extends CCVars {
+  private object LocalVars extends CCVars {
     val frameStack = new Stack[Int]
 
     override def addVar (v : CCVar) : Int = {
@@ -199,16 +217,16 @@ class CCReader private (prog : Program,
       vars.update(idx, elem)
     }
     def pop(n : Int) = {
-      localVars trimEnd n
+      LocalVars trimEnd n
       variableHints trimEnd n
-      assert(variableHints.size == size + globalVars.size)
+      assert(variableHints.size == size + GlobalVars.size)
     }
 
     def lastOption : Option[CCVar] = vars.lastOption
     def last : CCVar = vars.last
     def remove(n : Int): CCVar = {
       assume(n >= 0 && n < size)
-      variableHints.remove(n + globalVars.size)
+      variableHints.remove(n + GlobalVars.size)
       vars.remove(n)
     }
     def trimEnd(n: Int) = vars trimEnd n
@@ -216,7 +234,7 @@ class CCReader private (prog : Program,
     def popFrame = {
       val newSize = frameStack.pop
       vars reduceToSize newSize
-      variableHints reduceToSize (globalVars.size + newSize)
+      variableHints reduceToSize (GlobalVars.size + newSize)
     }
     def getVarsInTopFrame : List[CCVar] =
       (vars takeRight (vars.size - frameStack.last)).toList
@@ -224,13 +242,13 @@ class CCReader private (prog : Program,
 
   private def updateVarType(name : String, newType : CCType) = {
     val ind = lookupVar(name)
-    if (ind < globalVars.size) {
-      val oldVar = globalVars.vars(ind)
-      globalVars.vars(ind) =
+    if (ind < GlobalVars.size) {
+      val oldVar = GlobalVars.vars(ind)
+      GlobalVars.vars(ind) =
         new CCVar(name, oldVar.srcInfo, newType)
     } else {
-      val oldVar = localVars.vars(ind - globalVars.size)
-      localVars.vars(ind - globalVars.size) =
+      val oldVar = LocalVars.vars(ind - GlobalVars.size)
+      LocalVars.vars(ind - GlobalVars.size) =
         new CCVar(name, oldVar.srcInfo, newType)
     }
   }
@@ -239,9 +257,9 @@ class CCReader private (prog : Program,
   private val globalExitPred = newPred("exit", Nil, None)
 
   private def lookupVarNoException(name : String) : Int =
-    localVars lastIndexWhere name match {
-      case -1 => globalVars lastIndexWhere name
-      case i  => i + globalVars.size
+    LocalVars lastIndexWhere name match {
+      case -1 => GlobalVars lastIndexWhere name
+      case i  => i + GlobalVars.size
     }
 
   private def lookupVar(name : String) : Int = {
@@ -264,24 +282,24 @@ class CCReader private (prog : Program,
   }
 
   private def allFormalVars : Seq[CCVar] =
-    globalVars.formalVars ++ localVars.formalVars
+    GlobalVars.formalVars ++ LocalVars.formalVars
   private def allFormalVarTerms : Seq[ITerm] =
-    globalVars.formalVarTerms ++ localVars.formalVarTerms
+    GlobalVars.formalVarTerms ++ LocalVars.formalVarTerms
   private def allFormalVarTypes : Seq[CCType] =
-    globalVars.formalTypes ++ localVars.formalTypes
+    GlobalVars.formalTypes ++ LocalVars.formalTypes
 
   private def allFormalExprs : Seq[CCExpr] =
-    ((for (v <- globalVars.iterator)
+    ((for (v <- GlobalVars.iterator)
       yield CCTerm(v.term, v.typ, v.srcInfo)) ++
-     (for (v <- localVars.iterator)
+     (for (v <- LocalVars.iterator)
       yield CCTerm(v.term, v.typ, v.srcInfo))).toList
   private def allVarInits : Seq[ITerm] =
-    (globalVars.inits.toList map (_.toTerm)) ++
-      (localVars.formalVarTerms map (IExpression.i(_)))
+    (GlobalVars.inits.toList map (_.toTerm)) ++
+      (LocalVars.formalVarTerms map (IExpression.i(_)))
 
   private def freeFromGlobal(t : IExpression) : Boolean =
     !ContainsSymbol(t, (s:IExpression) => s match {
-                      case IConstant(c) => globalVars contains c // todo: true only with concurrency?
+                      case IConstant(c) => GlobalVars contains c // todo: true only with concurrency?
                       case _ => false
                     })
 
@@ -337,7 +355,7 @@ class CCReader private (prog : Program,
   private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
   private val functionClauses =
     new MHashMap[String, Seq[(Clause, ParametricEncoder.Synchronisation)]]
-  private val functionAssertionClauses = new MHashMap[String, Seq[CCClause]]
+  private val functionAssertionClauses = new MHashMap[String, Seq[CCAssertionClause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
   private val structDefs    = new MHashMap[String, CCStruct]
@@ -364,10 +382,21 @@ class CCReader private (prog : Program,
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private[tricera] def addRichClause (clause : Clause,
-                     srcInfo : Option[SourceInfo]) : CCClause = {
-    val richClause = CCClause(clause, srcInfo)
-    clauseToRichClause += ((clause, richClause))
+  private[tricera]
+  def addRichClause(clause  : Clause,
+                    srcInfo : Option[SourceInfo]) : CCClause = {
+    val richClause = new CCClause(clause, srcInfo)
+    clauseToRichClause += clause -> richClause
+    richClause
+  }
+
+  private[tricera]
+  def mkRichAssertionClause(clause       : Clause,
+                            srcInfo      : Option[SourceInfo],
+                            propertyType : properties.Property)
+  : CCAssertionClause = {
+    val richClause = new CCAssertionClause(clause, srcInfo, propertyType)
+    clauseToRichClause += clause -> richClause
     richClause
   }
 
@@ -376,7 +405,7 @@ class CCReader private (prog : Program,
   private val processes =
     new ArrayBuffer[(ParametricEncoder.Process, ParametricEncoder.Replication)]
 
-  private val assertionClauses = new ArrayBuffer[CCClause]
+  private val assertionClauses = new ArrayBuffer[CCAssertionClause]
   private val timeInvariants = new ArrayBuffer[Clause]
 
   private val clauses =
@@ -442,7 +471,8 @@ class CCReader private (prog : Program,
                     " in one step")
                 val newAssertionClause = merge(c.clause, currentClause.clause)
                 if (!newAssertionClause.hasUnsatConstraint)
-                  assertionClauses += addRichClause(newAssertionClause, c.srcInfo)
+                  assertionClauses += mkRichAssertionClause(
+                    newAssertionClause, c.srcInfo, c.property)
               }
           }
           case None =>
@@ -529,10 +559,10 @@ class CCReader private (prog : Program,
   //////////////////////////////////////////////////////////////////////////////
 
   if (useTime) {
-    globalVars addVar GT
-    globalVars.inits += CCTerm(GT.term, CCClock, None)
-    globalVars addVar GTU
-    globalVars.inits += CCTerm(GTU.term, CCInt, None)
+    GlobalVars addVar GT
+    GlobalVars.inits += CCTerm(GT.term, CCClock, None)
+    GlobalVars addVar GTU
+    GlobalVars.inits += CCTerm(GTU.term, CCInt, None)
     variableHints += List()
     variableHints += List()
   }
@@ -655,9 +685,21 @@ class CCReader private (prog : Program,
   val heapTerm = heapVar.term
 
   if (modelHeap) {
-    globalVars addVar heapVar
+    GlobalVars addVar heapVar
+    GlobalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None)
+    variableHints += List()
+  }
 
-    globalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None)
+  /**
+   * For checking [[properties.MemValidCleanup]], a prophecy variable is used.
+   */
+  private val memCleanupProphecyVar =
+    new CCVar("@v_cleanup", None, CCHeapPointer(heap, CCVoid))
+  if ((propertiesToCheck contains properties.MemValidCleanup) ||
+      propertiesToCheck.contains(properties.MemValidTrack) &&
+       TriCeraParameters.get.useMemCleanupForMemTrack) {
+    GlobalVars addVar memCleanupProphecyVar
+    GlobalVars.inits += CCTerm(heap.nullAddr(), memCleanupProphecyVar.typ, None)
     variableHints += List()
   }
 
@@ -743,16 +785,22 @@ class CCReader private (prog : Program,
           // nothing
       }
 
-    // prevent time variables and heap variable from being initialised twice
-    globalVars.inits ++= (globalVarSymex.getValues drop
-      (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0))
+    // prevent time variables, heap variable, and global ghost variables
+    // from being initialised twice
+    // TODO: This is very brittle and unintuitive - come up with a better solution.
+    GlobalVars.inits ++= (globalVarSymex.getValues drop
+      (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0) +
+      (if ((propertiesToCheck contains properties.MemValidCleanup) ||
+           propertiesToCheck.contains(properties.MemValidTrack) &&
+           TriCeraParameters.get.useMemCleanupForMemTrack) 1 else 0))
     // if while adding glboal variables we have changed the heap, the heap term
     // needs to be reinitialised as well. Happens with global array allocations.
     if (modelHeap) {
-      val initialisedHeapValue = globalVarSymex.getValues.head
-      val initialHeapValue = IConstant(globalVars.vars.head.term)
+      val heapInd = GlobalVars.lastIndexWhere(heapVar)
+      val initialisedHeapValue = globalVarSymex.getValues(heapInd)
+      val initialHeapValue = IConstant(GlobalVars.vars(heapInd).term)
       if (modelHeap && initialisedHeapValue.toTerm != initialHeapValue) {
-        globalVars.inits(0) = initialisedHeapValue
+        GlobalVars.inits(heapInd) = initialisedHeapValue
       }
     }
 
@@ -789,9 +837,9 @@ class CCReader private (prog : Program,
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
       val funDef = FuncDef(fun.function_def_)
-      localVars.pushFrame
+      LocalVars.pushFrame
       pushArguments(fun.function_def_)
-      val functionParams = localVars getVarsInTopFrame
+      val functionParams = LocalVars getVarsInTopFrame
 
       val oldVars = allFormalVars map (v =>
         new CCVar(v.name + "_old", v.srcInfo, v.typ))
@@ -802,7 +850,7 @@ class CCReader private (prog : Program,
       // the post-condition: f_post(oldVars, postGlobalVars, postResVar)
       // we first pass all current vars in context as old vars (oldVars)
       // then we pass all effected output vars (which are globals + resVar)
-      val postGlobalVars = globalVars.vars map (v =>
+      val postGlobalVars = GlobalVars.vars map (v =>
         new CCVar(v.name + "_post", v.srcInfo, v.typ))
       val postResVar = getType(fun.function_def_) match {
         case CCVoid => None
@@ -815,17 +863,18 @@ class CCReader private (prog : Program,
       val prePredArgACSLNames = allFormalVars map (_.name)
       val postPredACSLArgNames =
         allFormalVars.map(v => "\\old(" + v.name + ")") ++
-        globalVars.vars.map(v => v.name) ++ Seq("\\result")
+        GlobalVars.vars.map(v => v.name) ++
+        (if(postResVar nonEmpty) Seq("\\result") else Nil)
 
       val postOldVarsMap: Map[String, CCVar] =
       (allFormalVars.map(_ name) zip oldVars).toMap
       val postGlobalVarsMap: Map[String, CCVar] =
-        (globalVars.vars.map(_ name) zip postGlobalVars).toMap
+        (GlobalVars.vars.map(_ name) zip postGlobalVars).toMap
 
       val postPred = newPred(funDef.name + "_post", postVars,
         Some(getSourceInfo(fun))) // todo: end line of fun?
 
-      localVars.popFrame
+      LocalVars.popFrame
 
       class ReaderFunctionContext extends ACSLTranslator.FunctionContext {
         def getOldVar(ident: String): Option[CCVar] =
@@ -836,7 +885,7 @@ class CCReader private (prog : Program,
 
         def getParams: Seq[CCVar] = functionParams
 
-        def getGlobals: Seq[CCVar] = globalVars.vars - heapVar
+        def getGlobals: Seq[CCVar] = GlobalVars.vars - heapVar
 
         def getResultVar: Option[CCVar] = postResVar
 
@@ -913,12 +962,12 @@ class CCReader private (prog : Program,
       val (prePred, postPred) = (funContext.prePred, funContext.postPred)
       setPrefix(name)
 
-      localVars.pushFrame
+      LocalVars.pushFrame
       val stm = pushArguments(f.function_def_)
 
       val prePredArgs = allFormalVarTerms.toList
 
-      for (v <- functionPostOldArgs(name)) localVars addVar v
+      for (v <- functionPostOldArgs(name)) LocalVars addVar v
 
       val entryPred = newPred(Nil, Some(getSourceInfo(f)))
 
@@ -940,7 +989,7 @@ class CCReader private (prog : Program,
 
       functionExitPreds += ((name, finalPred))
 
-      val globalVarTerms : Seq[ITerm] = globalVars.formalVarTerms
+      val globalVarTerms : Seq[ITerm] = GlobalVars.formalVarTerms
       val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
         globalVarTerms ++ resVar.map(v => IConstant(v.term))
 
@@ -964,7 +1013,7 @@ class CCReader private (prog : Program,
       clauses.clear
       assertionClauses.clear
 
-      localVars popFrame
+      LocalVars popFrame
     }
 
     // then translate the threads
@@ -984,17 +1033,17 @@ class CCReader private (prog : Program,
             }
             case thread : ParaThread => {
               setPrefix(thread.cident_2)
-              localVars pushFrame
+              LocalVars pushFrame
               val threadVar = new CCVar(thread.cident_1,
                 Some(getSourceInfo(thread)),
                 CCInt)
-              localVars addVar threadVar
+              LocalVars addVar threadVar
               val translator = FunctionTranslator.apply
               val finalPred = translator translateNoReturn(thread.compound_stm_)
               functionExitPreds += ((thread.cident_2, finalPred))
               processes += ((clauses.toList, ParametricEncoder.Infinite))
               clauses.clear
-              localVars popFrame
+              LocalVars popFrame
             }
           }
 
@@ -1017,7 +1066,7 @@ class CCReader private (prog : Program,
         case Some(funDef) => {
           setPrefix(entryFunction)
 
-          localVars pushFrame
+          LocalVars pushFrame
 
           val f = FuncDef(funDef)
 
@@ -1044,40 +1093,48 @@ class CCReader private (prog : Program,
 
           functionExitPreds += ((f.name, finalPred))
 
-          // add an assertion to track memory safety (i.e., no memory leaks)
-          // currently this is only added to the exit point of the entry function,
-          if (modelHeap && trackMemorySafety) {
+          /**
+           * Add an assertion that all pointers that are in scope at the
+           * exit of `entryFunction` are freed using the prophecy variable.
+           * This ensures [[properties.MemValidCleanup]].
+          */
+          if (modelHeap &&
+              ((propertiesToCheck contains properties.MemValidCleanup) ||
+               propertiesToCheck.contains(properties.MemValidTrack) &&
+               TriCeraParameters.get.useMemCleanupForMemTrack)) {
+            val heapInd = GlobalVars.lastIndexWhere(heapVar)
+            val cleanupVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+
+            if (heapInd == -1 || cleanupVarInd == -1) {
+              assert(false, "Could not find the heap term or the mem-cleanup" +
+                            "prophecy variable term!")
+            }
+
             import HornClauses._
             import IExpression._
             finalPred match {
-              case CCPredicate(_, args, _) if args.head.sort == heap.HeapSort =>
-                // passing sort as CCVoid as it is not important
-                val addrVar = getFreshEvalVar(CCHeapPointer(heap, CCVoid), None)  // todo: add proper line numbers for auto-added free assertions
+              case CCPredicate(_, args, _)
+                if args(heapInd).sort == heap.HeapSort &&
+                   args(cleanupVarInd).sort == heap.AddressSort =>
+
                 val resVar = getResVar(args.last.typ)
-                var excludedAddresses = i(true)
-                for (arg <- args) arg.typ match {
-                  case arr: CCHeapArrayPointer
-                    if arr.arrayLocation == ArrayLocation.Global =>
-                    excludedAddresses = excludedAddresses &&&
-                      !heap.within(arg.term, addrVar.term)
-                  case _                                         => // nothing
-                }
                 assertionClauses +=
-                  addRichClause(((heap.read(args.head.term, addrVar.term) === defObj()) :-
-                    (atom(finalPred,
-                       allFormalVarTerms.toList ++
-                       resVar.map(v => IConstant(v.term)) take finalPred.arity)
-                     &&& excludedAddresses)),
-                    None) // todo: add proper line numbers for auto-added free assertions
-              case _ => throw new TranslationException("Tried to add -memtrack" +
-                "assertion but could not find the heap term!")
+                mkRichAssertionClause(
+                    (args(cleanupVarInd).term === heap.nullAddr()) :-
+                     atom(finalPred,
+                          allFormalVarTerms.toList ++
+                          resVar.map(v => IConstant(v.term)) take finalPred.arity),
+                    None, properties.MemValidCleanup)
+              case _ =>
+                assert(false, s"$finalPred does not contain the heap variable or" +
+                              s"the memory cleanup prophecy variable!")
             }
           }
 
           processes += ((clauses.toList, ParametricEncoder.Singleton))
           clauses.clear
 
-          localVars popFrame
+          LocalVars popFrame
         }
         case None =>
           warn("entry function \"" + entryFunction + "\" not found")
@@ -1405,11 +1462,12 @@ class CCReader private (prog : Program,
                             "size specified in an intialized array expression!")
                       }
                       import IExpression._
+                      val heapInd = GlobalVars.lastIndexWhere(heapVar)
                       val initHeapTerm =
-                        if (values.getValues.head.toTerm == IConstant(heapTerm)) {
-                          CCTerm(globalVars.inits.head.toTerm, CCHeap(heap), srcInfo)
+                        if (values.getValues(heapInd).toTerm == IConstant(heapTerm)) {
+                          CCTerm(GlobalVars.inits(heapInd).toTerm, CCHeap(heap), srcInfo)
                         } else
-                          CCTerm(values.getValues.head.toTerm, CCHeap(heap), srcInfo)
+                          CCTerm(values.getValues(heapInd).toTerm, CCHeap(heap), srcInfo)
                       val objTerm = CCTerm(arrayPtr.elementType.getZeroInit,
                         arrayPtr.elementType, srcInfo)
                       val arrayTerm =
@@ -1448,11 +1506,12 @@ class CCReader private (prog : Program,
                   val objValue = if (global) typ.elementType.getZeroInit
                   else typ.elementType.getNonDet
                   val objTerm = CCTerm(objValue, typ.elementType, srcInfo)
+                  val heapInd = GlobalVars.lastIndexWhere(heapVar)
                   val initHeapTerm =
-                    if (values.getValues.head.toTerm == IConstant(heapTerm)) {
-                      CCTerm(globalVars.inits.head.toTerm, CCHeap(heap), srcInfo)
+                    if (values.getValues(heapInd).toTerm == IConstant(heapTerm)) {
+                      CCTerm(GlobalVars.inits(heapInd).toTerm, CCHeap(heap), srcInfo)
                     } else
-                      CCTerm(values.getValues.head.toTerm, CCHeap(heap), srcInfo)
+                      CCTerm(values.getValues(heapInd).toTerm, CCHeap(heap), srcInfo)
                   val addressRangeValue = varDec.initArrayExpr match {
                     case Some(expr) =>
                       val arraySize =
@@ -1475,10 +1534,10 @@ class CCReader private (prog : Program,
         // do not use actualType below, take from lhsVar
 
         if (global) {
-          globalVars addVar actualLhsVar
+          GlobalVars addVar actualLhsVar
           variableHints += List()
         } else {
-          localVars addVar actualLhsVar
+          LocalVars addVar actualLhsVar
         }
 
         actualLhsVar.typ match {
@@ -1528,7 +1587,7 @@ class CCReader private (prog : Program,
                 new CCVar(name, Some(getSourceInfo(predExp)), typ)
             }
             values.saveState
-            ccVars.foreach(localVars addVar)
+            ccVars.foreach(LocalVars addVar)
             for ((ccVar, ind) <- ccVars.zipWithIndex) {
               values.addValue(CCTerm(IExpression.v(ind), ccVar.typ, ccVar.srcInfo))
             }
@@ -1558,7 +1617,7 @@ class CCReader private (prog : Program,
 
             val subst =
               (for ((v, n) <-
-                      (globalVars.iterator ++ localVars.iterator).zipWithIndex)
+                      (GlobalVars.iterator ++ LocalVars.iterator).zipWithIndex)
                yield (v.term.asInstanceOf[ConstantTerm] -> IExpression.v(n))).toMap
 
       import AnnotationParser._
@@ -1889,14 +1948,14 @@ class CCReader private (prog : Program,
       var enumerators = new MHashMap[String, IdealInt]
       val symex = Symex(null) // a temporary Symex to collect enum declarations
       // to deal with fields referring to same-enum fields, e.g. enum{a, b = a+1}
-      localVars pushFrame // we also need to add them as vars
+      LocalVars pushFrame // we also need to add them as vars
 
       for (s <- specs) s match {
         case s : Plain => {
           val ind = nextInd
           nextInd = nextInd + 1
           val v = new CCVar(s.cident_, Some(getSourceInfo(s)), CCInt)
-          localVars addVar v
+          LocalVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
         }
@@ -1912,13 +1971,13 @@ class CCReader private (prog : Program,
           nextInd = ind + 1
           val v = new CCVar(s.cident_,
             Some(getSourceInfo(s)), CCInt)
-          localVars addVar v
+          LocalVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
         }
       }
 
-      localVars popFrame
+      LocalVars popFrame
 
       val newEnum = CCIntEnum(enumName, enumerators.toSeq)
       enumDefs.put(enumName, newEnum)
@@ -2090,19 +2149,23 @@ class CCReader private (prog : Program,
 
     //todo:Heap get rid of this or change name
     def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = true,
-                 assumeMemSafety : Boolean = true) : CCTerm = {
+                 assumeMemSafety : Boolean = true)
+    : CCTerm = {
       val (objectGetter, typ : CCType) = ptrExpr.typ match {
         case typ : CCHeapPointer => (sortGetterMap(typ.typ.toSort), typ.typ)
         case _ => throw new TranslationException(
           "Can only read from heap pointers! (" + ptrExpr + ")")
       }
       val readObj = heap.read(getValue(heapTermName).toTerm, ptrExpr.toTerm)
-      if (assertMemSafety)
-        assertProperty(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)),
-          ptrExpr.srcInfo) // todo: add tester methods for user ADT sorts?
-      // also add memory safety assumptions to the clause
-      if (assertMemSafety && assumeMemSafety)
-        addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
+      if (assertMemSafety && propertiesToCheck.contains(properties.MemValidDeref)) {
+        assertProperty(
+          heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)),
+          ptrExpr.srcInfo, properties.MemValidDeref)
+        // todo: add tester methods for user ADT sorts?
+        // also add memory safety assumptions to the clause
+        if (assumeMemSafety)
+          addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(typ.toSort)))
+      }
       CCTerm(objectGetter(readObj), typ, ptrExpr.srcInfo)
     }
     def heapAlloc(value : CCTerm) : CCTerm = {
@@ -2135,8 +2198,10 @@ class CCReader private (prog : Program,
       val readAddress = CCTerm(heap.nth(arrExpr.toTerm, index.toTerm),
         CCHeapPointer(heap, arrType.elementType), arrExpr.srcInfo)
       val readValue = heapRead(readAddress, assertMemSafety, assumeMemSafety)
-      if (assertIndexWithinBounds)
-        assertProperty(heap.within(arrExpr.toTerm, readAddress.toTerm), arrExpr.srcInfo)
+      if (assertIndexWithinBounds &&
+          propertiesToCheck.contains(properties.MemValidDeref))
+        assertProperty(heap.within(arrExpr.toTerm, readAddress.toTerm),
+                       arrExpr.srcInfo, properties.MemValidDeref)
       readValue
     }
 
@@ -2153,7 +2218,8 @@ class CCReader private (prog : Program,
                   assumeMemSafety : Boolean = false) = {
       val newHeap = heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), rhs.srcInfo))
-      if (assertMemSafety) {
+      if (assertMemSafety &&
+          propertiesToCheck.contains(properties.MemValidDeref)) {
         def getObjAndSort(f : IFunApp) : (IFunApp, Sort) = {
           if (objectGetters contains f.fun) {
             val sort = f.fun.asInstanceOf[MonoSortedIFunction].resSort
@@ -2168,7 +2234,8 @@ class CCReader private (prog : Program,
         val (writtenObj, sort) = getObjAndSort(lhs)
 
         assertProperty(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)),
-          rhs.srcInfo) // todo: add tester methods for user ADT sorts?
+          rhs.srcInfo, properties.MemValidDeref)
+        // todo: add tester methods for user ADT sorts?
         // also add memory safety assumptions to the clause
         if (assumeMemSafety)
           addGuard(heap.heapADTs.hasCtor(writtenObj, sortCtorIdMap(sort)))
@@ -2190,18 +2257,50 @@ class CCReader private (prog : Program,
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), None)) // todo: src info?
     }
 
-    def heapFree(t : CCExpr) = {
+    /**
+     * `free` is encoded by writing [[defObj]] to the pointed location.
+     */
+    def heapFree(t : CCExpr, srcInfo : Option[SourceInfo]) = {
       t.typ match {
         case p : CCHeapPointer =>
           val termToFree : IFunApp =
             heapRead(t, assertMemSafety = false).toTerm match {
-              case IFunApp(f, Seq(arg)) if (objectGetters contains f) &
+              case IFunApp(f, Seq(arg))  if (objectGetters contains f) &
                 arg.isInstanceOf[IFunApp] =>
                 arg.asInstanceOf[IFunApp]
               case _ => throw new TranslationException("Could not resolve" +
                 " the term to free: " + t)
             }
-          heapWrite(termToFree, CCTerm(p.heap._defObj, p, t.srcInfo))
+          if(propertiesToCheck contains properties.MemValidFree){
+            /**
+             * Add an assertion that `ptrExpr` is safe to free.
+             * Checking [[Heap.isAlloc]] is not sufficient: freed locations are
+             * marked by writing the default object to them, so we need to check
+             * that read(h, p) =/= defObj. A free is also valid when
+             * p is nullAddr.
+             */
+            val readObj = heap.read(
+              getValue(heapTermName).toTerm, t.toTerm)
+            assertProperty(t.toTerm === heap.nullAddr() |||
+                           readObj =/= heap._defObj,
+                           srcInfo, properties.MemValidFree)
+          }
+          if ((propertiesToCheck contains properties.MemValidCleanup) ||
+              propertiesToCheck.contains(properties.MemValidTrack) &&
+              TriCeraParameters.get.useMemCleanupForMemTrack) {
+            /**
+             * Set [[memCleanupProphecyVar]] back to NULL, if the freed address
+             * is the same as the one stored.
+             */
+            val prophInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+            val prophOldVal = getValues(prophInd).toTerm
+            setValue(prophInd, CCTerm(
+              IExpression.ite(prophOldVal === t.toTerm,
+                              heap.nullAddr(),
+                              prophOldVal), memCleanupProphecyVar.typ, None),
+                     false)
+          }
+          heapWrite(termToFree, CCTerm(p.heap._defObj, p, srcInfo))
         case p : CCHeapArrayPointer =>
           import IExpression._
           //val n = getFreshEvalVar(CCUInt)
@@ -2219,11 +2318,53 @@ class CCReader private (prog : Program,
             }
           heapWrite(termToFree, CCTerm(p.heap._defObj, p))*/
           // todo: what about ADTs?
-          //if(p.arrayType != HeapArray) throw new TranslationException("Trying to free global or stack pointer " + p)
-          // todo: unsafe instead of exception?
+          if (propertiesToCheck contains properties.MemValidFree) {
+            p.arrayLocation match {
+              case ArrayLocation.Heap =>
+                /**
+                 * Assert that either `t` is `null`, or
+                 * forall ind. t[ind] =/= defObj
+                 * (or equivalently forall ind. read(h, nth(t, ind)) =/= defObj)
+                 */
+                val ind      = getFreshEvalVar(CCInt, t.srcInfo)
+                val readAddr = heap.nth(t.toTerm, ind.term)
+                val readObj  = heap.read(getValue(heapTermName).toTerm,
+                                         readAddr)
+                assertProperty(t.toTerm === heap.nullAddr() |||
+                               (heap.within(t.toTerm, readAddr) ==>
+                                (readObj =/= heap._defObj)),
+                               srcInfo, properties.MemValidFree)
+              case _ =>
+                /**
+                 * Freeing non-heap memory is undefined behaviour.
+                 */
+                assertProperty(IExpression.i(false),
+                               srcInfo, properties.MemValidFree)
+            }
+          }
+          if ((propertiesToCheck contains properties.MemValidCleanup) ||
+              propertiesToCheck.contains(properties.MemValidTrack) &&
+              TriCeraParameters.get.useMemCleanupForMemTrack) {
+            /**
+             * Set [[memCleanupProphecyVar]] back to NULL, if the beginning of
+             * the freed address block is the same as the one stored.
+             */
+            val prophInd    = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+            val prophOldVal = getValues(prophInd).toTerm
+            setValue(prophInd, CCTerm(
+              IExpression.ite(prophOldVal === heap.nth(t.toTerm, 0),
+                              heap.nullAddr(),
+                              prophOldVal), memCleanupProphecyVar.typ, None),
+                     false)
+          }
           heapBatchWrite(getValue(heapTermName).toTerm, t.toTerm, defObj())
-        case _ => throw new TranslationException("Unsupported operation: " +
-          "trying to free " + t + ".")
+        case _ =>
+          /**
+           * Freeing a non-heap pointer.
+           */
+          if (propertiesToCheck contains properties.MemValidFree)
+            assertProperty(IExpression.i(false),
+                           srcInfo, properties.MemValidFree)
       }
     }
 
@@ -2244,7 +2385,7 @@ class CCReader private (prog : Program,
       initAtom = oldAtom
       values.clear
       oldValues copyToBuffer values
-      localVars.pop(localVars.size - values.size + globalVars.size)
+      LocalVars.pop(LocalVars.size - values.size + GlobalVars.size)
       guard = oldGuard
       touchedGlobalState = oldTouched
     }
@@ -2268,7 +2409,7 @@ class CCReader private (prog : Program,
       val freshVar = getFreshEvalVar(v.typ, v.srcInfo, varName)
       addValue(v)
       // reserve a local variable, in case we need one later
-      localVars addVar freshVar
+      LocalVars addVar freshVar
 
       if (usingInitialPredicates) {
         // if the pushed value refers to other variables,
@@ -2299,7 +2440,7 @@ class CCReader private (prog : Program,
 
     private def pushFormalVal(typ : CCType, srcInfo : Option[SourceInfo]) = {
       val freshVar = getFreshEvalVar(typ, srcInfo)
-      localVars addVar freshVar
+      LocalVars addVar freshVar
       addValue(CCTerm(freshVar.term, typ, srcInfo))
       addGuard(freshVar rangePred)
     }
@@ -2307,13 +2448,13 @@ class CCReader private (prog : Program,
     private def popVal = {
       val res = values.last
       values trimEnd 1
-      localVars.pop(1)
+      LocalVars.pop(1)
       res
     }
     private def topVal = values.last
     private def removeVal(ind : Int) {
       values.remove(ind)
-      localVars.remove(ind - globalVars.size)
+      LocalVars.remove(ind - GlobalVars.size)
     }
 
     private def outputClause(srcInfo : Option[SourceInfo]) : Unit =
@@ -2367,11 +2508,12 @@ class CCReader private (prog : Program,
       outputClause(elsePred, srcInfo)
     }
 
-    def assertProperty(property : IFormula,
-                       srcInfo : Option[SourceInfo]) : Unit = {
+    def assertProperty(property     : IFormula,
+                       srcInfo      : Option[SourceInfo],
+                       propertyType : properties.Property) : Unit = {
       import HornClauses._
       val clause = (property :- (initAtom &&& guard))
-      assertionClauses += addRichClause(clause, srcInfo)
+      assertionClauses += mkRichAssertionClause(clause, srcInfo, propertyType)
     }
 
     def addValue(t : CCExpr) = {
@@ -2435,12 +2577,12 @@ class CCReader private (prog : Program,
         ind
       }*/
       touchedGlobalState =
-        touchedGlobalState || actualInd < globalVars.size || !freeFromGlobal(t)
+        touchedGlobalState || actualInd < GlobalVars.size || !freeFromGlobal(t)
     }
 
     private def getVar (ind : Int) : CCVar = {
-      if (ind < globalVars.size) globalVars.vars(ind)
-      else localVars.vars(ind - globalVars.size)
+      if (ind < GlobalVars.size) GlobalVars.vars(ind)
+      else LocalVars.vars(ind - GlobalVars.size)
     }
     private def getVar (name : String) : CCVar = {
       val ind = lookupVar(name)
@@ -2882,9 +3024,9 @@ class CCReader private (prog : Program,
           restoreState
           addGuard(~cond)
           evalHelp(exp.exp_3)
-          localVars.update(localVars.size - 1,
+          LocalVars.update(LocalVars.size - 1,
             new CCVar(s"ite_${srcInfo.get.line}_${srcInfo.get.col}",
-                      localVars.last.srcInfo, localVars.last.typ))
+                      LocalVars.last.srcInfo, LocalVars.last.typ))
           outputClause(intermediatePred, srcInfo)
         }
       case exp : Elor =>
@@ -3068,7 +3210,7 @@ class CCReader private (prog : Program,
                   //newTerm
                   throw new TranslationException(
                     "Function contracts are currently not supported together " +
-                    s"with stack pointers (at ${exp.line_num}:${exp.col_num})")
+                    s"with stack pointers (${exp.line_num}:${exp.col_num})")
                 } else {
                   val ind = values.indexWhere(v => v == topVal)
                   assert(ind > -1 && ind < values.size - 1) // todo
@@ -3106,41 +3248,42 @@ class CCReader private (prog : Program,
         val srcInfo = Some(getSourceInfo(exp))
         // inline the called function
         printer print exp.exp_ match {
-          case "__VERIFIER_error" | "reach_error" => {
-            assertProperty(false, srcInfo)
+          case "reach_error" =>
+            /**
+             * A special SV-COMP function used in the unreach-call category.
+             * We directly rewrite this as `assert(0)`.
+             */
+            if(propertiesToCheck contains properties.Reachability)
+              assertProperty(false, srcInfo, properties.Reachability)
             pushVal(CCFormula(true, CCInt, srcInfo))
-          }
-          case name => {
+          case name =>
             outputClause(srcInfo)
             handleFunction(name, initPred, 0)
-          }
         }
 
       case exp : Efunkpar =>
         val srcInfo = Some(getSourceInfo(exp))
         (printer print exp.exp_) match {
-          case "assert" | "static_assert" | "__VERIFIER_assert"
-                          if (exp.listexp_.size == 1) =>
-          val property = exp.listexp_.head match {
-            case a : Efunkpar
-              if uninterpPredDecls contains (printer print a.exp_)      =>
-              val args = a.listexp_.map(atomicEval).map(_.toTerm)
-              val pred = uninterpPredDecls(printer print a.exp_)
-              atom(pred, args)
-            case interpPred : Efunkpar
-              if interpPredDefs contains(printer print interpPred.exp_) =>
-              val args = interpPred.listexp_.map (atomicEval).map (_.toTerm)
-              val formula = interpPredDefs (printer print interpPred.exp_)
-              // the formula refers to pred arguments as IVariable(index)
-              // we need to subsitute those for the actual arguments
-              VariableSubstVisitor (formula.f, (args.toList, 0) )
-            case _ =>
-              atomicEvalFormula(exp.listexp_.head).f
-          }
-          assertProperty(property, srcInfo)
-          pushVal(CCFormula(true, CCInt, srcInfo))
-        case "assume" | "__VERIFIER_assume"
-                          if (exp.listexp_.size == 1) =>
+          case "assert" | "static_assert" if exp.listexp_.size == 1 =>
+            val property = exp.listexp_.head match {
+              case a : Efunkpar
+                if uninterpPredDecls contains(printer print a.exp_) =>
+                val args = a.listexp_.map(atomicEval).map(_.toTerm)
+                val pred = uninterpPredDecls(printer print a.exp_)
+                atom(pred, args)
+              case interpPred : Efunkpar
+                if interpPredDefs contains(printer print interpPred.exp_) =>
+                val args    = interpPred.listexp_.map(atomicEval).map(_.toTerm)
+                val formula = interpPredDefs(printer print interpPred.exp_)
+                // the formula refers to pred arguments as IVariable(index)
+                // we need to subsitute those for the actual arguments
+                VariableSubstVisitor(formula.f, (args.toList, 0))
+              case _ =>
+                atomicEvalFormula(exp.listexp_.head).f
+            }
+            assertProperty(property, srcInfo, properties.UserAssertion)
+            pushVal(CCFormula(true, CCInt, srcInfo))
+        case "assume" if (exp.listexp_.size == 1) =>
           val property = exp.listexp_.head match {
             case a : Efunkpar
               if uninterpPredDecls contains(printer print a.exp_) =>
@@ -3197,7 +3340,7 @@ class CCReader private (prog : Program,
               "Unsupported alloc expression: " + (printer print exp))
           }
 
-          val arrayType = name match {
+          val arrayLoc = name match {
             case "malloc" | "calloc"           => ArrayLocation.Heap
             case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
           }
@@ -3208,18 +3351,80 @@ class CCReader private (prog : Program,
 
           allocSize match {
             case CCTerm(IIntLit(IdealInt(1)), typ, srcInfo)
-              if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer =>
-              pushVal(heapAlloc(objectTerm))
+              if typ.isInstanceOf[CCArithType] && !lhsIsArrayPointer
+                 && arrayLoc == ArrayLocation.Heap =>
+              /**
+               * global and stack arrays are allocated using CCHeapArrayPointer,
+               * because CCHeapPointer does not distinguish between different
+               * allocation types. This difference is needed for correctly
+               * checking memory properties (e.g., only heap allocated memory
+               * can be freed).
+               */
+              val allocatedAddr = heapAlloc(objectTerm)
+
+              if ((propertiesToCheck contains properties.MemValidCleanup) ||
+                  propertiesToCheck.contains(properties.MemValidTrack) &&
+                  TriCeraParameters.get.useMemCleanupForMemTrack) {
+                /**
+                 * Nondeterministically write the address to the prophecy
+                 * variable [[memCleanupProphecyVar]].
+                 * I.e., nondet ==> prophTerm = allocatedAddr
+                 */
+                val prophVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+                val nondetTerm = IConstant(
+                  getFreshEvalVar(CCBool, None, name = "nondet").term)
+                setValue(prophVarInd,
+                         CCTerm(
+                           IExpression.ite(
+                             nondetTerm === ADT.BoolADT.True,
+                             allocatedAddr.toTerm,
+                             getValues(prophVarInd).toTerm
+                             ), memCleanupProphecyVar.typ, None),
+                         isIndirection = false)
+              }
+
+              pushVal(allocatedAddr)
             case CCTerm(sizeExp, typ, srcInfo) if typ.isInstanceOf[CCArithType] =>
               val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
-//              localVars.incrementLastFrame
-              // todo: values addGuard ?
-              pushVal(CCTerm(addressRangeValue, CCHeapArrayPointer(heap, typ, arrayType), srcInfo))
+              val allocatedBlock =
+                CCTerm(addressRangeValue,
+                       CCHeapArrayPointer(heap, typ, arrayLoc), srcInfo)
+
+              if (arrayLoc == ArrayLocation.Heap &&
+                  ((propertiesToCheck contains properties.MemValidCleanup) ||
+                   propertiesToCheck.contains(properties.MemValidTrack) &&
+                   TriCeraParameters.get.useMemCleanupForMemTrack)) {
+                /**
+                 * Nondeterministically write the address to the prophecy
+                 * variable [[memCleanupProphecyVar]]. Here a corner case to
+                 * consider is when sizeExp is not > 0, in which case no memory
+                 * is allocated, hence no need to change the value of the
+                 * prophecy variable.
+                 * I.e., (nondet & sizeExp > 0) ==> prophTerm = allocatedAddr
+                 */
+                val prophVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+                val nondetTerm  = IConstant(
+                  getFreshEvalVar(CCBool, None, name = "nondet").term)
+                setValue(prophVarInd,
+                         CCTerm(
+                           IExpression.ite(
+                             nondetTerm === ADT.BoolADT.True & sizeExp > 0,
+                             heap.nth(allocatedBlock.toTerm, 0),
+                             getValues(prophVarInd).toTerm
+                             ), memCleanupProphecyVar.typ, None),
+                         isIndirection = false)
+              }
+              pushVal(allocatedBlock)
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
                 // todo: optimise constant size allocations > 1?
           }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
           if TriCeraParameters.parameters.value.useArraysForHeap =>
+          /**
+           * @todo Support checking [[properties.MemValidCleanup]] when using
+           *       arrays to model heaps.
+           */
+
           val (typ, allocSize) = exp.listexp_(0) match {
             case exp : Ebytestype =>
               (getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
@@ -3264,12 +3469,12 @@ class CCReader private (prog : Program,
           if (!modelHeap)
             throw NeedsHeapModelException
           throw new TranslationException("realloc is not supported.")
-        case "free" => // todo: what about trying to free unallocated or already freed addresses?
+        case "free" =>
           if (!modelHeap)
             throw NeedsHeapModelException
-          val t = atomicEval(exp.listexp_.head)
-          heapFree(t)
-          pushVal(CCTerm(0, CCVoid, srcInfo)) // free returns no value, pushing dummy
+          val ptrExpr = atomicEval(exp.listexp_.head)
+          heapFree(ptrExpr, srcInfo)
+          pushVal(CCTerm(0, CCVoid, srcInfo)) // free returns no value, push dummy
         case name =>
           // then we inline the called function
 
@@ -3293,8 +3498,8 @@ class CCReader private (prog : Program,
               }
           }
           if(argNames nonEmpty) {
-            val evalVars = localVars.getVarsInTopFrame.takeRight(argCount)
-            localVars.pop(argCount) // remove those vars
+            val evalVars = LocalVars.getVarsInTopFrame.takeRight(argCount)
+            LocalVars.pop(argCount) // remove those vars
             assert(argNames.length == argCount && evalVars.length == argCount)
             val newVars = if (((assertionClauses.map(_.clause.constants) ++
               clauses.flatMap(_._1.constants)) intersect evalVars.map(_.term)).nonEmpty) {
@@ -3303,12 +3508,12 @@ class CCReader private (prog : Program,
             } else {
               for ((oldVar, argName) <- evalVars zip argNames) yield {
                 val uniqueArgName =
-                  if (localVars.vars.exists(v => v.name == argName)) name + "_" + argName
+                  if (LocalVars.vars.exists(v => v.name == argName)) name + "_" + argName
                   else argName
                 new CCVar(uniqueArgName, oldVar.srcInfo, oldVar.typ)
               }
             }
-            newVars.foreach(localVars addVar)
+            newVars.foreach(LocalVars addVar)
           }
           //////////////////////////////////////////////////////////////////////
 
@@ -3424,9 +3629,11 @@ class CCReader private (prog : Program,
             val readValue = CCTerm(array.arrayTheory.
               select(arrayTerm.toTerm, index.toTerm), array.elementType, srcInfo)
             array.sizeExpr match {
-              case Some(expr) =>
+              case Some(expr)
+                if propertiesToCheck contains properties.MemValidDeref =>
                 assertProperty((index.toTerm >= 0) &&&
-                  (index.toTerm < expr.toTerm), srcInfo)
+                  (index.toTerm < expr.toTerm), srcInfo,
+                               properties.MemValidDeref)
               case _ => // no safety assertion needed for mathematical arrays
             }
             pushVal(readValue)
@@ -3457,11 +3664,11 @@ class CCReader private (prog : Program,
             argTerms = popVal.toTerm :: argTerms
 
           val postGlobalVars : Seq[ITerm] = // todo : use ctx postglobal?
-            for (v <- globalVars.vars)
+            for (v <- GlobalVars.vars)
             yield IExpression.i(v.sort newConstant (v.name + "_post")) // todo: refactor
 
           val globals : Seq[ITerm] =
-            for (n <- 0 until globalVars.size)
+            for (n <- 0 until GlobalVars.size)
             yield getValue(n, false).toTerm
 
           val prePredArgs : Seq[ITerm] = globals ++ argTerms
@@ -3474,12 +3681,13 @@ class CCReader private (prog : Program,
           val preAtom  = ctx.prePred(prePredArgs)
           val postAtom = ctx.postPred(postPredArgs)
 
-          assertProperty(preAtom, None) // todo: mark pre atom assertions
+          assertProperty(preAtom, functionEntry.srcInfo,
+                         properties.FunctionPrecondition(name,functionEntry.srcInfo))
 
           addGuard(postAtom)
 
           for (((c, t), n) <- (postGlobalVars.iterator zip
-                                 globalVars.formalTypes.iterator).zipWithIndex)
+                                 GlobalVars.formalTypes.iterator).zipWithIndex)
             setValue(n, CCTerm(c, t, None), false) // todo: srcInfo?
 
           resVar match {
@@ -3492,7 +3700,6 @@ class CCReader private (prog : Program,
               //val argNames = PredPrintContextPrintContext.predArgNames(predDecl.pred)
               var argTerms : List[ITerm] = List()
               for (_ <- 0 until argCount) {
-                val argName =
                 argTerms = popVal.toTerm :: argTerms
               }
               pushVal(CCFormula(predDecl(argTerms), CCInt, None)) // todo:srcInfo
@@ -3634,7 +3841,7 @@ class CCReader private (prog : Program,
                              exit : CCPredicate,
                              args : List[CCType],
                              isNoReturn : Boolean) : Unit = {
-    localVars pushFrame
+    LocalVars pushFrame
     val stm = pushArguments(functionDef, args)
 
     // this might be an inlined function in an expression where we need to
@@ -3650,7 +3857,7 @@ class CCReader private (prog : Program,
       } else
         translator.translateWithReturn(stm, entry)
     functionExitPreds += ((FuncDef(functionDef).name, finalPred))
-    localVars popFrame
+    LocalVars popFrame
   }
 
   private def createHeapPointer(decl : BeginPointer, typ : CCType) :
@@ -3731,7 +3938,7 @@ class CCReader private (prog : Program,
               }
               val declaredVar =
                 new CCVar(name, Some(getSourceInfo(argDec)), actualType)
-              localVars addVar declaredVar
+              LocalVars addVar declaredVar
 
             case argDec : TypeHintAndParam =>
               val typ = getType(argDec.listdeclaration_specifier_)
@@ -3743,13 +3950,13 @@ class CCReader private (prog : Program,
               val declaredVar = new CCVar(getName(argDec.declarator_),
                                           Some(getSourceInfo(argDec)),
                                           actualType)
-              localVars addVar declaredVar
+              LocalVars addVar declaredVar
               processHints(argDec.listannotation_)
 //            case argDec : Abstract =>
           }
 //      case dec : OldFuncDef =>
 //        for (ident <- dec.listcident_)
-//          localVars += new ConstantTerm(ident)
+//          LocalVars += new ConstantTerm(ident)
       case dec : OldFuncDec =>
         // arguments are not specified ...
     }
@@ -3963,7 +4170,7 @@ class CCReader private (prog : Program,
               }
             }
 
-            override def getGlobals: Seq[CCVar] = globalVars.vars
+            override def getGlobals: Seq[CCVar] = GlobalVars.vars
             override def sortWrapper(s: Sort): Option[IFunction] =
               sortWrapperMap get s
             override def sortGetter(s: Sort): Option[IFunction] =
@@ -3978,7 +4185,8 @@ class CCReader private (prog : Program,
             override def getHeap: HeapObj =
               if (modelHeap) heap else throw NeedsHeapModelException
             override def getHeapTerm: ITerm =
-              if (modelHeap) stmSymex.getValues.head.toTerm
+              if (modelHeap)
+                stmSymex.getValues(GlobalVars.lastIndexWhere(heapVar)).toTerm
               else throw NeedsHeapModelException
             override def getOldHeapTerm: ITerm =
               getHeapTerm // todo: heap term for exit predicate?
@@ -3992,7 +4200,8 @@ class CCReader private (prog : Program,
             "/*@" + annot + "*/", new LocalContext()) match {
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
-                stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)))
+                stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
+                                        properties.Reachability)
               } else
                 warn("Ignoring annotation: " + annot)
             case _ => warn("Ignoring annotation: " + annot)
@@ -4028,7 +4237,7 @@ class CCReader private (prog : Program,
               }
             }
 
-            override def getGlobals : Seq[CCVar] = globalVars.vars
+            override def getGlobals : Seq[CCVar] = GlobalVars.vars
             override def sortWrapper(s : Sort) : Option[IFunction] =
               sortWrapperMap get s
             override def sortGetter(s : Sort) : Option[IFunction] =
@@ -4043,7 +4252,8 @@ class CCReader private (prog : Program,
             override def getHeap : HeapObj =
               if (modelHeap) heap else throw NeedsHeapModelException
             override def getHeapTerm : ITerm =
-              if (modelHeap) stmSymex.getValues.head.toTerm
+              if (modelHeap)
+                stmSymex.getValues(GlobalVars.lastIndexWhere(heapVar)).toTerm
               else throw NeedsHeapModelException
             override def getOldHeapTerm : ITerm =
               getHeapTerm // todo: heap term for exit predicate?
@@ -4105,7 +4315,7 @@ class CCReader private (prog : Program,
           Some(getSourceInfo(compound)))
         )
       case compound : ScompTwo => {
-        localVars pushFrame
+        LocalVars pushFrame
 
         val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
 
@@ -4127,9 +4337,8 @@ class CCReader private (prog : Program,
         }
         output(addRichClause(entryClause, entryPred.srcInfo))
 
-        translateStmSeq(stmsIt, entryPred, exit,
-                        freeArraysOnStack = trackMemorySafety && modelHeap)
-        localVars popFrame
+        translateStmSeq(stmsIt, entryPred, exit)
+        LocalVars popFrame
       }
     }
 
@@ -4183,19 +4392,17 @@ class CCReader private (prog : Program,
           Some(getSourceInfo(compound))))
       }
       case compound : ScompTwo => {
-        localVars pushFrame
+        LocalVars pushFrame
 
         val stmsIt = compound.liststm_.iterator
-        translateStmSeq(stmsIt, entry, exit,
-                        freeArraysOnStack = trackMemorySafety && modelHeap)
-        localVars popFrame
+        translateStmSeq(stmsIt, entry, exit)
+        LocalVars popFrame
       }
     }
 
     private def translateStmSeq(stmsIt : Iterator[Stm],
                                 entry : CCPredicate,
-                                exit : CCPredicate,
-                                freeArraysOnStack : Boolean = false) : Unit = {
+                                exit : CCPredicate) : Unit = {
       var prevPred = entry
       while (stmsIt.hasNext)
         stmsIt.next match {
@@ -4203,44 +4410,17 @@ class CCReader private (prog : Program,
             val srcInfo = Some(getSourceInfo(stm))
             prevPred = translate(stm.dec_, prevPred)
             if (!stmsIt.hasNext) {
-              if (freeArraysOnStack) {
-                // free stack allocated arrays that use the theory of heap
-                val freeSymex = Symex(prevPred)
-                for (v <- localVars.getVarsInTopFrame) v.typ match {
-                  case a : CCHeapArrayPointer
-                    if a.arrayLocation == ArrayLocation.Stack =>
-                    freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo))
-                    prevPred = newPred(Nil, None) // todo: line no?
-                    freeSymex.outputClause(prevPred, srcInfo)
-                  case _ => // nothing
-                }
-                freeSymex.outputClause(exit, srcInfo)
-              } else {
-                output(addRichClause(Clause(
-                  atom(exit, allFormalVarTerms take exit.arity),
-                  List(atom(prevPred, allFormalVarTerms take prevPred.arity)),
-                  true), srcInfo))
-              }
+              output(addRichClause(Clause(
+                atom(exit, allFormalVarTerms take exit.arity),
+                List(atom(prevPred, allFormalVarTerms take prevPred.arity)),
+                true), srcInfo))
             }
           }
           case stm => {
             val srcInfo = Some(getSourceInfo(stm))
-            var nextPred = if (stmsIt.hasNext || freeArraysOnStack) newPred(Nil, None) // todo: line no?
+            var nextPred = if (stmsIt.hasNext) newPred(Nil, None) // todo: line no?
                            else exit
             translate(stm, prevPred, nextPred)
-            if (freeArraysOnStack && !stmsIt.hasNext) {
-              // free stack allocated arrays that use the theory of heap
-              val freeSymex = Symex(nextPred)
-              for (v <- localVars.getVarsInTopFrame) v.typ match {
-                case a : CCHeapArrayPointer
-                  if a.arrayLocation == ArrayLocation.Stack =>
-                  freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // todo: line no probably incorrect
-                  nextPred = newPred(Nil, v.srcInfo)  // todo: line no probably incorrect
-                  freeSymex.outputClause(nextPred, srcInfo)
-                case _ => // nothing
-              }
-              freeSymex.outputClause(exit, srcInfo)
-            }
             prevPred = nextPred
           }
         }
@@ -4427,7 +4607,9 @@ class CCReader private (prog : Program,
           case Seq() =>
             // add an assertion that we never try to jump to a case that
             // does not exist. TODO: add a parameter for this?
-            selectorSymex assertProperty(or(guards), Some(getSourceInfo(stm)))
+            selectorSymex assertProperty(
+              or(guards), Some(getSourceInfo(stm)),
+              properties.SwitchCaseValidJump)
           case Seq((_, target)) => {
             selectorSymex.saveState
             selectorSymex addGuard ~or(guards)
@@ -4449,7 +4631,7 @@ class CCReader private (prog : Program,
         jumpLocs += ((jump.cident_, entry, allFormalVarTerms, clauses.size,
           getSourceInfo(jump)))
         // reserve space for the later jump clause
-        output(CCClause(null, null))
+        output(new CCClause(null, null))
       }
       case jump : SjumpTwo => { // continue
         if (innermostLoopCont == null)
@@ -4467,18 +4649,6 @@ class CCReader private (prog : Program,
         returnPred match {
           case Some(rp) => {
             var nextPred = entry
-            if (modelHeap && trackMemorySafety) {
-              // free stack allocated arrays that use the theory of heap
-              val freeSymex = Symex(entry)
-              for (v <- localVars.getVarsInTopFrame) v.typ match {
-                case a : CCHeapArrayPointer
-                  if a.arrayLocation == ArrayLocation.Stack =>
-                  freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // line no probably incorrect
-                  nextPred = newPred(Nil, srcInfo)
-                  freeSymex.outputClause(nextPred, srcInfo)
-                case _ => // nothing
-              }
-            }
             val args = allFormalVarTerms take rp.arity
             output(addRichClause(Clause(atom(rp, args),
                           List(atom(nextPred, allFormalVarTerms take nextPred.arity)),
@@ -4493,44 +4663,21 @@ class CCReader private (prog : Program,
         implicit val evalSettings = symex.EvalSettings.default
         val retValue = symex eval jump.exp_
         returnPred match {
-          case Some(rp) => {
-            if (modelHeap && trackMemorySafety) {
-              localVars.pushFrame
-              localVars.addVar(rp.argVars.last)
-              var nextPred = newPred(Nil, srcInfo)
-              val args = symex.getValuesAsTerms ++ List(retValue.toTerm)
-              symex outputClause(atom(nextPred, args take nextPred.arity), srcInfo) //output one clause in case return expr modifies heap
-              val freeSymex = Symex(nextPred) // reinitialise init atom
-              // free stack allocated arrays that use the theory of heap
-              for (v <- localVars.getVarsInTopFrame) v.typ match {
-                case a : CCHeapArrayPointer
-                  if a.arrayLocation == ArrayLocation.Stack =>
-                  freeSymex.heapFree(CCTerm(v.term, v.typ, v.srcInfo)) // todo: line no probably incorrect
-                  nextPred = newPred(Nil, srcInfo)
-                  freeSymex.outputClause(nextPred, srcInfo)
-                case _ => // nothing
-              }
-              val retArgs = (freeSymex.getValuesAsTerms take (rp.arity - 1)) ++
-                Seq(freeSymex.getValuesAsTerms.last)
-              freeSymex outputClause(atom(rp, retArgs), srcInfo)
-              localVars.popFrame
-            } else {
-              val args = (symex.getValuesAsTerms take (rp.arity - 1)) ++
-                List(retValue.toTerm)
-              symex outputClause(atom(rp, args), srcInfo)
-            }
-          }
+          case Some(rp) =>
+            val args = (symex.getValuesAsTerms take (rp.arity - 1)) ++
+                       List(retValue.toTerm)
+            symex outputClause(atom(rp, args), srcInfo)
           case None =>
             throw new TranslationException(
               "\"return\" can only be used within functions")
         }
       }
-      case _ : SjumpAbort | _ : SjumpExit => { // abort() or exit(int status)
-        output(addRichClause(Clause(atom(globalExitPred, Nil),
-                      List(atom(entry, allFormalVarTerms take entry.arity)),
-                      true), srcInfo))
+      case _ : SjumpAbort | _ : SjumpExit => // abort() or exit(int status)
+        output(addRichClause(
+          Clause(atom(globalExitPred, Nil),
+                 List(atom(entry, allFormalVarTerms take entry.arity)),
+                 true), srcInfo))
       }
-    }
     }
 
     private def translate(aStm : Atomic_stm,
@@ -4613,7 +4760,7 @@ class CCReader private (prog : Program,
                              if (singleThreaded) {
                                if (useTime) 2 else 0 // todo : anything for heap here? why only 2 if useTime?
                              } else {
-                               globalVars.size
+                               GlobalVars.size
                              },
                              None,
                              if (useTime)

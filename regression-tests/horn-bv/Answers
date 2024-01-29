@@ -1,7 +1,6 @@
 
 nonlinear2.hcc
 Warning: no definition of function "nondet" available
-UNSAFE
 
 -----------------------------------------------------------------
 Init:
@@ -66,8 +65,9 @@ Final:
   main((-447365120).\as[signed bv[32]], 11.\as[signed bv[32]])   
 -----------------------------------------------------------------
 Failed assertion:
-false :- main(f:5, i:6), f:5 < 1 | i:6 < 1. (line:13 col:3)
+false :- main(f:5, i:6), f:5 < 1 | i:6 < 1. (line:13 col:3) (property: user-assertion)
 
+UNSAFE
 
 ../horn-hcc/loop1.hcc
 Warning: entry function "main" not found

@@ -15,7 +15,6 @@ ext-univ-5-cmpN-safe.hcc
 SAFE
 
 ext-univ-1-unsafe.hcc
-UNSAFE
 
 --------------------------------------
 Init:
@@ -40,5 +39,6 @@ Final:
  main_2(1, store(const(1), 0, 0), 1)  
 --------------------------------------
 Failed assertion:
-false :- main_2(n:2, a:4, i:5), \exists int v0; (v0 >= 0 & n:2 - v0 >= 1 & select(a:4, v0) != v0 - 1). (line:11 col:3)
+false :- main_2(n:2, a:4, i:5), \exists int v0; (v0 >= 0 & n:2 - v0 >= 1 & select(a:4, v0) != v0 - 1). (line:11 col:3) (property: unreach-call)
 
+UNSAFE

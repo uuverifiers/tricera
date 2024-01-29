@@ -8,4 +8,5 @@ void main() {
     assert(*p == 0);
     p = p+1;
   }
+  free(a);
 }

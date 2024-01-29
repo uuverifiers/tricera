@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2021-2022 Pontus Ernstedt. All rights reserved.
+ * Copyright (c) 2021-2022 Pontus Ernstedt
+ *               2024      Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,7 +41,7 @@ import tricera.Util.SourceInfo
 
 import scala.collection.{Map, Set}
 import tricera.concurrency.CCReader
-import tricera.concurrency.CCReader.CCClause
+import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 
 
 // FIXME: Maybe just object? Or create companion?
@@ -77,7 +78,8 @@ class Encoder(reader : CCReader) {
     val processes : ProcessSet =
       if (hasACSLEntryFunction) encodeProcessesEntry else encodeProcesses
 
-    asserts.foreach(cc => reader.addRichClause(cc.clause, cc.srcInfo))
+    asserts.foreach(cc => reader.mkRichAssertionClause(
+      cc.clause, cc.srcInfo, cc.property))
 
     system.copy(
       assertions = asserts.map(_.clause),
@@ -95,16 +97,19 @@ class Encoder(reader : CCReader) {
    * @return encoded assertions and a backmapping from these to the original
    *         clauses
    */
-  private def encodeAssertions : Seq[CCClause] = {
-    val (preClauses, others) : (Seq[Clause], Seq[Clause]) =
+  private def encodeAssertions : Seq[CCAssertionClause] = {
+    val (preClauses, others) : (Seq[Clause], Seq[Clause]) = {
       system.assertions.partition(c => {
         prePredsToReplace(c.head.pred)
       })
+    }
 
-    val newPreClauses : Seq[CCClause] =
+    val newPreClauses : Seq[CCAssertionClause] =
       preClauses.map(c => buildPreClause(reader.getRichClause(c).get))
-    val newPostClauses : Seq[CCClause] = buildPostAsserts
-    (others.map(c => reader.getRichClause(c).get) ++ newPreClauses ++ newPostClauses)
+    val newPostClauses : Seq[CCAssertionClause] = buildPostAsserts
+    others.map(
+      c => reader.getRichClause(c).get.asInstanceOf[CCAssertionClause]) ++
+    newPreClauses ++ newPostClauses
   }
 
   /**
@@ -126,8 +131,8 @@ class Encoder(reader : CCReader) {
             val preAtom : IAtom    = funToPreAtom(name)
             val preCond : IFormula = funToContract(name).pre
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
-            CCClause(Clause(head, List(), constr),
-                     reader.getRichClause(c).get.srcInfo)
+            new CCClause(Clause(head, List(), constr),
+                         reader.getRichClause(c).get.srcInfo)
           }
           case c@Clause(head, body, oldConstr)
             if prePredsToReplace(head.pred) => {
@@ -198,28 +203,30 @@ class Encoder(reader : CCReader) {
           )
         case _ => (constr, oldSrcInfo)
       }
-      CCClause(Clause(head, keep, maybeNewConstr), newSrcInfo)
+      new CCClause(Clause(head, keep, maybeNewConstr), newSrcInfo)
   }
 
   // Handles function calls, e.g:
   // f_pre(..) :- mainN(..), .. ==> false :- mainN(..), .., !<pre>
-  private def buildPreClause(old : CCClause) : CCClause = {
+  private def buildPreClause(old : CCClause) : CCAssertionClause = {
     assert(prePredsToReplace(old.clause.head.pred))
     val name    : String   = old.clause.head.pred.name.stripSuffix(preSuffix)
     val preCond : IFormula = funToContract(name).pre
     val preAtom : IAtom    = funToPreAtom(name)
     val constr  : IFormula = applyArgs(preCond, preAtom, old.clause.head).unary_!
-    CCClause(Clause(falseHead, old.clause.body, constr), old.srcInfo)
+    reader.mkRichAssertionClause(Clause(falseHead, old.clause.body, constr),
+                              old.srcInfo,
+                              tricera.properties.FunctionPrecondition(name, old.srcInfo))
   }
 
   // Fetches clauses from system.processes and system.backgroundAxioms implying
   // post-condition and generates assertion clauses (to be moved into
   // system.assertions).
-  private def buildPostAsserts : Seq[CCClause] = {
+  private def buildPostAsserts : Seq[CCAssertionClause] = {
     import ParametricEncoder.{NoBackgroundAxioms, SomeBackgroundAxioms}
     val clauses1 : Seq[CCClause] =
       system.processes.flatMap({
-        case (p, r) => p.unzip._1.map(c => reader.getRichClause(c).get)
+        case (p, r) => p.map(p => reader.getRichClause(p._1).get)
       })
     val clauses2 : Seq[CCClause] =
       system.backgroundAxioms match {
@@ -232,7 +239,8 @@ class Encoder(reader : CCReader) {
     clauses.collect({
       // Handles final clause, e.g:
       // f_post(..) :- f1(..) ==> false :- f1(..), !(<post> & <assigns>)
-      case CCClause(Clause(head, body, oldConstr), _) if postPredsToReplace(head.pred) => {
+      case CCClause(Clause(head, body, oldConstr), srcInfo)
+        if postPredsToReplace(head.pred) =>
         val name     : String   = head.pred.name.stripSuffix(postSuffix)
         val postAtom : IAtom    = funToPostAtom(name)
         val postCond : IFormula = funToContract(name).post
@@ -240,11 +248,12 @@ class Encoder(reader : CCReader) {
         val constr   : IFormula = applyArgs(postCond, postAtom, head)
         val assigns  : IFormula =
           applyArgs(funToContract(name).assignsAssert, postAtom, head)
-        CCClause(Clause(falseHead, body, oldConstr &&& (constr &&& assigns).unary_!), Some(postSrc))
-      }
+        reader.mkRichAssertionClause(Clause(
+          falseHead, body, oldConstr &&& (constr &&& assigns).unary_!),
+                                  Some(postSrc),
+                                  tricera.properties.FunctionPostcondition(name, srcInfo))
     })
   }
-
 
   private def applyArgs(formula : IFormula, predParams : IAtom, predArgs : IAtom) : IFormula = {
     val paramToArgMap : Map[ITerm, ITerm] =

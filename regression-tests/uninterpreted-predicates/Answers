@@ -13,7 +13,6 @@ Warning: no definition of function "nondet" available
 SAFE
 
 unint-pred-simple-false.c
-UNSAFE
 
 ------------
 Init:
@@ -28,8 +27,9 @@ Final:
  main_1(42) 
 ------------
 Failed assertion:
-false :- main_1(x:5), x:5 != 43. (line:7 col:3)
+false :- main_1(x:5), x:5 != 43. (line:7 col:3) (property: user-assertion)
 
+UNSAFE
 
 unint-pred-simple-true.c
 SAFE

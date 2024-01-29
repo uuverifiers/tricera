@@ -1,6 +1,5 @@
 
 enum1.hcc
-UNSAFE
 
 ------------
 Init:
@@ -10,11 +9,11 @@ Final:
  main9_3(3) 
 ------------
 Failed assertion:
-false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3) (property: user-assertion)
 
+UNSAFE
 
 enum1-trailing-comma.hcc
-UNSAFE
 
 ------------
 Init:
@@ -24,11 +23,11 @@ Final:
  main9_3(3) 
 ------------
 Failed assertion:
-false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1 & x:8 != 2. (line:9 col:3) (property: user-assertion)
 
+UNSAFE
 
 enum2.hcc
-UNSAFE
 
 ------------
 Init:
@@ -38,8 +37,9 @@ Final:
  main9_3(2) 
 ------------
 Failed assertion:
-false :- main9_3(x:8), x:8 != 0 & x:8 != 1. (line:9 col:3)
+false :- main9_3(x:8), x:8 != 0 & x:8 != 1. (line:9 col:3) (property: user-assertion)
 
+UNSAFE
 
 enum3.hcc
 SAFE

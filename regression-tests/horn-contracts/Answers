@@ -1,6 +1,5 @@
 
 contract1.hcc
-SAFE
 
 Inferred ACSL annotations
 ================================================================================
@@ -11,9 +10,9 @@ Inferred ACSL annotations
 */
 ================================================================================
 
+SAFE
 
 contract2.hcc
-SAFE
 
 Inferred ACSL annotations
 ================================================================================
@@ -24,9 +23,9 @@ Inferred ACSL annotations
 */
 ================================================================================
 
+SAFE
 
 contract2b.hcc
-UNSAFE
 
 ------------------
 Init:
@@ -51,11 +50,11 @@ Final:
   main_2(-4, 5)   
 ------------------
 Failed assertion:
-false :- main_2(g:2, y:14), g:2 < 0. (line:18 col:3)
+false :- main_2(g:2, y:14), g:2 < 0. (line:18 col:3) (property: user-assertion)
 
+UNSAFE
 
 contract3.hcc
-SAFE
 
 Inferred ACSL annotations
 ================================================================================
@@ -66,9 +65,9 @@ Inferred ACSL annotations
 */
 ================================================================================
 
+SAFE
 
 takeuchi.hcc
-SAFE
 
 Inferred ACSL annotations
 ================================================================================
@@ -79,9 +78,9 @@ Inferred ACSL annotations
 */
 ================================================================================
 
+SAFE
 
 assert.hcc
-SAFE
 
 Inferred ACSL annotations
 ================================================================================
@@ -92,9 +91,9 @@ Inferred ACSL annotations
 */
 ================================================================================
 
+SAFE
 
 fib.hcc
-UNSAFE
 
 ---------------
 Init:
@@ -109,8 +108,11 @@ Final:
  main12_3_1(8) 
 ---------------
 Failed assertion:
-false :- main12_3_1(x:12), x:12 != 0. (line:14 col:3)
+false :- main12_3_1(x:12), x:12 != 0. (line:14 col:3) (property: user-assertion)
 
+UNSAFE
 
 stackptr.hcc
-Warning: enabling heap model
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Function contracts are currently not supported together with stack pointers (10:5)
+(error "Function contracts are currently not supported together with stack pointers (10:5)")
+Other Error: Function contracts are currently not supported together with stack pointers (10:5)

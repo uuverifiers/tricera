@@ -53,7 +53,6 @@ inits2.hcc
 SAFE
 
 inits3.hcc
-UNSAFE
 
 ---------------
 Init:
@@ -68,8 +67,9 @@ Final:
   main(1, 0)   
 ---------------
 Failed assertion:
-false :- main(g:3, h:4), g:3 != 0. (line:8 col:3)
+false :- main(g:3, h:4), g:3 != 0. (line:8 col:3) (property: user-assertion)
 
+UNSAFE
 
 shadowing.hcc
 SAFE
@@ -120,7 +120,6 @@ down_true-unreach-call.i.c
 SAFE
 
 ternary-bug.c
-UNSAFE
 
 ---------------
 Init:
@@ -135,8 +134,9 @@ Final:
  main(1, 0, 0) 
 ---------------
 Failed assertion:
-false :- main(x:2, y:2, z:3). (line:5 col:3)
+false :- main(x:2, y:2, z:3). (line:5 col:3) (property: user-assertion)
 
+UNSAFE
 
 assert-ite-1.c
 SAFE
@@ -145,7 +145,6 @@ assert-ite-2.c
 SAFE
 
 function-in-assume-assert-1-false.c
-UNSAFE
 
 ------------------
 Init:
@@ -160,14 +159,14 @@ Final:
  main5_1(0, 1, 1) 
 ------------------
 Failed assertion:
-false :- main5_1(x:10, y:11, __eval5_7:5), __eval5_7:5 != 0. (line:13 col:3)
+false :- main5_1(x:10, y:11, __eval5_7:5), __eval5_7:5 != 0. (line:13 col:3) (property: user-assertion)
 
+UNSAFE
 
 function-in-assume-assert-1-true.c
 SAFE
 
 function-in-assume-assert-2-false.c
-UNSAFE
 
 -----------------------
 Init:
@@ -182,14 +181,14 @@ Final:
  main13_16(2, 1, 2, 1) 
 -----------------------
 Failed assertion:
-false :- main13_16(x:10, y:11, __eval10_13:10, ite_13_16:1), __eval10_13:10 != ite_13_16:1. (line:13 col:3)
+false :- main13_16(x:10, y:11, __eval10_13:10, ite_13_16:1), __eval10_13:10 != ite_13_16:1. (line:13 col:3) (property: user-assertion)
 
+UNSAFE
 
 function-in-assume-assert-2-true.c
 SAFE
 
 function-in-assume-assert-3-false.c
-UNSAFE
 
 -----------------------
 Init:
@@ -204,8 +203,9 @@ Final:
  main15_16(2, 1, 2, 1) 
 -----------------------
 Failed assertion:
-false :- main15_16(x:12, y:13, __eval12_15:12, ite_15_16:1), __eval12_15:12 != ite_15_16:1. (line:15 col:3)
+false :- main15_16(x:12, y:13, __eval12_15:12, ite_15_16:1), __eval12_15:12 != ite_15_16:1. (line:15 col:3) (property: user-assertion)
 
+UNSAFE
 
 function-in-assume-assert-3-true.c
 SAFE

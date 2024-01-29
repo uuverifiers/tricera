@@ -47,7 +47,7 @@ object ACSLLineariser {
     for ((name, consts) <- List(("universalConstants", signature.universalConstants),
       ("existentialConstants", signature.existentialConstants),
       ("functions", signature.nullaryFunctions)))
-      if (!consts.isEmpty) {
+      if (consts.nonEmpty) {
         println("\\" + name + " {")
         for (c <- consts)
           println("int " + c.name + ";")
@@ -55,7 +55,7 @@ object ACSLLineariser {
       }
 
     // declare the required predicates
-    if (!order.orderedPredicates.isEmpty) {
+    if (order.orderedPredicates.nonEmpty) {
       println("\\predicates {")
       for (pred <- order.orderedPredicates) {
         print(pred.name)

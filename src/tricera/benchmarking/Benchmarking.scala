@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021-2022 Zafer Esen. All rights reserved.
+ * Copyright (c) 2021-2024 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,6 +28,8 @@
  */
 
 package tricera.benchmarking
+
+import tricera.properties
 
 object Benchmarking {
   // Execution Results
@@ -67,9 +69,9 @@ object Benchmarking {
     override def toString : String =
       "UNSAFE"
   }
-  case object Unknown extends ExecutionResult {
+  case class Unknown(reason : String = "") extends ExecutionResult {
     override def toString: String =
-      "UNKNOWN"
+      "UNKNOWN" + (if(reason.nonEmpty) s" ($reason)" else "")
   }
   case object DidNotExecute extends ExecutionResult {
     override def toString : String =
@@ -77,41 +79,15 @@ object Benchmarking {
     ""
   }
 
-  // SV-COMP related, should probably move somewhere else...
-  // supported SV-COMP benchmark tracks
-  sealed trait BenchmarkTrack
-  case object Reachability extends BenchmarkTrack { // unreachability of error
-    override def toString : String = "unreach-call"
-  }
-  // no subtracks need to be provided on a pass, a single subtrack is provided
-  // on fail
-  case class MemSafety(subTrack : Option[MemSubTrack]) extends BenchmarkTrack {
-    override def toString : String =
-      "valid-memsafety" + (subTrack match {
-        case Some(t) => "/" + t.toString
-        case None => ""
-      })
-  }
-  sealed trait MemSubTrack
-  case object MemTrack extends MemSubTrack { // valid-memtrack
-    override def toString : String = "valid-memtrack"
-  }
-  case object ValidDeref extends MemSubTrack { // valid-deref
-    override def toString : String = "valid-deref"
-  }
-  case object ValidFree extends MemSubTrack { // valid-free
-    override def toString : String = "valid-free"
-  }
-
   // returned by Main
   case class ExecutionSummary (
-                                executionResult: ExecutionResult,
-                                // if a supported SV-COMP track is provided, returns a list of these tracks
-                                // and whether the execution result matched the expected verdict or not
-                                trackResult : List[(BenchmarkTrack, Boolean)] = Nil,
-                                modelledHeap : Boolean = false, // true if the bm contained heap operations
-                                elapsedTime  : Double = 0,
-                                preprocessTime : Double = 0
+    executionResult : ExecutionResult,
+    // if a supported SV-COMP track is provided, returns a list of these tracks
+    // and whether the execution result matched the expected verdict or not
+    propertyResult  : Map[properties.Property, Boolean] = Map(),
+    modelledHeap    : Boolean = false, // true if the bm contained heap operations
+    elapsedTime     : Double = 0,
+    preprocessTime  : Double = 0
                               ) {
     override def toString: String = {
       "Result   : " + executionResult + "\n" +

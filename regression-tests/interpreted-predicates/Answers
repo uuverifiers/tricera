@@ -1,6 +1,5 @@
 
 simple-invariant-false.c
-UNSAFE
 
 ------------
 Init:
@@ -15,14 +14,14 @@ Final:
   main(3)   
 ------------
 Failed assertion:
-false :- main(x:8), x:8 != 42. (line:10 col:3)
+false :- main(x:8), x:8 != 42. (line:10 col:3) (property: user-assertion)
 
+UNSAFE
 
 simple-invariant-true.c
 SAFE
 
 simple-invariant-false.c
-UNSAFE
 
 ------------
 Init:
@@ -37,8 +36,9 @@ Final:
   main(3)   
 ------------
 Failed assertion:
-false :- main(x:8), x:8 != 42. (line:10 col:3)
+false :- main(x:8), x:8 != 42. (line:10 col:3) (property: user-assertion)
 
+UNSAFE
 
 simple-loop-invariant-true.c
 SAFE

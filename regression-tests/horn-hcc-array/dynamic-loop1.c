@@ -21,4 +21,6 @@ void main() {
   }
   
   assert(sum == n*3);
+
+  free(a);
 }

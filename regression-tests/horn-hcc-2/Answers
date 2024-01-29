@@ -38,7 +38,6 @@ Warning: entry function "main" not found
 SAFE
 
 lazy-and-or-bug.hcc
-UNSAFE
 
 ------------------------------------
 Init:
@@ -62,6 +61,7 @@ Init:
 Final:
      A10_7(1)         main(1, 1)    
 ------------------------------------
+UNSAFE
 
 channels.hcc
 Warning: entry function "main" not found
@@ -73,7 +73,6 @@ SAFE
 
 channels-2b.hcc
 Warning: entry function "main" not found
-UNSAFE
 
 ------------------------
 Init:
@@ -88,6 +87,7 @@ Init:
 Final:
  A7_10(42)   B(42, -10) 
 ------------------------
+UNSAFE
 
 channels-3.hcc
 tricera.concurrency.ccreader.CCExceptions$TranslationException: Cannot execute Receive(d) and Send(c) in one step
@@ -100,7 +100,6 @@ SAFE
 
 duration2.hcc
 Warning: enabling time
-UNSAFE
 
 ------------------------------------------------------
 Init:
@@ -130,6 +129,7 @@ Init:
 Final:
    A_2(0, 1, 0, 0, 0, 0)    main_1(0, 1, 0, 0, 0, 0)  
 ------------------------------------------------------
+UNSAFE
 
 duration3.hcc
 Warning: enabling time
@@ -137,7 +137,6 @@ SAFE
 
 duration3b.hcc
 Warning: enabling time
-UNSAFE
 
 ------------------------------------------------
 Init:
@@ -167,6 +166,7 @@ Init:
 Final:
    B_2(0, 1, 0, 0, 0)    main9_15_0(0, 1, 0, 0) 
 ------------------------------------------------
+UNSAFE
 
 duration3c.hcc
 Warning: enabling time
@@ -174,7 +174,6 @@ SAFE
 
 duration3d.hcc
 Warning: enabling time
-UNSAFE
 
 ----------------------------------------------
 Init:
@@ -206,6 +205,7 @@ Delay: 1.0
 Final:
    B_2(0, 1, 0, -1)      main9_15_0(0, 1, 0)  
 ----------------------------------------------
+UNSAFE
 
 nonlinear1.hcc
 Warning: no definition of function "nondet" available
@@ -213,7 +213,6 @@ SAFE
 
 nonlinear2.hcc
 Warning: no definition of function "nondet" available
-UNSAFE
 
 ----------------
 Init:
@@ -228,14 +227,14 @@ Final:
  main12_7(2, 4) 
 ----------------
 Failed assertion:
-false :- main12_7(x:7, y:10). (line:13 col:5)
+false :- main12_7(x:7, y:10). (line:13 col:5) (property: user-assertion)
 
+UNSAFE
 
 typedef1.hcc
 SAFE
 
 switch1.hcc
-UNSAFE
 
 ----------------
 Init:
@@ -250,8 +249,9 @@ Final:
    main(0, 0)   
 ----------------
 Failed assertion:
-false :- main(x:4, y:5), y:5 < 1. (line:19 col:3)
+false :- main(x:4, y:5), y:5 < 1. (line:19 col:3) (property: user-assertion)
 
+UNSAFE
 
 switch2.hcc
 Warning: no definition of function "nondet" available
