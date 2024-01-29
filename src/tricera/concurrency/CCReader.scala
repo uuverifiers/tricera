@@ -3210,7 +3210,7 @@ class CCReader private (prog              : Program,
                   //newTerm
                   throw new TranslationException(
                     "Function contracts are currently not supported together " +
-                    s"with stack pointers (at ${exp.line_num}:${exp.col_num})")
+                    s"with stack pointers (${exp.line_num}:${exp.col_num})")
                 } else {
                   val ind = values.indexWhere(v => v == topVal)
                   assert(ind > -1 && ind < values.size - 1) // todo

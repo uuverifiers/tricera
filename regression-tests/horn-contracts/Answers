@@ -113,5 +113,6 @@ false :- main12_3_1(x:12), x:12 != 0. (line:14 col:3) (property: user-assertion)
 UNSAFE
 
 stackptr.hcc
-(error "Function contracts are currently not supported together with stack pointers (at 10:5)")
-Other Error: Function contracts are currently not supported together with stack pointers (at 10:5)
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Function contracts are currently not supported together with stack pointers (10:5)
+(error "Function contracts are currently not supported together with stack pointers (10:5)")
+Other Error: Function contracts are currently not supported together with stack pointers (10:5)
