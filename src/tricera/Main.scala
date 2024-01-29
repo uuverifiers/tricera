@@ -35,14 +35,13 @@ import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
 import hornconcurrency.ParametricEncoder
 
 import java.io.{FileOutputStream, PrintStream}
-import java.nio.file.{Paths, Files}
-
+import java.nio.file.{Files, Paths}
 import lazabs.horn.bottomup.HornClauses.Clause
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import lazabs.prover._
 import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
-import tricera.concurrency.CCReader.CCClause
+import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
 import tricera.parsers.YAMLParser._
 
@@ -68,13 +67,136 @@ object Main {
 
   def doMain(args: Array[String], stoppingCond: => Boolean) : ExecutionSummary = {
     val triMain = new Main(args)
-    val res = triMain.run(stoppingCond)
-    res.executionResult match {
-      case Safe   => // nothing, already printed
-      case Unsafe => // nothing, already printed
-      case other  => println(other)
+
+    triMain.programTimer.start()
+    var remainingTimeout : Option[Int] = params.TriCeraParameters.get.timeout
+
+    val (propertiesToCheck, propertyToExpected) = collectProperties
+
+    /**
+     * @todo Below implementation can be improved a lot - there is no
+     *       need for the reader to parse the input for each property.
+     */
+    val result = if (tricera.params.TriCeraParameters.get.splitProperties &&
+                     propertiesToCheck.size > 1) {
+      println(s"Splitting properties: {${propertiesToCheck.mkString(",")}}")
+      var remainingProperties = propertiesToCheck
+      var overallResult = ExecutionSummary(DidNotExecute)
+
+      var prevDuration = triMain.programTimer.s
+      while(remainingProperties nonEmpty) {
+        val property = remainingProperties.head
+        print(s"  $property... ")
+        remainingProperties = remainingProperties.tail
+
+        remainingTimeout = remainingTimeout match {
+          case Some(to) => Some((to.toDouble - triMain.programTimer.ms).toInt)
+          case None => None
+        }
+        val propertyResult =
+          triMain.run(stoppingCond, Set(property), propertyToExpected,
+                      remainingTimeout)
+        val runDuration = propertyResult.elapsedTime - prevDuration
+        prevDuration = propertyResult.elapsedTime
+        if (propertyResult.executionResult != DidNotExecute) {
+          overallResult = ExecutionSummary(
+            propertyResult.executionResult,
+            overallResult.propertyResult ++ propertyResult.propertyResult,
+            overallResult.modelledHeap || propertyResult.modelledHeap,
+            propertyResult.elapsedTime, // this accumulates between runs
+            overallResult.preprocessTime + propertyResult.preprocessTime)
+          if (propertyResult.executionResult != Safe &&
+              propertyResult.executionResult != DidNotExecute) {
+            // No need to continue if we could not prove this property.
+            remainingProperties = Set()
+          }
+          println(propertyResult.executionResult)
+        }
+      }
+      overallResult
+    } else {
+      triMain.run(stoppingCond, propertiesToCheck, propertyToExpected,
+                  remainingTimeout)
     }
-    res
+    println(result.executionResult)
+    result
+  }
+
+  private def collectProperties : (Set[properties.Property],
+                                   Map[properties.Property, Boolean]) = {
+    val params = tricera.params.TriCeraParameters.get
+    import params._
+    // Check if an accompanying .yml file exists (SV-COMP style).
+    val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
+    val bmInfo : Option[BenchmarkInfo] =
+      if (Files.exists(Paths.get(yamlFileName))) {
+        val info = extractBenchmarkInfo(yamlFileName)
+        if (info isEmpty) Util.warn(
+          "Could not parse the accompanying YAML (.yml) file, ignoring it.")
+        info
+      } else None
+
+    /**
+     * Properties to check and their expected status, if any.
+     */
+    val (propertiesToCheck : Set[properties.Property],
+         propertyToExpected : Map[properties.Property, Boolean]) = {
+      val cliProps : Set[properties.Property] = Set(
+        if (checkMemTrack) Some(properties.MemValidTrack) else None,
+        if (checkValidFree) Some(properties.MemValidFree) else None,
+        if (checkValidDeref) Some(properties.MemValidDeref) else None,
+        if (checkMemCleanup) Some(properties.MemValidCleanup) else None,
+        if (checkReachSafety) Some(properties.Reachability) else None).flatten ++
+        (if (checkMemSafety)
+           memSafetyProperties else Set[properties.Property]())
+
+      if (cliProps.nonEmpty && bmInfo.nonEmpty) {
+        Util.warn("A property file exists, but properties are also " +
+                  "specified in the command-line. Ignoring the property file.")
+        (cliProps, Map.empty[properties.Property, Boolean])
+      } else if (bmInfo.nonEmpty) {
+        // SV-COMP style property specification.
+        val props = bmInfo.get.properties.flatMap{p =>
+          val verdictOption = p.expected_verdict
+          p match {
+            case _ if p.isReachSafety =>
+              verdictOption.map(properties.Reachability -> _)
+
+            case _ if p.isMemSafety  =>
+              val initialSubProps = memSafetyProperties.map(_ -> true).toMap
+              // At most one sub-property is expected to not hold, if any.
+              val updatedSubProps = verdictOption match {
+                case Some(false) => p.subproperty match {
+                  case Some("valid-free")     =>
+                    initialSubProps.updated(properties.MemValidFree, false)
+                  case Some("valid-deref")    =>
+                    initialSubProps.updated(properties.MemValidDeref, false)
+                  case Some("valid-memtrack") =>
+                    initialSubProps.updated(properties.MemValidTrack, false)
+                  case Some(prop)             => throw new Exception(
+                    s"Unknown sub-property $prop for the memsafety category.")
+                  case None                   => throw new Exception(
+                    "The failing sub-property must be specified for memsafety.")
+                }
+                case _ => initialSubProps
+              }
+              updatedSubProps
+            case _ if p.isMemCleanup =>
+              verdictOption.map(properties.MemValidCleanup -> _)
+
+            case _ => None
+          }
+        }.toMap
+
+        val propsSet : Set[properties.Property] = props.keys.toSet
+        (propsSet, props)
+      } else {
+        // No property file: use CLI properties. If none, use Reachability.
+        (if (cliProps nonEmpty) cliProps else Set(properties.Reachability),
+          Map[properties.Property, Boolean]())
+      }
+    }
+    (propertiesToCheck, propertyToExpected)
   }
 
   private def printError(message: String): Unit =
@@ -103,15 +225,18 @@ class Main (args: Array[String]) {
   private val programTimer = new Timer
   private val preprocessTimer = new Timer
 
-  def run(stoppingCond: => Boolean) : ExecutionSummary = try {
+  def run(stoppingCond: => Boolean,
+          propertiesToCheck : Set[properties.Property],
+          propertyToExpected : Map[properties.Property, Boolean],
+          runTimeout : Option[Int])
+  : ExecutionSummary = try {
     if (params.doNotExecute) // Exit early if we showed the help
       return ExecutionSummary(DidNotExecute)
-    programTimer.start()
 
     // work-around: make the Princess wrapper thread-safe
     lazabs.prover.PrincessWrapper.newWrapper
 
-    timeoutChecker = timeout match {
+    timeoutChecker = runTimeout match {
       case Some(to) => () => {
         if (programTimer.ms > to.toDouble)
           throw TimeoutException
@@ -209,77 +334,6 @@ class Main (args: Array[String]) {
     }
     preprocessTimer.stop()
 
-    // Check if an accompanying .yml file exists (SV-COMP style).
-    val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
-    val bmInfo : Option[BenchmarkInfo] =
-      if (Files.exists(Paths.get(yamlFileName))) {
-        Console.withOut(outStream){println("Accompanying YAML file found.")}
-        val info = extractBenchmarkInfo(yamlFileName)
-        if (info isEmpty) Util.warn(
-          "Could not parse the accompanying YAML (.yml) file, ignoring it.")
-        info
-      } else None
-
-    /**
-     * Properties to check and their expected status, if any.
-     */
-    val (propertiesToCheck : Set[properties.Property],
-         propertyToExpected : Map[properties.Property, Boolean]) = {
-      val cliProps : Set[properties.Property] = Set(
-        if (checkMemTrack) Some(properties.MemValidTrack) else None,
-        if (checkValidFree) Some(properties.MemValidFree) else None,
-        if (checkValidDeref) Some(properties.MemValidDeref) else None,
-        if (checkMemCleanup) Some(properties.MemValidCleanup) else None,
-        if (checkReachSafety) Some(properties.Reachability) else None).flatten ++
-        (if (checkMemSafety) memSafetyProperties else Set[properties.Property]())
-
-      if (cliProps.nonEmpty && bmInfo.nonEmpty) {
-        Util.warn("A property file exists, but properties are also " +
-                  "specified in the command-line. Ignoring the property file.")
-        (cliProps, Map.empty[properties.Property, Boolean])
-      } else if (bmInfo.nonEmpty) {
-        // SV-COMP style property specification.
-        val props = bmInfo.get.properties.flatMap{p =>
-          val verdictOption = p.expected_verdict
-          p match {
-            case _ if p.isReachSafety =>
-              verdictOption.map(properties.Reachability -> _)
-
-            case _ if p.isMemSafety =>
-              val initialSubProps = memSafetyProperties.map(_ -> true).toMap
-              // At most one sub-property is expected to not hold, if any.
-              val updatedSubProps = verdictOption match {
-                case Some(false) => p.subproperty match {
-                  case Some("valid-free")     =>
-                    initialSubProps.updated(properties.MemValidFree, false)
-                  case Some("valid-deref")    =>
-                    initialSubProps.updated(properties.MemValidDeref, false)
-                  case Some("valid-memtrack") =>
-                    initialSubProps.updated(properties.MemValidTrack, false)
-                  case Some(prop) => throw new Exception(
-                    s"Unknown sub-property $prop for the memsafety category.")
-                  case None => throw new Exception(
-                    "The failing sub-property must be specified for memsafety.")
-                }
-                case _ => initialSubProps
-              }
-              updatedSubProps
-            case _ if p.isMemCleanup =>
-              verdictOption.map(properties.MemValidCleanup -> _)
-
-            case _ => None
-          }
-        }.toMap
-
-        val propsSet : Set[properties.Property] = props.keys.toSet
-        (propsSet, props)
-      } else {
-        // No property file: use CLI properties. If none, use Reachability.
-        (if (cliProps nonEmpty) cliProps else Set(properties.Reachability),
-          Map[properties.Property, Boolean]())
-      }
-    }
-
     Console.withOut(outStream){
       println("Checked properties:")
       for (prop <- propertiesToCheck) {
@@ -290,13 +344,6 @@ class Main (args: Array[String]) {
         }
       }
       println
-    }
-
-    if (bmInfo.nonEmpty && propertiesToCheck.isEmpty) {
-      return ExecutionSummary(DidNotExecute, preprocessTime = preprocessTimer.s)
-      //throw new MainException("An associated property file (.yml) is " +
-      //  "found, however TriCera currently can only check for unreach-call" +
-      //  " and a subset of valid-memsafety properties.")
     }
 
     // todo: pass string to TriCera instead of writing to and passing file?
@@ -410,16 +457,21 @@ class Main (args: Array[String]) {
 
     /**
      * Expected status is printed in SMT files when they are dumped.
-     * @todo Better handling of expected status.
-     *       1) checking multiple properties at once, combine the properties
-     *       2) checking one property at a time, use only that property's expected
      */
     val expectedStatus =
-      // sat if no tracks are false, unsat otherwise
-      if (propertyToExpected.nonEmpty) {
-        if (propertyToExpected.forall(_._2)) "sat"
+      // sat if no properties are expected to be false, unsat otherwise
+      if (propertiesToCheck.forall(propertyToExpected.contains)) {
+        if (propertyToExpected.filter(
+          pair => propertiesToCheck.contains(pair._1)).forall(_._2)) "sat"
         else "unsat"
       } else "unknown"
+
+    val smtFileName = if (splitProperties) {
+      assert(propertiesToCheck.size == 1)
+      s"$fileName-${propertiesToCheck.head}.smt2"
+    } else {
+      s"$fileName.smt2"
+    }
 
     val verificationLoop =
       try {
@@ -428,7 +480,7 @@ class Main (args: Array[String]) {
             system = smallSystem,
             initialInvariants = null,
             printIntermediateClauseSets = printIntermediateClauseSets,
-            fileName = fileName + ".smt2",
+            fileName = smtFileName,
             expectedStatus = expectedStatus,
             log = needFullSolution,
             templateBasedInterpolation = templateBasedInterpolation,
@@ -456,7 +508,6 @@ class Main (args: Array[String]) {
 
     val executionResult = result match {
       case Left(res) =>
-        println("SAFE")
         res match {
           case Some(solution) =>
             import tricera.postprocessor._
@@ -588,15 +639,11 @@ class Main (args: Array[String]) {
         }
         Safe
       case Right(cex) => {
-        println("UNSAFE")
-
-        import hornconcurrency.VerificationLoop._
-        import tricera.Util.SourceInfo
-        import lazabs.horn.bottomup.HornClauses
-
-      val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
+        val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] =
+          cex._2.iterator.map{
           case (_, clause) =>
-            val richClauses : Seq[CCClause]= mergedToOriginal get clause match {
+            val richClauses : Seq[CCClause] = mergedToOriginal get clause
+            match {
               case Some(clauses) =>
                 for (Some(richClause) <- clauses map reader.getRichClause) yield
                   richClause
@@ -609,8 +656,18 @@ class Main (args: Array[String]) {
             (clause -> richClauses)
         }.toMap
 
+        val violatedAssertionClause     = cex._2.head._2
+        val violatedRichAssertionClause =
+          clauseToUnmergedRichClauses get violatedAssertionClause match {
+            case Some(richClauses) if richClauses != Nil =>
+              assert(richClauses.size == 1)
+              Some(richClauses.head.asInstanceOf[CCAssertionClause])
+            case _                                       => None
+          }
+
         if (plainCEX) {
-          if (cex._1 == Nil) { // todo: print cex when hornConcurrency no longer returns Nil
+          if (cex._1 == Nil) { // todo: print cex when hornConcurrency no
+            // longer returns Nil
             println("This counterexample cannot be printed in the " +
                     "console, use -eogCEX for a graphical view.")
           }
@@ -618,21 +675,20 @@ class Main (args: Array[String]) {
             println
             hornconcurrency.VerificationLoop.prettyPrint(cex)
             if (system.processes.size == 1 &&
-                system.processes.head._2 == ParametricEncoder.Singleton) { // todo: print failed assertion for concurrent systems
-              val violatedAssertionClause = cex._2.head._2
-              clauseToUnmergedRichClauses get violatedAssertionClause match {
-                case Some(richClauses) if richClauses != Nil =>
-                  assert(richClauses.size == 1)
-                  println("Failed assertion:\n" + richClauses.head.toString)
+                system.processes.head._2 == ParametricEncoder.Singleton) { //
+              // todo: print failed assertion for concurrent systems
+              violatedRichAssertionClause match {
+                case Some(assertionClause) =>
+                  println("Failed assertion:\n" + assertionClause.toString)
                   println
-                case None                                    =>
+                case None                  =>
               }
             }
           }
         }
         if (!pngNo) { // dotCEX and maybe eogCEX
-          if(system.processes.size == 1 &&
-             system.processes.head._2 == ParametricEncoder.Singleton) {
+          if (system.processes.size == 1 &&
+              system.processes.head._2 == ParametricEncoder.Singleton) {
             Util.show(cex._2, "cex",
                       clauseToUnmergedRichClauses.map(c => (c._1 ->
                                                             c._2.filter(_.srcInfo.nonEmpty).map(_.srcInfo.get))),
@@ -640,10 +696,26 @@ class Main (args: Array[String]) {
                       reader.PredPrintContext.predSrcInfo,
                       reader.PredPrintContext.isUninterpretedPredicate)
           } else {
-            println("Cannot display -eogCEX for concurrent processes, try -cex.")
+            println("Cannot display -eogCEX for concurrent processes, try " +
+                    "-cex.")
           }
         }
-        Unsafe
+        if (propertiesToCheck.contains(properties.MemValidTrack)
+            && params.useMemCleanupForMemTrack) {
+          if (system.processes.length > 1) {
+            println("Checking memtrack property with more than one process is" +
+                    " not supported.")
+            Unknown("concurrency - cannot check memtrack")
+          } else if (violatedRichAssertionClause.nonEmpty &&
+                     violatedRichAssertionClause.get.property ==
+                     properties.MemValidCleanup) {
+            /**
+             * The stronger property valid-memcleanup was violated, we cannot
+             * conclude that the weaker valid-memtrack is also violated.
+             */
+            Unknown("memcleanup violated - memtrack inconclusive")
+          } else Unsafe
+        } else Unsafe
       }
     }
 

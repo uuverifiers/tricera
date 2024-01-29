@@ -69,9 +69,9 @@ object Benchmarking {
     override def toString : String =
       "UNSAFE"
   }
-  case object Unknown extends ExecutionResult {
+  case class Unknown(reason : String = "") extends ExecutionResult {
     override def toString: String =
-      "UNKNOWN"
+      "UNKNOWN" + (if(reason.nonEmpty) s" ($reason)" else "")
   }
   case object DidNotExecute extends ExecutionResult {
     override def toString : String =

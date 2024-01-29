@@ -1,11 +1,8 @@
 
 list-001.c
-Warning: enabling heap model
 SAFE
 
 list-001-fail.c
-Warning: enabling heap model
-UNSAFE
 
 ---------------------------------------------------------------------
 Init:
@@ -20,13 +17,12 @@ Final:
  main12_3(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
 ---------------------------------------------------------------------
 Failed assertion:
-false :- main12_3(@h, list:11, y:12), y:12 = 0. (line:13 col:3) (property: unreach-call)
+false :- main12_3(@h, list:11, y:12), y:12 = 0. (line:13 col:3) (property: user-assertion)
 
+UNSAFE
 
 list-002-fail.c
-Warning: enabling heap model
 Warning: no definition of function "nondet_bool" available
-UNSAFE
 
 -------------------------------------------------------------------------------------------------
 Init:
@@ -41,20 +37,17 @@ Final:
  main_3(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
 -------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_3(@h, list:14, tail:17), list:14 = tail:17. (line:29 col:3) (property: unreach-call)
+false :- main_3(@h, list:14, tail:17), list:14 = tail:17. (line:29 col:3) (property: user-assertion)
 
+UNSAFE
 
 mutually-referential-structs.c
-Warning: enabling heap model
 SAFE
 
 mutually-referential-structs-fail.c
-Warning: enabling heap model
 SAFE
 
 mutually-referential-structs-unsafe.c
-Warning: enabling heap model
-UNSAFE
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
@@ -69,209 +62,184 @@ Final:
  main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1)) 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_3(@h, list:14), p(getchild(read(@h, child1(getparent(read(@h, list:14)))))) != p(getchild(read(@h, child2(getparent(read(@h, list:14)))))). (line:20 col:3) (property: unreach-call)
+false :- main_3(@h, list:14), p(getchild(read(@h, child1(getparent(read(@h, list:14)))))) != p(getchild(read(@h, child2(getparent(read(@h, list:14)))))). (line:20 col:3) (property: user-assertion)
 
+UNSAFE
 
 simple-struct.c
-Warning: enabling heap model
 SAFE
 
 simple-struct-2.c
-Warning: enabling heap model
 SAFE
 
 simple-struct-fail.c
-Warning: enabling heap model
 SAFE
 
 swap-1.c
-Warning: enabling heap model
 SAFE
 
 swap-1-fail.c
-Warning: enabling heap model
 SAFE
 
 swap-2.c
-Warning: enabling heap model
 SAFE
 
 swap-2-fail.c
-Warning: enabling heap model
 SAFE
 
 swap-3.c
-Warning: enabling heap model
 SAFE
 
 simple-arith.c
-Warning: enabling heap model
 SAFE
 
 typecastUnsafe-001.c
-Warning: enabling heap model
+
+----------------------------------------------------------------------------------
+Init:
+                          main6_3(emptyHeap, nthAddr(0))                          
+----------------------------------------------------------------------------------
+                                        |                                         
+                                        |                                         
+                                        V                                         
+ main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(1)) 
+----------------------------------------------------------------------------------
+Final:
+ main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(1)) 
+----------------------------------------------------------------------------------
+Failed assertion:
+false :- main7_3(@h, @v_cleanup, x:6, y:7), !is_O_S(read(@h, y:7)). (line:7 col:12) (property: valid-deref)
+
 UNSAFE
 
-----------------------------------------------------------------------
-Init:
-                          main6_3(emptyHeap)                          
-----------------------------------------------------------------------
-                                  |                                   
-                                  |                                   
-                                  V                                   
- main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(1)) 
-----------------------------------------------------------------------
-Final:
- main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(1)) 
-----------------------------------------------------------------------
-Failed assertion:
-false :- main7_3(@h, x:6, y:7), !is_O_S(read(@h, y:7)). (line:7 col:12) (property: valid-deref)
-
-
 typecastSafe-001.c
-Warning: enabling heap model
 SAFE
 
 illegal-access-001.c
-Warning: enabling heap model
 tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
 (error "Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)")
 Other Error: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
 
 illegal-access-002.c
-Warning: enabling heap model
 tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)
 (error "Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)")
 Other Error: Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)
 
 postop.c
-Warning: enabling heap model
 SAFE
 
 postop-struct.c
-Warning: enabling heap model
 SAFE
 
 preop.c
-Warning: enabling heap model
 SAFE
 
 preop-struct.c
-Warning: enabling heap model
 SAFE
 
 opassign.c
-Warning: enabling heap model
 SAFE
 
 opassign-struct.c
-Warning: enabling heap model
 SAFE
 
 unsafe-access-001.c
-Warning: enabling heap model
+
+----------------------------------------------------------------------------------
+Init:
+                          main2_3(emptyHeap, nthAddr(0))                          
+----------------------------------------------------------------------------------
+                                        |                                         
+                                        |                                         
+                                        V                                         
+ main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(0)) 
+----------------------------------------------------------------------------------
+Final:
+ main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(0)) 
+----------------------------------------------------------------------------------
+Failed assertion:
+false :- main3_3(@h, @v_cleanup, x:2, y:3), !is_O_Addr(read(@h, y:3)). (line:3 col:7) (property: valid-deref)
+
 UNSAFE
 
-----------------------------------------------------------------------
-Init:
-                          main2_3(emptyHeap)                          
-----------------------------------------------------------------------
-                                  |                                   
-                                  |                                   
-                                  V                                   
- main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(0)) 
-----------------------------------------------------------------------
-Final:
- main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(1), nthAddr(0)) 
-----------------------------------------------------------------------
-Failed assertion:
-false :- main3_3(@h, x:2, y:3), !is_O_Addr(read(@h, y:3)). (line:3 col:7) (property: valid-deref)
-
-
 stackptr-to-heapptr.c
-Warning: enabling heap model
 SAFE
 
 free-1-unsafe.c
-Warning: enabling heap model
-UNSAFE
 
-------------------------------------------------------------
+------------------------------------------------------------------------
 Init:
-                     main2_3(emptyHeap)                     
-------------------------------------------------------------
-                             |                              
-                             |                              
-                             V                              
- main2_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(1)) 
-------------------------------------------------------------
-                             |                              
-                             |                              
-                             V                              
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(1))     
-------------------------------------------------------------
+                     main2_3(emptyHeap, nthAddr(0))                     
+------------------------------------------------------------------------
+                                   |                                    
+                                   |                                    
+                                   V                                    
+ main2_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(0), nthAddr(1)) 
+------------------------------------------------------------------------
+                                   |                                    
+                                   |                                    
+                                   V                                    
+    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
+------------------------------------------------------------------------
 Final:
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(1))     
-------------------------------------------------------------
+    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
+------------------------------------------------------------------------
 Failed assertion:
-false :- main(@h, a:2), !is_O_Int(read(@h, a:2)). (line:2 col:7) (property: valid-deref)
+false :- main(@h, @v_cleanup, a:2), !is_O_Int(read(@h, a:2)). (line:2 col:7) (property: valid-deref)
 
+UNSAFE
 
 free-2-nondet-unsafe.c
-Warning: enabling heap model
 Warning: no definition of function "nondet" available
+
+------------------------------------------------------------------------
+Init:
+                     main4_3(emptyHeap, nthAddr(0))                     
+------------------------------------------------------------------------
+                                   |                                    
+                                   |                                    
+                                   V                                    
+ main5_6_2(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(0), nthAddr(1)) 
+------------------------------------------------------------------------
+                                   |                                    
+                                   |                                    
+                                   V                                    
+    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
+------------------------------------------------------------------------
+Final:
+    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
+------------------------------------------------------------------------
+Failed assertion:
+false :- main(@h, @v_cleanup, a:4), !is_O_Int(read(@h, a:4)). (line:4 col:7) (property: valid-deref)
+
 UNSAFE
 
-------------------------------------------------------------
-Init:
-                     main4_3(emptyHeap)                     
-------------------------------------------------------------
-                             |                              
-                             |                              
-                             V                              
- main5_6_2(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(1)) 
-------------------------------------------------------------
-                             |                              
-                             |                              
-                             V                              
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(1))     
-------------------------------------------------------------
-Final:
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(1))     
-------------------------------------------------------------
-Failed assertion:
-false :- main(@h, a:4), !is_O_Int(read(@h, a:4)). (line:4 col:7) (property: valid-deref)
-
-
 free-3-safe.c
-Warning: enabling heap model
 SAFE
 
 free-4-unsafe.c
-Warning: enabling heap model
+
+--------------------------------------------------------------------------------
+Init:
+                         main4_3(emptyHeap, nthAddr(0))                         
+--------------------------------------------------------------------------------
+                                       |                                        
+                                       |                                        
+                                       V                                        
+     main4_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(0), nthAddr(1))     
+--------------------------------------------------------------------------------
+                                       |                                        
+                                       |                                        
+                                       V                                        
+ main6_3(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------------------
+Final:
+ main6_3(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------------------
+Failed assertion:
+false :- main6_3(@h, @v_cleanup, a:4, b:6), !is_O_Int(read(@h, b:6)). (line:6 col:7) (property: valid-deref)
+
 UNSAFE
 
---------------------------------------------------------------------
-Init:
-                         main4_3(emptyHeap)                         
---------------------------------------------------------------------
-                                 |                                  
-                                 |                                  
-                                 V                                  
-     main4_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(1))     
---------------------------------------------------------------------
-                                 |                                  
-                                 |                                  
-                                 V                                  
- main6_3(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
---------------------------------------------------------------------
-Final:
- main6_3(newHeap(alloc(emptyHeap, defObj)), nthAddr(1), nthAddr(1)) 
---------------------------------------------------------------------
-Failed assertion:
-false :- main6_3(@h, a:4, b:6), !is_O_Int(read(@h, b:6)). (line:6 col:7) (property: valid-deref)
-
-
 struct-ptrfield-1.c
-Warning: enabling heap model
 SAFE

@@ -10,5 +10,6 @@ void main() {
   *x = 42;
   assert(*z == *x);
   assert(*z == 42);
+  free(y);
 }
 

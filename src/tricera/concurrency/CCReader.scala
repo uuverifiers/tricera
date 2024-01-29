@@ -78,7 +78,6 @@ object CCReader {
           useTime = true
         }
         case NeedsHeapModelException => {
-          warn("enabling heap model")
           modelHeap = true
         }
       }
@@ -392,9 +391,9 @@ class CCReader private (prog              : Program,
   }
 
   private[tricera]
-  def addAssertionClause(clause       : Clause,
-                         srcInfo      : Option[SourceInfo],
-                         propertyType : properties.Property)
+  def mkRichAssertionClause(clause       : Clause,
+                            srcInfo      : Option[SourceInfo],
+                            propertyType : properties.Property)
   : CCAssertionClause = {
     val richClause = new CCAssertionClause(clause, srcInfo, propertyType)
     clauseToRichClause += clause -> richClause
@@ -472,7 +471,7 @@ class CCReader private (prog              : Program,
                     " in one step")
                 val newAssertionClause = merge(c.clause, currentClause.clause)
                 if (!newAssertionClause.hasUnsatConstraint)
-                  assertionClauses += addAssertionClause(
+                  assertionClauses += mkRichAssertionClause(
                     newAssertionClause, c.srcInfo, c.property)
               }
           }
@@ -696,7 +695,9 @@ class CCReader private (prog              : Program,
    */
   private val memCleanupProphecyVar =
     new CCVar("@v_cleanup", None, CCHeapPointer(heap, CCVoid))
-  if (propertiesToCheck contains properties.MemValidCleanup) {
+  if ((propertiesToCheck contains properties.MemValidCleanup) ||
+      propertiesToCheck.contains(properties.MemValidTrack) &&
+       TriCeraParameters.get.useMemCleanupForMemTrack) {
     GlobalVars addVar memCleanupProphecyVar
     GlobalVars.inits += CCTerm(heap.nullAddr(), memCleanupProphecyVar.typ, None)
     variableHints += List()
@@ -789,7 +790,9 @@ class CCReader private (prog              : Program,
     // TODO: This is very brittle and unintuitive - come up with a better solution.
     GlobalVars.inits ++= (globalVarSymex.getValues drop
       (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0) +
-      (if (propertiesToCheck.contains(properties.MemValidCleanup)) 1 else 0))
+      (if ((propertiesToCheck contains properties.MemValidCleanup) ||
+           propertiesToCheck.contains(properties.MemValidTrack) &&
+           TriCeraParameters.get.useMemCleanupForMemTrack) 1 else 0))
     // if while adding glboal variables we have changed the heap, the heap term
     // needs to be reinitialised as well. Happens with global array allocations.
     if (modelHeap) {
@@ -1096,7 +1099,9 @@ class CCReader private (prog              : Program,
            * This ensures [[properties.MemValidCleanup]].
           */
           if (modelHeap &&
-              propertiesToCheck.contains(properties.MemValidCleanup)) {
+              ((propertiesToCheck contains properties.MemValidCleanup) ||
+               propertiesToCheck.contains(properties.MemValidTrack) &&
+               TriCeraParameters.get.useMemCleanupForMemTrack)) {
             val heapInd = GlobalVars.lastIndexWhere(heapVar)
             val cleanupVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
 
@@ -1114,7 +1119,7 @@ class CCReader private (prog              : Program,
 
                 val resVar = getResVar(args.last.typ)
                 assertionClauses +=
-                  addAssertionClause(
+                mkRichAssertionClause(
                     (args(cleanupVarInd).term === heap.nullAddr()) :-
                      atom(finalPred,
                           allFormalVarTerms.toList ++
@@ -2280,7 +2285,9 @@ class CCReader private (prog              : Program,
                            readObj =/= heap._defObj,
                            srcInfo, properties.MemValidFree)
           }
-          if (propertiesToCheck contains properties.MemValidCleanup) {
+          if ((propertiesToCheck contains properties.MemValidCleanup) ||
+              propertiesToCheck.contains(properties.MemValidTrack) &&
+              TriCeraParameters.get.useMemCleanupForMemTrack) {
             /**
              * Set [[memCleanupProphecyVar]] back to NULL, if the freed address
              * is the same as the one stored.
@@ -2335,7 +2342,9 @@ class CCReader private (prog              : Program,
                                srcInfo, properties.MemValidFree)
             }
           }
-          if (propertiesToCheck contains properties.MemValidCleanup) {
+          if ((propertiesToCheck contains properties.MemValidCleanup) ||
+              propertiesToCheck.contains(properties.MemValidTrack) &&
+              TriCeraParameters.get.useMemCleanupForMemTrack) {
             /**
              * Set [[memCleanupProphecyVar]] back to NULL, if the beginning of
              * the freed address block is the same as the one stored.
@@ -2504,7 +2513,7 @@ class CCReader private (prog              : Program,
                        propertyType : properties.Property) : Unit = {
       import HornClauses._
       val clause = (property :- (initAtom &&& guard))
-      assertionClauses += addAssertionClause(clause, srcInfo, propertyType)
+      assertionClauses += mkRichAssertionClause(clause, srcInfo, propertyType)
     }
 
     def addValue(t : CCExpr) = {
@@ -3239,22 +3248,23 @@ class CCReader private (prog              : Program,
         val srcInfo = Some(getSourceInfo(exp))
         // inline the called function
         printer print exp.exp_ match {
-          case "__VERIFIER_error" | "reach_error" => {
-            assertProperty(false, srcInfo, properties.Reachability)
+          case "reach_error" =>
+            /**
+             * A special SV-COMP function used in the unreach-call category.
+             * We directly rewrite this as `assert(0)`.
+             */
+            if(propertiesToCheck contains properties.Reachability)
+              assertProperty(false, srcInfo, properties.Reachability)
             pushVal(CCFormula(true, CCInt, srcInfo))
-          }
-          case name => {
+          case name =>
             outputClause(srcInfo)
             handleFunction(name, initPred, 0)
-          }
         }
 
       case exp : Efunkpar =>
         val srcInfo = Some(getSourceInfo(exp))
         (printer print exp.exp_) match {
-          case "assert" | "static_assert" | "__VERIFIER_assert"
-                          if exp.listexp_.size == 1 =>
-          if (propertiesToCheck contains properties.Reachability) {
+          case "assert" | "static_assert" if exp.listexp_.size == 1 =>
             val property = exp.listexp_.head match {
               case a : Efunkpar
                 if uninterpPredDecls contains(printer print a.exp_) =>
@@ -3271,11 +3281,9 @@ class CCReader private (prog              : Program,
               case _ =>
                 atomicEvalFormula(exp.listexp_.head).f
             }
-            assertProperty(property, srcInfo, properties.Reachability)
-          }
-          pushVal(CCFormula(true, CCInt, srcInfo))
-        case "assume" | "__VERIFIER_assume"
-                          if (exp.listexp_.size == 1) =>
+            assertProperty(property, srcInfo, properties.UserAssertion)
+            pushVal(CCFormula(true, CCInt, srcInfo))
+        case "assume" if (exp.listexp_.size == 1) =>
           val property = exp.listexp_.head match {
             case a : Efunkpar
               if uninterpPredDecls contains(printer print a.exp_) =>
@@ -3354,7 +3362,9 @@ class CCReader private (prog              : Program,
                */
               val allocatedAddr = heapAlloc(objectTerm)
 
-              if (propertiesToCheck contains properties.MemValidCleanup) {
+              if ((propertiesToCheck contains properties.MemValidCleanup) ||
+                  propertiesToCheck.contains(properties.MemValidTrack) &&
+                  TriCeraParameters.get.useMemCleanupForMemTrack) {
                 /**
                  * Nondeterministically write the address to the prophecy
                  * variable [[memCleanupProphecyVar]].
@@ -3381,7 +3391,9 @@ class CCReader private (prog              : Program,
                        CCHeapArrayPointer(heap, typ, arrayLoc), srcInfo)
 
               if (arrayLoc == ArrayLocation.Heap &&
-                  propertiesToCheck.contains(properties.MemValidCleanup)) {
+                  ((propertiesToCheck contains properties.MemValidCleanup) ||
+                   propertiesToCheck.contains(properties.MemValidTrack) &&
+                   TriCeraParameters.get.useMemCleanupForMemTrack)) {
                 /**
                  * Nondeterministically write the address to the prophecy
                  * variable [[memCleanupProphecyVar]]. Here a corner case to
@@ -3669,7 +3681,8 @@ class CCReader private (prog              : Program,
           val preAtom  = ctx.prePred(prePredArgs)
           val postAtom = ctx.postPred(postPredArgs)
 
-          assertProperty(preAtom, None, properties.FunctionPrecondition)
+          assertProperty(preAtom, functionEntry.srcInfo,
+                         properties.FunctionPrecondition(name,functionEntry.srcInfo))
 
           addGuard(postAtom)
 

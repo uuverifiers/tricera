@@ -29,6 +29,10 @@
 
 package tricera
 
+import ap.api.SimpleAPI
+import ap.parser.IFormula
+import tricera.Util.SourceInfo
+
 /**
  * We define the properties (mostly) as defined in SV-COMP
  * [[https://sv-comp.sosy-lab.org/2024/rules.php]].
@@ -41,10 +45,42 @@ package object properties {
   // Explicit assertions
 
   /**
-   * Unreachability of Error Function
+   * Unreachability of error function: `reach_error`
    */
   case object Reachability extends Property {
     override def toString : String = "unreach-call"
+  }
+
+  case object UserAssertion extends Property {
+    override def toString : String = "user-assertion"
+  }
+
+  /**
+   * Function pre-/post-conditions asserted at function entry and function
+   * call sites respectively.
+   */
+  case class FunctionPrecondition(funName : String,
+                                  srcInfo : Option[SourceInfo])
+    extends Property {
+    override def toString : String = {
+      s"precondition of function $funName" +
+      (srcInfo match {
+        case Some(info) => s" asserted at ${info.line}:${info.col}."
+        case None       => ""
+      })
+    }
+  }
+
+  case class FunctionPostcondition(funName : String,
+                                   srcInfo : Option[SourceInfo])
+    extends Property {
+    override def toString : String = {
+      s"postcondition of function $funName" +
+      (srcInfo match {
+        case Some(info) => s" asserted at ${info.line}:${info.col}."
+        case None       => ""
+      })
+    }
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -119,15 +155,7 @@ package object properties {
   }
 
   //////////////////////////////////////////////////////////////////////////////
-  // Non-SV-COMP properties
-
-  /**
-   * Function pre-/post-conditions asserted at function entry and function
-   * call sites respectively.
-   */
-  case object FunctionPrecondition extends Property
-  case object FunctionPostcondition extends Property
-
+  // Other properties
 
   /**
    * In `switch` statements that we never try to jump to a case that does not

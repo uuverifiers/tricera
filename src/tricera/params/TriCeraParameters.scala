@@ -72,6 +72,15 @@ class TriCeraParameters extends GlobalParameters {
   var checkMemCleanup  : Boolean = false
 
   /**
+   * memtrack is not directly supported by TriCera. Instead, we check for
+   * the stronger property memcleanup - safe means safe for memtrack, unsafe
+   * means inconclusive.
+   * @todo Support memtrack and remove the following field, refactoring the code
+   *       that refer to it.
+   */
+  val useMemCleanupForMemTrack = true
+
+  /**
    * If set, will check all properties in [[memSafetyProperties]].
    * This set should reflect the memsafety category of SV-COMP.
    */
@@ -80,6 +89,11 @@ class TriCeraParameters extends GlobalParameters {
     import tricera.properties._
     Set(MemValidDeref, MemValidTrack, MemValidFree)
   }
+
+  /**
+   * If set, will verify each property separately.
+   */
+  var splitProperties : Boolean = false
 
   var useArraysForHeap : Boolean = false
 
@@ -277,6 +291,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-valid-deref"      :: rest => checkValidDeref = true; parseArgs(rest)
     case "-valid-free"       :: rest => checkValidFree = true; parseArgs(rest)
     case "-valid-memcleanup" :: rest => checkMemCleanup = true; parseArgs(rest)
+    case "-splitProperties"  :: rest => splitProperties = true; parseArgs(rest)
 
     case arg :: rest if Set("-v", "--version").contains(arg) =>
       println(version); false
@@ -318,6 +333,7 @@ class TriCeraParameters extends GlobalParameters {
     |-valid-deref       Checks the validity of pointer dereferences and array accesses.
     |-valid-free        Checks that all occurrences of 'free' are valid.
     |-valid-memcleanup  Checks that all allocated memory is deallocated before program termination.
+    |-splitProperties   Check each property separately.
 
     |Horn clauses:
     |-p                 Pretty-print Horn clauses
