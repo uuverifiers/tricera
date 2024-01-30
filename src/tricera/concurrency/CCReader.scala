@@ -639,14 +639,14 @@ class CCReader private (prog              : Program,
   val ObjSort = HeapObj.ADTSort(0)
 
   val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
-    (for (i <- structInfos.indices) yield {
-      if(structInfos(i).fieldInfos isEmpty) warn(
-        "Struct " + structInfos(i).name + " was declared, but never defined, " +
+    (for ((struct, i) <- structInfos zipWithIndex) yield {
+      if(struct.fieldInfos isEmpty) warn(
+        s"Struct ${struct.name} was declared, but never defined, " +
           "or it has no fields.")
       val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
-        for(FieldInfo(fieldName, fieldType, ptrDepth) <-
-              structInfos(i).fieldInfos) yield
-          (fieldName,
+        for(fieldInfo@FieldInfo(fieldName, fieldType, ptrDepth) <-
+              struct.fieldInfos) yield
+          (struct.getFullFieldName(fieldName),
             if (ptrDepth > 0) Heap.AddressCtor
             else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
@@ -657,7 +657,7 @@ class CCReader private (prog              : Program,
                 }
             }
             })
-      (structInfos(i).name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
+      (struct.name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
     }).toList
 
   // todo: only add types that exist in the program - should also add machine arithmetic types
@@ -726,7 +726,8 @@ class CCReader private (prog              : Program,
   for (((ctor, sels), i) <- structCtors zip structSels zipWithIndex) {
     val fieldInfos = structInfos(i).fieldInfos
     val fieldsWithType = for (j <- fieldInfos.indices) yield {
-      assert(sels(j).name == fieldInfos(j).name)
+      val fullFieldName = structInfos(i).getFullFieldName(fieldInfos(j).name)
+      assert(sels(j).name == fullFieldName)
       (sels(j),{
         val actualType = fieldInfos(j).typ match {
         case Left(ind) => CCStructField(structInfos(ind).name, structDefs)
@@ -1678,7 +1679,7 @@ class CCReader private (prog              : Program,
 
   private def getPtrType (ptr : Pointer, _typ : CCType) : CCType = {
     ptr match {
-      case _   : Point => CCHeapPointer(heap, _typ)
+      case _   : Point | _ : PointQual => CCHeapPointer(heap, _typ) // todo; support pointer qualifiers?
       case ptr : PointPoint =>
         getPtrType(ptr.pointer_, CCHeapPointer(heap, _typ))
       case _ => throw new TranslationException(
@@ -3335,6 +3336,8 @@ class CCReader private (prog              : Program,
                     "Unsupported alloc expression: " + (printer print exp))
               }
             //case exp : Evar => // allocation in bytes
+            case e : Econst => // allocation in bytes
+              (CCInt, eval(e)) // todo: add support for char?
 
             case _ => throw new TranslationException(
               "Unsupported alloc expression: " + (printer print exp))
@@ -3531,13 +3534,21 @@ class CCReader private (prog              : Program,
         evaluatingLhs = false
         val subexpr = eval(exp.exp_)
         evaluatingLhs = evaluatingLhs_pre
-        val fieldName = exp.cident_
+        val rawFieldName = exp.cident_
         subexpr.typ match {
           case structType : CCStruct => // todo a better way
-            if(!structType.contains(fieldName))
-              throw new TranslationException(fieldName + " is not a member of "
+            val structInfo = structInfos.find(_.name == structType.shortName)
+            match {
+              case Some(info) => info
+              case None => throw new TranslationException(
+                s"Internal error: could not find struct ${structType.shortName} " +
+                s"in structInfos.")
+            }
+            val fullFieldName = structInfo.getFullFieldName(rawFieldName)
+            if(!structType.contains(fullFieldName))
+              throw new TranslationException(rawFieldName + " is not a member of "
                 + structType + "!")
-            val ind = structType.getFieldIndex(fieldName)
+            val ind = structType.getFieldIndex(fullFieldName)
             val fieldType = structType.getFieldType(ind) /*match {
               case declPtr : CCDeclarationOnlyPointer if !evaluatingLhs =>
                 getHeapPointer (declPtr)
@@ -3547,7 +3558,7 @@ class CCReader private (prog              : Program,
             pushVal(CCTerm(sel(subexpr.toTerm), fieldType, srcInfo))
           case _ =>
             throw new TranslationException("Trying to access field '." +
-              fieldName + "' of a variable which is not a struct.")
+              rawFieldName + "' of a variable which is not a struct.")
         }
 
       case exp : Epoint =>
@@ -3556,13 +3567,13 @@ class CCReader private (prog              : Program,
         evaluatingLhs = false
         val subexpr = eval(exp.exp_)
         evaluatingLhs = evaluatingLhs_pre
-        val fieldName = exp.cident_
+        val rawFieldName = exp.cident_
         val term = subexpr.typ match {
           case ptrType : CCStackPointer => getPointedTerm(ptrType)
           case _ : CCHeapPointer =>  //todo: error here if field is null
             heapRead(subexpr)
           case _ => throw new TranslationException(
-            "Trying to access field '->" + fieldName + "' of non pointer.")
+            "Trying to access field '->" + rawFieldName + "' of non pointer.")
         }
         val structType = term.typ match {
           case typ : CCStruct => typ
@@ -3571,10 +3582,16 @@ class CCReader private (prog              : Program,
             "only implemented for structs, not " + typ + ": " +
             (printer print exp))
         }
-        if(!structType.contains(fieldName))
-          throw new TranslationException(fieldName + " is not a member of "
+        val structInfo = structInfos.find(_.name == structType.shortName) match {
+          case Some(info) => info
+          case None => throw new TranslationException(
+            s"Internal error: could not find struct ${structType.shortName} in structInfos.")
+        }
+        val fullFieldName = structInfo.getFullFieldName(rawFieldName)
+        if(!structType.contains(fullFieldName))
+          throw new TranslationException(rawFieldName + " is not a member of "
             + structType + "!")
-        val ind = structType.getFieldIndex(fieldName)
+        val ind = structType.getFieldIndex(fullFieldName)
         val fieldType = structType.getFieldType(ind)
         val sel = structType.getADTSelector(ind)
         pushVal(CCTerm(sel(term.toTerm), fieldType, srcInfo))
@@ -3639,7 +3656,8 @@ class CCReader private (prog              : Program,
             pushVal(readValue)
           case _ =>
             throw new TranslationException(getLineString(exp) +
-              arrayTerm + " is not an array type!")
+              arrayTerm + " is not a supported array type - currently only " +
+                                           "1-d arrays are supported.")
         }
 
       case _ =>

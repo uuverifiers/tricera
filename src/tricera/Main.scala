@@ -167,16 +167,18 @@ object Main {
               // At most one sub-property is expected to not hold, if any.
               val updatedSubProps = verdictOption match {
                 case Some(false) => p.subproperty match {
-                  case Some("valid-free")     =>
+                  case Some("valid-free") =>
                     initialSubProps.updated(properties.MemValidFree, false)
-                  case Some("valid-deref")    =>
+                  case Some("valid-deref") =>
                     initialSubProps.updated(properties.MemValidDeref, false)
                   case Some("valid-memtrack") =>
                     initialSubProps.updated(properties.MemValidTrack, false)
-                  case Some(prop)             => throw new Exception(
+                  case Some(prop) => throw new Exception(
                     s"Unknown sub-property $prop for the memsafety category.")
-                  case None                   => throw new Exception(
-                    "The failing sub-property must be specified for memsafety.")
+                  case None => throw new Exception(
+                    "For memsafety where the expected verdict is 'false', the " +
+                    "failing sub-property must be specified. Alternatively, the " +
+                    "expected verdict can be removed.")
                 }
                 case _ => initialSubProps
               }

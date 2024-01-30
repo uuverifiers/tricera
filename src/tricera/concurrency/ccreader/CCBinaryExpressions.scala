@@ -33,6 +33,7 @@ import ap.theories.ModuloArithmetic
 import tricera.concurrency.CCReader._
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import IExpression._
+import tricera.Util.getLineString
 
 object CCBinaryExpressions {
   object BinaryOperators {
@@ -53,10 +54,16 @@ object CCBinaryExpressions {
       protected def getIntRes:   IExpression
 
       def expr: CCExpr = {
-        (lhs.typ, rhs.typ) match {
+        try {(lhs.typ, rhs.typ) match {
           case (CCFloat, _) => toCCExpr(getFloatRes)
           case (_, CCFloat) => toCCExpr(getFloatRes)
           case _            => toCCExpr(getIntRes)
+        }} catch {
+          case e : IllegalArgumentException =>
+            throw new TranslationException(
+              getLineString(lhs.srcInfo) +
+              s"Could not apply binary operator: $this\n")
+          case e => throw e
         }
       }
 
