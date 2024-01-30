@@ -30,7 +30,7 @@
 package tricera.concurrency.ccreader
 
 import ap.basetypes.IdealInt
-import ap.parser.{IFormula, IIntLit, ITerm}
+import ap.parser.{IFormula, IFunction, IIntLit, ITerm}
 import ap.theories.Heap
 import tricera.concurrency.CCReader._
 import ap.parser.IExpression.{Sort, _}
@@ -38,10 +38,7 @@ import ap.theories.bitvectors.ModuloArithmetic._
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import CCExceptions._
 
-import scala.collection.mutable.{
-  Stack,
-  HashMap => MHashMap
-}
+import scala.collection.mutable.{Stack, HashMap => MHashMap}
 
 abstract sealed class CCType {
   def shortName : String
@@ -274,10 +271,7 @@ case class FieldInfo(name       : String,
                      typ        : Either[Integer, CCType],
                      ptrDepth   : Integer)
 
-case class StructInfo(name : String, fieldInfos : Seq[FieldInfo]) {
-  def getFullFieldName(rawFieldName : String) : String =
-    s"$name::$rawFieldName"
-}
+case class StructInfo(name : String, fieldInfos : Seq[FieldInfo])
 
 /**
  * A struct field with a struct type
@@ -289,15 +283,23 @@ case class CCStructField(structName : String,
   def shortName = "field:" + structName
 }
 
+object CCStruct{
+  def rawToFullFieldName(structName : String, fieldName : String) =
+    s"$structName::$fieldName"
+}
 case class CCStruct(ctor : MonoSortedIFunction,
                     sels : IndexedSeq[(MonoSortedIFunction, CCType)])
   extends CCType {
+  import CCStruct._
   override def toString: String =
     "struct " + ctor.name + ": (" + sels.mkString + ")"
   def shortName = ctor.name
-  def getFieldIndex(name : String) = sels.indexWhere(_._1.name == name)
-  def getFieldAddress(nestedName : List[String]) : List[Int] =
-    nestedName match {
+  def getFieldIndex(rawFieldName : String) = sels.indexWhere(
+    _._1.name == rawToFullFieldName(shortName, rawFieldName))
+  def getFieldIndex(fieldSelector : IFunction) =
+    sels.indexWhere(_._1 == fieldSelector)
+  def getFieldAddress(nestedSelectors : List[IFunction]) : List[Int] =
+    nestedSelectors match {
       case hd :: Nil => getFieldIndex(hd) :: Nil
       case hd :: tl => {
         val ind = getFieldIndex(hd)
@@ -324,7 +326,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
             "empty field index!")
     }
 
-  def contains(fieldName : String) = getFieldIndex(fieldName) != -1
+  def contains(rawFieldName : String) = getFieldIndex(rawFieldName) != -1
   def getFieldTerm(t : ITerm, fieldAddress: List[Int]): ITerm = {
     val hd :: tl = fieldAddress
     val sel      = getADTSelector(hd)

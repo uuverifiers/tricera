@@ -119,7 +119,7 @@ Final:
  main18_36_3(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
 ---------------------------------------------------------------------------------
 Failed assertion:
-false :- main18_36_3(s:14, i:18), select(data(s:14), i:18) = i:18. (line:19 col:5) (property: user-assertion)
+false :- main18_36_3(s:14, i:18), select(S::data(s:14), i:18) = i:18. (line:19 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -197,7 +197,7 @@ Final:
  main8_3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2)) 
 ------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main8_3(@h, sArr:5), f(getS(read(@h, nthAddrRange(sArr:5, 0)))) != 0. (line:8 col:3) (property: user-assertion)
+false :- main8_3(@h, sArr:5), S::f(getS(read(@h, nthAddrRange(sArr:5, 0)))) != 0. (line:8 col:3) (property: user-assertion)
 
 UNSAFE
 

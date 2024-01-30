@@ -644,9 +644,9 @@ class CCReader private (prog              : Program,
         s"Struct ${struct.name} was declared, but never defined, " +
           "or it has no fields.")
       val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
-        for(fieldInfo@FieldInfo(fieldName, fieldType, ptrDepth) <-
+        for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
               struct.fieldInfos) yield
-          (struct.getFullFieldName(fieldName),
+          (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
             if (ptrDepth > 0) Heap.AddressCtor
             else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
@@ -724,9 +724,11 @@ class CCReader private (prog              : Program,
     objectSorts.zip(0 until structCount+structCtorsOffset).toMap
 
   for (((ctor, sels), i) <- structCtors zip structSels zipWithIndex) {
-    val fieldInfos = structInfos(i).fieldInfos
+    val curStruct = structInfos(i)
+    val fieldInfos = curStruct.fieldInfos
     val fieldsWithType = for (j <- fieldInfos.indices) yield {
-      val fullFieldName = structInfos(i).getFullFieldName(fieldInfos(j).name)
+      val fullFieldName =
+        CCStruct.rawToFullFieldName(curStruct.name, fieldInfos(j).name)
       assert(sels(j).name == fullFieldName)
       (sels(j),{
         val actualType = fieldInfos(j).typ match {
@@ -2778,18 +2780,18 @@ class CCReader private (prog              : Program,
         lhs.toTerm match {
         case fieldFun : IFunApp => // an ADT
           assignedToStruct = true
-          val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
+          val (fieldSelectors, rootTerm) = getFieldInfo(fieldFun)
 
           rootTerm match {
             case Left(t) =>
               val structType = structDefs(t.sort.name)
-              val fieldAddress = structType.getFieldAddress(fieldNames)
+              val fieldAddress = structType.getFieldAddress(fieldSelectors)
               CCTerm(structType.setFieldTerm(t, rhs.toTerm, fieldAddress),
                 structType, rhs.srcInfo)
             case Right(f) =>
               val structType =
                 structDefs(f.fun.asInstanceOf[MonoSortedIFunction].resSort.name)
-              val fieldAddress = structType.getFieldAddress(fieldNames)
+              val fieldAddress = structType.getFieldAddress(fieldSelectors)
               CCTerm(structType.setFieldTerm(f, rhs.toTerm, fieldAddress),
                 structType, rhs.srcInfo)
             /*case _ => {getVarType(rootTerm.name) match {
@@ -2801,29 +2803,29 @@ class CCReader private (prog              : Program,
       }
     }
 
-    // Returns the root term and a list of names pointing to the given field.
+    // Returns the root term and a list of selectors pointing to the given field.
     // todo: this works incorrectly when root is not a pointer but the field is
     // e.g. getInt(read(h, f(someStruct)))
     private def getFieldInfo(nested : IFunApp) :
-    (List[String], Either[SortedConstantTerm, IFunApp]) = {
-      val fieldNames = List()
-      getFieldInfo(nested, fieldNames)
+    (List[IFunction], Either[SortedConstantTerm, IFunApp]) = {
+      val fieldSelectors = List()
+      getFieldInfo(nested, fieldSelectors)
     }
-    private def getFieldInfo(nested : IFunApp, fieldNames : List[String])
-    : (List[String], Either[SortedConstantTerm, IFunApp]) = {
+    private def getFieldInfo(nested : IFunApp, fieldSelectors : List[IFunction])
+    : (List[IFunction], Either[SortedConstantTerm, IFunApp]) = {
       nested.args.size match {
-        case n if n > 1 => (fieldNames, Left(getStructTerm(nested)))
+        case n if n > 1 => (fieldSelectors, Left(getStructTerm(nested)))
         case n if n == 1 =>
           nested.args.head match{
             case nestedMore : IFunApp if !(objectGetters contains nestedMore.fun) =>
-              getFieldInfo(nestedMore, nested.fun.name :: fieldNames)
+              getFieldInfo(nestedMore, nested.fun :: fieldSelectors)
             case objectGetter : IFunApp =>
-              (nested.fun.name :: fieldNames, Right(objectGetter))
+              (nested.fun :: fieldSelectors, Right(objectGetter))
             case lastLevel : IConstant =>
-              (nested.fun.name :: fieldNames,
+              (nested.fun :: fieldSelectors,
                 Left(lastLevel.c.asInstanceOf[SortedConstantTerm]))
           }
-        case _ => throw new TranslationException("Cannot get field names " +
+        case _ => throw new TranslationException("Cannot get field selectors " +
           "from given struct term " + nested)
       }
     }
@@ -3537,18 +3539,10 @@ class CCReader private (prog              : Program,
         val rawFieldName = exp.cident_
         subexpr.typ match {
           case structType : CCStruct => // todo a better way
-            val structInfo = structInfos.find(_.name == structType.shortName)
-            match {
-              case Some(info) => info
-              case None => throw new TranslationException(
-                s"Internal error: could not find struct ${structType.shortName} " +
-                s"in structInfos.")
-            }
-            val fullFieldName = structInfo.getFullFieldName(rawFieldName)
-            if(!structType.contains(fullFieldName))
+            if(!structType.contains(rawFieldName))
               throw new TranslationException(rawFieldName + " is not a member of "
                 + structType + "!")
-            val ind = structType.getFieldIndex(fullFieldName)
+            val ind = structType.getFieldIndex(rawFieldName)
             val fieldType = structType.getFieldType(ind) /*match {
               case declPtr : CCDeclarationOnlyPointer if !evaluatingLhs =>
                 getHeapPointer (declPtr)
@@ -3587,11 +3581,10 @@ class CCReader private (prog              : Program,
           case None => throw new TranslationException(
             s"Internal error: could not find struct ${structType.shortName} in structInfos.")
         }
-        val fullFieldName = structInfo.getFullFieldName(rawFieldName)
-        if(!structType.contains(fullFieldName))
+        if(!structType.contains(rawFieldName))
           throw new TranslationException(rawFieldName + " is not a member of "
             + structType + "!")
-        val ind = structType.getFieldIndex(fullFieldName)
+        val ind = structType.getFieldIndex(rawFieldName)
         val fieldType = structType.getFieldType(ind)
         val sel = structType.getADTSelector(ind)
         pushVal(CCTerm(sel(term.toTerm), fieldType, srcInfo))

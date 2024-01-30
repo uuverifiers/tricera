@@ -62,7 +62,7 @@ Final:
  main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1)) 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_3(@h, list:14), p(getchild(read(@h, child1(getparent(read(@h, list:14)))))) != p(getchild(read(@h, child2(getparent(read(@h, list:14)))))). (line:20 col:3) (property: user-assertion)
+false :- main_3(@h, list:14), child::p(getchild(read(@h, parent::child1(getparent(read(@h, list:14)))))) != child::p(getchild(read(@h, parent::child2(getparent(read(@h, list:14)))))). (line:20 col:3) (property: user-assertion)
 
 UNSAFE
 
