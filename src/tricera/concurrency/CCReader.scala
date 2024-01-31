@@ -3176,9 +3176,8 @@ class CCReader private (prog              : Program,
                     // &((*p)->tail)
                     // alternatively one could rewrite this using a temporary variable
                     // and create a stack pointer to it (but this needs to be done during preprocessing,
-                    //otherwise when we evaluate this we would be pushing two terms instead of one)
+                    // otherwise when we evaluate this we would be pushing two terms instead of one)
                     val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
-                    maybeOutputClause(srcInfo)
                     assert(c.args.size == 1)
                     val readObj = c.args.head
                     val resSort = c.fun.asInstanceOf[MonoSortedIFunction].resSort

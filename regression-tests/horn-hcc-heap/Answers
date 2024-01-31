@@ -243,3 +243,6 @@ UNSAFE
 
 struct-ptrfield-1.c
 SAFE
+
+stack-ptr-bug-1.c
+SAFE

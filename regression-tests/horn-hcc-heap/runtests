@@ -10,11 +10,10 @@ for name in $TESTS; do
     $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
-# this one runs forever with the current encoding
-#TESTS="list-002.c"
+VALID_DEREF_TESTS="stack-ptr-bug-1.c"
 
-#for name in $TESTS; do
-#    echo
-#    echo $name
-#    $LAZABS -cex -abstract "$@" $name
-#done
+for name in $VALID_DEREF_TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off -valid-deref "$@" $name 2>&1 | grep -v 'at '
+done
