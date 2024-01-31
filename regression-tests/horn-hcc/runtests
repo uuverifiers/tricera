@@ -15,7 +15,9 @@ TESTS="test1.hcc test2.hcc test3.hcc test4.hcc \
        ternary-bug.c assert-ite-1.c assert-ite-2.c \
        function-in-assume-assert-1-false.c function-in-assume-assert-1-true.c \
        function-in-assume-assert-2-false.c function-in-assume-assert-2-true.c \
-       function-in-assume-assert-3-false.c function-in-assume-assert-3-true.c "
+       function-in-assume-assert-3-false.c function-in-assume-assert-3-true.c \
+       static-local-retention-false.c static-local-retention-true.c \
+       static-shadowing-true.c"
 
 for name in $TESTS; do
     echo

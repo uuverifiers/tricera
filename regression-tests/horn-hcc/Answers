@@ -210,6 +210,36 @@ UNSAFE
 function-in-assume-assert-3-true.c
 SAFE
 
+static-local-retention-false.c
+
+--------------
+Init:
+  main8_5(0)  
+--------------
+      |       
+      |       
+      V       
+  main2_5(0)  
+--------------
+      |       
+      |       
+      V       
+ main2_5_7(1) 
+--------------
+Final:
+ main2_5_7(1) 
+--------------
+Failed assertion:
+false :- main2_5_7(local:2), local:2 != 0. (line:3 col:5) (property: user-assertion)
+
+UNSAFE
+
+static-local-retention-true.c
+SAFE
+
+static-shadowing-true.c
+SAFE
+
 test2b.hcc
 Warning: entry function "main" not found
 UNSAFE

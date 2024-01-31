@@ -57,7 +57,7 @@ class CCReaderCollectVarDecls extends AnyFlatSpec {
                                         expected : CCType) : Boolean = {
     val decl = Util.parseGlobalDeclaration(new java.io.StringReader(dec))
     reader.collectVarDecls(decl, isGlobal = isGlobal) match {
-      case Seq(reader.CCVarDeclaration(_, `expected`, _, _, _, _, _, _)) => true
+      case Seq(reader.CCVarDeclaration(_, `expected`, _, _, _, _, _, _, _)) => true
       case _ => false
     }
   }
