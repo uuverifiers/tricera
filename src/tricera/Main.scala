@@ -363,25 +363,11 @@ class Main (args: Array[String]) {
         case e : TranslationException if !devMode =>
           return ExecutionSummary(TranslationError(e.getMessage), Map(),
                                   modelledHeap, 0, preprocessTimer.s)
+        case e : UnsupportedCastException =>
+          return ExecutionSummary(Unknown(e.getMessage), Map(),
+                                  modelledHeap, 0, preprocessTimer.s)
         case e : Throwable => throw e
       }
-
-    if (printPathConstraints) {
-      import lazabs.horn.bottomup.HornClauses._
-      import ap.parser._
-
-      val clauses : Seq[Clause] = reader.system.processes.flatMap(_._1.map(_._1))
-      val predPathConstraints = symex.PathConstraints(clauses)
-      val entryFun = TriCeraParameters.get.funcName
-      println
-      val exitPred =
-        reader.PredPrintContext.getFunctionExitPred(entryFun).get.pred
-      println("Path constraints for " + entryFun + ":")
-      predPathConstraints(exitPred).foreach(c =>
-        if(!c.isFalse)
-          println(PrincessLineariser.asString(c)))
-      println
-    }
 
     import tricera.acsl.Encoder
 
@@ -454,7 +440,7 @@ class Main (args: Array[String]) {
     if(smtPrettyPrint)
       tricera.concurrency.ReaderMain.printSMTClauses(smallSystem)
 
-    if(prettyPrint || smtPrettyPrint || printPathConstraints)
+    if(prettyPrint || smtPrettyPrint)
       return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
     /**

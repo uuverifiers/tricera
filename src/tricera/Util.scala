@@ -119,10 +119,13 @@ object Util {
     getLineString(Some(sourceInfo))
   }
 
-  def getLineString(maybeSourceInfo : Option[SourceInfo]) : String = {
+  def getLineString(maybeSourceInfo : Option[SourceInfo]) : String =
+    s"At (${getLineStringShort(maybeSourceInfo)})): "
+
+  def getLineStringShort(maybeSourceInfo : Option[SourceInfo]) : String = {
     maybeSourceInfo match {
       case Some(sourceInfo) =>
-        s"At (${sourceInfo.line}:${sourceInfo.col}): "
+        s"${sourceInfo.line}:${sourceInfo.col}"
       case None => ""
     }
   }

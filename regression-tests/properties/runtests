@@ -12,7 +12,9 @@ TESTS="valid-free-10-true.c  valid-free-3-true.c   valid-free-7-false.c \
        valid-deref-arraybounds-4-false.c \
        valid-memcleanup-1-false.c  valid-memcleanup-array-false.c \
        valid-memcleanup-1-true.c   valid-memcleanup-array-true.c \
-       valid-memtrack-array-true.c"
+       valid-memtrack-array-true.c valid-memcleanup-2-false.c \
+       valid-memcleanup-3-false.c valid-memcleanup-3-true.c \
+       valid-free-12-false.c"
 
 for name in $TESTS; do
     echo

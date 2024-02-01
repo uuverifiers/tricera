@@ -29,14 +29,7 @@
 
 package tricera.concurrency.ccreader
 
-import ap.parser.{
-  IBoolLit,
-  IExpression,
-  IFormula,
-  IIntLit,
-  ITerm,
-  SymbolCollector
-}
+import ap.parser.{IBoolLit, IExpression, IFormula, IIntLit, ITerm, SymbolCollector}
 import tricera.Util.SourceInfo
 import CCExceptions._
 import ap.parser.IExpression._
@@ -46,6 +39,7 @@ abstract sealed class CCExpr(val typ: CCType, val srcInfo: Option[SourceInfo]) {
   def toTerm:             ITerm
   def toFormula:          IFormula
   def occurringConstants: Seq[IExpression.ConstantTerm]
+
   def convertToType(newType: CCType): CCExpr = {
     (typ, newType) match {
       case (oldType, newType) if (oldType == newType) =>
@@ -67,14 +61,17 @@ abstract sealed class CCExpr(val typ: CCType, val srcInfo: Option[SourceInfo]) {
           case lit: IIntLit if lit.value.intValue == 0 =>
             CCTerm(newType.heap.nullAddr(), newType, srcInfo) //newType cast t
           case _ =>
-            throw new TranslationException(
+            throw new UnsupportedCastException(
               "pointer arithmetic is not allowed, cannot convert " + this + " to" +
                 " " + newType)
         }
+      case (oldType : CCHeapPointer, newType : CCArithType) =>
+        throw new UnsupportedCastException(
+          "Cannot cast pointer type to arithmetic type.")
       case (oldType: CCHeapPointer, newType: CCHeapPointer) =>
         newType cast this
       case _ =>
-        throw new TranslationException(
+        throw new UnsupportedCastException(
           "do not know how to convert " + typ + " to " + newType +
             " for term: " + toTerm + " (srcInfo: " + srcInfo + ")")
     }

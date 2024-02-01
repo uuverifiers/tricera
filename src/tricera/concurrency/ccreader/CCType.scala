@@ -37,6 +37,7 @@ import ap.parser.IExpression.{Sort, _}
 import ap.theories.bitvectors.ModuloArithmetic._
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import CCExceptions._
+import tricera.Util.{SourceInfo, getLineString, getLineStringShort}
 
 import scala.collection.mutable.{Stack, HashMap => MHashMap}
 
@@ -152,6 +153,25 @@ abstract sealed class CCType {
 
   def newConstant(name : String) : ConstantTerm = toSort newConstant name
 
+  def isPointerType : Boolean =
+    this.isInstanceOf[CCHeapPointer] || this.isInstanceOf[CCHeapArrayPointer]
+  def isArithType : Boolean = this.isInstanceOf[CCArithType]
+
+  /**
+   * @note [[CCExpr.convertToType]] also has some checks regarding conversions,
+   *       which does not use this class for casting.
+   *       In fact this check would be too strong in some cases (e.g., *p = 0),
+   *       checking the values is needed to relax this check, which is not
+   *       possible to do in this class.
+   */
+  private def castIsAllowed(newType : CCType) : Boolean = {
+    this match {
+      case typ if typ.isArithType   && newType.isPointerType
+               || typ.isPointerType && newType.isArithType => false
+      case _ => true
+    }
+  }
+
   def cast(t: ITerm) : ITerm = toSort match {
     case s : ModSort => cast2Sort(s, t)
     case _ => t
@@ -162,9 +182,16 @@ abstract sealed class CCType {
     case _               => t
   }
 
-  def cast(e : CCExpr) : CCExpr = e match {
-    case CCTerm(t, _, srcInfo)    => CCTerm(cast(t), this, srcInfo)
-    case CCFormula(f, _, srcInfo) => CCFormula(f, this, srcInfo)
+  def cast(e : CCExpr) : CCExpr = {
+    if (!castIsAllowed(e.typ)) {
+      throw new UnsupportedCastException(
+        getLineStringShort(e.srcInfo) +
+        " Casts between pointer and arithmetic types are not supported.")
+    }
+    e match {
+      case CCTerm(t, _, srcInfo)    => CCTerm(cast(t), this, srcInfo)
+      case CCFormula(f, _, srcInfo) => CCFormula(f, this, srcInfo)
+    }
   }
 
   def getNonDet : ITerm =

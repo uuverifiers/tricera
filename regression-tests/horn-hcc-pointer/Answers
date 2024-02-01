@@ -56,3 +56,6 @@ SAFE
 
 ptrptr-bug-2.c
 SAFE
+
+ptr-to-int-cast.c
+UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)

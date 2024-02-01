@@ -71,3 +71,17 @@ SAFE
 
 valid-memtrack-array-true.c
 UNKNOWN (memcleanup violated - memtrack inconclusive)
+
+valid-memcleanup-2-false.c
+UNSAFE
+
+valid-memcleanup-3-false.c
+Warning: no definition of function "nondet" available
+UNSAFE
+
+valid-memcleanup-3-true.c
+Warning: no definition of function "nondet" available
+SAFE
+
+valid-free-12-false.c
+UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)

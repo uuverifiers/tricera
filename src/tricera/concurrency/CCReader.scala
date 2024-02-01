@@ -361,7 +361,6 @@ class CCReader private (prog              : Program,
   private val channels = new MHashMap[String, ParametricEncoder.CommChannel]
 
   private val functionDefs  = new MHashMap[String, Function_def]
-  private val functionExitPreds = new MHashMap[String, CCPredicate]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val functionContexts = new MHashMap[String, FunctionContext]
   private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
@@ -1041,8 +1040,6 @@ class CCReader private (prog              : Program,
           translator.translateWithReturn(stm, entryPred)
       }
 
-      functionExitPreds += ((name, finalPred))
-
       val globalVarTerms : Seq[ITerm] = GlobalVars.formalVarTerms
       val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
         globalVarTerms ++ resVar.map(v => IConstant(v.term))
@@ -1081,7 +1078,6 @@ class CCReader private (prog              : Program,
               setPrefix(thread.cident_)
               val translator = FunctionTranslator.apply(thread.cident_)
               val finalPred = translator translateNoReturn(thread.compound_stm_)
-              functionExitPreds += ((thread.cident_, finalPred))
               processes += ((clauses.toList, ParametricEncoder.Singleton))
               clauses.clear
             }
@@ -1093,7 +1089,6 @@ class CCReader private (prog              : Program,
               LocalVars addVar threadVar
               val translator = FunctionTranslator.apply(thread.cident_2)
               val finalPred = translator translateNoReturn(thread.compound_stm_)
-              functionExitPreds += ((thread.cident_2, finalPred))
               processes += ((clauses.toList, ParametricEncoder.Infinite))
               clauses.clear
               LocalVars popFrame
@@ -1136,15 +1131,18 @@ class CCReader private (prog              : Program,
           val stm = pushArguments(funDef)
 
           val translator = FunctionTranslator(exitPred, f.name)
-          val finalPred =
-            if (returnType != CCVoid) {
-              translator.translateWithReturn(stm)
-              exitPred
-            }
-            else
-              translator.translateNoReturn(stm)
 
-          functionExitPreds += ((f.name, finalPred))
+          /**
+           * There can be various ways out of a function. If a function has a
+           * return type, the function can still end without reaching a
+           * return statement - which is why there can be multiple `finalPreds`.
+           */
+          val finalPreds =
+            if (returnType != CCVoid) {
+              val exitWithoutReturnPred = translator.translateWithReturn(stm)
+              Seq(exitWithoutReturnPred, exitPred)
+            }
+            else Seq(translator.translateNoReturn(stm))
 
           /**
            * Add an assertion that all pointers that are in scope at the
@@ -1165,7 +1163,7 @@ class CCReader private (prog              : Program,
 
             import HornClauses._
             import IExpression._
-            finalPred match {
+            for (finalPred <- finalPreds) finalPred match {
               case CCPredicate(_, args, _)
                 if args(heapInd).sort == heap.HeapSort &&
                    args(cleanupVarInd).sort == heap.AddressSort =>
@@ -3996,7 +3994,6 @@ private def collectVarDecls(dec                    : Dec,
         exit
       } else
         translator.translateWithReturn(stm, entry)
-    functionExitPreds += ((FuncDef(functionDef).name, finalPred))
     LocalVars popFrame
   }
 
@@ -4151,7 +4148,14 @@ private def collectVarDecls(dec                    : Dec,
       postProcessClauses
     }
 
-    def translateWithReturn(compound : Compound_stm) : Unit = {
+    /**
+     * The returned predicate is the predicate for the exit point for when
+     * the function does not return with a `return` statement. This can happen,
+     * for example, when a function is declared with a return type, but there
+     * are paths out of the function without a `return` statement.
+     * E.g., int main() { }
+     */
+    def translateWithReturn(compound : Compound_stm) : CCPredicate = {
       val finalPred = newPred(Nil, Some(getLastSourceInfo(compound)))
       translateWithEntryClause(compound, finalPred)
       // add a default return edge
@@ -4161,6 +4165,7 @@ private def collectVarDecls(dec                    : Dec,
       //              List(atom(finalPred, allFormalVars)),
       //              true))
       postProcessClauses
+      finalPred
     }
 
     def translateWithReturn(compound : Compound_stm,
@@ -4963,8 +4968,6 @@ private def collectVarDecls(dec                    : Dec,
       getPred(pred).argVars.map(_.toString)
     def predSrcInfo (pred : Predicate) : Option[SourceInfo] =
       getPred(pred).srcInfo
-    def getFunctionExitPred (funName : String) : Option[CCPredicate] =
-      functionExitPreds get funName
     def isUninterpretedPredicate (predicate : Predicate) : Boolean =
       uninterpPredDecls.values.exists(ccPred => ccPred.pred == predicate)
   }

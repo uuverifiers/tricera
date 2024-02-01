@@ -2,7 +2,7 @@
 
 LAZABS=../../tri
 
-TESTS="basic.hcc fields.hcc fields-nested.hcc struct-pointer.hcc struct-pointer2.hcc unary.hcc unary-struct.hcc unary-struct-nested.hcc list-init.hcc cast-stack-heap-01.c ptrptr-bug-1.c  ptrptr-bug-2.c"
+TESTS="basic.hcc fields.hcc fields-nested.hcc struct-pointer.hcc struct-pointer2.hcc unary.hcc unary-struct.hcc unary-struct-nested.hcc list-init.hcc cast-stack-heap-01.c ptrptr-bug-1.c  ptrptr-bug-2.c ptr-to-int-cast.c"
 
 for name in $TESTS; do
     echo
