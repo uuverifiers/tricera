@@ -33,6 +33,7 @@ object CCExceptions {
   class ParseException(msg : String) extends Exception(msg)
   class TranslationException(msg : String) extends Exception(msg)
   class UnsupportedCastException(msg : String) extends Exception(msg)
+  class UnsupportedCFragmentException(msg : String) extends Exception(msg)
   object NeedsTimeException extends Exception
   object NeedsHeapModelException extends Exception
 }

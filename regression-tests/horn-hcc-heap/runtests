@@ -2,7 +2,7 @@
 
 LAZABS=../../tri
 
-TESTS="list-001.c list-001-fail.c list-002-fail.c mutually-referential-structs.c mutually-referential-structs-fail.c mutually-referential-structs-unsafe.c simple-struct.c simple-struct-2.c simple-struct-fail.c swap-1.c swap-1-fail.c swap-2.c swap-2-fail.c swap-3.c simple-arith.c typecastUnsafe-001.c typecastSafe-001.c illegal-access-001.c illegal-access-002.c postop.c postop-struct.c preop.c preop-struct.c opassign.c opassign-struct.c unsafe-access-001.c stackptr-to-heapptr.c free-1-unsafe.c free-2-nondet-unsafe.c free-3-safe.c free-4-unsafe.c struct-ptrfield-1.c"
+TESTS="list-001.c list-001-fail.c list-002-fail.c mutually-referential-structs.c mutually-referential-structs-fail.c mutually-referential-structs-unsafe.c simple-struct.c simple-struct-2.c simple-struct-fail.c swap-1.c swap-1-fail.c swap-2.c swap-2-fail.c swap-3.c simple-arith.c typecastUnsafe-001.c typecastSafe-001.c illegal-access-001.c illegal-access-002.c postop.c postop-struct.c preop.c preop-struct.c opassign.c opassign-struct.c unsafe-access-001.c stackptr-to-heapptr.c stackptr-to-heapptr-double.c free-1-unsafe.c free-2-nondet-unsafe.c free-3-safe.c free-4-unsafe.c struct-ptrfield-1.c"
 
 for name in $TESTS; do
     echo

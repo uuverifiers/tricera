@@ -1608,8 +1608,8 @@ private def collectVarDecls(dec                    : Dec,
                     "initialization is not yet supported.")
               }
             }
-            case Some(_) => throw new TranslationException("Unsupported" +
-              "initializer expression.")
+            case Some(_) => throw new UnsupportedCFragmentException(
+              getLineStringShort(srcInfo) + " Unsupported initializer expression.")
             case None =>
               varDec.typ match {
                 case typ : CCHeapArrayPointer =>
@@ -2655,9 +2655,10 @@ private def collectVarDecls(dec                    : Dec,
       else
         values(ind)
 
-    private def getPointedTerm (ptrType : CCStackPointer) =
+    private def getPointedTerm (ptrType : CCStackPointer) : CCTerm =
       ptrType.fieldAddress match {
-        case Nil => getValue(ptrType.targetInd, false)
+        case Nil =>
+          getValue(ptrType.targetInd, false).asInstanceOf[CCTerm]
         case _ =>
           val structVal = getValue(ptrType.targetInd, false)
           val structType = structVal.typ.asInstanceOf[CCStruct]
@@ -3002,9 +3003,13 @@ private def collectVarDecls(dec                    : Dec,
                      evalCtx.enclosingFunctionName)
           } else {
             val lhsName = asLValue(exp.exp_1)
-            val actualRhsVal = rhsVal.toTerm match {
-              case lit : IIntLit =>
-                if (lit.value.intValue != 0) {
+            val actualRhsVal = rhsVal match {
+              case CCTerm(_, stackPtr@CCStackPointer(_,_,_), srcInfo) =>
+                throw new UnsupportedCFragmentException(
+                  getLineStringShort(srcInfo) +
+                  " Only limited support for stack pointers")
+              case CCTerm(IIntLit(value), _, _) =>
+                if (value.intValue != 0) {
                   throw new TranslationException("Pointer arithmetic is not " +
                     "allowed, and the only assignable integer value for " +
                     "pointers is 0 (NULL)")
@@ -3026,8 +3031,8 @@ private def collectVarDecls(dec                    : Dec,
                           arrayPtr2.arrayLocation == ArrayLocation.Heap) // -> alloca
                         updateVarType(lhsName, arrayPtr1,
                                       evalCtx.enclosingFunctionName) // todo: replace with a static analysis? we should detect arrays on stack beforehand maybe?
-                      else throw new TranslationException(getLineString(exp) +
-                        "Unsupported operation: pointer " + lhsName +
+                      else throw new UnsupportedCFragmentException(getLineString(exp) +
+                        "Pointer " + lhsName +
                         " points to elements of multiple arrays (or array types)." +
                         "Try initialising the array directly.")
                     }
@@ -3288,12 +3293,15 @@ private def collectVarDecls(dec                    : Dec,
                     // alternatively one could rewrite this using a temporary variable
                     // and create a stack pointer to it (but this needs to be done during preprocessing,
                     // otherwise when we evaluate this we would be pushing two terms instead of one)
-                    val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
-                    assert(c.args.size == 1)
-                    val readObj = c.args.head
-                    val resSort = c.fun.asInstanceOf[MonoSortedIFunction].resSort
-                    addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(resSort)))
-                    pushVal(newTerm)
+//                    val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
+//                    assert(c.args.size == 1)
+//                    val readObj = c.args.head
+//                    val resSort = c.fun.asInstanceOf[MonoSortedIFunction].resSort
+//                    addGuard(heap.heapADTs.hasCtor(readObj, sortCtorIdMap(resSort)))
+//                    pushVal(newTerm)
+                  throw new UnsupportedCFragmentException(
+                    getLineStringShort(srcInfo) +
+                    " Stack pointers in combination with heap pointers")
                 }
               case f : IFunApp if objectGetters contains f.fun => // a heap read (might also be from a heap array)
                 val readFunApp = f.args.head.asInstanceOf[IFunApp] // sth like read(h, ...)
@@ -3323,7 +3331,7 @@ private def collectVarDecls(dec                    : Dec,
                   //val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
                   //maybeOutputClause(Some(getSourceInfo(exp)))
                   //newTerm
-                  throw new TranslationException(
+                  throw new UnsupportedCFragmentException(
                     "Function contracts are currently not supported together " +
                     s"with stack pointers (${exp.line_num}:${exp.col_num})")
                 } else {
@@ -3450,14 +3458,14 @@ private def collectVarDecls(dec                    : Dec,
                 case e if exp.exp_2.isInstanceOf[Ebytestype] =>
                   (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
                 case _ =>
-                  throw new TranslationException(
+                  throw new UnsupportedCFragmentException(
                     "Unsupported alloc expression: " + (printer print exp))
               }
             //case exp : Evar => // allocation in bytes
             case e : Econst => // allocation in bytes
               (CCInt, eval(e)) // todo: add support for char?
 
-            case _ => throw new TranslationException(
+            case _ => throw new UnsupportedCFragmentException(
               "Unsupported alloc expression: " + (printer print exp))
           }
 
@@ -3556,12 +3564,12 @@ private def collectVarDecls(dec                    : Dec,
                 case e if exp.exp_2.isInstanceOf[Ebytestype] =>
                   (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
                 case _ =>
-                  throw new TranslationException(
+                  throw new UnsupportedCFragmentException(
                     "Unsupported alloc expression: " + (printer print exp))
               }
             //case exp : Evar => // allocation in bytes
 
-            case _ => throw new TranslationException(
+            case _ => throw new UnsupportedCFragmentException(
               "Unsupported alloc expression: " + (printer print exp))
           }
 

@@ -366,6 +366,10 @@ class Main (args: Array[String]) {
         case e : UnsupportedCastException =>
           return ExecutionSummary(Unknown(e.getMessage), Map(),
                                   modelledHeap, 0, preprocessTimer.s)
+        case e : UnsupportedCFragmentException =>
+          return ExecutionSummary(
+            Unknown("Unsupported C fragment. " + e.getMessage), Map(),
+            modelledHeap, 0, preprocessTimer.s)
         case e : Throwable => throw e
       }
 

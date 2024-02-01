@@ -165,6 +165,9 @@ UNSAFE
 stackptr-to-heapptr.c
 SAFE
 
+stackptr-to-heapptr-double.c
+UNKNOWN (Unsupported C fragment. 6:8 Only limited support for stack pointers)
+
 free-1-unsafe.c
 
 ------------------------------------------------------------------------
@@ -245,4 +248,4 @@ struct-ptrfield-1.c
 SAFE
 
 stack-ptr-bug-1.c
-SAFE
+UNKNOWN (Unsupported C fragment. 11:10 Stack pointers in combination with heap pointers)
