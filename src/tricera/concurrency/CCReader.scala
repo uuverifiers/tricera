@@ -257,7 +257,6 @@ class CCReader private (prog              : Program,
   }
 
   private var globalPreconditions : IFormula = true
-  private val globalExitPred = newPred("exit", Nil, None)
 
   private def lookupVarNoException(name : String, enclosingFunction : String)
   : Int = {
@@ -714,6 +713,14 @@ class CCReader private (prog              : Program,
     variableHints += List()
   }
 
+  /**
+   * It is important that globalExitPred has arguments for the ghost variables
+   * and the heap - for instance we want to check that memory is cleaned before
+   * exit, and it cannot be done if the prophecy variable does not exist at
+   * that point. This is reachable, for instance, with the `abort` statement.
+   */
+  private val globalExitPred = newPred("exit", allFormalVars, None)
+
   private val structCtorsOffset = predefSignatures.size
   val defObj = heap.userADTCtors.last
   val structCount = structInfos.size
@@ -1137,12 +1144,12 @@ class CCReader private (prog              : Program,
            * return type, the function can still end without reaching a
            * return statement - which is why there can be multiple `finalPreds`.
            */
-          val finalPreds =
+          val finalPreds = Seq(globalExitPred) ++ (
             if (returnType != CCVoid) {
               val exitWithoutReturnPred = translator.translateWithReturn(stm)
               Seq(exitWithoutReturnPred, exitPred)
             }
-            else Seq(translator.translateNoReturn(stm))
+            else Seq(translator.translateNoReturn(stm)))
 
           /**
            * Add an assertion that all pointers that are in scope at the
@@ -4842,7 +4849,7 @@ private def collectVarDecls(dec                    : Dec,
       }
       case _ : SjumpAbort | _ : SjumpExit => // abort() or exit(int status)
         output(addRichClause(
-          Clause(atom(globalExitPred, Nil),
+          Clause(atom(globalExitPred, allFormalVarTerms take globalExitPred.arity),
                  List(atom(entry, allFormalVarTerms take entry.arity)),
                  true), srcInfo))
       }
