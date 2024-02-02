@@ -249,3 +249,9 @@ SAFE
 
 stack-ptr-bug-1.c
 UNKNOWN (Unsupported C fragment. 11:10 Stack pointers in combination with heap pointers)
+
+sizeof-bug-1-true.c
+SAFE
+
+sizeof-bug-2-true.c
+SAFE

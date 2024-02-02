@@ -10,7 +10,7 @@ for name in $TESTS; do
     $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
-VALID_DEREF_TESTS="stack-ptr-bug-1.c"
+VALID_DEREF_TESTS="stack-ptr-bug-1.c sizeof-bug-1-true.c sizeof-bug-2-true.c"
 
 for name in $VALID_DEREF_TESTS; do
     echo

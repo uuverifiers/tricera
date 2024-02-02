@@ -3466,14 +3466,16 @@ private def collectVarDecls(dec                    : Dec,
                   (getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
                 case _ =>
                   throw new UnsupportedCFragmentException(
-                    "Unsupported alloc expression: " + (printer print exp))
+                    getLineStringShort(srcInfo) +
+                    " Unsupported alloc expression: " + (printer print exp))
               }
             //case exp : Evar => // allocation in bytes
             case e : Econst => // allocation in bytes
               (CCInt, eval(e)) // todo: add support for char?
 
             case _ => throw new UnsupportedCFragmentException(
-              "Unsupported alloc expression: " + (printer print exp))
+              getLineStringShort(srcInfo) +
+              " Unsupported alloc expression: " + (printer print exp))
           }
 
           val arrayLoc = name match {

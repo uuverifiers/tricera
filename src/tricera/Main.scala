@@ -291,7 +291,7 @@ class Main (args: Array[String]) {
 
       if (logPPLevel > 0)
         Console.withOut(outStream) {
-          println("=" * 80 + "\nPreprocessor warnings and errors\n")
+          println("=" * 80 + "\nTriCera's preprocessor (tri-pp) warnings and errors\n")
         }
 
       val pp = new TriCeraPreprocessor(cppFileName,
@@ -300,17 +300,16 @@ class Main (args: Array[String]) {
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName)
       if (logPPLevel > 0) Console.withOut(outStream) {
-        println("\n\nEnd of preprocessor warnings and errors")
+        println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)
       }
 
       if (pp.hasError && logPPLevel > 0)
-        Util.warn("The preprocessor (LLVM) reported an error in the" +
-          " input file, This might be due to TriCera accepting a non-standard" +
-          " subset of the C language, or due to an actual error in the " +
-          "input program. You can safely ignore this warning if it is" +
-          " the former. You can print preprocessor warnings and errors " +
-          "using the -warnPP option.")
+        Util.warn(
+          """The preprocessor tri-pp (LLVM) reported an error in the input file, This might
+            |be due to TriCera accepting a non-standard subset of the C language, or
+            |due to an actual error in the input program. You can safely ignore this
+            |warning if it is the former.""".stripMargin)
 
       if (printPP) {
         val src = scala.io.Source.fromFile(preprocessedFile)
@@ -332,7 +331,16 @@ class Main (args: Array[String]) {
       //            Nil, false,  0, preprocessTimer.s)
       //throw new MainException("Input file has unsupported C features " +
       //  "(e.g. varargs)") // todo: more detail
-      preprocessedFile.getAbsolutePath
+      if(preprocessedFile.length() == 0 && pp.hasError) {
+        Util.warn(
+          """TriCera preprocessor (tri-pp) returned an empty file - attempting
+            |to continue without it. Use option -logPP:2 to display what went
+            |wrong, use option -noPP to disable the preprocessor and this warning.
+            |""".stripMargin)
+        cppFileName
+      } else {
+        preprocessedFile.getAbsolutePath
+      }
     }
     preprocessTimer.stop()
 
@@ -455,7 +463,12 @@ class Main (args: Array[String]) {
       if (propertiesToCheck.forall(propertyToExpected.contains)) {
         if (propertyToExpected.filter(
           pair => propertiesToCheck.contains(pair._1)).forall(_._2)) "sat"
-        else "unsat"
+        else {
+          if (useMemCleanupForMemTrack &&
+              propertiesToCheck.contains(properties.MemValidTrack))
+            "unknown"
+          else "unsat"
+        }
       } else "unknown"
 
     val smtFileName = if (splitProperties) {

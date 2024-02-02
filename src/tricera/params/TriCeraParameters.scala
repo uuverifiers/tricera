@@ -364,7 +364,8 @@ class TriCeraParameters extends GlobalParameters {
     |TriCera preprocessor:
     |-printPP           Print the output of the TriCera preprocessor to stdout
     |-dumpPP            Dump the output of the TriCera preprocessor to file (input file name + .tri)
-    |-logPP:n           Display TriCera preprocessor warnings and errors with verbosity n (currently 0 <= n <= 2)
+    |-logPP:n           Display TriCera preprocessor warnings and errors with verbosity n.
+    |                     (0 <= n <= 2, default: 0)
     |-noPP              Turn off the TriCera preprocessor (typedefs are not allowed in this mode)
 
     |Debugging:
