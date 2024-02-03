@@ -462,13 +462,17 @@ class Main (args: Array[String]) {
       // sat if no properties are expected to be false, unsat otherwise
       if (propertiesToCheck.forall(propertyToExpected.contains)) {
         if (propertyToExpected.filter(
-          pair => propertiesToCheck.contains(pair._1)).forall(_._2)) "sat"
-        else {
+          pair => propertiesToCheck.contains(pair._1)).forall(_._2)) {
           if (useMemCleanupForMemTrack &&
-              propertiesToCheck.contains(properties.MemValidTrack))
+              propertiesToCheck.contains(properties.MemValidTrack)) {
+            /**
+             *  memtrack expected might be 'sat', but we check for
+             *  valid-cleanup, which might return unsat
+             */
             "unknown"
-          else "unsat"
+          } else "sat"
         }
+        else "unsat"
       } else "unknown"
 
     val smtFileName = if (splitProperties) {
