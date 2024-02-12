@@ -9,5 +9,5 @@ int main(void) {
       x++;
     }
   }
-  __VERIFIER_assert((x % 2) == (y % 2));
+  assert((x % 2) == (y % 2));
 }

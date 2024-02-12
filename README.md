@@ -9,11 +9,11 @@ TriCera is a model checker for C programs, that is being developed and maintaine
 
 and much more. See the `.c` and `.hcc` files under [`regression-tests`](https://github.com/uuverifiers/tricera/tree/master/regression-tests) to see some examples of what it can handle.
 
-TriCera works by encoding the input program into a set of Constrained Horn Clauses (CHCs), which include properties explicitly added to the program through `assert` and `assume` statements, but also some explicit properties such as checking the type and runtime safety of heap accesses. It then passes the generated CHCs to [Eldarica](https://github.com/uuverifiers/eldarica) for solving. This is similar to, for instance, what [JayHorn](https://jayhorn.github.io/jayhorn/) does for Java.
+TriCera works by encoding the input program into a set of Constrained Horn Clauses (CHCs), which include properties explicitly added to the program through `assert` and `assume` statements, but also some implicit properties such as checking the type and runtime safety of heap accesses. It then passes the generated CHCs to [Eldarica](https://github.com/uuverifiers/eldarica) for solving. This is similar to, for instance, what [JayHorn](https://jayhorn.github.io/jayhorn/) does for Java.
 
 TriCera can also automatically generate function contracts for functions annotated with `/*@contract@*/`. Contracts will then be generated when the clauses can be solved. See [`regression-tests/horn-contracts`](https://github.com/uuverifiers/tricera/tree/master/regression-tests/horn-contracts) for examples. To print the contracts, `-log:3` option must be passed to the tool.
 
-TriCera can parse [SV-Comp](https://sv-comp.sosy-lab.org/) style `.yml` property files, and output if the expected verdict matches the analysis result. The property file must have the same name as the input file except the extension (`input_files` provided in the property file is currently ignored ). [Here](https://github.com/uuverifiers/tricera/blob/master/regression-tests/horn-hcc-heap/memtrack-01.yml) is an example from the regression tests.
+TriCera can parse [SV-Comp](https://sv-comp.sosy-lab.org/) style [task definition](https://gitlab.com/sosy-lab/benchmarking/task-definition-format/-/tree/2.0) files and extract the properties to check from there. The property file must have the same name as the input file except the extension (`input_files` provided in the property file is currently ignored). Alternatively, the properties to check can be specified via the command-line interface - please refer to tool command-line help for supported properties. By default, TriCera attempts to verify only user-specified assertions, and the unreachability of any calls to `reach_error` function.
 
 # Installation
 Since TriCera uses sbt, compilation is quite simple: you just need sbt installed on your machine, and then type `sbt assembly` to download the compiler, all required libraries, and produce a binary of TriCera.
@@ -26,13 +26,11 @@ When using a binary release, one can instead also call
 
 `java -jar target/scala-2.*/TriCera-assembly*.jar regression-tests/horn-contracts/fib.hcc`
 
-This currently does not work - will be updated: ~~You can use the script tri-client instead of tri in order to run TriCera in a server-client mode, which significantly speeds up processing of multiple problems.~~
-
 A full list of options can be obtained by calling ./tri -h.
 In particular, the options `-cex` can be used to show a counterexample when the program is unsafe, and `-log:n` (n in 1..3) can be used to show the solution when the program is safe.
 
 # Try it out online
-TriCera has a [web interface](http://logicrunch.it.uu.se:4096/~zafer/tricera/) where you can try it out, which also contains many examples.
+TriCera has a [web interface](https://eldarica.org/tricera/) where you can try it out, which also contains many examples.
 
 # Bug reports
 TriCera is under development, and bug reports are welcome!

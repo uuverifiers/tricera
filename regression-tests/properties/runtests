@@ -1,0 +1,23 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="valid-free-10-true.c  valid-free-3-true.c   valid-free-7-false.c \
+       valid-free-11-true.c  valid-free-4-false.c  valid-free-8-false.c \
+       valid-free-1-true.c   valid-free-5-false.c  valid-free-9-false.c \
+       valid-free-2-false.c  valid-free-6-true.c \
+       valid-deref-arraybounds-1-false.c  valid-deref-arraybounds-3-true.c \
+       valid-deref-arraybounds-2-false.c  valid-deref-nullptr-false.c \
+       valid-deref-arraybounds-3-false.c  valid-deref-uninit-false.c \
+       valid-deref-arraybounds-4-false.c \
+       valid-memcleanup-1-false.c  valid-memcleanup-array-false.c \
+       valid-memcleanup-1-true.c   valid-memcleanup-array-true.c \
+       valid-memtrack-array-true.c valid-memcleanup-2-false.c \
+       valid-memcleanup-3-false.c valid-memcleanup-3-true.c \
+       valid-free-12-false.c valid-memcleanup-4-false.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done

@@ -15,9 +15,6 @@ lazy val commonSettings = Seq(
     useCoursier          := false
 )
 
-// Jar files for the parsers
-
-
 lazy val parserSettings = Seq(
     publishArtifact in packageDoc := false,
     publishArtifact in packageSrc := false,
@@ -25,14 +22,13 @@ lazy val parserSettings = Seq(
     crossPaths := true
 )
 
-// Parser generation
-
 lazy val ccParser = (project in file("cc-parser")).
   settings(commonSettings: _*).
   settings(parserSettings: _*).
   settings(
     name := "TriCera-CC-parser",
-    packageBin in Compile := baseDirectory.value / "cc-parser.jar"
+    packageBin in Compile := baseDirectory.value / "cc-parser.jar",
+    unmanagedJars in Compile += baseDirectory.value / "cc-parser.jar"
   ).disablePlugins(AssemblyPlugin)
 
 lazy val acslParser = (project in file("acsl-parser")).
@@ -40,12 +36,13 @@ lazy val acslParser = (project in file("acsl-parser")).
   settings(parserSettings: _*).
   settings(
     name := "TriCera-ACSL-parser",
-    packageBin in Compile := baseDirectory.value / "acsl-parser.jar"
+    packageBin in Compile := baseDirectory.value / "acsl-parser.jar",
+    unmanagedJars in Compile += baseDirectory.value / "acsl-parser.jar"
   ).disablePlugins(AssemblyPlugin)
 
 lazy val pp = taskKey[Unit]("")
 pp := {
-  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.2/tri-pp")
+  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.3/tri-pp")
   f #> file("tri-pp") !
 }
 def addExecutePermissions(file : File) {
@@ -99,7 +96,7 @@ settings(
                                         case "2.11.12" => "-optimise"
                                         case "2.12.8" => "-opt:_"
                                       }}).value,
-  resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
+  resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",

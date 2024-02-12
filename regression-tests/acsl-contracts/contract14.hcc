@@ -1,5 +1,5 @@
 /*@ 
-  ensures \forall int i; (i >= 0) ==> (i > \result);
+  ensures \forall int i; i >= 0 ==> i > \result;
 */
 int getNeg() {
   return -1;

@@ -1,21 +1,20 @@
-
+PARSER_BASEDIR=$(shell pwd)
+PARSER_LIBDIR=$(PARSER_BASEDIR)/lib
+PARSER_BINDIR=$(PARSER_BASEDIR)/bin
 
 CUP = java_cup.Main
 CUPFLAGS = -expect 100 -locations
+CUP_JAR = $(PARSER_LIBDIR)/java-cup-11b.jar
 
-JLEX = JLex.Main
+JFLEX = jflex.Main
+JFLEX_PLUGIN_JAR = $(PARSER_LIBDIR)/jflex-1.9.1.jar
 
 LATEX = latex
 DVIPS = dvips
 DVIPDF = dvipdfm
 
-
-PARSER_BASEDIR=$(shell pwd)
-PARSER_BINDIR=$(PARSER_BASEDIR)/bin
-
-
-JLEX_PATH:=/usr/share/java/JLex.jar
-CLASSPATH:=$(CLASSPATH):$(PARSER_BASEDIR)/lib/java-cup-11b.jar:$(PARSER_BASEDIR):$(JLEX_PATH)
+CLASSPATH:=$(CLASSPATH):$(CUP_JAR):$(JFLEX_PLUGIN_JAR)
+export CLASSPATH
 
 JAVAC:=javac
 JAVAC_FLAGS:=-target 1.8 -source 1.8
@@ -23,12 +22,10 @@ JAVAC_FLAGS:=-target 1.8 -source 1.8
 JAVA:=java
 JAVA_FLAGS:=
 
+.PHONY: all
+all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class
 
-export CLASSPATH
-
-
-all: cc-parser.jar tricera/concurrency/concurrent_c/Test.class
-
+include $(PARSER_BASEDIR)/download_jars.mk
 
 cc-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/sym.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Yylex.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/parser.class
 	cd $(PARSER_BINDIR) && jar cf $(PARSER_BASEDIR)/cc-parser.jar tricera
@@ -37,6 +34,7 @@ cc-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/concurrency/concurrent_
 $(PARSER_BINDIR):
 	mkdir $(PARSER_BINDIR)
 
+.PHONY: clean
 clean:
 #	rm -rf parser.jar
 	rm -rf $(PARSER_BINDIR)
@@ -46,10 +44,10 @@ clean:
 
 # just any of the files that is created by bnfc
 concurrent_c.tex: concurrentC.cf
-	bnfc -p tricera.concurrency --java -l concurrentC.cf
+	bnfc -p tricera.concurrency --java --jflex -l concurrentC.cf
 
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java: concurrentC.cf
-	bnfc -p tricera.concurrency --java -l concurrentC.cf
+	bnfc -p tricera.concurrency --java --jflex -l concurrentC.cf
 
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class: $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/Absyn/*.java
@@ -61,7 +59,7 @@ tricera/concurrency/concurrent_c/Yylex.java: tricera/concurrency/concurrent_c/Yy
 #       quote dashes "-"
 #	sed 's/\\\+-/\\+\\-/g' <tricera/concurrency/concurrent_c/Yylex >tricera/concurrency/concurrent_c/Yylex.temp
 #	mv tricera/concurrency/concurrent_c/Yylex.temp tricera/concurrency/concurrent_c/Yylex
-	${JAVA} ${JAVA_FLAGS} ${JLEX} tricera/concurrency/concurrent_c/Yylex
+	${JAVA} ${JAVA_FLAGS} ${JFLEX} tricera/concurrency/concurrent_c/Yylex
 
 tricera/concurrency/concurrent_c/sym.java tricera/concurrency/concurrent_c/parser.java: tricera/concurrency/concurrent_c/_cup.cup
 	${JAVA} ${JAVA_FLAGS} ${CUP} ${CUPFLAGS} tricera/concurrency/concurrent_c/_cup.cup

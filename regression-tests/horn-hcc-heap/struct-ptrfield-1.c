@@ -10,5 +10,6 @@ void alloc(struct S *ps) {
 int main() {
   struct S s;
   alloc(&s);
+  free(s.f);
   return 0;
 }

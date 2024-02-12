@@ -13,9 +13,9 @@ assign-exp-eval-order.hcc
 SAFE
 
 assign-illegal.hcc
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Cannot assign struct S1: ((x/1p,int)) to struct S2: ((x/1p,int))!
-(error "Cannot assign struct S1: ((x/1p,int)) to struct S2: ((x/1p,int))!")
-Other Error: Cannot assign struct S1: ((x/1p,int)) to struct S2: ((x/1p,int))!
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Cannot assign struct S1: ((S1::x/1p,int)) to struct S2: ((S2::x/1p,int))!
+(error "Cannot assign struct S1: ((S1::x/1p,int)) to struct S2: ((S2::x/1p,int))!")
+Other Error: Cannot assign struct S1: ((S1::x/1p,int)) to struct S2: ((S2::x/1p,int))!
 
 init.hcc
 Warning: entry function "main" not found

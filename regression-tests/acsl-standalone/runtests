@@ -24,6 +24,6 @@ TESTS="inc_safe.c \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS "$@" $name 2>&1 | grep -v 'at '
+    $LAZABS "$@" $name -memsafety -reachsafety
 done
 

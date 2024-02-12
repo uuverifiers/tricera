@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,7 +30,7 @@
 package tricera.concurrency.ccreader
 
 import ap.basetypes.IdealInt
-import ap.parser.{IFormula, IIntLit, ITerm}
+import ap.parser.{IFormula, IFunction, IIntLit, ITerm}
 import ap.theories.{Heap, ADT}
 import tricera.concurrency.CCReader._
 import tricera.concurrency.FloatADT
@@ -40,17 +40,20 @@ import ap.parser.IExpression.{Sort, _}
 import ap.theories.bitvectors.ModuloArithmetic._
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import CCExceptions._
+import tricera.Util.{SourceInfo, getLineString, getLineStringShort}
 
 import scala.collection.mutable.{Stack, HashMap => MHashMap}
 
 abstract sealed class CCType {
-  def shortName: String
+  def shortName : String
 
   // todo: make this abstract. nice to have them all in the same place but
   //  would lead to runtime errors if there are missing cases.
-  def toSort: Sort = tricera.params.TriCeraParameters.get.arithMode match {
+  def toSort : Sort = tricera.params.TriCeraParameters.get.arithMode match {
     case ArithmeticMode.Mathematical =>
       this match {
+        case CCBool                         => Sort.Bool
+        case CCMathInt                      => Sort.Integer
         case typ: CCArithType if typ.isUnsigned => Sort.Nat
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
@@ -67,7 +70,9 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.ILP32 =>
       this match {
+        case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
+        case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(32)
         case CCULong                        => UnsignedBVSort(32)
@@ -89,7 +94,9 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.LP64 =>
       this match {
+        case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
+        case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(64)
         case CCULong                        => UnsignedBVSort(64)
@@ -111,7 +118,9 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.LLP64 =>
       this match {
+        case CCBool                         => Sort.Bool
         case CCInt                          => SignedBVSort(32)
+        case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
         case CCLong                         => SignedBVSort(32)
         case CCULong                        => UnsignedBVSort(32)
@@ -133,7 +142,7 @@ abstract sealed class CCType {
       }
   }
 
-  def rangePred(t: ITerm): IFormula =
+  def rangePred(t : ITerm) : IFormula =
     toSort match {
       case Sort.Nat =>
         t >= 0
@@ -143,7 +152,7 @@ abstract sealed class CCType {
       // ADTs
     }
 
-  def range: (Option[IdealInt], Option[IdealInt]) = {
+  def range : (Option[IdealInt], Option[IdealInt]) = {
     toSort match {
       case Sort.Nat     => (Some(IdealInt(0)), None)
       case Sort.Integer => (None, None)
@@ -156,28 +165,54 @@ abstract sealed class CCType {
     }
   }
 
-  def newConstant(name: String): ConstantTerm = toSort newConstant name
+  def newConstant(name : String) : ConstantTerm = toSort newConstant name
 
-  def cast(t: ITerm): ITerm = toSort match {
-    case s: ModSort => cast2Sort(s, t)
+  def isPointerType : Boolean =
+    this.isInstanceOf[CCHeapPointer] || this.isInstanceOf[CCHeapArrayPointer]
+  def isArithType : Boolean = this.isInstanceOf[CCArithType]
+
+  /**
+   * @note [[CCExpr.convertToType]] also has some checks regarding conversions,
+   *       which does not use this class for casting.
+   *       In fact this check would be too strong in some cases (e.g., *p = 0),
+   *       checking the values is needed to relax this check, which is not
+   *       possible to do in this class.
+   */
+  private def castIsAllowed(newType : CCType) : Boolean = {
+    this match {
+      case typ if typ.isArithType   && newType.isPointerType
+               || typ.isPointerType && newType.isArithType => false
+      case _ => true
+    }
+  }
+
+  def cast(t: ITerm) : ITerm = toSort match {
+    case s : ModSort => cast2Sort(s, t)
     case _ => t
   }
 
-  def cast2Unsigned(t: ITerm): ITerm = toSort match {
+  def cast2Unsigned(t : ITerm) : ITerm = toSort match {
     case SignedBVSort(n) => cast2UnsignedBV(n, t)
     case _               => t
   }
 
-  def cast(e: CCExpr): CCExpr = e match {
-    case CCTerm(t, _, srcInfo)    => CCTerm(cast(t), this, srcInfo)
-    case CCFormula(f, _, srcInfo) => CCFormula(f, this, srcInfo)
+  def cast(e : CCExpr) : CCExpr = {
+    if (!castIsAllowed(e.typ)) {
+      throw new UnsupportedCastException(
+        getLineStringShort(e.srcInfo) +
+        " Casts between pointer and arithmetic types are not supported.")
+    }
+    e match {
+      case CCTerm(t, _, srcInfo)    => CCTerm(cast(t), this, srcInfo)
+      case CCFormula(f, _, srcInfo) => CCFormula(f, this, srcInfo)
+    }
   }
 
-  def getNonDet: ITerm =
+  def getNonDet : ITerm =
     new SortedConstantTerm("_", toSort)
 
   // todo: make this abstract
-  def getZeroInit: ITerm = this match {
+  def getZeroInit : ITerm = this match {
     case structType: CCStruct =>
       val const: IndexedSeq[ITerm] =
         for ((_, fieldType) <- structType.sels)
@@ -197,55 +232,67 @@ abstract sealed class CCType {
 }
 
 abstract class CCArithType extends CCType {
-  val UNSIGNED_RANGE: IdealInt
-  val isUnsigned:     Boolean
+  val UNSIGNED_RANGE : IdealInt
+  val isUnsigned     : Boolean
 }
 
 case object CCVoid extends CCType {
-  override def toString: String = "void"
+  override def toString : String = "void"
   def shortName = "void"
 }
 
+// Logical type - only to be used in ghost code & annotations
+case object CCBool extends CCType {
+  override def toString : String = "boolean"
+  def shortName = "boolean"
+}
+
 case object CCInt extends CCArithType {
-  override def toString: String = "int"
+  override def toString : String = "int"
   def shortName = "int"
-  val UNSIGNED_RANGE: IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
-  val isUnsigned:     Boolean  = false
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
+  val isUnsigned     : Boolean  = false
+}
+
+// Logical type - only to be used in ghost code & annotations
+case object CCMathInt extends CCType {
+  override def toString : String = "integer"
+  def shortName = "integer"
 }
 
 case object CCUInt extends CCArithType {
   override def toString: String = "unsigned int"
   def shortName = "uint"
-  val UNSIGNED_RANGE: IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
-  val isUnsigned:     Boolean  = true
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
+  val isUnsigned     : Boolean  = true
 }
 
 case object CCLong extends CCArithType {
   override def toString: String = "long"
   def shortName = "long"
-  val UNSIGNED_RANGE: IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
-  val isUnsigned:     Boolean  = false
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
+  val isUnsigned     : Boolean  = false
 }
 
 case object CCULong extends CCArithType {
   override def toString: String = "unsigned long"
   def shortName = "ulong"
-  val UNSIGNED_RANGE: IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
-  val isUnsigned:     Boolean  = true
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
+  val isUnsigned     : Boolean  = true
 }
 
 case object CCLongLong extends CCArithType {
   override def toString: String = "long long"
   def shortName = "llong"
-  val UNSIGNED_RANGE: IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
-  val isUnsigned:     Boolean  = false
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
+  val isUnsigned     : Boolean  = false
 }
 
 case object CCULongLong extends CCArithType {
-  override def toString: String = "unsigned long long"
+  override def toString : String = "unsigned long long"
   def shortName = "ullong"
-  val UNSIGNED_RANGE: IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
-  val isUnsigned:     Boolean  = true
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
+  val isUnsigned     : Boolean  = true
 }
 
 case object CCFloat extends CCType {
@@ -256,41 +303,52 @@ case object CCDouble extends CCType {
   override def toString : String = "double"
   def shortName = "double"
 }
-
 case object CCLongDouble extends CCType {
   override def toString : String = "long double"
   def shortName = "long double"
 }
-case class CCHeap(heap: Heap) extends CCType {
-  override def toString: String = heap.toString
+
+case class CCHeap(heap : Heap) extends CCType {
+  override def toString : String = heap.toString
   def shortName = "heap"
 }
 
 /**
  * typ is either an index into structInfos (if ADT type), or a CCType
  * ptrDepth 0 => not a pointer, 1 => *, 2 => **, ... */
-case class FieldInfo(name:     String,
-                     typ:      Either[Integer, CCType],
-                     ptrDepth: Integer)
+case class FieldInfo(name       : String,
+                     typ        : Either[Integer, CCType],
+                     ptrDepth   : Integer)
 
-case class StructInfo(name: String, fieldInfos: Seq[FieldInfo])
+case class StructInfo(name : String, fieldInfos : Seq[FieldInfo])
 
-case class CCStructField(structName: String,
-                         structs:    MHashMap[String, CCStruct])
-    extends CCType {
+/**
+ * A struct field with a struct type
+ */
+case class CCStructField(structName : String,
+                         structs    : MHashMap[String, CCStruct])
+  extends CCType {
   override def toString: String = "field with type: " + structName
   def shortName = "field:" + structName
 }
 
-case class CCStruct(ctor:    MonoSortedIFunction,
-                    sels:    IndexedSeq[(MonoSortedIFunction, CCType)])
-    extends CCType {
+object CCStruct{
+  def rawToFullFieldName(structName : String, fieldName : String) =
+    s"$structName::$fieldName"
+}
+case class CCStruct(ctor : MonoSortedIFunction,
+                    sels : IndexedSeq[(MonoSortedIFunction, CCType)])
+  extends CCType {
+  import CCStruct._
   override def toString: String =
     "struct " + ctor.name + ": (" + sels.mkString + ")"
   def shortName = ctor.name
-  def getFieldIndex(name:         String) = sels.indexWhere(_._1.name == name)
-  def getFieldAddress(nestedName: List[String]): List[Int] =
-    nestedName match {
+  def getFieldIndex(rawFieldName : String) = sels.indexWhere(
+    _._1.name == rawToFullFieldName(shortName, rawFieldName))
+  def getFieldIndex(fieldSelector : IFunction) =
+    sels.indexWhere(_._1 == fieldSelector)
+  def getFieldAddress(nestedSelectors : List[IFunction]) : List[Int] =
+    nestedSelectors match {
       case hd :: Nil => getFieldIndex(hd) :: Nil
       case hd :: tl => {
         val ind = getFieldIndex(hd)
@@ -299,11 +357,11 @@ case class CCStruct(ctor:    MonoSortedIFunction,
       }
       case Nil => Nil // not possible to reach
     }
-  def getFieldType(ind: Int): CCType = sels(ind)._2 match {
+  def getFieldType(ind : Int) : CCType = sels(ind)._2 match {
     case CCStructField(name, structs) => structs(name)
     case typ                          => typ
   }
-  def getFieldType(fieldAddress: List[Int]): CCType =
+  def getFieldType(fieldAddress : List[Int]) : CCType =
     fieldAddress match {
       case hd :: Nil => getFieldType(hd)
       case hd :: tl =>
@@ -317,8 +375,8 @@ case class CCStruct(ctor:    MonoSortedIFunction,
             "empty field index!")
     }
 
-  def contains(fieldName: String) = getFieldIndex(fieldName) != -1
-  def getFieldTerm(t:     ITerm, fieldAddress: List[Int]): ITerm = {
+  def contains(rawFieldName : String) = getFieldIndex(rawFieldName) != -1
+  def getFieldTerm(t : ITerm, fieldAddress: List[Int]): ITerm = {
     val hd :: tl = fieldAddress
     val sel      = getADTSelector(hd)
     getFieldType(hd) match {
@@ -467,11 +525,11 @@ case class CCHeapPointer(heap: Heap, typ: CCType) extends CCPointer(typ) {
   override def toString: String = typ.shortName + " pointer to heap"
 }
 
-// arrays on the heap do not get automatically freed.
-// global arrays get automatically freed (as they are not really on the heap)
-//   when the main function returns.
-// "alloca" and stack arrays get automatically freed when the calling
-// function returns.
+/**
+ * `Heap`   : arrays allocated via memory allocation functions.
+ * `Stack`  : arrays declared on the stack, or allocated via `alloca`.
+ * `Global` : global arrays.
+ */
 object ArrayLocation extends Enumeration {
   type ArrayLocation = Value
   val Global, Stack, Heap = Value

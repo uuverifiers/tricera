@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -34,14 +34,26 @@ import ap.types.SortedConstantTerm
 import tricera.Util.SourceInfo
 import tricera.params.TriCeraParameters
 
+sealed trait VariableStorage
+case object GlobalStorage extends VariableStorage
+case object AutoStorage   extends VariableStorage
+case class  StaticStorage(enclosingFunctionName : String) extends VariableStorage
+
 object CCVar {
   val lineNumberPrefix = ":"
 }
 
-class CCVar(val name:    String,
-            val srcInfo: Option[SourceInfo],
-            val typ:     CCType) {
+class CCVar(val name    : String,
+            val srcInfo : Option[SourceInfo],
+            val typ     : CCType,
+            val storage : VariableStorage) {
   import CCVar._
+  val isStatic = storage.isInstanceOf[StaticStorage]
+  val enclosingFunctionName : Option[String] = storage match {
+    case GlobalStorage     => None
+    case AutoStorage       => None // We could provide the enclosing function, but it is not needed.
+    case s : StaticStorage => Some(s.enclosingFunctionName)
+  }
   val nameWithLineNumber = name +
     (srcInfo match {
       case Some(info) if info.line >= 0 =>

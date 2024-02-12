@@ -35,15 +35,14 @@ import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 
 object ADTExploder extends SolutionProcessor {
-  def apply(expr : IExpression) : IExpression =
-    Rewriter.rewrite(expr, explodeADTs)
+  def apply(expr : IFormula) : IFormula =
+    Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
 
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
     def getADTTerm(t : IExpression) : Option[ADTTerm] = {
       t match {
-        case f @ IFunApp(fun, _) if fun.isInstanceOf[MonoSortedIFunction] &&
-          fun.asInstanceOf[MonoSortedIFunction].resSort.isInstanceOf[ADTProxySort] =>
+        case f @ IFunApp(fun, _) if ADT.Constructor.unapply(fun).nonEmpty =>
           val sortedFun = fun.asInstanceOf[MonoSortedIFunction]
           val adtSort = sortedFun.resSort.asInstanceOf[ADT.ADTProxySort]
           Some(ADTTerm(f, adtSort))

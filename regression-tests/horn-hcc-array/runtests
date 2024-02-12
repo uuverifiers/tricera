@@ -2,7 +2,7 @@
 
 LAZABS=../../tri
 
-TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-bounds-line4.c dynamic-loop1.c simple-dynamic-array.c simple-global-array.c array-single-alloc.c array-inside-struct-1.c pointer-arith-1-safe.c pointer-arith-1-unsafe.c  pointer-arith-2-safe.c  pointer-arith-2-unsafe.c  pointer-arith-3-safe.c  pointer-arith-3-unsafe.c global-struct-array-1.c array-of-ptr-1.c"
+TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-bounds-line4.c dynamic-loop1.c simple-dynamic-array.c simple-global-array.c array-single-alloc.c array-inside-struct-1.c pointer-arith-1-safe.c pointer-arith-1-unsafe.c  pointer-arith-2-safe.c  pointer-arith-2-unsafe.c  global-struct-array-1.c array-of-ptr-1.c"
 
 for name in $TESTS; do
     echo
@@ -10,11 +10,20 @@ for name in $TESTS; do
     $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
-MEMTRACKTESTS="simple-dynamic-memsafety1.c simple-dynamic-memsafety2.c simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
+MEMTRACKTESTS="simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
 
 for name in $MEMTRACKTESTS; do
     echo
     echo $name
     $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    # -memtrack can also be added but not required when .yml files are present
+done
+
+SPLITPROPERTYTESTS="pointer-arith-3-safe.c  pointer-arith-3-unsafe.c"
+
+for name in $SPLITPROPERTYTESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off -splitProperties "$@" $name 2>&1 | grep -v 'at '
     # -memtrack can also be added but not required when .yml files are present
 done

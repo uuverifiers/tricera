@@ -6,28 +6,28 @@ fields.hcc
 SAFE
 
 fields-nested.hcc
-UNSAFE
 
 -----------------------------------------------------------------
 Init:
-   main2(.AS0(1, .AS1(2, .AS2(3))), .AS0(4, .AS1(5, .AS2(6))))   
+ main18_5(.AS0(1, .AS1(2, .AS2(3))), .AS0(4, .AS1(5, .AS2(6))))  
 -----------------------------------------------------------------
                                 |                                
                                 |                                
                                 V                                
-   main3(.AS0(1, .AS1(2, .AS2(6))), .AS0(4, .AS1(5, .AS2(3))))   
+   main(.AS0(1, .AS1(2, .AS2(6))), .AS0(4, .AS1(5, .AS2(3))))    
 -----------------------------------------------------------------
                                 |                                
                                 |                                
                                 V                                
- main12(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
+ main_4(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
 -----------------------------------------------------------------
 Final:
- main12(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
+ main_4(.AS0(1, .AS1(5, .AS2(6))), .AS0(4, .AS1(2, .AS2(3))), 0) 
 -----------------------------------------------------------------
 Failed assertion:
-false :- main12(s1:9, s2:9, x1:21), a(b(s1:9)) != a(b(s1:9)) | a(b(s1:9)) != 2 | a(b(s2:9)) != 5. (line 23)
+false :- main_4(s1:9, s2:9, x1:21), .AS1::a(.AS0::b(s1:9)) != .AS1::a(.AS0::b(s1:9)) | .AS1::a(.AS0::b(s1:9)) != 2 | .AS1::a(.AS0::b(s2:9)) != 5. (line:23 col:5) (property: user-assertion)
 
+UNSAFE
 
 struct-pointer.hcc
 SAFE
@@ -52,9 +52,10 @@ cast-stack-heap-01.c
 SAFE
 
 ptrptr-bug-1.c
-Warning: enabling heap model
 SAFE
 
 ptrptr-bug-2.c
-Warning: enabling heap model
 SAFE
+
+ptr-to-int-cast.c
+UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)

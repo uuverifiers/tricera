@@ -30,15 +30,12 @@ contract10.hcc
 SAFE
 
 contract11.hcc
-Warning: enabling heap model
 SAFE
 
 contract12.hcc
-Warning: enabling heap model
 SAFE
 
 contract13.hcc
-Warning: enabling heap model
 UNSAFE
 
 contract14.hcc
@@ -48,7 +45,6 @@ contract15.hcc
 SAFE
 
 contract16.hcc
-Warning: enabling heap model
 SAFE
 
 contract17.hcc
@@ -58,11 +54,9 @@ contract18.hcc
 UNSAFE
 
 contract19.hcc
-Warning: enabling heap model
 SAFE
 
 contract20.hcc
-Warning: enabling heap model
 UNSAFE
 
 contract21.hcc
@@ -72,21 +66,28 @@ contract22.hcc
 UNSAFE
 
 contract23.hcc
-Warning: enabling heap model
 UNSAFE
 
 contract24.hcc
-Warning: enabling heap model
 UNSAFE
 
 contract25.hcc
-Warning: enabling heap model
 SAFE
 
 contract26.hcc
-Warning: enabling heap model
 SAFE
 
 contract27.hcc
-Warning: enabling heap model
 SAFE
+
+struct-field-access-1-true.hcc
+SAFE
+
+struct-field-access-2-false.hcc
+UNSAFE
+
+struct-field-access-3-true.hcc
+SAFE
+
+struct-field-access-4-false.hcc
+UNSAFE

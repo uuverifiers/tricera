@@ -5,6 +5,7 @@ input_files: 'out-of-bounds-line3.c'
 properties:
   - property_file: ../properties/valid-memsafety.prp
     expected_verdict: false
+    subproperty: valid-deref
 
 options:
   language: C

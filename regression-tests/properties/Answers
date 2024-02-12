@@ -1,0 +1,90 @@
+
+valid-free-10-true.c
+SAFE
+
+valid-free-3-true.c
+SAFE
+
+valid-free-7-false.c
+UNSAFE
+
+valid-free-11-true.c
+SAFE
+
+valid-free-4-false.c
+UNSAFE
+
+valid-free-8-false.c
+UNSAFE
+
+valid-free-1-true.c
+SAFE
+
+valid-free-5-false.c
+UNSAFE
+
+valid-free-9-false.c
+UNSAFE
+
+valid-free-2-false.c
+UNSAFE
+
+valid-free-6-true.c
+SAFE
+
+valid-deref-arraybounds-1-false.c
+UNSAFE
+
+valid-deref-arraybounds-3-true.c
+Warning: no definition of function "nondet" available
+Warning: no definition of function "nondet" available
+SAFE
+
+valid-deref-arraybounds-2-false.c
+UNSAFE
+
+valid-deref-nullptr-false.c
+UNSAFE
+
+valid-deref-arraybounds-3-false.c
+Warning: no definition of function "nondet" available
+Warning: no definition of function "nondet" available
+UNSAFE
+
+valid-deref-uninit-false.c
+UNSAFE
+
+valid-deref-arraybounds-4-false.c
+UNSAFE
+
+valid-memcleanup-1-false.c
+UNSAFE
+
+valid-memcleanup-array-false.c
+UNSAFE
+
+valid-memcleanup-1-true.c
+SAFE
+
+valid-memcleanup-array-true.c
+SAFE
+
+valid-memtrack-array-true.c
+UNKNOWN (memcleanup violated - memtrack inconclusive)
+
+valid-memcleanup-2-false.c
+UNSAFE
+
+valid-memcleanup-3-false.c
+Warning: no definition of function "nondet" available
+UNSAFE
+
+valid-memcleanup-3-true.c
+Warning: no definition of function "nondet" available
+SAFE
+
+valid-free-12-false.c
+UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
+
+valid-memcleanup-4-false.c
+UNSAFE
