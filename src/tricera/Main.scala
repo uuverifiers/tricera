@@ -466,8 +466,8 @@ class Main (args: Array[String]) {
           if (useMemCleanupForMemTrack &&
               propertiesToCheck.contains(properties.MemValidTrack)) {
             /**
-             *  memtrack expected might be 'sat', but we check for
-             *  valid-cleanup, which might return unsat
+             *  memtrack expected is 'sat', but TriCera encodes the stronger
+             *  property valid-cleanup, which might be 'unsat'.
              */
             "unknown"
           } else "sat"
