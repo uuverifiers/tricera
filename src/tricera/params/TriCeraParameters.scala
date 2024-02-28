@@ -29,7 +29,7 @@
 
 package tricera.params
 
-import java.io.FileInputStream
+import java.io.FileReader
 
 import lazabs.GlobalParameters
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
@@ -377,7 +377,7 @@ class TriCeraParameters extends GlobalParameters {
       showHelp
       throw new MainException(s"unrecognized option '$arg'")
     case fn :: rest =>
-      fileName = fn; in = new FileInputStream(fileName); parseArgs(rest)
+      fileName = fn; in = new FileReader(fileName); parseArgs(rest)
   }
 
   var doNotExecute : Boolean = false
