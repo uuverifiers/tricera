@@ -31,7 +31,7 @@ package tricera.concurrency
 
 import ap.parser._
 import ap.theories.nia.GroebnerMultiplication
-import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, Util}
+import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 import hornconcurrency.{ParametricEncoder, VerificationLoop}
 import tricera.params.TriCeraParameters
 
@@ -70,15 +70,13 @@ object ParameterisedExamples extends App {
   def solve(enc : ParametricEncoder) = {
   println("Solving ...")
   
-  val predAbs =
-    new HornPredAbs(enc.allClauses, Map(),
-                    DagInterpolator.interpolatingPredicateGenCEXAndOr _)
+  val predAbs = new HornPredAbs(enc.allClauses)
 
   println
   predAbs.result match {
     case Right(cex) => {
       println("NOT SOLVABLE")
-      Util.show(for (p <- cex) yield p._1, "horn-cex")
+      lazabs.horn.Util.show(for (p <- cex) yield p._1, "horn-cex")
       cex.prettyPrint
     }
     case Left(solution) =>
