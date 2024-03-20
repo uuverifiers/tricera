@@ -63,7 +63,7 @@ object CCBinaryExpressions {
             throw new TranslationException(
               getLineString(lhs.srcInfo) +
               s"Could not apply binary operator: $this\n")
-          case e => throw e
+          case e : Throwable => throw e
         }
       }
 

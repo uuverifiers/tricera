@@ -30,22 +30,25 @@
 
 package tricera
 
-import ap.parser.IExpression.{ConstantTerm, Predicate}
-import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
-import hornconcurrency.ParametricEncoder
-
 import java.io.{FileOutputStream, PrintStream}
 import java.nio.file.{Files, Paths}
+import sys.process._
+
+import ap.parser.IExpression.{ConstantTerm, Predicate}
+import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
+
+import hornconcurrency.ParametricEncoder
+
 import lazabs.horn.bottomup.HornClauses.Clause
-import tricera.concurrency.{CCReader, TriCeraPreprocessor}
+import lazabs.horn.Util.NullStream
 import lazabs.prover._
+
+import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import tricera.Util.SourceInfo
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
 import tricera.parsers.YAMLParser._
-
-import sys.process._
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -256,7 +259,7 @@ class Main (args: Array[String]) {
     if (princess)
       Prover.setProver(lazabs.prover.TheoremProver.PRINCESS)
     val outStream =
-      if (logStat) Console.err else lazabs.horn.bottomup.HornWrapper.NullStream
+      if (logStat) Console.err else NullStream
 
     Console.withOut(outStream) {
       println(
