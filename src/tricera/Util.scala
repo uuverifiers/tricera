@@ -223,7 +223,7 @@ object Util {
   }
 
 ////////////////////////////////////////////////////////////////////////////////
-  import lazabs.horn.bottomup.Util.{Dag, DagNode, DagEmpty}
+  import lazabs.horn.Util.{Dag, DagNode, DagEmpty}
 
   /**
    *  Methods to print lazabs.horn.bottomup.Util.Dag

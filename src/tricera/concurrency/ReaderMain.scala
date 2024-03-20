@@ -31,7 +31,7 @@ package tricera.concurrency
 
 import ap.parser.{IBoolLit, ITerm, PrincessLineariser, IExpression}
 import IExpression.Predicate
-import lazabs.horn.bottomup.HornTranslator
+import lazabs.horn.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
 import hornconcurrency.{ParametricEncoder, VerificationLoop}
