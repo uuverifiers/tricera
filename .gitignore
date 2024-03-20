@@ -20,3 +20,4 @@ preprocessor/build
 tri-pp
 *.swp
 *.swo
+.attach_pid*

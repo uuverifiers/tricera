@@ -270,14 +270,18 @@ class Main (args: Array[String]) {
     val cppFileName = if (cPreprocessor) {
       val preprocessedFile = File.createTempFile("tri-", ".i")
       System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
-      val cmdLine = Seq("cpp", fileName, "-E", "-P", "-CC")
-      try Process(cmdLine) !
+      val cmdLine = "cpp " + fileName + " -E -P -CC"
+      try {
+        cmdLine !
+      }
       catch {
         case _: Throwable =>
-          throw new Main.MainException("The C preprocessor could not" +
-            " be executed (option -cpp). This might be due cpp not being " +
-            "installed in the system.\n" + "Attempted command: " +
-            cmdLine.mkString(" "))
+          throw new Main.MainException("The preprocessor could not" +
+            " be executed. This might be due to TriCera preprocessor binary " +
+            "not being in the current directory. Alternatively, use the " +
+            "-noPP switch to disable the preprocessor.\n" +
+            "Preprocessor command: " + cmdLine
+            )
       }
       preprocessedFile.deleteOnExit()
       preprocessedFile.getAbsolutePath

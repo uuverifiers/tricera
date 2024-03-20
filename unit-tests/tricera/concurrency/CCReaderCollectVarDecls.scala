@@ -34,6 +34,15 @@ import CCReader._
 import ccreader._
 import tricera.params.TriCeraParameters
 
+import scala.util.control._
+import scala.math.BigInt
+import  scala.math._
+import java.math.BigInteger
+import org.scalatest._
+import tricera.concurrency.ccreader._
+import scala.math.BigDecimal.int2bigDecimal
+
+
 class CCReaderCollectVarDecls extends AnyFlatSpec {
 ////////////////////////////////////////////////////////////////////////////////
 // Configuration
