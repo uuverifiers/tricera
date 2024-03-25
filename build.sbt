@@ -5,13 +5,13 @@ import java.nio.file.attribute.PosixFilePermission._
 lazy val commonSettings = Seq(
     name                 := "TriCera",
     organization         := "uuverifiers",
-    version              := "0.2",
+    version              := "0.3",
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
     scalaVersion         := "2.11.12",
-    crossScalaVersions   := Seq("2.11.12", "2.12.8"),
-    publishTo            := Some(Resolver.file("file",  new File( "/home/wv/public_html/maven/" )) ),
+    crossScalaVersions   := Seq("2.11.12", "2.12.18"),
+    publishTo            := Some(Resolver.file("file",  new File( "/home/compilation/public_html/maven/" )) ),
     useCoursier          := false
 )
 
@@ -94,11 +94,11 @@ settings(
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
   scalacOptions += (scalaVersion map { sv => sv match {
                                         case "2.11.12" => "-optimise"
-                                        case "2.12.8" => "-opt:_"
+                                        case "2.12.18" => "-opt:_"
                                       }}).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "nightly-SNAPSHOT",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.1",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.1",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",
