@@ -1418,11 +1418,10 @@ class CCReader private (prog              : Program,
     for (ind <- decList.indices) yield {
       decList(ind) match {
         case t : OnlyType => {
-          if (t.listdeclaration_specifier_.exists(spec => !spec
-            .isInstanceOf[Type]))
-            throw new TranslationException("Only type specifiers" +
-                                           "are allowed inside predicate" +
-                                           "declarations.")
+          if (t.listdeclaration_specifier_.exists(
+            spec => !spec.isInstanceOf[Type]))
+            throw new TranslationException(
+              "Only type specifiers are allowed inside predicate declarations.")
           val argType = getType(
             t.listdeclaration_specifier_.map(_.asInstanceOf[Type]
                                               .type_specifier_).toIterator)
@@ -1430,37 +1429,27 @@ class CCReader private (prog              : Program,
           (argType, argName)
         }
         case argDec : TypeAndParam => {
-          val name       = getName(argDec.declarator_)
-          val typ        = getType(argDec.listdeclaration_specifier_)
+          val name = getName(argDec.declarator_)
+          val typ  = getType(argDec.listdeclaration_specifier_)
           val actualType = argDec.declarator_ match {
-            case p : BeginPointer =>
-              //createHeapPointer(p, typ)
-              throw new TranslationException("Pointers inside " +
-                                             "predicate declarations are " +
-                                              "not supported.")
-            case np : NoPointer   =>
-              np.direct_declarator_ match {
-                case _ : Incomplete =>
-                  //CCHeapArrayPointer(heap, typ, HeapArray)
-                  throw new TranslationException("Arrays inside " +
-                                                 "predicate declarations " +
-                                                 "are not supported.")
-                case _ => typ
-              }
+            case p : BeginPointer => createHeapPointer(p, typ)
+            case np : NoPointer   => np.direct_declarator_ match {
+              case _ : Incomplete =>
+                //CCHeapArrayPointer(heap, typ, HeapArray)
+                throw new TranslationException(
+                  "Arrays inside predicate declarations are not supported.")
+              case _ => typ
+            }
             case _ => typ
           }
           (actualType, name)
         }
         case argDec : TypeHintAndParam => {
-          val name       = getName(argDec.declarator_)
-          val typ        = getType(argDec.listdeclaration_specifier_)
+          val name = getName(argDec.declarator_)
+          val typ  = getType(argDec.listdeclaration_specifier_)
           val actualType = argDec.declarator_ match {
-            case p : BeginPointer =>
-              //createHeapPointer(p, typ)
-              throw new TranslationException("Pointers inside" +
-                                             "predicate declarations are " +
-                                              "not supported.")
-            case _                => typ
+            case p : BeginPointer => createHeapPointer(p, typ)
+            case _ => typ
           }
           processHints(argDec.listannotation_) // todo: does this work??
           (actualType, name)
@@ -3399,9 +3388,13 @@ private def collectVarDecls(dec                    : Dec,
               case a : Efunkpar
                 if uninterpPredDecls contains(printer print a.exp_) =>
                 val args = a.listexp_.map(exp => atomicEval(exp, evalCtx))
-                                     .map(_.toTerm)
+                if(args.exists(a => a.typ.isInstanceOf[CCStackPointer])) {
+                  throw new TranslationException(
+                    getLineStringShort(srcInfo) + " Unsupported operation: " +
+                    "stack pointer argument to uninterpreted predicate.")
+                }
                 val pred = uninterpPredDecls(printer print a.exp_)
-                atom(pred, args)
+                atom(pred, args.map(_.toTerm))
               case interpPred : Efunkpar
                 if interpPredDefs contains(printer print interpPred.exp_) =>
                 val args    = interpPred.listexp_.map(

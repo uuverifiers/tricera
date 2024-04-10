@@ -33,3 +33,11 @@ UNSAFE
 
 unint-pred-simple-true.c
 SAFE
+
+unint-pred-stack-ptr-unsupported.c
+tricera.concurrency.ccreader.CCExceptions$TranslationException: 5:3 Unsupported operation: stack pointer argument to uninterpreted predicate.
+(error "5:3 Unsupported operation: stack pointer argument to uninterpreted predicate.")
+Other Error: 5:3 Unsupported operation: stack pointer argument to uninterpreted predicate.
+
+unint-pred-simple-ptr-true.c
+SAFE

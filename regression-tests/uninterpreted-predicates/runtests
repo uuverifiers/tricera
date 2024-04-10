@@ -3,7 +3,8 @@
 LAZABS=../../tri
 
 TESTS="pred-hint.c pred-hint-loop.c \
-       unint-pred-simple-false.c unint-pred-simple-true.c"
+       unint-pred-simple-false.c unint-pred-simple-true.c \
+       unint-pred-stack-ptr-unsupported.c unint-pred-simple-ptr-true.c"
 
 for name in $TESTS; do
     echo
