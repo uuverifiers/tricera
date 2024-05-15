@@ -29,9 +29,9 @@
 
 package tricera.concurrency
 
-import ap.basetypes.IdealInt
+import ap.basetypes.{IdealInt, IdealRat}
 import ap.parser._
-import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic}
+import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic, rationals}
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import concurrent_c._
 import concurrent_c.Absyn._
@@ -39,7 +39,7 @@ import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
 import lazabs.horn.bottomup.HornClauses
-import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
+import IExpression.{ConstantTerm, Predicate, Sort, i, toFunApplier}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack, HashMap => MHashMap, HashSet => MHashSet}
 import tricera.Util._
@@ -51,6 +51,12 @@ import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
 import tricera.{Util, properties}
+import tricera.concurrency.Floats.floatToFraction
+import tricera.concurrency.Doubles.doubleToFraction
+import tricera.concurrency.LongDoubles.longDoubleToFraction
+
+import ap.theories.rationals.Rationals
+import ap.theories.rationals.Rationals.Fraction
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -113,6 +119,7 @@ object CCReader {
   object ArithmeticMode extends Enumeration {
     val Mathematical, ILP32, LP64, LLP64 = Value
   }
+
   //////////////////////////////////////////////////////////////////////////////
   class CCClause(val clause  : HornClauses.Clause,
                  val srcInfo : Option[SourceInfo]) {
@@ -353,7 +360,6 @@ class CCReader private (prog              : Program,
     val res = new CCVar(varName, srcInfo, typ, storage)
     res
   }
-
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -2136,6 +2142,12 @@ private def collectVarDecls(dec                    : Dec,
               // ignore
             case _ : Tchar =>
               // ignore
+            case _ : Tfloat =>
+              typ = CCFloat
+            case _: Tdouble if typ == CCLong =>
+              typ = CCLongDouble
+            case _: Tdouble =>
+              typ = CCDouble
             case _ : Tsigned =>
               typ = CCInt
             case _ : Tunsigned =>
@@ -3969,9 +3981,24 @@ private def collectVarDecls(dec                    : Dec,
           pushVal(CCTerm(IdealInt(constant.octallong_.substring(
             0, constant.octallong_.size - 1), 8), CCLong, srcInfo))
 //      case constant : Eoctalunslong. Constant ::= OctalUnsLong;
-//      case constant : Ecdouble.      Constant ::= CDouble;
-//      case constant : Ecfloat.       Constant ::= CFloat;
-//      case constant : Eclongdouble.  Constant ::= CLongDouble;
+        case constant : Ecfloat =>
+          //val frac : (String, String) = floatToFraction(constant.cfloat_)
+          val (num, denum) = floatToFraction(constant.cfloat_)
+          val floatData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
+          pushVal(CCTerm(FloatADT.floatCtor(floatData),
+                         CCFloat, Some(getSourceInfo(constant))))
+        // assertProperty(FloatADT.isFloat(floatData), None)) // todo: just an example of adding an implicit assertion
+        // addGuard(FloatADT.isFloat(floatData)) // todo: just an example of adding an assumption
+        case constant : Ecdouble =>
+          val (num, denum) = doubleToFraction(constant.cdouble_)
+          val doubleData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
+          pushVal(CCTerm(DoubleADT.doubleCtor(doubleData),
+          CCDouble, Some(getSourceInfo(constant))))
+        case constant : Eclongdouble =>
+          val (num, denum) = doubleToFraction(constant.clongdouble_.dropRight(1))
+          val longDoubleData = Fraction(i((IdealInt(num))), i(IdealInt(denum)))
+          pushVal(CCTerm(LongDoubleADT.longDoubleCtor(longDoubleData),
+          CCLongDouble, Some(getSourceInfo(constant))))
         case constant : Eint =>
           pushVal(CCTerm(IExpression.i(IdealInt(
             constant.unboundedinteger_)), CCInt, srcInfo))

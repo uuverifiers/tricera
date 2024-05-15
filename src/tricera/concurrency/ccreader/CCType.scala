@@ -31,8 +31,11 @@ package tricera.concurrency.ccreader
 
 import ap.basetypes.IdealInt
 import ap.parser.{IFormula, IFunction, IIntLit, ITerm}
-import ap.theories.Heap
+import ap.theories.{Heap, ADT}
 import tricera.concurrency.CCReader._
+import tricera.concurrency.FloatADT
+import tricera.concurrency.DoubleADT
+import tricera.concurrency.LongDoubleADT
 import ap.parser.IExpression.{Sort, _}
 import ap.theories.bitvectors.ModuloArithmetic._
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
@@ -61,6 +64,8 @@ abstract sealed class CCType {
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
+        case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
         case _                              => Sort.Integer
       }
     case ArithmeticMode.ILP32 =>
@@ -73,6 +78,9 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(32)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
+        case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
+        case CCLongDouble                   => LongDoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -94,6 +102,9 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(64)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
+        case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
+        case CCLongDouble                   => LongDoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -115,6 +126,9 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(32)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
+        case CCFloat                        => FloatADT.sort
+        case CCDouble                       => DoubleADT.sort
+        case CCLongDouble                   => LongDoubleADT.sort
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -284,6 +298,14 @@ case object CCULongLong extends CCArithType {
 case object CCFloat extends CCType {
   override def toString : String = "float"
   def shortName = "float"
+}
+case object CCDouble extends CCType {
+  override def toString : String = "double"
+  def shortName = "double"
+}
+case object CCLongDouble extends CCType {
+  override def toString : String = "long double"
+  def shortName = "long double"
 }
 
 case class CCHeap(heap : Heap) extends CCType {

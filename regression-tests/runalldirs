@@ -25,6 +25,9 @@ run_test ./rundir math-arrays  "" -assert -dev -t:60
 run_test ./rundir quantifiers "" -assert -dev -t:60
 run_test ./rundir interpreted-predicates "" -assert -dev -t:60
 run_test ./rundir properties "" -assert -dev -t:60
+run_test ./rundir float "" -assert -dev -t:60
+run_test ./rundir double "" -assert -dev -t:60
+run_test ./rundir long_double "" -assert -dev -t:60
 #run_test ./rundir ParametricEncoder ""
 
 if [ $ERRORS -ne 0 ]; then
