@@ -119,3 +119,16 @@ UNSAFE
 
 stackptr.hcc
 UNKNOWN (Unsupported C fragment. Function contracts are currently not supported together with stack pointers (10:5))
+
+struct-name-bug.hcc
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for foo */
+/*@
+  requires s.f == 21;
+  ensures \old(s).f == 21 && 2*21 == \result;
+*/
+================================================================================
+
+SAFE

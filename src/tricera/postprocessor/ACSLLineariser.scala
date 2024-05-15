@@ -83,7 +83,7 @@ object ACSLLineariser {
   def asString(e : IExpression) : String =
     ap.DialogUtil.asString { printExpression(e) }
 
-  private def fun2Identifier(fun : IFunction) = fun.name
+  private def fun2Identifier(fun : IFunction) = fun.name.split("::").last
 
   //////////////////////////////////////////////////////////////////////////////
 

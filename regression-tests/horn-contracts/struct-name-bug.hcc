@@ -1,0 +1,15 @@
+struct S {
+  int f;
+};
+
+/*@ contract @*/
+int foo(struct S s) {
+  return s.f*2;
+}
+
+int main() {
+  struct S s;
+  s.f = 21;
+  assert(foo(s) == 42);
+  return 0;
+}
