@@ -46,7 +46,7 @@ import tricera.postprocessor.ContractConditionType._
 object ToVariableForm extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
-  ): IExpression = {
+  ): IFormula = {
     val valueSet = cci.contractConditionType match {
       case Precondition =>
         ValSetReader.deBrujin(cci.precondition)
@@ -56,7 +56,7 @@ object ToVariableForm extends ContractProcessor {
           ValSetReader.deBrujin(cci.postcondition)
         )
     }
-    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap, cci)
+    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap, cci).asInstanceOf[IFormula]
   }
 }
 

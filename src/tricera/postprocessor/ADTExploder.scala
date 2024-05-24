@@ -41,7 +41,7 @@ object ADTExploder extends SolutionProcessor
 
   def processContractCondition(
       cci: ContractConditionInfo
-  ): IExpression = {
+  ): IFormula = {
     apply(cci.contractCondition)
   }
 

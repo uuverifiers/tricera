@@ -50,15 +50,15 @@ import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 object ADTSimplifier extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
-  ): IExpression = {
+  ): IFormula = {
     apply(cci)
   }
 
   def apply(
       cci: ContractConditionInfo
-  ): IExpression = {
+  ): IFormula = {
     val adtTermSimplifier = new ADTTermSimplifier(cci)
-    adtTermSimplifier.visit(cci.contractCondition, null)
+    adtTermSimplifier.visit(cci.contractCondition, null).asInstanceOf[IFormula]
   }
 
   class ADTTermSimplifier(cci: ContractConditionInfo)

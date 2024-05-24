@@ -57,7 +57,6 @@ object AssignmentProcessor extends ContractProcessor with ClauseCreator {
     getClauses(cci.contractCondition, cci) match {
       case Some(clauses) =>
         cci.contractCondition
-          .asInstanceOf[IFormula]
           .&(clauses)
       case _ =>
         cci.contractCondition

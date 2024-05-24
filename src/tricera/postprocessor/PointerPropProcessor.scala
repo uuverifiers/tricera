@@ -47,7 +47,6 @@ object PointerPropProcessor extends ContractProcessor with ClauseCreator {
     getSafePointers(cci.contractCondition, cci) match {
       case safePointers if safePointers.size >= 2 =>
         cci.contractCondition
-          .asInstanceOf[IFormula]
           .&(ACSLExpression.separatedPointers(safePointers, 0, cci))
           .&(ACSLExpression.validPointers(safePointers, 0, cci))
       case _ => 

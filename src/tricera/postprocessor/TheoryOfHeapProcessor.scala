@@ -53,8 +53,8 @@ object TheoryOfHeapProcessor
     extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
-  ): IExpression = {
-    TheoryOfHeapRewriter(cci)
+  ): IFormula = {
+    TheoryOfHeapRewriter(cci).asInstanceOf[IFormula]
   }
 
   object TheoryOfHeapRewriter extends ExpressionUtils {

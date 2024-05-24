@@ -46,10 +46,11 @@ import ContractConditionType._
 object ClauseRemover extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
-  ): IExpression = {
-    apply(cci.contractCondition, cci)
+  ): IFormula = {
+    apply(cci.contractCondition, cci).asInstanceOf[IFormula]
   }
 
+  // TODO: Use IFormula instead of IExpression?
   def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
     val noTOHExpr = CleanupVisitor(TheoryOfHeapRemoverVisitor(expr, cci))
     val noTOHOrExplPtrExpr = CleanupVisitor(ExplicitPointerRemover(noTOHExpr, cci))
@@ -129,8 +130,8 @@ class ContainsTOHVisitor(cci: ContractConditionInfo)
 }
 
 object ExplicitPointerRemover extends ContractProcessor {
-  def processContractCondition(cci: ContractConditionInfo): IExpression = {
-    (new ExplicitPointerRemoverVisitor(cci)).visit(cci.contractCondition, 0)
+  def processContractCondition(cci: ContractConditionInfo): IFormula = {
+    (new ExplicitPointerRemoverVisitor(cci)).visit(cci.contractCondition, 0).asInstanceOf[IFormula]
   }
 
   def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {

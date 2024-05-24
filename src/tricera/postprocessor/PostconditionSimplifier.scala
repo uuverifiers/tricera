@@ -51,7 +51,7 @@ import ap.SimpleAPI
 object PostconditionSimplifier extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
-  ): IExpression = {
+  ): IFormula = {
     cci.contractConditionType match {
       case ContractConditionType.Precondition =>
         cci.contractCondition
@@ -60,9 +60,8 @@ object PostconditionSimplifier extends ContractProcessor {
     }
   }
 
-  def apply(precond: IExpression, postcond: IExpression): IExpression = {
-    val precondition = precond.asInstanceOf[IFormula]
-    var postcondition = postcond.asInstanceOf[IFormula]
+  def apply(precondition: IFormula, postcond: IFormula): IFormula = {
+    var postcondition = postcond
 
     def attemptReplacingIFormulasBy(replaceByFormula: IFormula) = {
       var i = 0

@@ -94,7 +94,7 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
   val selectors = ci.selectors
   
   val contractConditionType = ci.getContractConditionType(predicate)
-  val contractCondition: IExpression = contractConditionType match {
+  val contractCondition: IFormula = contractConditionType match {
     case ContractConditionType.Precondition =>
       ci.precondition
     case ContractConditionType.Postcondition =>
@@ -249,7 +249,7 @@ trait ContractProcessor {
       solution: SolutionProcessor.Solution,
       function: String,
       context: FunctionContext
-  ): (IExpression, IExpression) = {
+  ): (IFormula, IFormula) = {
     val contractInfo = ContractInfo(solution, function, context)
     val preconditionInfo =
       contractInfo.toContractConditionInfo(context.prePred.pred)
@@ -259,8 +259,8 @@ trait ContractProcessor {
       processContractCondition(preconditionInfo),
       processContractCondition(postconditionInfo)
     ): (
-        IExpression,
-        IExpression
+        IFormula,
+        IFormula
     )
   }
 
@@ -279,5 +279,5 @@ trait ContractProcessor {
     */
   def processContractCondition(
       contractConditionInfo: ContractConditionInfo
-  ): IExpression
+  ): IFormula
 }

@@ -54,7 +54,7 @@ object ACSLExpressionProcessor
     extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
-  ): IExpression = {
+  ): IFormula = {
     val visitor =
       new ACSLExpressionVisitor(cci)
     visitor(cci.contractCondition)
@@ -64,8 +64,8 @@ object ACSLExpressionProcessor
       cci: ContractConditionInfo
   ) extends CollectingVisitor[Int, IExpression] {
 
-    def apply(contractCondition: IExpression): IExpression = {
-      visit(contractCondition, 0)
+    def apply(contractCondition: IFormula): IFormula = {
+      visit(contractCondition, 0).asInstanceOf[IFormula]
     }
 
     override def preVisit(
