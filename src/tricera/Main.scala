@@ -712,7 +712,7 @@ class Main (args: Array[String]) {
                 // todo: implement replaceArgs as a solution processor
                 def funContractToACSLString(fPred    : Predicate,
                                             argNames : Seq[String]) : String = {
-                  val fPredToSol  = fPred -> processedSolution(fPred)
+                  val fPredToSol  = fPred -> acslProcessedSolution(fPred)
                   val fPredClause = clausifySolution(fPredToSol, argNames)
                   ACSLLineariser asString fPredClause.constraint
                 }
