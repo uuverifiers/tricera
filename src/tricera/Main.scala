@@ -760,9 +760,7 @@ class Main (args: Array[String]) {
         }
         Safe
       case Right(cex) => {
-        println("UNSAFE")
-
-      val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
+        val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
           case (_, clause) =>
             val richClauses : Seq[CCClause] = mergedToOriginal get clause
             match {
