@@ -10,6 +10,7 @@ tMyStruct g_myStruct;
 
 tMyStruct g_incr_myStruct;
 
+/*@contract@*/
 void g_incr() {
     g_incr_myStruct.val++;
 }

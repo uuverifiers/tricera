@@ -12,6 +12,7 @@ typedef struct Truck {
     struct Human* driver;
 } *TruckPtr;
 
+//No inferred contract found for tick
 void tick(TruckPtr t) {
     t->x++;
     t->driver->distance_driven++;
