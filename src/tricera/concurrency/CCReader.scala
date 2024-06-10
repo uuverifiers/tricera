@@ -696,7 +696,7 @@ class CCReader private (prog              : Program,
 
   if (modelHeap) {
     GlobalVars addVar heapVar
-    GlobalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None)
+    GlobalVars.inits += CCTerm(heapTerm, CCHeap(heap), None)
     variableHints += List()
   }
 
