@@ -1,4 +1,10 @@
-
+// TODO: This test currently results in 
+//
+// java.lang.Exception: Predicate generation failed
+// (error "Predicate generation failed")
+// Other Error: Predicate generation failed
+// 
+// 
 int r1;
 int n_init;
 
@@ -27,6 +33,8 @@ void main()
   assume((n_init > 0));
 
   n = (int*) malloc(sizeof(*n));
+  // Commenting out the following line makes the test pass,
+  // but leads to undefined behavior. 
   *n = n_init;
   r1 = get(n);
 

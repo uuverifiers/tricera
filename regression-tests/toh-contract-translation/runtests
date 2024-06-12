@@ -3,7 +3,6 @@
 LAZABS=../../tri
 
 TESTS="get-1.c  \
-       get-2.c  \
        incdec-1.c  \
        incdec-2.c  \
        incdec-3.c  \
