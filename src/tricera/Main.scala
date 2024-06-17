@@ -678,7 +678,7 @@ class Main (args: Array[String]) {
                     printlnDebug(postClauses.toString)
 
                     acslProcessedSolution = addClauses(
-                      postClauses,ctx.prePred.pred, acslProcessedSolution)
+                      postClauses,ctx.postPred.pred, acslProcessedSolution)
                   }
 
                   val printHeapExprProcessors = Seq(
