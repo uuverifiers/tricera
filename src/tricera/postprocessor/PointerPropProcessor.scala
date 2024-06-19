@@ -135,6 +135,8 @@ class HeapReducer(cci: ContractConditionInfo)
       subres: Seq[IExpression]
   ): IExpression = {
     t update subres match {
+      case IFunApp(fun, args) if (fun.name == "emptyHeap" && args.isEmpty) => 
+        HeapState.empty
       case QuantifiedVarWithId(ISortedVariable(_, sort), id)
           if sort.name == "Heap" =>
         HeapState.heapById(id)

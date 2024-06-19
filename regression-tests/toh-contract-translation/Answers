@@ -15,14 +15,6 @@ Inferred ACSL annotations
 
 SAFE
 
-get-2.c
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int_ptr" available
-java.lang.Exception: Predicate generation failed
-(error "Predicate generation failed")
-Other Error: Predicate generation failed
-
 incdec-1.c
 Warning: no definition of function "non_det_int" available
 Warning: no definition of function "non_det_int" available
@@ -33,13 +25,13 @@ Inferred ACSL annotations
 ================================================================================
 /* contracts for decrement */
 /*@
-  requires \true;
-  ensures a_init == \old(a_init) && b_init == \old(b_init) && a == \old(a) && b == \old(b);
+  requires \separated(a, b) && \valid(a) && \valid(b);
+  ensures a_init == \old(a_init) && b_init == \old(b_init) && a == \old(a) && b == \old(b) && \separated(a, b) && \valid(a) && \valid(b);
 */
 /* contracts for increment */
 /*@
-  requires val == a;
-  ensures \old(val) == a && a_init == \old(a_init) && b_init == \old(b_init) && \old(val) == \old(a) && b == \old(b);
+  requires val == a && \separated(val, b) && \valid(val) && \valid(b);
+  ensures \old(val) == a && a_init == \old(a_init) && b_init == \old(b_init) && \old(val) == \old(a) && b == \old(b) && \separated(val, b) && \valid(val) && \valid(b) && *val == 1 + \old(*val);
 */
 ================================================================================
 
@@ -53,24 +45,17 @@ Inferred ACSL annotations
 ================================================================================
 /* contracts for decrement */
 /*@
-  requires \true;
-  ensures a_init == \old(a_init) && a == \old(a);
+  requires \valid(a);
+  ensures a_init == \old(a_init) && a == \old(a) && \valid(a);
 */
 /* contracts for increment */
 /*@
-  requires val == a;
-  ensures \old(val) == a && a_init == \old(a_init);
+  requires val == a && \valid(val);
+  ensures \old(val) == a && a_init == \old(a_init) && \valid(val) && *val == 1 + \old(*val);
 */
 ================================================================================
 
 SAFE
-
-incdec-3.c
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int_ptr" available
-(error "Out of Memory")
-Out of Memory
 
 max-1.c
 Warning: no definition of function "non_det_int" available
@@ -83,7 +68,7 @@ Inferred ACSL annotations
 ================================================================================
 /* contracts for findMax */
 /*@
-  requires x == a && y == b;
+  requires x == a && y == b && \separated(x, y) && \valid(x) && \valid(y);
   ensures ((a_init == \result && \result >= b_init) || (b_init - a_init >= 1 && b_init == \result)) && r == \old(r) && a_init == \old(a_init) && b_init == \old(b_init) && \old(a) == a && \old(b) == b;
 */
 ================================================================================
@@ -101,7 +86,7 @@ Inferred ACSL annotations
 ================================================================================
 /* contracts for findMax */
 /*@
-  requires max == r && x == a && y == b;
+  requires max == r && x == a && y == b && \separated(x, y) && \separated(x, max) && \separated(y, max) && \valid(x) && \valid(y) && \valid(max);
   ensures (\old(b_init) - \old(a_init) >= 1 || \old(a_init) >= \old(b_init)) && a == \old(x) && b == \old(y) && r == \old(max) && \old(a_init) == a_init && \old(b_init) == b_init;
 */
 ================================================================================
@@ -137,61 +122,17 @@ Inferred ACSL annotations
 ================================================================================
 /* contracts for addTwoNumbers */
 /*@
-  requires \true;
-  ensures a == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init);
+  requires \separated(a, b) && \separated(a, result) && \separated(b, result) && \valid(a) && \valid(b) && \valid(result);
+  ensures a == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init) && \separated(a, b) && \separated(a, result) && \separated(b, result) && \valid(a) && \valid(b) && \valid(result);
 */
 /* contracts for multiplyByTwo */
 /*@
-  requires num == a;
-  ensures \old(num) == a && \old(num) == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init);
+  requires num == a && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result);
+  ensures \old(num) == a && \old(num) == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init) && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result) && *num == 2*\old(*num);
 */
 ================================================================================
 
 SAFE
-
-multadd-2.c
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int" available
-(error "Out of Memory")
-Out of Memory
-
-multadd-3.c
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int_ptr" available
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int" available
-
-Inferred ACSL annotations
-================================================================================
-/* contracts for addNumbers */
-/*@
-  requires c == result1 && result == result1;
-  ensures \old(c) == c && a == \old(a) && b == \old(b) && result2 == \old(result2) && a_init == \old(a_init) && b_init == \old(b_init) && c_init == \old(c_init) && \old(c) == result1;
-*/
-/* contracts for multiplyNumbers */
-/*@
-  requires c == result1;
-  ensures \old(c) == \old(result1) && \old(c) == c && a == \old(a) && b == \old(b) && result2 == \old(result2) && a_init == \old(a_init) && b_init == \old(b_init) && c_init == \old(c_init) && \old(c) == result1;
-*/
-================================================================================
-
-SAFE
-
-truck-1.c
-Warning: no definition of function "non_det_int" available
-Warning: no definition of function "non_det_int" available
-(error "Out of Memory")
-Out of Memory
 
 truck-2.c
 
