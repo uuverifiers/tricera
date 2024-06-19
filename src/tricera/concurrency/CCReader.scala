@@ -738,6 +738,10 @@ class CCReader private (prog              : Program,
     objectSorts.zip(objectGetters).toMap
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectWrappers).toMap
+  val getterSortMap : Map[MonoSortedIFunction, Sort] =
+    sortGetterMap.map(_.swap)
+  val wrapperSortMap : Map[MonoSortedIFunction, Sort] =
+    sortWrapperMap.map(_.swap)
   val sortCtorIdMap : Map[Sort, Int] =
     objectSorts.zip(0 until structCount+structCtorsOffset).toMap
 
@@ -967,13 +971,28 @@ class CCReader private (prog              : Program,
 
         def sortGetter(s: Sort): Option[MonoSortedIFunction] =
           sortGetterMap.get(s)
+        
+        def wrapperSort(wrapper: IFunction): Option[Sort] = wrapper match {
+          case w: MonoSortedIFunction => 
+            wrapperSortMap.get(w)
+          case _ => None
+        }
 
+        def getterSort(getter: IFunction): Option[Sort] = getter match {
+          case g: MonoSortedIFunction => 
+            getterSortMap.get(g)
+          case _ => None
+        }
+      
         def getTypOfPointer(t: CCType): CCType = t match {
           case p: CCHeapPointer => p.typ
           case t => t
         }
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
+
+        override val getStructMap: Map[IFunction, CCStruct] = 
+          structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
         override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
 
@@ -4333,6 +4352,19 @@ private def collectVarDecls(dec                    : Dec,
               sortWrapperMap get s
             override def sortGetter(s: Sort): Option[IFunction] =
               sortGetterMap get s
+            override def wrapperSort(wrapper: IFunction): Option[Sort] =
+              wrapper match {
+                case w: MonoSortedIFunction => 
+                  wrapperSortMap.get(w)
+                case _ => None
+              }
+            override def getterSort(getter: IFunction): Option[Sort] =
+              getter match {
+                case g: MonoSortedIFunction => 
+                  getterSortMap.get(g)
+                case _ => None
+              } 
+
             override def getCtor(s: Sort): Int = sortCtorIdMap(s)
             override def getTypOfPointer(t: CCType): CCType =
               t match {
@@ -4341,13 +4373,19 @@ private def collectVarDecls(dec                    : Dec,
               }
             override def isHeapEnabled: Boolean = modelHeap
             override def getHeap: HeapObj =
-              if (modelHeap) heap else throw NeedsHeapModelException
+              if (modelHeap) heap
+              else throw new TranslationException("getHeap called with no heap!")
             override def getHeapTerm: ITerm =
               if (modelHeap)
                 stmSymex.getValues(GlobalVars.lastIndexWhere(heapVar)).toTerm
-              else throw NeedsHeapModelException
-            override def getOldHeapTerm: ITerm =
-              getHeapTerm // todo: heap term for exit predicate?
+              else throw new TranslationException("getHeapTerm called with no heap!")
+            override def getOldHeapTerm: ITerm = {
+              if (modelHeap) getHeapTerm
+              else throw new TranslationException("getOldHeapTerm called with no heap!")
+            } // todo: heap term for exit predicate?
+
+            override val getStructMap: Map[IFunction, CCStruct] = 
+              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(stm)
@@ -4400,6 +4438,18 @@ private def collectVarDecls(dec                    : Dec,
               sortWrapperMap get s
             override def sortGetter(s : Sort) : Option[IFunction] =
               sortGetterMap get s
+            override def wrapperSort(wrapper: IFunction): Option[Sort] =
+              wrapper match {
+                case w: MonoSortedIFunction => 
+                  wrapperSortMap.get(w)
+                case _ => None
+              }
+            override def getterSort(getter: IFunction): Option[Sort] =
+              getter match {
+                case g: MonoSortedIFunction => 
+                  getterSortMap.get(g)
+                case _ => None
+              } 
             override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
             override def getTypOfPointer(t : CCType) : CCType =
               t match {
@@ -4415,6 +4465,9 @@ private def collectVarDecls(dec                    : Dec,
               else throw NeedsHeapModelException
             override def getOldHeapTerm : ITerm =
               getHeapTerm // todo: heap term for exit predicate?
+            
+            override val getStructMap: Map[IFunction, CCStruct] = 
+              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(loop_annot)

@@ -46,6 +46,11 @@ object Util {
   def warn(msg : String) : Unit =
     Console.err.println("Warning: " + msg)
 
+  def printlnDebug(msg : String) : Unit = {
+    if (params.TriCeraParameters.get.printDebugMessages)
+      println(msg)
+  }
+
   case class SourceInfo (line : Int, col : Int)
 
   private def getIntegerField(obj: Any, fieldName: String): Int = {

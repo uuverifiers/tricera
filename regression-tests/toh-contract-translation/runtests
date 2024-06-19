@@ -1,0 +1,17 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="get-1.c  \
+       incdec-1.c  \
+       incdec-2.c  \
+       max-1.c  \
+       max-2.c  \
+       multadd-1.c  \
+       truck-2.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -acsl "$@" $name 2>&1 | grep -v 'at '
+done

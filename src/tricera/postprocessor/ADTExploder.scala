@@ -34,9 +34,16 @@ import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 
-object ADTExploder extends SolutionProcessor {
+object ADTExploder extends SolutionProcessor 
+                      with ContractProcessor {
   def apply(expr : IFormula) : IFormula =
     Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
+
+  def processContractCondition(
+      cci: ContractConditionInfo
+  ): IFormula = {
+    apply(cci.contractCondition)
+  }
 
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
@@ -57,6 +64,23 @@ object ADTExploder extends SolutionProcessor {
                            subres: Seq[IExpression]) : IExpression = {
 
       import IExpression._
+      def checkExplodable(originalEq : IEquation, ctorFun : IFunction,
+                       lhsIsCtor : Boolean) : Boolean = {
+        val newEq = originalEq update subres
+        val (newFunApp, selectorTerms, newRootTerm) =
+          if (lhsIsCtor) {
+            val Eq(newFunApp@IFunApp(_, selectorTerms), newRootTerm) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          } else {
+            val Eq(newRootTerm, newFunApp@IFunApp(_, selectorTerms)) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          }
+        val adtTerm = getADTTerm(newFunApp).get
+        val adt = adtTerm.adtSort.adtTheory
+        val ctorIndex = adt.constructors.indexOf(ctorFun)
+        ctorIndex != -1
+      }
+
       def explodeADTSelectors (originalEq : IEquation, ctorFun : IFunction,
                                lhsIsCtor : Boolean) = {
         val newEq = originalEq update subres
@@ -74,14 +98,16 @@ object ADTExploder extends SolutionProcessor {
         val selectors = adt.selectors(ctorIndex)
         (for ((fieldTerm, selectorInd) <- selectorTerms zipWithIndex)
           yield selectors(selectorInd)(newRootTerm) ===
-            fieldTerm.asInstanceOf[ITerm]).reduce(_ &&& _)
+            fieldTerm).reduce(_ &&& _)
       }
 
       t match {
-        case e@Eq(funApp@IFunApp(fun, _), _) if getADTTerm(funApp).nonEmpty =>
-          explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = true)
-        case e@Eq(_, funApp@IFunApp(fun, _)) if getADTTerm(funApp).nonEmpty =>
-          explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = false)
+        case e@Eq(funApp@IFunApp(fun, _), _) if getADTTerm(funApp).nonEmpty &&
+              checkExplodable(e.asInstanceOf[IEquation], fun, lhsIsCtor = true) =>
+                explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = true)
+        case e@Eq(_, funApp@IFunApp(fun, _)) if getADTTerm(funApp).nonEmpty &&
+              checkExplodable(e.asInstanceOf[IEquation], fun, lhsIsCtor = false) =>
+                explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = false)
         case t@IFunApp(f,_) =>
           val newApp = t update subres
           (for (theory <- TheoryRegistry lookupSymbol f;
