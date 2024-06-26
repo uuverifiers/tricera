@@ -255,9 +255,6 @@ UNSAFE
 
 switch2.hcc
 Warning: no definition of function "nondet" available
-Warning: no definition of function "nondet" available
-Warning: no definition of function "nondet" available
-Warning: no definition of function "nondet" available
 SAFE
 
 hints.hcc

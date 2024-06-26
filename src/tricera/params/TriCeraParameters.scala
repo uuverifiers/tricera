@@ -55,6 +55,8 @@ class TriCeraParameters extends GlobalParameters {
 
   var cPreprocessor : Boolean = false
 
+  var dumpSimplifiedClauses : Boolean = false
+
   var showVarLineNumbersInTerms : Boolean = false
 
   /**
@@ -121,7 +123,7 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  private val version = "0.3"
+  private val version = "0.3.1"
 
   private val greeting =
     "TriCera v" + version + ".\n(C) Copyright " +
@@ -143,6 +145,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-noPP" :: rest => noPP = true; parseArgs(rest)
     case "-cpp"  :: rest => cPreprocessor = true; parseArgs(rest)
     case "-dumpClauses" :: rest => printIntermediateClauseSets = true; parseArgs(rest)
+    case "-dumpSimplified" :: rest => dumpSimplifiedClauses = true; parseArgs(rest)
     case "-sp" :: rest => smtPrettyPrint = true; parseArgs(rest)
     //      case "-pnts" :: rest => ntsPrint = true; arguments(rest)
     case "-disj" :: rest => disjunctive = true; parseArgs(rest)
@@ -258,6 +261,7 @@ class TriCeraParameters extends GlobalParameters {
                                     .split(",").toSet
       parseArgs(rest)
     case "-logSimplified" :: rest => printHornSimplified = true; parseArgs(rest)
+    case "-logSimplifiedSMT" :: rest => printHornSimplifiedSMT = true; parseArgs(rest)
     case "-dot" :: str :: rest => dotSpec = true; dotFile = str; parseArgs(rest)
     case "-pngNo" :: rest => pngNo = true; parseArgs(rest)
     case "-dotCEX" :: rest => pngNo = false; parseArgs(rest)
@@ -339,6 +343,8 @@ class TriCeraParameters extends GlobalParameters {
     |-pDot              Pretty-print Horn clauses, output in dot format and display it
     |-sp                Pretty-print the Horn clauses in SMT-LIB format
     |-dumpClauses       Write the Horn clauses in SMT-LIB format to input filename.smt2
+    |-dumpSimplified    Write simplified Horn clauses in SMT-LIB format to input filename.smt2
+    |                   The printed clauses are the ones after Eldarica's default preprocessor
     |-varLines          Print program variables in clauses together with their line numbers (e.g., x:42)
 
     |Horn engine options (Eldarica):
@@ -362,6 +368,8 @@ class TriCeraParameters extends GlobalParameters {
     |-splitClauses:n    Aggressiveness when splitting disjunctions in clauses
     |                     (0 <= n <= 2, default: 1)
     |-pHints            Print initial predicates and abstraction templates
+    |-logSimplified     Show clauses after Eldarica preprocessing in Prolog format
+    |-logSimplifiedSMT  Show clauses after Eldarica preprocessing in SMT-LIB format
 
     |TriCera preprocessor:
     |-printPP           Print the output of the TriCera preprocessor to stdout

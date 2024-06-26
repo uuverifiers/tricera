@@ -33,16 +33,12 @@ package tricera
 import java.io.{FileOutputStream, PrintStream}
 import java.nio.file.{Files, Paths}
 import sys.process._
-
 import ap.parser.IExpression.{ConstantTerm, Predicate}
 import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
-
 import hornconcurrency.ParametricEncoder
-
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.Util.NullStream
 import lazabs.prover._
-
 import tricera.concurrency.{CCReader, TriCeraPreprocessor}
 import tricera.Util.{SourceInfo, printlnDebug}
 import tricera.benchmarking.Benchmarking._
@@ -259,7 +255,10 @@ class Main (args: Array[String]) {
     if (princess)
       Prover.setProver(lazabs.prover.TheoremProver.PRINCESS)
     val outStream =
-      if (logStat) Console.err else NullStream
+      if (logStat || printHornSimplified || printHornSimplifiedSMT)
+        Console.err
+      else
+        NullStream
 
     Console.withOut(outStream) {
       println(
@@ -491,7 +490,8 @@ class Main (args: Array[String]) {
           new hornconcurrency.VerificationLoop(
             system = smallSystem,
             initialInvariants = null,
-            printIntermediateClauseSets = printIntermediateClauseSets,
+            dumpIntermediateClauses = printIntermediateClauseSets,
+            dumpSimplifiedClauses = dumpSimplifiedClauses,
             fileName = smtFileName,
             expectedStatus = expectedStatus,
             log = needFullSolution,
@@ -515,7 +515,8 @@ class Main (args: Array[String]) {
 
     val result = verificationLoop.result
 
-    if (printIntermediateClauseSets)
+    if (printIntermediateClauseSets || dumpSimplifiedClauses ||
+        printHornSimplified || printHornSimplifiedSMT)
       return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
     val executionResult = result match {

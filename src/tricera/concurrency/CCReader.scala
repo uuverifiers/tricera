@@ -361,6 +361,7 @@ class CCReader private (prog              : Program,
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
+  private val warnedFunctionNames = new MHashSet[String]
   private val functionContexts = new MHashMap[String, FunctionContext]
   private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
   private val functionClauses =
@@ -3903,8 +3904,11 @@ private def collectVarDecls(dec                    : Dec,
           resetFields(functionExit)
         case None => (functionDecls get name) match {
           case Some((fundecl, typ)) =>
-            if (!(name contains "__VERIFIER_nondet" ))
+            if (!name.contains("__VERIFIER_nondet") &&
+                !warnedFunctionNames.contains(name)) {
               warn("no definition of function \"" + name + "\" available")
+              warnedFunctionNames += name
+            }
             pushFormalVal(typ, Some(getSourceInfo(fundecl)))
           case None =>
             throw new TranslationException(
