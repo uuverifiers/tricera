@@ -27,7 +27,7 @@ all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class
 
 include $(PARSER_BASEDIR)/download_jars.mk
 
-cc-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/sym.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Yylex.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/parser.class
+cc-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/sym.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Yylex.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/parser.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/AllVisitor.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/AbstractVisitor.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/ComposVisitor.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/FoldVisitor.class
 	cd $(PARSER_BINDIR) && jar cf $(PARSER_BASEDIR)/cc-parser.jar tricera
 
 
@@ -70,6 +70,18 @@ $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Yylex.class: tricera/concurren
 
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/sym.class: tricera/concurrency/concurrent_c/sym.java
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/sym.java
+
+$(PARSER_BINDIR)/tricera/concurrency/concurrent_c/AllVisitor.class: tricera/concurrency/concurrent_c/AllVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/AllVisitor.java
+
+$(PARSER_BINDIR)/tricera/concurrency/concurrent_c/AbstractVisitor.class: tricera/concurrency/concurrent_c/AbstractVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/AbstractVisitor.java
+
+$(PARSER_BINDIR)/tricera/concurrency/concurrent_c/ComposVisitor.class: tricera/concurrency/concurrent_c/ComposVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/ComposVisitor.java
+
+$(PARSER_BINDIR)/tricera/concurrency/concurrent_c/FoldVisitor.class: tricera/concurrency/concurrent_c/FoldVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/FoldVisitor.java
 
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/parser.class: tricera/concurrency/concurrent_c/parser.java tricera/concurrency/concurrent_c/sym.java
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/parser.java
