@@ -93,7 +93,6 @@ separator nonempty Init_declarator ",";
 -- SomeExpArgs.    Maybe_Exp_Args ::= "{" Exp "}";
 -- NoExpArgs.      Maybe_Exp_Args ::= ;
 
-
 Tvoid.        Type_specifier ::= "void";
 Tbool.        Type_specifier ::= "_Bool";
 -- Tcomplex.     Type_specifier ::= "_Complex";
@@ -350,6 +349,7 @@ Epoint.      Exp16 ::= Exp16 "->" CIdent;
 Epostinc.    Exp16 ::= Exp16 "++";
 Epostdec.    Exp16 ::= Exp16 "--";
 Evar.        Exp17 ::= CIdent;
+internal EvarWithType.        Exp17 ::= CIdent [Declaration_specifier] Init_declarator ;
 Econst.      Exp17 ::= Constant;
 Estring.     Exp17 ::= String;
 Enondet.     Exp17 ::= "_";
