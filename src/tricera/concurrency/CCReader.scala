@@ -52,6 +52,7 @@ import tricera.parsers.AnnotationParser._
 import CCExceptions._
 import tricera.{Util, properties, HeapInfo}
 import tricera.Literals
+import lazabs.horn.concurrency.concurrentC.PrettyPrinter
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -68,6 +69,23 @@ object CCReader {
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
 //    println(printer print prog)
+
+
+// SSSOWO: start
+    //val prg = 
+
+    val progCopy = CCAstTypeAnnotator(prog)
+
+    val pp = new PrettyPrinterNonStatic()
+    val prgStr = pp.print(prog)
+    val prgCpStr = pp.print(progCopy)
+// SSSOWO: end
+
+    if (prog == progCopy) {
+      printlnDebug(f"Programs match: ${prgStr} ${prgCpStr}")
+    } else {
+      printlnDebug("Programs doesn't match")
+    }
 
     var reader : CCReader = null
     while (reader == null)
