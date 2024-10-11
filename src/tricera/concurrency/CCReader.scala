@@ -72,20 +72,15 @@ object CCReader {
 
 
 // SSSOWO: start
-    //val prg = 
-
-    val progCopy = CCAstTypeAnnotator(prog)
+    val typeAnnotProg = CCAstTypeAnnotator(prog)
+    val transformedCallsProg = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg)
 
     val pp = new PrettyPrinterNonStatic()
     val prgStr = pp.print(prog)
-    val prgCpStr = pp.print(progCopy)
+    val prgCpStr = pp.print(transformedCallsProg)
 // SSSOWO: end
 
-    if (prog == progCopy) {
-      printlnDebug(f"Programs match: ${prgStr} ${prgCpStr}")
-    } else {
-      printlnDebug("Programs doesn't match")
-    }
+    printlnDebug(f"Original program: \n${prgStr}\n\nRewritten:\n${prgCpStr}")
 
     var reader : CCReader = null
     while (reader == null)

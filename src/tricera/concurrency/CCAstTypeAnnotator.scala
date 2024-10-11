@@ -19,13 +19,41 @@ object CCAstTypeAnnotator {
 class CCAstTypeAnnotator {
   def annotate(program: Program): Program = {
     val visitor = new CCAstTypeAnnotationVisitor
-    program.accept(visitor, new CCAstTypeAnnotationData)
+    program.accept(visitor, getPreloadedSymbolTable())
+  }
+
+  private def getPreloadedSymbolTable() = {
+    def createDeclSpecifiers(tps: List[Type_specifier]) = {
+      val declSpec = new ListDeclaration_specifier
+      for (tp <- tps) {
+        declSpec.add(new Type(tp))
+      }
+      declSpec
+    }
+
+    def createDeclaration(name: String, tps: List[Type_specifier]) = {
+      CCAstDeclaration(createDeclSpecifiers(tps), new OnlyDecl(new NoPointer(new Name(name))))
+    }
+
+    def createPointerDeclaration(name: String, tps: List[Type_specifier]) = {
+      CCAstDeclaration(createDeclSpecifiers(tps), new OnlyDecl(new BeginPointer(new Point, new Name(name))))
+    }
+
+    val symTab = new CCAstTypeAnnotationData
+    symTab.put("assume", createDeclaration("assume", List(new Tint)))
+    symTab.put("assert", createDeclaration("assert", List(new Tvoid)))
+    symTab.put("malloc", createPointerDeclaration("malloc", List(new Tunsigned, new Tlong)))
+    symTab
   }
 }
 
 object CCAstDeclaration {
   def apply(d: ListDeclaration_specifier, i: Init_declarator, e: ListExtra_specifier): CCAstDeclaration = {
     new CCAstDeclaration(d, i, e)
+  }
+
+  def apply(d: ListDeclaration_specifier, i: Init_declarator): CCAstDeclaration = {
+    new CCAstDeclaration(d, i, new ListExtra_specifier)
   }
 } 
 
@@ -36,17 +64,20 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
 }
 
 class CCAstTypeAnnotationData {
-  private val globalVariables = MHashMap[String, Declarators]()
+  private val globalVariables = MHashMap[String, CCAstDeclaration]()
 
-  def put(name: String, declaration: Declarators) = {
+  def put(name: String, declaration: CCAstDeclaration) = {
     globalVariables += (name -> declaration)
   }
 
-  def get(name: String): Option[Declarators] = {
+  def get(name: String): Option[CCAstDeclaration] = {
     globalVariables.get(name)
   }
 }
 
+/*
+  Vistor class to extract a name from a declaration or definition.
+*/
 class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     /* Function_def */
     override def visit(defn: AnnotatedFunc, arg: Unit): String = { defn.declarator_.accept(this, arg); }
@@ -77,12 +108,77 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(dec: OldFuncDec, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
 }
 
+/*
+  Vistor to copy an AST.
+*/
+class CCAstCopyVisitor extends ComposVisitor[Unit] {
+  def apply(specifiers: ListDeclaration_specifier): ListDeclaration_specifier = {
+    val decSpecifiers = new ListDeclaration_specifier
+    for (d <- specifiers.asScala)
+    {
+      decSpecifiers.add(d.accept(this, ()));
+    }
+    decSpecifiers
+  }
+
+  def apply(specifiers: ListExtra_specifier): ListExtra_specifier = {
+    val extraSpecifiers = new ListExtra_specifier
+    for (s <- specifiers.asScala)
+    {
+      extraSpecifiers.add(s.accept(this, ()));
+    }
+    extraSpecifiers
+  }
+
+  def apply(expressions: ListExp) = {
+    val expsCopy = new ListExp
+    for (x <- expressions.asScala) {
+      expsCopy.add(x.accept(this, ()))
+    }
+    expsCopy
+  }
+}
+
+/*
+  Vistor to extract a function declaration from a function definition.
+*/
+class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration_specifier, Init_declarator), Unit] {
+  val copyAst = new CCAstCopyVisitor
+  /* Function_def */
+  override def visit(defn: AnnotatedFunc, arg: Unit) = { 
+    (copyAst(defn.listdeclaration_specifier_), new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
+  }
+  override def visit(defn: NewFuncInt, arg: Unit) = {
+    val declarationSpecifiers = new ListDeclaration_specifier
+    declarationSpecifiers.add(new Type(new Tint))
+    (declarationSpecifiers, new OnlyDecl(defn.declarator_.accept(copyAst, arg))); 
+  }
+  override def visit(defn: NewFunc, arg: Unit) = { 
+    (copyAst(defn.listdeclaration_specifier_), new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
+  }
+}
+
+/*
+  Vistor to create a copy of an AST with EvarWithType nodes substituted for
+  Evar nodes.
+*/
 class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] {
   val getName = new CCAstGetNameVistor
+  val copyAst = new CCAstCopyVisitor
+  val getDeclaration = new CCAstGetFunctionDeclarationVistor
   val nameStack = Stack[String]()
 
   def getScopedName(name: String): String = {
-     nameStack.mkString("", ".", ".") + name
+    // A "scoped name" is an fully qualified identifier where each
+    // part of the scope is separated by the US (unit separator)
+    // character. The outer most scope is the first part etc.
+    // This will never conflict with an identifier in the original
+    // source since US is not a valid identifier character in C.
+    if (nameStack.isEmpty) {
+      name
+    } else {
+      nameStack.mkString("", "\u001F", "\u001F") + name
+    }
   }
 
   def withScope[A](name: String)(thunk: => A): A = {
@@ -93,16 +189,15 @@ class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] 
   } 
 
   /*
-  override def visit(globalDec: Global, symTab: CCAstTypeAnnotationData): External_declaration = {
-    val name = globalDec.dec_.accept(getName, ())
-    symTab.put(name, globalDec.dec_)
-    val dec = globalDec.dec_.accept(this, symTab);
-    new Global(dec);
-  }
+    Add an entry in the symbol table for the defined function.
+    Parse the body in function name scope.
   */
-
   override def visit(func: Afunc, symTab: CCAstTypeAnnotationData): External_declaration = {
     val funcName = func.function_def_.accept(getName, ())
+    val (decSpecifiers, initDeclarator) = func.function_def_.accept(getDeclaration, ())
+
+    symTab.put(funcName, CCAstDeclaration(decSpecifiers, initDeclarator))
+
     withScope(funcName) {
       super.visit(func, symTab)
     }
@@ -114,78 +209,63 @@ class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] 
   */
   override def visit(dec: Declarators, symTab: CCAstTypeAnnotationData): Dec = {
     // TODO: This will break symbol table entries when the declaration is shadowing
-    //   another variable. This can be fixed by adding scope awareness.
-    for (initDec <- dec.listinit_declarator_.asScala)
+    //   another variable. This can be fixed by adding scope awareness, i.e. open a
+    //   new "withScope" for each scope in the source.
+    for (initDeclarator <- dec.listinit_declarator_.asScala)
     {
-      val decSpecifiers = new ListDeclaration_specifier
-      for (d <- dec.listdeclaration_specifier_.asScala)
-      {
-        decSpecifiers.add(d.accept(this, symTab));
-      }
+      val decSpecifiers = copyAst(dec.listdeclaration_specifier_)
+      val extraSpecifiers = copyAst(dec.listextra_specifier_)
+      val initDec = initDeclarator.accept(copyAst, ())
+      val name = getScopedName(initDeclarator.accept(getName, ()))
 
-      val extraSpecifiers = new ListExtra_specifier
-      for (e <- dec.listextra_specifier_.asScala)
-      {
-        extraSpecifiers.add(e.accept(this, symTab));
-      }
-
-      val initDecs = new ListInit_declarator
-      initDecs.add(initDec.accept(this, symTab));
-
-      val name = getScopedName(initDec.accept(getName, ()))
-      symTab.put(name, new Declarators(decSpecifiers, initDecs, extraSpecifiers))  
+      symTab.put(name, CCAstDeclaration(decSpecifiers, initDec, extraSpecifiers))
     }
     super.visit(dec, symTab)
   }
 
   override def visit(param: TypeAndParam, symTab: CCAstTypeAnnotationData): Parameter_declaration = {
     val name = getScopedName(param.declarator_.accept(getName, ()))
-    
-    symTab.put(name, param.declarator_)
+    val spec = copyAst(param.listdeclaration_specifier_)
+    val decl = new OnlyDecl(param.declarator_.accept(copyAst, ()))
+    symTab.put(name, CCAstDeclaration(spec, decl))
     super.visit(param, symTab)
   }
 
   override def visit(param: TypeHintAndParam, symTab: CCAstTypeAnnotationData): Parameter_declaration = {
     val name = getScopedName(param.declarator_.accept(getName, ()))
-    symTab.put(name, param.declarator_)
+    val spec = copyAst(param.listdeclaration_specifier_)
+    val decl = new OnlyDecl(param.declarator_.accept(copyAst, ()))
+    symTab.put(name, CCAstDeclaration(spec, decl))
     super.visit(param, symTab)
   }
-
-  /*
-  override def visit(func: Efunkpar, symTab: CCAstTypeAnnotationData): Exp = {
-    val f = func.exp_.accept(this, symTab)
-    
-    val args = new ListExp
-    for (arg <- func.listexp_.asScala) {
-      args.add(arg.accept(this,symTab))
-    }
-    new Efunkpar(f, args)
-  }
-  */
 
   /*
     Create an EvarWithType node for any Evar node.
   */
   override def visit(eVar: Evar, symTab: CCAstTypeAnnotationData): Exp = {
-      def createEvarWithType(name: String, declaration: Declarators): EvarWithType = {
-        val decSpecs = new ListDeclaration_specifier
-        for (x <- declaration.listdeclaration_specifier_.asScala) {
-          decSpecs.add(x.accept(this, symTab));
-        }
-  
-        val initDecs = new ListInit_declarator
-        for (x <- declaration.listinit_declarator_.asScala) {
-          initDecs.add(x.accept(this, symTab));
-        }
-        new EvarWithType(name, decSpecs, initDecs);
+    def createEvarWithType(name: String, declaration: CCAstDeclaration): EvarWithType = {
+      val decSpecs = copyAst(declaration.declarationSpecifiers)
+      val initDec = declaration.initDeclarator.accept(copyAst, ())
+      new EvarWithType(name, decSpecs, initDec);
+    }
+    
+    def findDeclaration(name: String) = {
+      symTab.get(getScopedName(name)) match {
+        case None => symTab.get(name)
+        case Some(declaration) => Some(declaration)
       }
+    }
 
-      val name = getScopedName(eVar.cident_)
-      symTab.get(name) match {
-        case None => 
-          throw new TypeAnnotationException(f"Undeclared variable in expression: ${name}")
-        case Some(declaration) =>
-          createEvarWithType(name, declaration)
-      }
+    val name = eVar.cident_
+    findDeclaration(name) match {
+      case None => 
+        throw new TypeAnnotationException(f"Undeclared identifier in expression: ${name}")
+      case Some(declaration) =>
+        val newVar = createEvarWithType(name, declaration)
+        newVar.col_num = eVar.col_num
+        newVar.line_num = eVar.line_num
+        newVar.offset = eVar.offset
+        newVar
+    }
   }
 }
