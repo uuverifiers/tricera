@@ -3,7 +3,7 @@ package tricera.concurrency
 import concurrent_c._
 import concurrent_c.Absyn._
 
-import scala.collection.mutable.MutableList
+import scala.collection.mutable.{HashMap => MHashMap, MutableList}
 import scala.collection.JavaConverters._
 import tricera.concurrency.ReaderMain.falseNodeId
 import javax.xml.crypto.dsig.Transform
@@ -40,6 +40,25 @@ class CCAstRemovePointerLevelVistor extends ComposVisitor[Unit] {
 class CCAstRenameInDeclarationVistor extends ComposVisitor[String => String] {
   /* Direct_declarator */
   override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
+}
+
+/*
+  Vistor class to transform any declaration to a scalar variable declaration,
+  removing e.g. array or function declaration elements.
+*/
+class CCAstDeclaratorToNameVistor extends ComposVisitor[String => String] {
+  /* Direct_declarator */
+  override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
+  override def visit(dec: ParenDecl, rename: String => String): Name = { dec.declarator_ match {
+      case ptr: BeginPointer => ptr.direct_declarator_.accept(this, rename).asInstanceOf[Name]
+      case d: NoPointer => d.direct_declarator_.accept(this, rename).asInstanceOf[Name]
+    } 
+  }
+  override def visit(dec: InitArray, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
+  override def visit(dec: Incomplete, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
+  override def visit(dec: MathArray, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
+  override def visit(dec: NewFuncDec, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
+  override def visit(dec: OldFuncDec, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
 }
 
 /*
@@ -98,75 +117,20 @@ class CCAstParamToAstDeclarationVistor extends AbstractVisitor[CCAstDeclaration,
   }
 }
 
-
 /*
-  Vistor to convert function parameters to global declarations.
+  Vistor to get declared type from a specifier.
 */
-// class CCAstParamToGlobalVistor extends AbstractVisitor[Global, Unit] {
-  // private val copyAst = new CCAstCopyVisitor
-// 
-  // /* Init_declarator */
-  // override def visit(param: TypeAndParam, arg: Unit) = {
-    // toGlobal(param.listdeclaration_specifier_, param.declarator_)
-  // }
-// 
-  // override def visit(param: TypeHintAndParam, arg: Unit) = { 
-    // toGlobal(param.listdeclaration_specifier_, param.declarator_)
-  // }
-// 
-  // private def toGlobal(decSpecs: ListDeclaration_specifier, declarator: Declarator) = {
-  //  val initDecls = new ListInit_declarator
-  //  initDecls.add(new OnlyDecl(declarator.accept(copyAst, ())))
-  //  new Global(new Declarators(
-    //  copyAst(decSpecs),
-    //  initDecls,
-    //  new ListExtra_specifier))
-  // }
-// }
-
-/*
-  Vistor to convert function parameters and variable declarations
-  to EvarWithType expressions.
-*/
-//class CCAstDeclarationToEvarWithTypeVistor extends AbstractVisitor[EvarWithType, Unit] {
-//  private val copyAst = new CCAstCopyVisitor
-//  private val getName = new CCAstGetNameVistor
-//  private val getDeclarator = new CCAstGetDeclaratorVistor
-//
-//  /* External_declaration */
-//  override def visit(ext: Global, arg: Unit): EvarWithType = { ext.dec_.accept(this, arg) }
-//
-//    /* Dec */
-//  override def visit(decs: Declarators, arg: Unit): EvarWithType = {
-//    /* TODO: This will give correct result for declarations containing
-//         a single declaration.
-//    */
-//    toEvarWithType(
-//      decs.listdeclaration_specifier_,
-//      decs.listinit_declarator_.asScala.head.accept(getDeclarator, ()))
-//  }
-//
-//  /* Parameter_declaration */
-//  override def visit(param: TypeAndParam, arg: Unit): EvarWithType = {
-//    toEvarWithType(param.listdeclaration_specifier_, param.declarator_)
-//  }
-//
-//  override def visit(param: TypeHintAndParam, arg: Unit): EvarWithType = { 
-//    toEvarWithType(param.listdeclaration_specifier_, param.declarator_)
-//  }
-//
-//  private def toEvarWithType(decSpecs: ListDeclaration_specifier, declarator: Declarator): EvarWithType = {
-//    new EvarWithType(
-//      declarator.accept(getName, ()),
-//      copyAst(decSpecs),
-//      new OnlyDecl(declarator.accept(copyAst, ())))
-//  }
-//}
-
-
+class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, MutableList[Type_specifier]] {
+  /* Declaration_specifier */
+  override def visit(spec: Type, types: MutableList[Type_specifier]) = { types += spec.type_specifier_; true }
+  override def visit(spec: Storage, types: MutableList[Type_specifier]) = { false }
+  override def visit(spec: SpecProp, types: MutableList[Type_specifier]) = { false }
+  override def visit(spec: SpecFunc, types: MutableList[Type_specifier]) = { false }
+}
 
 private object CCAstUtils {
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
+    // TODO: Check that init value is address-of operator
     identifier.init_declarator_ match {
       case _: HintInitDecl => true
       case _: InitDecl => true
@@ -192,10 +156,10 @@ object CallSiteTransform {
   private val getDeclarator = new CCAstGetDeclaratorVistor
   private val getParameters = new CCAstGetParametersVistor
   private val getName = new CCAstGetNameVistor
+  private val toName = new CCAstDeclaratorToNameVistor
   private val rename = new CCAstRenameInDeclarationVistor
   private val getFunctionBody = new CCAstGetFunctionBodyVistor
   private val removePointer = new CCAstRemovePointerLevelVistor
-//  private val toEvarWithType = new CCAstDeclarationToEvarWithTypeVistor
   private val toCCAstDeclaration = new CCAstParamToAstDeclarationVistor
 
   def apply(callSite: Efunkpar): CallSiteTransform = callSite.exp_ match {
@@ -229,14 +193,53 @@ object CallSiteTransform {
       case _ => id
     }
   }
+
+  private def transformIdentifier(id: String): String = { 
+    f"global\u001F${id}" 
+  }
+
+  private def onlyTransformIdentifier(matchId: String)(id: String): String = {
+    id match {
+      case `matchId` => transformIdentifier(id)
+      case _ => id
+    }
+  }
+
+  private def resultIdentifier(id: String): String = { 
+    f"result\u001F${id}" 
+  }
 }
 
 class CallSiteTransform(specifiers: ListDeclaration_specifier, declarator: Declarator, args: ListExp) {
   import CallSiteTransform._
 
-  val originalName = declarator.accept(getName, ())
+  private val originalName = declarator.accept(getName, ())
+  private val params = declarator.accept(getParameters, ())
+  private val keptArgs = {
+    val kept = new ListExp
+    args.asScala
+    .withFilter(isStackPtr(_))
+    .foreach(param => kept.add(param.accept(copyAst, ())))
+    kept
+  }
+  private val keptParams = { 
+    val kept = new ListParameter_declaration
+    params.asScala.zip(args.asScala)
+    .withFilter({case (param, arg) => !isStackPtr(arg)})
+    .map({case (param, arg) => param.accept(copyAst, ())})
+    .foreach(param => kept.add(param))
+    kept
+  }
+  private val removedParams = {
+    val removed = new ListParameter_declaration
+    params.asScala.zip(args.asScala)
+    .withFilter({case (param, arg) => isStackPtr(arg)})
+    .map({case (param, arg) => param.accept(copyAst, ())})
+    .foreach(param => removed.add(param))
+    removed
+  }
 
-  def wrapperDef():External_declaration = {
+  def wrapperDefinition(): External_declaration = {
     new Afunc(
       new NewFunc(copyAst(specifiers),
       declarator.accept(rename, onlyWrapIdentifier(originalName)(_)),
@@ -253,7 +256,6 @@ class CallSiteTransform(specifiers: ListDeclaration_specifier, declarator: Decla
   }
 
   def transformDef(original: Function_def): External_declaration = {
-    def transformIdentifier(id: String): String = { f"global\u001F${id}" }
     new Afunc(
       new NewFunc(
         copyAst(specifiers),
@@ -263,19 +265,22 @@ class CallSiteTransform(specifiers: ListDeclaration_specifier, declarator: Decla
 
   def globalVariableDeclarations(): ListExternal_declaration = {
     val globals = new ListExternal_declaration
-    val params = declarator.accept(getParameters, ()).asScala
-    val zipped = params.zip(args.asScala.map(arg => arg.accept(copyAst, ()))).zipWithIndex
-    for (((param, arg), index) <- zipped) if (isStackPtr(arg)) {
+    for (param <- removedParams.asScala) {
       globals.add(toGlobalDeclaration(param).toGlobal())
     }
     globals
   }
 
-  private def paramGlobalPairs() = {
-    val paired = declarator.accept(getParameters, ()).asScala.zip(args.asScala)
-    paired
-      .withFilter({ case (param, arg) => isStackPtr(arg) })
-      .map({ case (param, arg) => (param.accept(toCCAstDeclaration,()), toGlobalDeclaration(param)) })
+  private def transformedFunctionDeclaration() = {
+    val funcDec = if (keptParams.size > 0) {
+      new NewFuncDec(new Name(transformIdentifier(originalName)), new AllSpec(copyAst(keptParams)))
+    } else {
+      new OldFuncDec(new Name(transformIdentifier(originalName)))
+    }
+    new CCAstDeclaration(
+      copyAst(specifiers),
+      new OnlyDecl(new NoPointer(funcDec)),
+      new ListExtra_specifier)
   }
 
   private def toGlobalDeclaration(param: Parameter_declaration) = {
@@ -290,23 +295,77 @@ class CallSiteTransform(specifiers: ListDeclaration_specifier, declarator: Decla
   }
 
   private def createWrapperBody(): Compound_stm = {
-    val statements = new ListStm
-    val pairs = paramGlobalPairs()
-    for ((param, global) <- pairs) {
-      statements.add(new ExprS(new SexprTwo(
-        new Eassign(
-          global.toEvarWithType(),
-          new Assign, 
-          new Epreop(new Indirection(), param.toEvarWithType())))))
+    def paramToGlobalAssignment(param: CCAstDeclaration, global: CCAstDeclaration) = {
+      new ExprS(new SexprTwo(new Eassign(
+        global.toEvarWithType(),
+        new Assign, 
+        new Epreop(new Indirection(), param.toEvarWithType()))))
     }
 
-    for ((param, global) <- pairs.reverse) {
-      statements.add(new ExprS(new SexprTwo(
-        new Eassign(
-          new Epreop(new Indirection(), param.toEvarWithType()),
-          new Assign,
-          global.toEvarWithType()))))
+    def globalToParamAssignment(param: CCAstDeclaration, global: CCAstDeclaration) = {
+      new ExprS(new SexprTwo(
+          new Eassign(
+            new Epreop(new Indirection(), param.toEvarWithType()),
+            new Assign,
+            global.toEvarWithType())))
     }
+
+    def resultName(matchId: String)(id: String) = {
+      id match {
+        case `matchId` => resultIdentifier(id)
+        case _ => id
+      }
+    }
+
+    def getResultDeclaration(): Option[CCAstDeclaration] = {
+      val getType = new CCAstGetTypeVisitor
+      val types = new MutableList[Type_specifier]
+      specifiers.asScala.foreach(s => s.accept(getType, types))
+      types.contains(new Tvoid) match {
+        case true => 
+          None
+        case false =>
+          Some(CCAstDeclaration(copyAst(specifiers), new OnlyDecl(declarator.accept(toName, resultName(originalName)(_)))))
+      }
+    }
+
+    def callTransformedFunctionExp() = {
+      val func = transformedFunctionDeclaration()
+      val callExp = if (keptParams.size > 0) {
+        new Efunkpar(func.toEvarWithType, copyAst(keptArgs))
+      } else {
+        new Efunk(func.toEvarWithType())
+      }
+
+      val statement = getResultDeclaration() match {
+        case None => new ExprS(new SexprTwo(callExp))
+        case Some(resultVar) =>
+          new ExprS(new SexprTwo(new Eassign(resultVar.toEvarWithType(), new Assign, callExp)))
+      }
+      statement
+    }
+
+    def returnFromWrapper() = {
+      getResultDeclaration() match {
+        case None => new JumpS(new SjumpFour())
+        case Some(resultVar) => new JumpS(new SjumpFive(resultVar.toEvarWithType()))
+      }
+    }
+
+    val statements = new ListStm
+    val pairs = removedParams.asScala.map(p => (p.accept(toCCAstDeclaration,()), toGlobalDeclaration(p)))
+
+    for ((param, global) <- pairs) {
+      statements.add(paramToGlobalAssignment(param, global))
+    }
+ 
+    statements.add(callTransformedFunctionExp())
+
+    for ((param, global) <- pairs.reverse) {
+      statements.add(globalToParamAssignment(param, global))
+    }
+
+    statements.add(returnFromWrapper())
 
     new ScompTwo(statements)
   }
@@ -346,6 +405,8 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
   //   variables.
 
   val getName = new CCAstGetNameVistor
+  val copyAst = new CCAstCopyVisitor
+  val functionDefinitions = new MHashMap[String, Function_def]
 
   /* Program */
   override def visit(progr: Progr, callSiteTransforms: CallSiteTransforms): Program = {
@@ -362,9 +423,12 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
       extDeclarations
     }
 
-    def transformFunctions(funcs: CallSiteTransforms): ListExternal_declaration = {
-      new ListExternal_declaration
-    }
+    //def transformFunctions(funcs: CallSiteTransforms): ListExternal_declaration = {
+    //  val funcs = new ListExternal_declaration
+    //  val transformedFuncs = callSiteTransforms.map(t => t.transformDef())
+    //  distinctBy({ v:External_declaration => v.accept(getName, ())}, transformedFuncs).foreach(v => funcs.add(v))
+    //  funcs
+    //}
 
     def getNewGlobalVariables(transforms: CallSiteTransforms): ListExternal_declaration = {
       val globs = new ListExternal_declaration
@@ -375,7 +439,7 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
 
     def wrapperFunctions(transforms: CallSiteTransforms): ListExternal_declaration = {
       val funcs = new ListExternal_declaration
-      val wrappers = callSiteTransforms.map(t => t.wrapperDef())
+      val wrappers = callSiteTransforms.map(t => t.wrapperDefinition())
       distinctBy({ v:External_declaration => v.accept(getName, ())}, wrappers).foreach(v => funcs.add(v))
       funcs
     }
@@ -388,12 +452,18 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
     val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isMainDefinition(_)).get)
 
-    declarations.addAll(mainDefIndex, transformFunctions(callSiteTransforms))
+ //   declarations.addAll(mainDefIndex, transformFunctions(callSiteTransforms))
     declarations.addAll(mainDefIndex, wrapperFunctions(callSiteTransforms))    
     declarations.addAll(mainDefIndex, getNewGlobalVariables(callSiteTransforms))
 
-
     return new Progr(declarations);
+  }
+
+  override def visit(func: Afunc, transforms: CallSiteTransforms): External_declaration = {
+    functionDefinitions.put(
+      func.function_def_.accept(getName, ()),
+      func.function_def_.accept(copyAst, ()))
+    super.visit(func, transforms)
   }
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {

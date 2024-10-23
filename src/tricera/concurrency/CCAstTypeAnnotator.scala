@@ -171,6 +171,14 @@ class CCAstCopyVisitor extends ComposVisitor[Unit] {
     }
     expsCopy
   }
+
+  def apply(params: ListParameter_declaration) = {
+    val paramsCopy = new ListParameter_declaration
+    for (p <- params.asScala) {
+      paramsCopy.add(p.accept(this, ()))
+    }
+    paramsCopy
+  }
 }
 
 /*
