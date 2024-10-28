@@ -2,14 +2,13 @@ package tricera.concurrency
 
 import concurrent_c._
 import concurrent_c.Absyn._
+import tricera.concurrency.CCAstUtils.isStackPtr
 
 import scala.collection.mutable.{HashMap => MHashMap, MutableList}
+import scala.util.{Try,Success,Failure}
 import scala.collection.JavaConverters._
-import tricera.concurrency.ReaderMain.falseNodeId
-import javax.xml.crypto.dsig.Transform
-import tricera.params.TriCeraParameters
-import tricera.concurrency.CCAstUtils.isStackPtr
 import scala.collection.mutable.Buffer
+
 
 class CallSiteTransformationException(msg : String) extends Exception(msg)
 
@@ -147,6 +146,46 @@ private object CCAstUtils {
           }
       case x: EvarWithType if (isStackPtrInitialized(x)) => true
       case _ => false
+    }
+  }
+}
+
+/*
+    Vistor to replace given pointers with global variables.
+*/
+class CCAstPointerToGlobalVisitor extends ComposVisitor[Map[String, CCAstDeclaration]] {
+  private val getName = new CCAstGetNameVistor
+  /* Stm */
+  override def visit(stm: CompS, replacements: Map[String, CCAstDeclaration]): Stm = {
+    val compound_stm_ = stm.compound_stm_.accept(this, replacements);
+    new CompS(compound_stm_);
+  }
+
+  /* Exp */
+  override def visit(exp: Epreop, replacements: Map[String, CCAstDeclaration]): Exp = {
+    exp.unary_operator_ match {
+      case op: Indirection => exp.exp_ match {
+        // *id ...
+        case id: EvarWithType => replacements.get(id.cident_) match {
+          case Some(global) => global.toEvarWithType();
+          case None => super.visit(exp, replacements)
+        }
+        // *exp
+        case _ => super.visit(exp, replacements)
+      }
+      case _ => super.visit(exp, replacements)
+    }
+  }
+
+  override def visit(exp: Epoint, replacements: Map[String, CCAstDeclaration]): Exp = {
+    exp.exp_ match {
+      // id->...
+      case id: EvarWithType => replacements.get(id.cident_) match {
+        case Some(global) => new Eselect(global.toEvarWithType(), exp.cident_);
+        case None => super.visit(exp, replacements)
+      }
+      // exp->...
+      case _ => super.visit(exp, replacements)
     }
   }
 }
@@ -365,8 +404,7 @@ class CallSiteTransform(funcDef: Function_def, args: ListExp) {
     // Take the original body, replace "removedParams" in the body
     // with the corresponding global variables.
     val paramToGlobalVar = removedParams.asScala.map(p => (p.accept(getName,()), toGlobalDeclaration(p))).toMap
-    //body.accept(replacePointersWithGlobals, paramToGlobalVar)
-    new ScompOne()
+    body.accept(new CCAstPointerToGlobalVisitor, paramToGlobalVar)
   }
 }
 
@@ -382,7 +420,7 @@ object  CCAstStackPtrArgToGlobalTransformer {
 class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransforms] {
   // Idea: For each function invocation that has arguments that points to
   //   memory allocated on the stack (stack pointers), introduce two new
-  //   functions, and a global variable for each stack pointer argument.
+  //   functions, and for each stack pointer argument a global variable.
   //   The first function, called the "wrapper", is substituted for at the
   //   call site. The wrapper takes the same arguments as the original
   //   function. However, the wrapper body just assigns the global variables

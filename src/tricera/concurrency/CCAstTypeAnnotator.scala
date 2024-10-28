@@ -142,7 +142,7 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(param: TypeHintAndParam, arg: Unit): String = { param.declarator_.accept(this, arg) }
 
     /* Exp */
-    override def visit(exp: Earray, arg: Unit) : String ={ exp.exp_1.accept(this, ()) }
+    override def visit(exp: Earray, arg: Unit) : String = { exp.exp_1.accept(this, ()) }
     override def visit(exp: Efunk, arg: Unit): String = { exp.exp_.accept(this, ()) }
     override def visit(exp: Efunkpar, arg: Unit): String = { exp.exp_.accept(this, ()) }
     override def visit(exp: Evar, arg: Unit): String = { exp.cident_ }
