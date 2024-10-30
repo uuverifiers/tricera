@@ -73,12 +73,16 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
   }
 
   def toGlobal(): Global = {
+    new Global(toDeclarators())
+  }
+
+  def toDeclarators(): Declarators = {
     val initDecls = new ListInit_declarator
     initDecls.add(initDeclarator.accept(copyAst, ()))
-    new Global(new Declarators(
+    new Declarators(
       copyAst(declarationSpecifiers),
       initDecls,
-      new ListExtra_specifier))
+      new ListExtra_specifier)
   }
 }
 
