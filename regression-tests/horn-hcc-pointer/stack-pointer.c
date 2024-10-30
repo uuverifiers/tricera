@@ -18,7 +18,10 @@ void decr(tMyStruct* s) {
 /*@contract@*/ 
 int incr(tMyStruct* s) {
     s->val++;
-    decr(s);
+    if (s->val < 0) {
+      incr(s);
+    }
+//    decr(s);
     return 1;
 }
 
