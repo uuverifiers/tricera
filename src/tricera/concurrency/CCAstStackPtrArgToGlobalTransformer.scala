@@ -195,22 +195,6 @@ class CCAstPointerToGlobalVisitor extends ComposVisitor[Map[String, CCAstDeclara
       case None => super.visit(exp, replacements)
     }
   }
-
-  // override def visit(callSite: Efunkpar, replacements: Map[String, CCAstDeclaration]): Exp = {
-  //   callSite.listexp_.asScala.find(CCAstUtils.isStackPtr) match {
-  //     case None =>
-  //       super.visit(callSite, transforms)
-  //     case Some(_) => 
-  //       super.visit(callSite, transforms)
-  //       // TODO: This will not work if function is invoked through
-  //       //   a pointer. Then we don't know the name of the function
-  //       //   being invoked. Therefore we can't create/invoke a
-  //       //   transformed function.
-  //       val tform = CallSiteTransform(functionDefinitions(callSite.accept(getName, ())), callSite.listexp_)
-  //       transforms += tform
-  //       tform.wrappedInvocation()
-  //   }
-  // }
 }
 
 /*
@@ -220,6 +204,7 @@ class CCAstPointerToGlobalVisitor extends ComposVisitor[Map[String, CCAstDeclara
   arguments), with global variables.
 */
 object CallSiteTransform {
+  type CallSiteTransforms = MutableList[CallSiteTransform]
   private val copyAst = new CCAstCopyVisitor
   private val getDeclarator = new CCAstGetDeclaratorVistor
   private val getFunctionDeclaration = new CCAstGetFunctionDeclarationVistor
@@ -231,8 +216,11 @@ object CallSiteTransform {
   private val removePointer = new CCAstRemovePointerLevelVistor
   private val toCCAstDeclaration = new CCAstParamToAstDeclarationVistor
 
-  def apply(funcDef: Function_def, args: ListExp): CallSiteTransform = {
-    new CallSiteTransform(funcDef, copyAst(args))
+  def apply(
+    ptrTransformer: CCAstStackPtrArgToGlobalTransformer,
+    funcDef: Function_def,
+    args: ListExp): CallSiteTransform = {
+    new CallSiteTransform(ptrTransformer, funcDef, copyAst(args))
   }
 
   private def wrapIdentifier(id: String) = {
@@ -265,7 +253,10 @@ object CallSiteTransform {
   }
 }
 
-class CallSiteTransform(funcDef: Function_def, args: ListExp) {
+class CallSiteTransform(
+  stackPtrTransformer:CCAstStackPtrArgToGlobalTransformer,
+  funcDef: Function_def,
+  args: ListExp) {
   import CallSiteTransform._
 
   private val (specifiers, declarator) = {
@@ -274,28 +265,20 @@ class CallSiteTransform(funcDef: Function_def, args: ListExp) {
   }
   val originalName = declarator.accept(getName, ())
   private val params = declarator.accept(getParameters, ())
+  private val (keptParams, removedParams) = {
+    val kept = new ListParameter_declaration
+    val removed = new ListParameter_declaration
+    val (r, k) = params.asScala.zip(args.asScala).partition({case (param, arg) => isStackPtr(arg)})
+    r.map({case (param, arg) => param.accept(copyAst, ())}).foreach(param => removed.add(param))
+    k.map({case (param, arg) => param.accept(copyAst, ())}).foreach(param => kept.add(param))
+    (kept, removed)
+  }
   private val keptArgs = {
     val kept = new ListExp
     args.asScala
     .withFilter(!isStackPtr(_))
     .foreach(param => kept.add(param.accept(copyAst, ())))
     kept
-  }
-  private val keptParams = { 
-    val kept = new ListParameter_declaration
-    params.asScala.zip(args.asScala)
-    .withFilter({case (param, arg) => !isStackPtr(arg)})
-    .map({case (param, arg) => param.accept(copyAst, ())})
-    .foreach(param => kept.add(param))
-    kept
-  }
-  private val removedParams = {
-    val removed = new ListParameter_declaration
-    params.asScala.zip(args.asScala)
-    .withFilter({case (param, arg) => isStackPtr(arg)})
-    .map({case (param, arg) => param.accept(copyAst, ())})
-    .foreach(param => removed.add(param))
-    removed
   }
 
   def wrapperDefinition(): External_declaration = {
@@ -327,13 +310,15 @@ class CallSiteTransform(funcDef: Function_def, args: ListExp) {
       copyAst(args))
   }
 
-  def transformedDefinition(): External_declaration = {
+  def transformedDefinition(): (External_declaration, CallSiteTransforms) = {
     val funcDec = transformedDeclaration().toEvarWithType()
-    new Afunc(
+    val (body, transforms) = createTransformedBody(funcDef.accept(getFunctionBody, ()))
+    val func = new Afunc(
       new NewFunc(
         funcDec.listdeclaration_specifier_,
         funcDec.init_declarator_.accept(getDeclarator, ()),
-        createTransformedBody(funcDef.accept(getFunctionBody, ()))))
+        body))
+    (func, transforms)
   }
 
   def globalVariableDeclarations(): ListExternal_declaration = {
@@ -395,7 +380,7 @@ class CallSiteTransform(funcDef: Function_def, args: ListExp) {
       }
     }
 
-    def callTransformedFunctionExp() = {
+    def transformedFunctionInvocationExp() = {
       val func = transformedDeclaration()
       val callExp = if (keptParams.size > 0) {
         new Efunkpar(func.toEvarWithType(), copyAst(keptArgs))
@@ -430,7 +415,7 @@ class CallSiteTransform(funcDef: Function_def, args: ListExp) {
       body.add(paramToGlobalAssignment(param, global))
     }
  
-    body.add(callTransformedFunctionExp())
+    body.add(transformedFunctionInvocationExp())
 
     for ((param, global) <- pairs.reverse) {
       body.add(globalToParamAssignment(param, global))
@@ -441,24 +426,26 @@ class CallSiteTransform(funcDef: Function_def, args: ListExp) {
     new ScompTwo(body)
   }
 
-  private def createTransformedBody(body: Compound_stm) = {
-    // Take the original body, replace "removedParams" in the body
-    // with the corresponding global variables.
+  private def createTransformedBody(originalBody: Compound_stm) = {
+    val transforms = new CallSiteTransforms
     val paramToGlobalVar = removedParams.asScala.map(p => (p.accept(getName,()), toGlobalDeclaration(p))).toMap
-    body.accept(new CCAstPointerToGlobalVisitor, paramToGlobalVar)
+    val transformedBody = 
+      originalBody
+        .accept(new CCAstPointerToGlobalVisitor, paramToGlobalVar)
+        .accept(stackPtrTransformer, transforms)
+    (transformedBody, transforms)
   }
 }
 
-class CallSiteTransforms extends MutableList[CallSiteTransform]
-
 object  CCAstStackPtrArgToGlobalTransformer {
+  import CallSiteTransform.CallSiteTransforms
   def apply(program: Program) = {
     val transformer = new CCAstStackPtrArgToGlobalTransformer
     program.accept(transformer, new CallSiteTransforms)
   }
 }
 
-class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransforms] {
+class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransform.CallSiteTransforms] {
   // Idea: For each function invocation that has arguments that points to
   //   memory allocated on the stack (stack pointers), introduce two new
   //   functions, and for each stack pointer argument a global variable.
@@ -477,6 +464,7 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
   //   pointer. Then we don't know the name of the function being
   //   invoked and cannot add the corresponding function with global
   //   variables.
+  import CallSiteTransform.CallSiteTransforms
 
   private val getName = new CCAstGetNameVistor
   private val copyAst = new CCAstCopyVisitor
@@ -496,45 +484,34 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
         extDeclarations.add(x.accept(this, transforms));
       }
 
-      transforms ++= processCallSiteTransforms(callSiteTransforms)
+      transforms ++= processCallSiteTransforms(transforms)
 
       extDeclarations
     }
 
     def processCallSiteTransforms(transforms: CallSiteTransforms): CallSiteTransforms = {
-      def onlyRename(matchId: String, newId: String)(id: String) = {
-        id match {
-          case `matchId` => newId
-          case _ => id
-        }
-      }
       // TODO: Watch out for recursion.
-      val updatedTransforms = new CallSiteTransforms
       val nested = new CallSiteTransforms
       for (t <- transforms) {
-        val wrapper = t.wrapperDefinition()
-        functionDefinitions.put(wrapper.accept(getName, ()), wrapper.asInstanceOf[Afunc].function_def_)
-        val transformed = t.transformedDefinition()
-        val fullTransformed = transformed.accept(this, nested).accept(rename, onlyRename(transformed.accept(getName, ()), t.originalName)(_))
-        updatedTransforms += new CallSiteTransform(fullTransformed.asInstanceOf[Afunc].function_def_, t.wrapperInvocation().listexp_)
+        val (transformed, ts) = t.transformedDefinition()
+        nested ++= ts
       }
-      if (nested.size > 0) {
-        nested ++= processCallSiteTransforms(nested)
+      val next = nested.filter(t => transforms.count(i => i.originalName == t.originalName) == 0)
+      if (next.size > 0) {
+        next ++= processCallSiteTransforms(next)
       }
-      updatedTransforms ++= nested
+      next
     }
 
     def transformedFunctions(transforms: CallSiteTransforms): ListExternal_declaration = {
       val funcs = new ListExternal_declaration 
-      distinctBy({ v:External_declaration => v.accept(getName, ())}, transforms.reverse.map(t => t.transformedDefinition())).foreach(v => funcs.add(v))
+      distinctBy({ v:External_declaration => v.accept(getName, ())}, transforms.map(t => t.transformedDefinition()._1)).foreach(v => funcs.add(v))
       funcs
     }
 
     def wrapperDeclarations(transforms: CallSiteTransforms): ListExternal_declaration = {
       val funcDecls = new ListExternal_declaration 
-      val q = transforms.reverse.map(t => t.wrapperDeclaration().toGlobal())
-      distinctBy({ v:External_declaration => v.accept(getName, ())}, q).foreach(v => funcDecls.add(v))
-//      distinctBy({ v:External_declaration => v.accept(getName, ())}, transforms.reverse.map(t => t.wrapperDeclaration().toGlobal())).foreach(v => funcDecls.add(v))
+      distinctBy({ v:External_declaration => v.accept(getName, ())}, transforms.map(t => t.wrapperDeclaration().toGlobal())).foreach(v => funcDecls.add(v))
       funcDecls
     }
 
@@ -585,7 +562,7 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
         //   a pointer. Then we don't know the name of the function
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
-        val tform = CallSiteTransform(functionDefinitions(callSite.accept(getName, ())), callSite.listexp_)
+        val tform = CallSiteTransform(this, functionDefinitions(callSite.accept(getName, ())), callSite.listexp_)
         transforms += tform
         tform.wrapperInvocation()
     }
