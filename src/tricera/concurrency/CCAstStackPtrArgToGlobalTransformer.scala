@@ -9,22 +9,6 @@ import scala.util.{Try,Success,Failure}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 
-
-class CallSiteTransformationException(msg : String) extends Exception(msg)
-
-/*
-  Vistor to extract the "Declarator" part from an Init_declaration
-*/
-class CCAstGetDeclaratorVistor extends AbstractVisitor[Declarator, Unit] {
-  private val copyAst = new CCAstCopyVisitor
-
-  /* Init_declarator */
-  override def visit(dec: OnlyDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
-  override def visit(dec: InitDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
-  override def visit(dec: HintDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
-  override def visit(dec: HintInitDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
-}
-
 /*
   Vistor class to remove one level of indirection ("dereference a pointer").
 */
@@ -58,6 +42,15 @@ class CCAstDeclaratorToNameVistor extends ComposVisitor[String => String] {
   override def visit(dec: MathArray, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
   override def visit(dec: NewFuncDec, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
   override def visit(dec: OldFuncDec, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
+}
+
+/*
+  Vistor class to replace one function declaration with another.
+*/
+class CCAstReplaceFunctionDeclarationVistor extends ComposVisitor[Direct_declarator] {
+  /* Direct_declarator */
+  override def visit(dec: NewFuncDec, replacement: Direct_declarator) = { replacement }
+  override def visit(dec: OldFuncDec, replacement: Direct_declarator) = { replacement }
 }
 
 /*
@@ -212,6 +205,7 @@ object CallSiteTransform {
   private val getName = new CCAstGetNameVistor
   private val toName = new CCAstDeclaratorToNameVistor
   private val rename = new CCAstRenameInDeclarationVistor
+  private val replaceFuncDec = new CCAstReplaceFunctionDeclarationVistor
   private val getFunctionBody = new CCAstGetFunctionBodyVistor
   private val removePointer = new CCAstRemovePointerLevelVistor
   private val toCCAstDeclaration = new CCAstParamToAstDeclarationVistor
@@ -230,37 +224,27 @@ object CallSiteTransform {
     f"wrapped\u001F${id}"
   }
 
-  private def onlyWrapIdentifier(matchId: String)(id: String) = {
-    id match {
-      case `matchId` => wrapIdentifier(id)
-      case _ => id
-    }
-  }
-
   private def transformIdentifier(id: String): String = { 
     f"global\u001F${id}" 
-  }
-
-  private def onlyTransformIdentifier(matchId: String)(id: String): String = {
-    id match {
-      case `matchId` => transformIdentifier(id)
-      case _ => id
-    }
   }
 
   private def resultIdentifier(id: String): String = { 
     f"result\u001F${id}" 
   }
+
+  private def toGlobalVariableName(functionName: String)(name: String) = {
+    f"global\u001F${functionName}\u001F${name}"
+  }
 }
 
 class CallSiteTransform(
   stackPtrTransformer:CCAstStackPtrArgToGlobalTransformer,
-  funcDef: Function_def,
+  originalDef: Function_def,
   args: ListExp) {
   import CallSiteTransform._
 
   private val (specifiers, declarator) = {
-    val (spec, dec) = funcDef.accept(getFunctionDeclaration, ())
+    val (spec, dec) = originalDef.accept(getFunctionDeclaration, ())
     (spec, dec.accept(getDeclarator, ()))
   }
   private val params = declarator.accept(getParameters, ())
@@ -280,7 +264,7 @@ class CallSiteTransform(
     kept
   }
 
-  val originalName = declarator.accept(getName, ())
+  val originalFuncName = declarator.accept(getName, ())
 
   def getAstAdditions(): AstAddition = {
     val additions = new AstAddition
@@ -289,31 +273,21 @@ class CallSiteTransform(
   }
 
   def wrapperInvocation(): Efunkpar = {
-    val funcDec = wrapperDeclaration().toEvarWithType()
-    new Efunkpar(
-      new EvarWithType(
-        wrapIdentifier(originalName),
-        funcDec.listdeclaration_specifier_,
-        funcDec.init_declarator_),
-      copyAst(args))
+    new Efunkpar(wrapperDeclaration().toEvarWithType(), copyAst(args))
   }
 
   private def accumulateAdditions(knownAdditions: AstAddition):Unit = {
-    val funcDec = transformedDeclaration().toEvarWithType()
-    if (!knownAdditions.transformedFunctionDefinitions.contains(funcDec.cident_)) {
-      val (body, transforms) = createTransformedBody(funcDef.accept(getFunctionBody, ()))
-      val func = new Afunc(
-        new NewFunc(
-          funcDec.listdeclaration_specifier_,
-          funcDec.init_declarator_.accept(getDeclarator, ()),
-          body))
+    val transDec = transformedDeclaration()
+    if (!knownAdditions.transformedFunctionDefinitions.contains(transDec.getId())) {
+      val wrapperDec = wrapperDeclaration()
+      val (body, transforms) = createTransformedBody(originalDef.accept(getFunctionBody, ()))
 
-        knownAdditions += AstAddition(
-          wrapperDeclaration().toGlobal(),
-          wrapperDefinition(),
-          transformedDeclaration.toGlobal(),
-          func,
-          globalVariableDeclarations())
+      knownAdditions += AstAddition(
+        wrapperDec.toGlobal(),
+        wrapperDec.toAfunc(createWrapperBody()),
+        transDec.toGlobal(),
+        transDec.toAfunc(body),
+        globalVariableDeclarations())
 
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))
     }
@@ -321,25 +295,13 @@ class CallSiteTransform(
 
   private def transformedDeclaration() = {
     val funcDec = if (keptParams.size > 0) {
-      new NewFuncDec(new Name(transformIdentifier(originalName)), new AllSpec(copyAst(keptParams)))
+      new NewFuncDec(new Name(transformIdentifier(originalFuncName)), new AllSpec(copyAst(keptParams)))
     } else {
-      new OldFuncDec(new Name(transformIdentifier(originalName)))
+      new OldFuncDec(new Name(transformIdentifier(originalFuncName)))
     }
-    new CCAstDeclaration(
+    CCAstDeclaration(
       copyAst(specifiers),
-      new OnlyDecl(new NoPointer(funcDec)), // TODO: This is wrong if the orginal function returs a pointer
-      new ListExtra_specifier)
-  }
-
-  private def transformedDefinition(): (External_declaration, CallSiteTransforms) = {
-    val funcDec = transformedDeclaration().toEvarWithType()
-    val (body, transforms) = createTransformedBody(funcDef.accept(getFunctionBody, ()))
-    val func = new Afunc(
-      new NewFunc(
-        funcDec.listdeclaration_specifier_,
-        funcDec.init_declarator_.accept(getDeclarator, ()),
-        body))
-    (func, transforms)
+      new OnlyDecl(declarator.accept(replaceFuncDec, funcDec)))
   }
 
   private def createTransformedBody(originalBody: Compound_stm) = {
@@ -362,33 +324,20 @@ class CallSiteTransform(
 
   private def toGlobalDeclaration(param: Parameter_declaration) = {
     param
-      .accept(rename, toGlobalVariableName(_))
+      .accept(rename, toGlobalVariableName(originalFuncName)(_))
       .accept(removePointer, ())
       .accept(toCCAstDeclaration, ())
   }
 
-  private def toGlobalVariableName(name: String) = {
-    f"global\u001F${originalName}\u001F${name}"
-  }
-
   private def wrapperDeclaration(): CCAstDeclaration = {
     val funcDec = if (params.size > 0) {
-      new NewFuncDec(new Name(wrapIdentifier(originalName)), new AllSpec(copyAst(params)))
+      new NewFuncDec(new Name(wrapIdentifier(originalFuncName)), new AllSpec(copyAst(params)))
     } else {
-      new OldFuncDec(new Name(wrapIdentifier(originalName)))
+      new OldFuncDec(new Name(wrapIdentifier(originalFuncName)))
     }
-    new CCAstDeclaration(
+    CCAstDeclaration(
       copyAst(specifiers),
-      new OnlyDecl(new NoPointer(funcDec)), // TODO: This is wrong if the orginal function returs a pointer
-      new ListExtra_specifier)
-  }
-
-  private def wrapperDefinition(): External_declaration = {
-    new Afunc(
-      new NewFunc(
-        copyAst(specifiers),
-        declarator.accept(rename, onlyWrapIdentifier(originalName)(_)),
-        createWrapperBody()))
+      new OnlyDecl(declarator.accept(replaceFuncDec, funcDec)))
   }
 
   private def createWrapperBody(): Compound_stm = {
@@ -450,7 +399,9 @@ class CallSiteTransform(
         case None => ;
         case Some(resultDeclaration) => body.add(new DecS(resultDeclaration.toDeclarators()))
       }
-  
+
+      // TODO: Add assignments to local variables to save the global state.
+      //   Important if function is called recursively.
       for ((param, global) <- pairs) {
         body.add(paramToGlobalAssignmentStm(param, global))
       }
@@ -460,6 +411,8 @@ class CallSiteTransform(
       for ((param, global) <- pairs.reverse) {
         body.add(globalToParamAssignmentStm(param, global))
       }
+      // TODO: Add assignments from local variables to restore the global state.
+      //   Important if function is called recursively.
   
       body.add(returnStm())
       body
@@ -469,6 +422,11 @@ class CallSiteTransform(
   }
 }
 
+/*
+  AstAddition contains all the additions that needs to be added
+  to the AST in order for it to contain all functions and variables
+  used by the program after stack pointers have been replaced.
+*/
 object AstAddition {
   private val getName = new CCAstGetNameVistor
   def apply(

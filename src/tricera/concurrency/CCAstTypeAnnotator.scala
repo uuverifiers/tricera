@@ -47,9 +47,15 @@ class CCAstTypeAnnotator {
   }
 }
 
+/*
+   The CCAstDeclaration represents a declaration in the AST.
+   It can be used to construct various kinds of nodes when
+   manipulating the tree.
+*/
 object CCAstDeclaration {
   private val copyAst = new CCAstCopyVisitor
   private val getName = new CCAstGetNameVistor
+  private val getDeclarator = new CCAstGetDeclaratorVistor
 
   def apply(d: ListDeclaration_specifier, i: Init_declarator, e: ListExtra_specifier): CCAstDeclaration = {
     new CCAstDeclaration(d, i, e)
@@ -61,19 +67,21 @@ object CCAstDeclaration {
 } 
 
 class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: ListExtra_specifier) {
-  import CCAstDeclaration.{copyAst, getName}
+  import CCAstDeclaration._
   private val declarationSpecifiers: ListDeclaration_specifier = d
   private val initDeclarator: Init_declarator = i
   private val extraSpecifiers: ListExtra_specifier = e
 
-  def toEvarWithType(): EvarWithType = {
-    val decSpecs = copyAst(declarationSpecifiers)
-    val initDec = initDeclarator.accept(copyAst, ())
-    new EvarWithType(initDeclarator.accept(getName, ()), decSpecs, initDec);
+  def getId(): String = {
+    initDeclarator.accept(getName, ())
   }
 
-  def toGlobal(): Global = {
-    new Global(toDeclarators())
+  def toAfunc(body: Compound_stm): Afunc = {
+    new Afunc(
+      new NewFunc(
+        copyAst(declarationSpecifiers),
+        initDeclarator.accept(getDeclarator, ()),
+        body))
   }
 
   def toDeclarators(): Declarators = {
@@ -83,6 +91,16 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
       copyAst(declarationSpecifiers),
       initDecls,
       copyAst(e))
+  }
+
+  def toEvarWithType(): EvarWithType = {
+    val decSpecs = copyAst(declarationSpecifiers)
+    val initDec = initDeclarator.accept(copyAst, ())
+    new EvarWithType(initDeclarator.accept(getName, ()), decSpecs, initDec);
+  }
+
+  def toGlobal(): Global = {
+    new Global(toDeclarators())
   }
 }
 
@@ -209,6 +227,19 @@ class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration
   override def visit(defn: NewFunc, arg: Unit) = { 
     (copyAst(defn.listdeclaration_specifier_), new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
   }
+}
+
+/*
+  Vistor to extract the "Declarator" part from an Init_declaration
+*/
+class CCAstGetDeclaratorVistor extends AbstractVisitor[Declarator, Unit] {
+  private val copyAst = new CCAstCopyVisitor
+
+  /* Init_declarator */
+  override def visit(dec: OnlyDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
+  override def visit(dec: InitDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
+  override def visit(dec: HintDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
+  override def visit(dec: HintInitDecl, arg: Unit): Declarator = { dec.declarator_.accept(copyAst, arg); }
 }
 
 /*
