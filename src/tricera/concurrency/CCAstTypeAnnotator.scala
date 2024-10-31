@@ -82,7 +82,7 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
     new Declarators(
       copyAst(declarationSpecifiers),
       initDecls,
-      new ListExtra_specifier)
+      copyAst(e))
   }
 }
 
