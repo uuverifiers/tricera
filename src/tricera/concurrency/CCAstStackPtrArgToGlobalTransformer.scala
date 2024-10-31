@@ -307,6 +307,7 @@ class CallSiteTransform(
           funcDec.listdeclaration_specifier_,
           funcDec.init_declarator_.accept(getDeclarator, ()),
           body))
+
         knownAdditions += AstAddition(
           wrapperDeclaration().toGlobal(),
           wrapperDefinition(),
@@ -314,17 +315,6 @@ class CallSiteTransform(
           func,
           globalVariableDeclarations())
 
-//      knownAdditions.transformedFunctionDefinitions.put(func.accept(getName, ()), func)
-//      knownAdditions.transformedFunctionDeclarations.put(funcDec.accept(getName, ()), transformedDeclaration.toGlobal())
-//  
-//      val wrapperDec = wrapperDeclaration().toGlobal()
-//      knownAdditions.wrapperDeclarations.put(wrapperDec.accept(getName, ()), wrapperDec)
-//  
-//      val wrapperDef = wrapperDefinition()
-//      knownAdditions.wrapperDefinitions.put(wrapperDef.accept(getName, ()), wrapperDef)
-//
-//      globalVariableDeclarations().asScala.foreach(g => knownAdditions.introducedGlobalVariables.put(g.accept(getName, ()), g))
-  
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))
     }
   }
@@ -519,6 +509,7 @@ class AstAddition(
     this.transformedFunctionDeclarations ++= that.transformedFunctionDeclarations
     this.transformedFunctionDefinitions ++= that.transformedFunctionDefinitions
     this.introducedGlobalVariables ++= that.introducedGlobalVariables
+    this
   }
 }
 
@@ -559,82 +550,25 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
 
   /* Program */
   override def visit(progr: Progr, callSiteTransforms: CallSiteTransforms): Program = {
-    def distinctBy[A, K](f: A => K, seq: Iterable[A]) = {
-      seq.groupBy(f).map({ case (key, buffer) => buffer.head })
-    }
-
     def processExternalDeclarations(extDecl: ListExternal_declaration, transforms: CallSiteTransforms) = {
       val extDeclarations = new ListExternal_declaration
       for (x <- extDecl.asScala)
       {
         extDeclarations.add(x.accept(this, transforms));
       }
-
-//      transforms ++= processCallSiteTransforms(transforms)
-
       extDeclarations
     }
-
-//    def processCallSiteTransforms(transforms: CallSiteTransforms): CallSiteTransforms = {
-//      // TODO: Watch out for recursion.
-//      val nested = new CallSiteTransforms
-//      for (t <- transforms) {
-//        val (transformed, ts) = t.transformedDefinition()
-//        nested ++= ts
-//      }
-//      val next = nested.filter(t => transforms.count(i => i.originalName == t.originalName) == 0)
-//      if (next.size > 0) {
-//        next ++= processCallSiteTransforms(next)
-//      }
-//      next
-//    }
-
-//    def transformedFunctions(transforms: CallSiteTransforms): ListExternal_declaration = {
-//      val funcs = new ListExternal_declaration 
-//      distinctBy({ v:External_declaration => v.accept(getName, ())}, transforms.map(t => t.transformedDefinition()._1)).foreach(v => funcs.add(v))
-//      funcs
-//    }
-//
-//    def wrapperDeclarations(transforms: CallSiteTransforms): ListExternal_declaration = {
-//      val funcDecls = new ListExternal_declaration 
-//      distinctBy({ v:External_declaration => v.accept(getName, ())}, transforms.map(t => t.wrapperDeclaration().toGlobal())).foreach(v => funcDecls.add(v))
-//      funcDecls
-//    }
-//
-//    def getNewGlobalVariables(transforms: CallSiteTransforms): ListExternal_declaration = {
-//      val globs = new ListExternal_declaration
-//      val newGlobals = transforms.flatMap(t => t.globalVariableDeclarations().asScala)
-//      distinctBy({ v:External_declaration => v.accept(getName, ())}, newGlobals).foreach(v => globs.add(v))
-//      globs
-//    }
-//
-//    def wrapperFunctions(transforms: CallSiteTransforms): ListExternal_declaration = {
-//      val funcs = new ListExternal_declaration
-//      val wrappers = transforms.map(t => t.wrapperDefinition())
-//      distinctBy({ v:External_declaration => v.accept(getName, ())}, wrappers).foreach(v => funcs.add(v))
-//      funcs
-//    }
 
     def isMainDefinition(dec: External_declaration): Boolean = dec match {
       case funcDef: Afunc if (funcDef.function_def_.accept(getName, ()) == "main") => true
       case _ => false
     }
 
-    def getAstAdditions(transforms: CallSiteTransforms) = {
-      val additions = new AstAddition
-      transforms.foreach(t => additions += t.getAstAdditions())
-      additions
-    }
-
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
     val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isMainDefinition(_)).get)
 
-    val additions = getAstAdditions(callSiteTransforms)
+    val additions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
 
-//    declarations.addAll(mainDefIndex, wrapperFunctions(callSiteTransforms))
-//    declarations.addAll(mainDefIndex, transformedFunctions(callSiteTransforms))
-//    declarations.addAll(mainDefIndex, wrapperDeclarations(callSiteTransforms))
-//    declarations.addAll(mainDefIndex, getNewGlobalVariables(callSiteTransforms))
     declarations.addAll(mainDefIndex, additions.wrapperDefinitions.map(i => i._2).asJavaCollection)
     declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions.map(i => i._2).asJavaCollection)
     declarations.addAll(mainDefIndex, additions.wrapperDeclarations.map(i => i._2).asJavaCollection)
