@@ -265,6 +265,10 @@ class CallSiteTransform(
         rhs.toEvarWithType())))
     }
 
+    def initStm(lhs: CCAstDeclaration, rhs: CCAstDeclaration) = {
+      new DecS(lhs.toDeclarators(Some(new InitExpr(rhs.toEvarWithType()))))
+    }
+
     def resultDeclaration(): Option[CCAstDeclaration] = {
       val getType = new CCAstGetTypeVisitor
       val types = new MutableList[Type_specifier]
@@ -273,22 +277,29 @@ class CallSiteTransform(
         case true => 
           None
         case false =>
-          Some(CCAstDeclaration(copyAst(specifiers), new OnlyDecl(declarator.accept(toName, resultIdentifier(_)))))
+          Some(CCAstDeclaration(
+            copyAst(specifiers),
+            new OnlyDecl(declarator.accept(toName, resultIdentifier(_)))))
       }
     }
 
     def transformedFunctionInvocationStm() = {
       val func = transformedDeclaration()
       val callExp = if (keptParams.size > 0) {
-        new Efunkpar(func.toEvarWithType(), copyAst(keptArgs))
+        val params = new ListExp
+        params.addAll(
+          keptParams
+            .asScala.map(p => p.accept(toCCAstDeclaration, ()).toEvarWithType())
+            .asJavaCollection)
+        new Efunkpar(func.toEvarWithType(), params)
       } else {
         new Efunk(func.toEvarWithType())
       }
 
       val statement = resultDeclaration() match {
         case None => new ExprS(new SexprTwo(callExp))
-        case Some(resultVar) =>
-          new ExprS(new SexprTwo(new Eassign(resultVar.toEvarWithType(), new Assign, callExp)))
+        case Some(decl) =>
+          new DecS(decl.toDeclarators(Some(new InitExpr(callExp))))
       }
       statement
     }
@@ -305,15 +316,10 @@ class CallSiteTransform(
       val savedGlobalPairs = paramGlobalPairs.map({ case (p, g) => (g.withId(savedIdentifier(g.getId())), g)})
       val body = new ListStm
   
-      resultDeclaration() match {
-        case None => ;
-        case Some(resultDeclaration) => body.add(new DecS(resultDeclaration.toDeclarators()))
-      }
-
       for ((saved, global) <- savedGlobalPairs) {
         // Store global variables on stack to allow for recursive
         // calls of the wrapper
-        body.add(assignmentStm(saved, global))
+        body.add(initStm(saved, global))
       }
 
       for ((param, global) <- paramGlobalPairs) {
@@ -432,13 +438,16 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
       extDeclarations
     }
 
-    def isMainDefinition(dec: External_declaration): Boolean = dec match {
+    def isEntryPointDefinition(dec: External_declaration): Boolean = dec match {
+      // TODO: Currently this scans for "main". This needs to be
+      //   adapted with extra input to be able to inject the 
+      //   content from '-m:entry-function-name' option in TriCera.
       case funcDef: Afunc if (funcDef.function_def_.accept(getName, ()) == "main") => true
       case _ => false
     }
 
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
-    val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isMainDefinition(_)).get)
+    val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
 
     val additions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
 

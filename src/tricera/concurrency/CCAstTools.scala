@@ -16,6 +16,7 @@ object CCAstDeclaration {
   private val getName = new CCAstGetNameVistor
   private val getDeclarator = new CCAstGetDeclaratorVistor
   private val rename = new CCAstRenameInDeclarationVistor
+  private val replaceInit = new CCAstReplaceInitializerVistor
 
   def apply(d: ListDeclaration_specifier, i: Init_declarator, e: ListExtra_specifier): CCAstDeclaration = {
     new CCAstDeclaration(d, i, e)
@@ -39,7 +40,7 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
   def toAfunc(body: Compound_stm):Afunc = toAfunc("", body)
 
   def toAfunc(annotation: String, body: Compound_stm): Afunc = {
-    annotation.isEmpty||annotation.isBlank match {
+    annotation.isEmpty || annotation.isBlank match {
       case true =>
         new Afunc(
           new NewFunc(
@@ -56,6 +57,19 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
             initDeclarator.accept(getDeclarator, ()),
             body)) 
     }
+  }
+
+  def toDeclarators(initializer: Option[Initializer] = None): Declarators = {
+    val initDecls = new ListInit_declarator
+    initializer match {
+      case Some(_) => initDecls.add(initDeclarator.accept(replaceInit, initializer))
+      case None => false
+    }
+    
+    new Declarators(
+      copyAst(declarationSpecifiers),
+      initDecls,
+      copyAst(e))
   }
 
   def toDeclarators(): Declarators = {
@@ -148,38 +162,34 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
   Vistor to copy an AST.
 */
 class CCAstCopyVisitor extends ComposVisitor[Unit] {
+  def apply(annotations: ListAnnotation): ListAnnotation = {
+    val copy = new ListAnnotation
+    copy.addAll(annotations.asScala.map(a => a.accept(this, ())).asJava)
+    copy
+  }
+
   def apply(specifiers: ListDeclaration_specifier): ListDeclaration_specifier = {
-    val decSpecifiers = new ListDeclaration_specifier
-    for (d <- specifiers.asScala)
-    {
-      decSpecifiers.add(d.accept(this, ()));
-    }
-    decSpecifiers
+    val copy = new ListDeclaration_specifier
+    copy.addAll(specifiers.asScala.map(s => s.accept(this, ())).asJava)
+    copy
   }
 
   def apply(specifiers: ListExtra_specifier): ListExtra_specifier = {
-    val extraSpecifiers = new ListExtra_specifier
-    for (s <- specifiers.asScala)
-    {
-      extraSpecifiers.add(s.accept(this, ()));
-    }
-    extraSpecifiers
+    val copy = new ListExtra_specifier
+    copy.addAll(specifiers.asScala.map(s => s.accept(this, ())).asJava);
+    copy
   }
 
   def apply(expressions: ListExp) = {
-    val expsCopy = new ListExp
-    for (x <- expressions.asScala) {
-      expsCopy.add(x.accept(this, ()))
-    }
-    expsCopy
+    val copy = new ListExp
+    copy.addAll(expressions.asScala.map(x => x.accept(this, ())).asJava)
+    copy
   }
 
   def apply(params: ListParameter_declaration) = {
-    val paramsCopy = new ListParameter_declaration
-    for (p <- params.asScala) {
-      paramsCopy.add(p.accept(this, ()))
-    }
-    paramsCopy
+    val copy = new ListParameter_declaration
+    copy.addAll(params.asScala.map(p => p.accept(this, ())).asJava)
+    copy
   }
 }
 
@@ -258,6 +268,52 @@ class CCAstReplaceFunctionDeclarationVistor extends ComposVisitor[Direct_declara
   /* Direct_declarator */
   override def visit(dec: NewFuncDec, replacement: Direct_declarator) = { replacement }
   override def visit(dec: OldFuncDec, replacement: Direct_declarator) = { replacement }
+}
+
+/*
+  Vistor class to replace one initialization with another.
+*/
+class CCAstReplaceInitializerVistor extends ComposVisitor[Option[Initializer]] {
+  private val copyAst = new CCAstCopyVisitor
+
+  /* Init_declarator */
+  override def visit(dec: OnlyDecl, replacement: Option[Initializer]): Init_declarator = { 
+    replacement match {
+        case None => new OnlyDecl(dec.declarator_.accept(copyAst, ()))
+        case Some(init) => new InitDecl(dec.declarator_.accept(copyAst, ()), init)
+    } 
+  }
+
+  override def visit(dec: InitDecl, replacement: Option[Initializer]): Init_declarator = {
+    replacement match {
+        case None => new OnlyDecl(dec.declarator_.accept(copyAst, ()))
+        case Some(init) => new InitDecl(dec.declarator_.accept(copyAst, ()), init)
+    } 
+  }
+  
+  override def visit(dec: HintDecl, replacement: Option[Initializer]): Init_declarator = {
+    replacement match {
+        case None => new HintDecl(
+          copyAst(dec.listannotation_),
+          dec.declarator_.accept(copyAst, ()))
+        case Some(init) => new HintInitDecl(
+          copyAst(dec.listannotation_),
+          dec.declarator_.accept(copyAst, ()),
+          init)
+    }
+  }
+  
+  override def visit(dec: HintInitDecl, replacement: Option[Initializer]): Init_declarator = {
+    replacement match {
+        case None => new HintDecl(
+          copyAst(dec.listannotation_),
+          dec.declarator_.accept(copyAst, ()))
+        case Some(init) => new HintInitDecl(
+          copyAst(dec.listannotation_),
+          dec.declarator_.accept(copyAst, ()),
+          init)
+    }
+  }
 }
 
 /*
