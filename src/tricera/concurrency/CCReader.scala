@@ -85,7 +85,7 @@ object CCReader {
     var reader : CCReader = null
     while (reader == null)
       try {
-        reader = new CCReader(prog, entryFunction, propertiesToCheck)
+        reader = new CCReader(transformedCallsProg, entryFunction, propertiesToCheck)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -2795,6 +2795,7 @@ private def collectVarDecls(dec                    : Dec,
     def asAtom(pred : CCPredicate) = atom(pred, getValuesAsTerms.take(pred.arity))
 
     def asLValue(exp : Exp) : String = exp match {
+      case exp : EvarWithType => exp.cident_
       case exp : Evar    => exp.cident_
       case exp : Eselect => asLValue(exp.exp_)
       case exp : Epoint  => asLValue(exp.exp_)
@@ -2811,6 +2812,8 @@ private def collectVarDecls(dec                    : Dec,
     : Boolean = exp match {
       case exp : Evar => getValue(exp.cident_,
                                   enclosingFunction).typ == CCClock
+      case exp : EvarWithType => getValue(exp.cident_,
+                                  enclosingFunction).typ == CCClock
       case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
       case exp =>
         throw new TranslationException(getLineString(exp) +
@@ -2821,6 +2824,8 @@ private def collectVarDecls(dec                    : Dec,
     private def isDurationVariable(exp : Exp, enclosingFunction : String)
     : Boolean = exp match {
       case exp : Evar => getValue(exp.cident_,
+                                  enclosingFunction).typ == CCDuration
+      case exp : EvarWithType => getValue(exp.cident_,
                                   enclosingFunction).typ == CCDuration
       case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
       case exp =>
@@ -3459,7 +3464,12 @@ private def collectVarDecls(dec                    : Dec,
 
       case exp : Efunkpar =>
         val srcInfo = Some(getSourceInfo(exp))
-        (printer print exp.exp_) match {
+        val funcIdentifier = exp.exp_ match {
+          case v : Evar => v.cident_
+          case v : EvarWithType => v.cident_
+          case _ => (printer print exp.exp_)
+        }
+        funcIdentifier match {
           case "assert" | "static_assert" if exp.listexp_.size == 1 =>
             val property = exp.listexp_.head match {
               case a : Efunkpar
@@ -3811,6 +3821,21 @@ private def collectVarDecls(dec                    : Dec,
         }
 
       case exp : Evar =>
+        // todo: Unify with EvarWithType, they should always be treated the same.
+        val name = exp.cident_
+        pushVal(lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+          case -1 =>
+            (enumeratorDefs get name) match {
+              case Some(e) => e
+              case None => throw new TranslationException(
+                getLineString(exp) + "Symbol " + name + " is not declared")
+            }
+          case ind =>
+            getValue(ind, false)
+        })
+
+      case exp : EvarWithType =>
+        // todo: Unify with Evar, they should always be treated the same.
         val name = exp.cident_
         pushVal(lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
           case -1 =>
