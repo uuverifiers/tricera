@@ -2,135 +2,28 @@ package tricera.concurrency
 
 import concurrent_c._
 import concurrent_c.Absyn._
-import tricera.concurrency.CCAstUtils.isStackPtr
 
 import scala.collection.mutable.{HashMap => MHashMap, MutableList}
-import scala.util.{Try,Success,Failure}
 import scala.collection.JavaConverters._
-import scala.collection.mutable.Buffer
-
-/*
-  Vistor class to remove one level of indirection ("dereference a pointer").
-*/
-class CCAstRemovePointerLevelVistor extends ComposVisitor[Unit] {
-  /* Declarator */
-  override def visit(dec: BeginPointer, arg: Unit) = { new NoPointer(dec.direct_declarator_.accept(this, arg)); }
-}
-
-/*
-  Vistor class to rename a declaration or definition.
-*/
-class CCAstRenameInDeclarationVistor extends ComposVisitor[String => String] {
-  /* Direct_declarator */
-  override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
-}
-
-/*
-  Vistor class to transform any declaration to a scalar variable declaration,
-  removing e.g. array or function declaration elements.
-*/
-class CCAstDeclaratorToNameVistor extends ComposVisitor[String => String] {
-  /* Direct_declarator */
-  override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
-  override def visit(dec: ParenDecl, rename: String => String): Name = { dec.declarator_ match {
-      case ptr: BeginPointer => ptr.direct_declarator_.accept(this, rename).asInstanceOf[Name]
-      case d: NoPointer => d.direct_declarator_.accept(this, rename).asInstanceOf[Name]
-    } 
-  }
-  override def visit(dec: InitArray, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
-  override def visit(dec: Incomplete, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
-  override def visit(dec: MathArray, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
-  override def visit(dec: NewFuncDec, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
-  override def visit(dec: OldFuncDec, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
-}
-
-/*
-  Vistor class to replace one function declaration with another.
-*/
-class CCAstReplaceFunctionDeclarationVistor extends ComposVisitor[Direct_declarator] {
-  /* Direct_declarator */
-  override def visit(dec: NewFuncDec, replacement: Direct_declarator) = { replacement }
-  override def visit(dec: OldFuncDec, replacement: Direct_declarator) = { replacement }
-}
-
-/*
-  Vistor to extract a function body from a function definition.
-*/
-class CCAstGetFunctionBodyVistor extends AbstractVisitor[Compound_stm, Unit] {
-  val copyAst = new CCAstCopyVisitor
-  /* Function_def */
-  override def visit(defn: AnnotatedFunc, arg: Unit) = { 
-    defn.compound_stm_.accept(copyAst, arg)
-  }
-  override def visit(defn: NewFuncInt, arg: Unit) = {
-    defn.compound_stm_.accept(copyAst, arg)
-  }
-  override def visit(defn: NewFunc, arg: Unit) = { 
-    defn.compound_stm_.accept(copyAst, arg)
-  }
-}
-
-/*
-  Vistor to extract the "Parameter_type" part from a Declarator
-*/
-class CCAstGetParametersVistor extends AbstractVisitor[ListParameter_declaration, Unit] {
-    /* Declarator */
-    override def visit(dec: BeginPointer, arg: Unit) = { dec.direct_declarator_.accept(this, ()) }
-    override def visit(dec: NoPointer, arg: Unit) = { dec.direct_declarator_.accept(this, ()) }
-
-    /* Direct_declarator */
-    override def visit(dec: NewFuncDec, arg: Unit) = { dec.parameter_type_.accept(this, ()) }
-    override def visit(dec: OldFuncDec, arg: Unit) = { new ListParameter_declaration }
-
-    /* Parameter_type */
-    override def visit(spec: AllSpec, arg: Unit) = { spec.listparameter_declaration_ }
-}
-
-/*
-  Vistor to convert function parameters to CCAstDeclaration.
-*/
-class CCAstParamToAstDeclarationVistor extends AbstractVisitor[CCAstDeclaration, Unit] {
-  private val copyAst = new CCAstCopyVisitor
-
-  /* Init_declarator */
-  override def visit(param: TypeAndParam, arg: Unit) = {
-    toDeclarationData(param.listdeclaration_specifier_, param.declarator_)
-  }
-
-  override def visit(param: TypeHintAndParam, arg: Unit) = { 
-    toDeclarationData(param.listdeclaration_specifier_, param.declarator_)
-  }
-
-  private def toDeclarationData(decSpecs: ListDeclaration_specifier, declarator: Declarator) = {
-    new CCAstDeclaration(
-      copyAst(decSpecs),
-      new OnlyDecl(declarator.accept(copyAst, ())),
-      new ListExtra_specifier)
-  }
-}
-
-/*
-  Vistor to get declared type from a specifier.
-*/
-class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, MutableList[Type_specifier]] {
-  /* Declaration_specifier */
-  override def visit(spec: Type, types: MutableList[Type_specifier]) = { types += spec.type_specifier_; true }
-  override def visit(spec: Storage, types: MutableList[Type_specifier]) = { false }
-  override def visit(spec: SpecProp, types: MutableList[Type_specifier]) = { false }
-  override def visit(spec: SpecFunc, types: MutableList[Type_specifier]) = { false }
-}
 
 private object CCAstUtils {
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
-    // TODO: Check that init value is address-of operator
+    def check(inializer: Initializer) = inializer match {
+      case init: InitExpr => isStackPtr(init.exp_)
+      case _ => false
+    }
     identifier.init_declarator_ match {
-      case _: HintInitDecl => true
-      case _: InitDecl => true
+      case dec: HintInitDecl => check(dec.initializer_)
+      case dec: InitDecl => check(dec.initializer_)
       case _ => false
     }
   }
 
   def isStackPtr(exp: Exp): Boolean = {
+    // NOTE: This is very simplistic in it's interpretation of
+    //   what is considered a stack pointer. However, something
+    //   more refined will require more exlaborate data flow
+    //   analysis.
     exp match {
       case x: Epreop =>
           x.unary_operator_ match {
@@ -144,7 +37,7 @@ private object CCAstUtils {
 }
 
 /*
-    Vistor to replace given pointers with global variables.
+  Vistor to replace given pointers with global variables.
 */
 class CCAstPointerToGlobalVisitor extends ComposVisitor[Map[String, CCAstDeclaration]] {
   private val getName = new CCAstGetNameVistor
@@ -232,6 +125,10 @@ object CallSiteTransform {
     f"result\u001F${id}" 
   }
 
+  private def savedIdentifier(id: String): String = { 
+    f"saved\u001F${id}" 
+  }
+
   private def toGlobalVariableName(functionName: String)(name: String) = {
     f"global\u001F${functionName}\u001F${name}"
   }
@@ -242,6 +139,7 @@ class CallSiteTransform(
   originalDef: Function_def,
   args: ListExp) {
   import CallSiteTransform._
+  import CCAstUtils.isStackPtr
 
   private val (specifiers, declarator) = {
     val (spec, dec) = originalDef.accept(getFunctionDeclaration, ())
@@ -277,6 +175,11 @@ class CallSiteTransform(
   }
 
   private def accumulateAdditions(knownAdditions: AstAddition):Unit = {
+    def addAnnotationMarkers(str: String) = {
+      import tricera.parsers.CommentPreprocessor.annotationMarker
+      annotationMarker + str + annotationMarker
+    }
+
     val transDec = transformedDeclaration()
     if (!knownAdditions.transformedFunctionDefinitions.contains(transDec.getId())) {
       val wrapperDec = wrapperDeclaration()
@@ -286,7 +189,7 @@ class CallSiteTransform(
         wrapperDec.toGlobal(),
         wrapperDec.toAfunc(createWrapperBody()),
         transDec.toGlobal(),
-        transDec.toAfunc(body),
+        transDec.toAfunc(addAnnotationMarkers("contract"), body),
         globalVariableDeclarations())
 
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))
@@ -349,11 +252,17 @@ class CallSiteTransform(
     }
 
     def globalToParamAssignmentStm(param: CCAstDeclaration, global: CCAstDeclaration) = {
-      new ExprS(new SexprTwo(
-          new Eassign(
-            new Epreop(new Indirection(), param.toEvarWithType()),
-            new Assign,
-            global.toEvarWithType())))
+      new ExprS(new SexprTwo(new Eassign(
+        new Epreop(new Indirection(), param.toEvarWithType()),
+        new Assign,
+        global.toEvarWithType())))
+    }
+
+    def assignmentStm(lhs: CCAstDeclaration, rhs: CCAstDeclaration) = {
+      new ExprS(new SexprTwo(new Eassign(
+        lhs.toEvarWithType(),
+        new Assign,
+        rhs.toEvarWithType())))
     }
 
     def resultDeclaration(): Option[CCAstDeclaration] = {
@@ -392,7 +301,8 @@ class CallSiteTransform(
     }
 
     def composeBody() = {
-      val pairs = removedParams.asScala.map(p => (p.accept(toCCAstDeclaration,()), toGlobalDeclaration(p)))
+      val paramGlobalPairs = removedParams.asScala.map(p => (p.accept(toCCAstDeclaration,()), toGlobalDeclaration(p)))
+      val savedGlobalPairs = paramGlobalPairs.map({ case (p, g) => (g.withId(savedIdentifier(g.getId())), g)})
       val body = new ListStm
   
       resultDeclaration() match {
@@ -400,19 +310,25 @@ class CallSiteTransform(
         case Some(resultDeclaration) => body.add(new DecS(resultDeclaration.toDeclarators()))
       }
 
-      // TODO: Add assignments to local variables to save the global state.
-      //   Important if function is called recursively.
-      for ((param, global) <- pairs) {
+      for ((saved, global) <- savedGlobalPairs) {
+        // Store global variables on stack to allow for recursive
+        // calls of the wrapper
+        body.add(assignmentStm(saved, global))
+      }
+
+      for ((param, global) <- paramGlobalPairs) {
         body.add(paramToGlobalAssignmentStm(param, global))
       }
-   
+
       body.add(transformedFunctionInvocationStm())
   
-      for ((param, global) <- pairs.reverse) {
+      for ((param, global) <- paramGlobalPairs.reverse) {
         body.add(globalToParamAssignmentStm(param, global))
       }
-      // TODO: Add assignments from local variables to restore the global state.
-      //   Important if function is called recursively.
+
+      for ((saved, global) <- savedGlobalPairs.reverse) {
+        body.add(assignmentStm(global, saved))
+      }
   
       body.add(returnStm())
       body
@@ -503,7 +419,6 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
 
   private val getName = new CCAstGetNameVistor
   private val copyAst = new CCAstCopyVisitor
-  private val rename = new CCAstRenameInDeclarationVistor
   private val functionDefinitions = new MHashMap[String, Function_def]
 
   /* Program */
