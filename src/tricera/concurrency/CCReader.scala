@@ -86,6 +86,7 @@ object CCReader {
     while (reader == null)
       try {
         reader = new CCReader(transformedCallsProg, entryFunction, propertiesToCheck)
+        //reader = new CCReader(prog, entryFunction, propertiesToCheck)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -3448,7 +3449,12 @@ private def collectVarDecls(dec                    : Dec,
       case exp : Efunk =>
         val srcInfo = Some(getSourceInfo(exp))
         // inline the called function
-        printer print exp.exp_ match {
+        val funcIdentifier = exp.exp_ match {
+          case v : Evar => v.cident_
+          case v : EvarWithType => v.cident_
+          case _ => (printer print exp.exp_)
+        }
+        funcIdentifier match {
           case "reach_error" =>
             /**
              * A special SV-COMP function used in the unreach-call category.

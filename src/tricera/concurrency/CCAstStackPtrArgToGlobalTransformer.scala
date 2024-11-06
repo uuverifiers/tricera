@@ -103,38 +103,25 @@ object CallSiteTransform {
   private val removePointer = new CCAstRemovePointerLevelVistor
   private val toCCAstDeclaration = new CCAstParamToAstDeclarationVistor
 
+  // We use the non-printable 0x1F US (Unit Separator)
+  // as a means to get a new identifier name not colliding
+  // with something existing in the original source.
+  private val separator = "\u001F"
+
   def apply(
     ptrTransformer: CCAstStackPtrArgToGlobalTransformer,
     funcDef: Function_def,
     args: ListExp): CallSiteTransform = {
     new CallSiteTransform(ptrTransformer, funcDef, copyAst(args))
   }
-
-  private def wrapIdentifier(id: String) = {
-    // We use the non-printable 0x1F US (Unit Separator)
-    // as a means to get a new identifier name not colliding
-    // with something existing in the original source.
-    f"wrapped\u001F${id}"
-  }
-
-  private def transformIdentifier(id: String): String = { 
-    f"global\u001F${id}" 
-  }
-
-  private def resultIdentifier(id: String): String = { 
-    f"result\u001F${id}" 
-  }
-
-  private def savedIdentifier(id: String): String = { 
-    f"saved\u001F${id}" 
-  }
-
-  private def toGlobalVariableName(functionName: String)(name: String) = {
-    f"global\u001F${functionName}\u001F${name}"
-  }
 }
 
 class CallSiteTransform(
+  // TODO: Introduce suffix to indicate which arguments that
+  //   where replaced. Add this suffix to generated identifiers
+  //   to enable generation of multiple global functions in case
+  //   there are multiple parameters and they are replaced to
+  //   varying degree.
   stackPtrTransformer:CCAstStackPtrArgToGlobalTransformer,
   originalDef: Function_def,
   args: ListExp) {
@@ -154,15 +141,14 @@ class CallSiteTransform(
     k.map({case (param, arg) => param.accept(copyAst, ())}).foreach(param => kept.add(param))
     (kept, removed)
   }
-  private val keptArgs = {
-    val kept = new ListExp
-    args.asScala
-    .withFilter(!isStackPtr(_))
-    .foreach(param => kept.add(param.accept(copyAst, ())))
-    kept
-  }
 
   val originalFuncName = declarator.accept(getName, ())
+  val suffix = {
+    args.asScala.zipWithIndex
+      .withFilter({ case (arg, index) => isStackPtr(arg)})
+      .map({ case (arg, index) => f"_${index}"})
+      .reduce((a,b) => a+b)      
+  }
 
   def getAstAdditions(): AstAddition = {
     val additions = new AstAddition
@@ -172,6 +158,26 @@ class CallSiteTransform(
 
   def wrapperInvocation(): Efunkpar = {
     new Efunkpar(wrapperDeclaration().toEvarWithType(), copyAst(args))
+  }
+
+  private def wrapIdentifier(id: String) = {
+    f"wrapped${separator}${id}${suffix}"
+  }
+
+  private def transformIdentifier(id: String): String = { 
+    f"global${separator}${id}${suffix}" 
+  }
+
+  private def resultIdentifier(id: String): String = { 
+    f"result${separator}${id}${suffix}" 
+  }
+
+  private def savedIdentifier(id: String): String = { 
+    f"saved${separator}${id}${suffix}" 
+  }
+
+  private def toGlobalVariableName(functionName: String)(name: String) = {
+    f"global${separator}${functionName}${suffix}${separator}${name}"
   }
 
   private def accumulateAdditions(knownAdditions: AstAddition):Unit = {
@@ -296,6 +302,12 @@ class CallSiteTransform(
         new Efunk(func.toEvarWithType())
       }
 
+      // TODO: If the original function returns some pointer it
+      //   got as an argument, and that pointer is a stack pointer,
+      //   this return value breaks. In such a case the orginial
+      //   function would return the pointer to the stack, but this
+      //   one will return the address of the global variable
+      //   replacing the stack pointer.
       val statement = resultDeclaration() match {
         case None => new ExprS(new SexprTwo(callExp))
         case Some(decl) =>
@@ -317,7 +329,7 @@ class CallSiteTransform(
       val body = new ListStm
   
       for ((saved, global) <- savedGlobalPairs) {
-        // Store global variables on stack to allow for recursive
+        // Store global variables on the stack to allow for recursive
         // calls of the wrapper
         body.add(initStm(saved, global))
       }
