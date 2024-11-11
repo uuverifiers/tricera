@@ -37,6 +37,37 @@ private object CCAstUtils {
 }
 
 /*
+  Vistor to test if an expression is a pointer to stack allocated data.
+
+  NOTE: This visitor requires a type annotated AST as produced by
+    the CCAstTypeAnnotationVistor.
+
+  NOTE: This is very simplistic in it's interpretation of
+    what is considered a stack pointer. However, something
+    more refined will require more exlaborate data flow
+    analysis.
+*/
+class CCAstIsStackPointerVisitor extends AbstractVisitor[Boolean, Unit] {
+  /* Init_declarator */
+  override def visit(dec: InitDecl, arg: Unit) = { dec.initializer_.accept(this, ()) }
+  override def visit(dec: HintInitDecl, arg: Unit) = { dec.initializer_.accept(this, ()) }
+  override def visitDefault(dec: Init_declarator, arg: Unit) = { false }
+
+  /* Initializer */
+  override def visit(init: InitExpr, arg: Unit) = { init.exp_.accept(this, ()) }
+  override def visitDefault(init: Initializer, arg: Unit) = { false }
+
+  /* Exp */
+  override def visit(exp: Epreop, arg: Unit) = { exp.unary_operator_.accept(this, ()) }
+  override def visit(exp: EvarWithType, arg: Unit) = { exp.init_declarator_.accept(this, ()) }
+  override def visitDefault(exp: Exp, arg: Unit) = { false }
+
+  /* Unary opperator */
+  override def visit(op: Address, arg: Unit) = { true }
+  override def visitDefault(op: Unary_operator, arg: Unit) = { false }
+}
+
+/*
   Vistor to replace given pointers with global variables.
 */
 class CCAstPointerToGlobalVisitor extends ComposVisitor[Map[String, CCAstDeclaration]] {
@@ -408,13 +439,13 @@ class AstAddition(
 
 object  CCAstStackPtrArgToGlobalTransformer {
   import CallSiteTransform.CallSiteTransforms
-  def apply(program: Program) = {
-    val transformer = new CCAstStackPtrArgToGlobalTransformer
+  def apply(program: Program, entryFunctionId: String) = {
+    val transformer = new CCAstStackPtrArgToGlobalTransformer(entryFunctionId)
     program.accept(transformer, new CallSiteTransforms)
   }
 }
 
-class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransform.CallSiteTransforms] {
+class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String) extends ComposVisitor[CallSiteTransform.CallSiteTransforms] {
   // Idea: For each function invocation that has arguments that points to
   //   memory allocated on the stack (stack pointers), introduce two new
   //   functions, and for each stack pointer argument a global variable.
@@ -451,10 +482,7 @@ class CCAstStackPtrArgToGlobalTransformer extends ComposVisitor[CallSiteTransfor
     }
 
     def isEntryPointDefinition(dec: External_declaration): Boolean = dec match {
-      // TODO: Currently this scans for "main". This needs to be
-      //   adapted with extra input to be able to inject the 
-      //   content from '-m:entry-function-name' option in TriCera.
-      case funcDef: Afunc if (funcDef.function_def_.accept(getName, ()) == "main") => true
+      case funcDef: Afunc if (funcDef.function_def_.accept(getName, ()) == entryFunctionId) => true
       case _ => false
     }
 
