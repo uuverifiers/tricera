@@ -6,7 +6,7 @@
 -- part of BSc thesis at Chalmers University of Technology
 --
 -- NOTICE: the C program may need to be preprocessed by cpp. Also types defined
--- by typedefs have to be eliminated (these are known problems with the 
+-- by typedefs have to be eliminated (these are known problems with the
 -- BNF grammar of Ansi C).
 
 entrypoints Program, Stm, Exp ;
@@ -39,6 +39,7 @@ SingleThread. Thread_def ::= "thread" CIdent Compound_stm ;
 ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
 
 NoDeclarator.    Dec ::= [Declaration_specifier] [Extra_specifier] ";";
+AnnotatedFuncDeclarator.     Dec ::= [Annotation] [Declaration_specifier] Declarator ";" ;
 Declarators.     Dec ::= [Declaration_specifier] [Init_declarator] [Extra_specifier] ";" ;
 PredDeclarator.  Dec ::= "/*$" [Pred_hint] "$*/";
 InterpPredDeclarator. Dec ::= "/*$" Pred_interp "$*/";
@@ -65,7 +66,7 @@ SpecFunc. Declaration_specifier ::= Function_specifier ;
 -- preprocessed prgorams containing gcc attributes
 AttrSpec.  Extra_specifier       ::= "__attribute__" "(" "(" [Attribute] ")" ")";
 AsmSpec.   Extra_specifier       ::= "__asm__" "(" String ")" ;
-Attr.      Attribute             ::= CIdent ; 
+Attr.      Attribute             ::= CIdent ;
 AttrParam. Attribute             ::= CIdent "(" Exp ")" ;
 
 separator nonempty Declaration_specifier "";
@@ -197,7 +198,7 @@ separator nonempty CIdent ",";
 
 
 InitExpr.    Initializer ::= Exp2 ;
-InitListOne. Initializer ::= "{" Initializers "}" ; 
+InitListOne. Initializer ::= "{" Initializers "}" ;
 InitListTwo. Initializer ::= "{" Initializers "," "}" ;
 
 AnInit.      Initializers ::= Initializer ;
@@ -310,7 +311,7 @@ token CDouble (((digit+ '.')|('.' digit+))(('e'|'E') ('-')? digit+)?)|
 token CFloat (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-')? digit+)?
                                ('f'|'F'))|((digit+ ('e'|'E')('-')? digit+)('f'|'F'));
 
-token CLongDouble (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-')? 
+token CLongDouble (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-')?
                    digit+)?('l'|'L'))|((digit+ ('e'|'E')('-')? digit+)('l'|'L'));
 
 
@@ -370,7 +371,7 @@ Eoctalunslong. Constant ::= OctalUnsLong;
 Ecdouble.      Constant ::= CDouble;
 Ecfloat.       Constant ::= CFloat;
 Eclongdouble.  Constant ::= CLongDouble;
-Eint.          Constant ::= UnboundedInteger;  
+Eint.          Constant ::= UnboundedInteger;
 
 -- internal Elonger. Constant ::= Integer;
 -- internal Edouble. Constant ::= Double;
