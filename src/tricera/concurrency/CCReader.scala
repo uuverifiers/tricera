@@ -73,7 +73,7 @@ object CCReader {
 
 // SSSOWO: start
     val typeAnnotProg = CCAstTypeAnnotator(prog)
-    val transformedCallsProg = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg)
+    val transformedCallsProg = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
 
     val pp = new PrettyPrinterNonStatic()
     val prgStr = pp.print(prog)
