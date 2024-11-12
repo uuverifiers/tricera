@@ -45,6 +45,24 @@ import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 
 
 // FIXME: Maybe just object? Or create companion?
+object Encoder {
+  object TermSubstVisitor extends CollectingVisitor[Map[ITerm, ITerm], IExpression] {
+    def apply(e : IFormula, paramToArgMap : Map[ITerm, ITerm]) : IFormula = {
+      visit(e, paramToArgMap).asInstanceOf[IFormula]
+    }
+
+    override def postVisit(e: IExpression, paramToArgMap : Map[ITerm, ITerm], subres: Seq[IExpression]) : IExpression = {
+      e match {
+        case t : ITerm =>
+          val exp = paramToArgMap.getOrElse(t, t)
+          // NOTE: Check fixes so that expressions as args works (e.g foo(2+2)).
+          if (subres.isEmpty) exp else exp.update(subres)
+        case exp =>
+          exp.update(subres)
+      }
+    }
+  }
+}
 // FIXME: We should try not to have to pass around the reader object itself,
 //        but only necessary data therein.
 class Encoder(reader : CCReader) {
@@ -255,26 +273,10 @@ class Encoder(reader : CCReader) {
     })
   }
 
+
   private def applyArgs(formula : IFormula, predParams : IAtom, predArgs : IAtom) : IFormula = {
     val paramToArgMap : Map[ITerm, ITerm] =
       predParams.args.zip(predArgs.args).toMap
-    TermSubstVisitor(formula, paramToArgMap)
-  }
-
-  object TermSubstVisitor extends CollectingVisitor[Map[ITerm, ITerm], IExpression] {
-    def apply(e : IFormula, paramToArgMap : Map[ITerm, ITerm]) : IFormula = {
-      visit(e, paramToArgMap).asInstanceOf[IFormula]
-    }
-
-    override def postVisit(e: IExpression, paramToArgMap : Map[ITerm, ITerm], subres: Seq[IExpression]) : IExpression = {
-      e match {
-        case t : ITerm =>
-          val exp = paramToArgMap.getOrElse(t, t)
-          // NOTE: Check fixes so that expressions as args works (e.g foo(2+2)).
-          if (subres.isEmpty) exp else exp.update(subres)
-        case exp =>
-          exp.update(subres)
-      }
-    }
+    Encoder.TermSubstVisitor(formula, paramToArgMap)
   }
 }
