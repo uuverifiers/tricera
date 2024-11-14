@@ -362,7 +362,6 @@ class CCReader private (prog              : Program,
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val warnedFunctionNames = new MHashSet[String]
-  private val functionContexts = new MHashMap[String, FunctionContext]
   private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
   private val functionClauses =
     new MHashMap[String, Seq[(Clause, ParametricEncoder.Synchronisation)]]
@@ -390,6 +389,9 @@ class CCReader private (prog              : Program,
   val prePredsToReplace : MHashSet[Predicate] = new MHashSet()
   val postPredsToReplace : MHashSet[Predicate] = new MHashSet()
   val clauseToRichClause : MHashMap[Clause, CCClause] = new MHashMap()
+  val functionContexts = new MHashMap[String, FunctionContext]
+  val funsWithOnlyContract = new MHashSet[String]
+  val funsGlobalsToPostMap = new MHashMap[String, Map[ITerm, ITerm]]
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -1164,7 +1166,7 @@ class CCReader private (prog              : Program,
 
           LocalVars popFrame
         }
-        case None => //Nothing if no body exists
+        case None => funsWithOnlyContract += f.name //Nothing if no body exists
       }
     }
 
@@ -3938,23 +3940,25 @@ private def collectVarDecls(dec                    : Dec,
                   //       at a few locations the static variables belonging to
                   //       that function only.
               }
-              IExpression.i(v.sort newConstant(v.name + "_post")) //
+              val globalCCVar = ctx.acslContext.getPostGlobalVar(v.name).get
+              globalCCVar.toConstantITerm
+              // IExpression.i(v.sort newConstant(v.name + "_post")) //
               // todo: refactor
             }
+
 
           val globals : Seq[ITerm] =
             for (n <- 0 until GlobalVars.size)
             yield getValue(n, false).toTerm
 
+          val globalsToPostMap = globals.zip(postGlobalVars).toMap
+          funsGlobalsToPostMap += (name -> globalsToPostMap)
+
           val prePredArgs : Seq[ITerm] = globals ++ argTerms
 
           val resVar : Seq[CCVar] = getResVar(typ)
-          val postPredArgs : Seq[ITerm] =
-            prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
+          val postPredArgs : Seq[ITerm] = prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
             //postGlobalVars ++ argTerms ++ globals ++ resVar.map(c => IConstant(c.term))
-
-          postPredArgs.foreach(x => print(x))
-          print(postPredArgs)
 
           val preAtom  = ctx.prePred(prePredArgs)
           val postAtom = ctx.postPred(postPredArgs)
