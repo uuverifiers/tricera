@@ -31,10 +31,8 @@
 package tricera.acsl
 
 import ap.parser.IExpression
-import ap.parser.IExpression.ConstantTerm
 import ap.parser.CollectingVisitor
-import ap.parser.SymbolCollector
-import ap.parser.{IAtom, IFormula, ITerm, IConstant}
+import ap.parser.{IAtom, IFormula, ITerm}
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.bottomup.HornClauses.FALSE
 import hornconcurrency.ParametricEncoder.System
@@ -43,30 +41,10 @@ import tricera.Util.SourceInfo
 
 import scala.collection.{Map, Set}
 import tricera.concurrency.CCReader
-import tricera.concurrency.ccreader.CCVar
-import tricera.concurrency.CCReader.{CCAssertionClause, CCClause, FunctionContext}
+import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 
 
 // FIXME: Maybe just object? Or create companion?
-object Encoder {
-  object TermSubstVisitor extends CollectingVisitor[Map[ITerm, ITerm], IExpression] {
-    def apply(e : IFormula, paramToArgMap : Map[ITerm, ITerm]) : IFormula = {
-      visit(e, paramToArgMap).asInstanceOf[IFormula]
-    }
-
-    override def postVisit(e: IExpression, paramToArgMap : Map[ITerm, ITerm], subres: Seq[IExpression]) : IExpression = {
-      e match {
-        case t : ITerm =>
-          println("t:" + t)
-          val exp = paramToArgMap.getOrElse(t, t)
-          // NOTE: Check fixes so that expressions as args works (e.g foo(2+2)).
-          if (subres.isEmpty) exp else exp.update(subres)
-        case exp =>
-          exp.update(subres)
-      }
-    }
-  }
-}
 // FIXME: We should try not to have to pass around the reader object itself,
 //        but only necessary data therein.
 class Encoder(reader : CCReader) {
@@ -89,11 +67,6 @@ class Encoder(reader : CCReader) {
   val prePredsToReplace  : Set[IExpression.Predicate] = reader.prePredsToReplace
   val postPredsToReplace : Set[IExpression.Predicate] =
     reader.postPredsToReplace
-
-  val functionContexts : Map[String, FunctionContext] = reader.functionContexts
-  val funsWithOnlyContract : Set[String] = reader.funsWithOnlyContract
-  val funsGlobalsToPostMap : Map[String, Map[ITerm, ITerm]] =
-    reader.funsGlobalsToPostMap
 
   val hasACSLEntryFunction : Boolean = reader.hasACSLEntryFunction
 
@@ -222,33 +195,12 @@ class Encoder(reader : CCReader) {
       val (maybeNewConstr, newSrcInfo) = toss match {
         case atom :: Nil =>
           val name : String = atom.pred.name.stripSuffix(postSuffix)
-          val ctx = functionContexts(name)
           val postAtom : IAtom = funToPostAtom(name)
           val postCond : IFormula = funToContract(name).post
-          println("atom: " + atom)
-          println("posttom: " + postAtom)
-          println("postcond: " + postCond)
-          println("ctxpred:" + functionContexts(name).postPred)
           val assigns  : IFormula = funToContract(name).assignsAssume
-          val postCondNew = if (funsWithOnlyContract(name)) {
-            println(ctx.acslContext.getGlobals)
-            // val postCondArgs : Seq[ConstantTerm] = SymbolCollector.constants(postCond).toSeq
-            // val hasPostVars : Seq[ConstantTerm] = postCondArgs.filter(
-            //   x => ctx.acslContext.getPostGlobalVar(x.name.take(x.name.lastIndexOf(":"))).isDefined
-            // )
-            // println(hasPostVars)
-            val postVarMap = funsGlobalsToPostMap(name)
-            //   hasPostVars.map(x =>
-            //   (IConstant(x).asInstanceOf[ITerm],
-            //     ctx.acslContext.getPostGlobalVar(x.name.take(x.name.lastIndexOf(":"))).get.toConstantITerm)
-            // ).toMap
-            println(postVarMap)
-            Encoder.TermSubstVisitor(postCond, postVarMap)
-          } else {
-            postCond
-          }
-          val newConstr = applyArgs(postCondNew &&& assigns, postAtom, atom)
-          (constr &&& newConstr, Some(funToContract(name).postSrcInfo))
+          (constr &&& applyArgs(postCond &&& assigns, postAtom, atom),
+            Some(funToContract(name).postSrcInfo)
+          )
         case _ => (constr, oldSrcInfo)
       }
       new CCClause(Clause(head, keep, maybeNewConstr), newSrcInfo)
@@ -303,10 +255,26 @@ class Encoder(reader : CCReader) {
     })
   }
 
-
   private def applyArgs(formula : IFormula, predParams : IAtom, predArgs : IAtom) : IFormula = {
     val paramToArgMap : Map[ITerm, ITerm] =
       predParams.args.zip(predArgs.args).toMap
-    Encoder.TermSubstVisitor(formula, paramToArgMap)
+    TermSubstVisitor(formula, paramToArgMap)
+  }
+
+  object TermSubstVisitor extends CollectingVisitor[Map[ITerm, ITerm], IExpression] {
+    def apply(e : IFormula, paramToArgMap : Map[ITerm, ITerm]) : IFormula = {
+      visit(e, paramToArgMap).asInstanceOf[IFormula]
+    }
+
+    override def postVisit(e: IExpression, paramToArgMap : Map[ITerm, ITerm], subres: Seq[IExpression]) : IExpression = {
+      e match {
+        case t : ITerm =>
+          val exp = paramToArgMap.getOrElse(t, t)
+          // NOTE: Check fixes so that expressions as args works (e.g foo(2+2)).
+          if (subres.isEmpty) exp else exp.update(subres)
+        case exp =>
+          exp.update(subres)
+      }
+    }
   }
 }

@@ -30,9 +30,6 @@
 package tricera.concurrency.ccreader
 
 import ap.parser.IFormula
-import ap.parser.ITerm
-import ap.parser.IExpression
-
 import ap.types.SortedConstantTerm
 import tricera.Util.SourceInfo
 import tricera.params.TriCeraParameters
@@ -81,8 +78,5 @@ class CCVar(val name    : String,
       case Some(info) if info.line >= 0 => lineNumberPrefix + info.line
       case _                            => ""
     }
-  }
-  def toConstantITerm : ITerm = {
-    IExpression.i(sort newConstant(name))
   }
 }
