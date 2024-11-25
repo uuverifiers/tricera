@@ -810,10 +810,10 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
           }
         } else {
           funCtx.getParams.find(v => v.name == ident) match {
-            case Some(v) => Some(v)
+            case Some(v) => // function parameters always refer to values in the pre state, see ACSL 2.3.1
+              funCtx.getOldVar(ident)
             case None => funCtx.getGlobals.find(v => v.name == ident) match {
-              case Some(v) if translationCtx.useOldValues
-                           || !translationCtx.inPostCondition =>
+              case Some(v) if !translationCtx.inPostCondition =>
                 Some(v)
               case Some(v) if translationCtx.inPostCondition =>
                 funCtx.getPostGlobalVar(v.name) match {
