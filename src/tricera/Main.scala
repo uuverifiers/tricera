@@ -49,6 +49,7 @@ import tricera.concurrency.ccreader.{CCVar, CCHeapPointer, CCHeapArrayPointer, C
 import lazabs.horn.preprocessor.HornPreprocessor
 import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
+import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -368,7 +369,7 @@ class Main (args: Array[String]) {
     // todo: add a switch for this, also benchmark/profile
     val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
       new java.io.FileReader(new java.io.File(ppFileName))))
-    val (reader, modelledHeapRes) =
+    val (reader, modelledHeapRes, callSiteTransforms) =
       try {
         CCReader(bufferedReader, funcName, propertiesToCheck)
       } catch {

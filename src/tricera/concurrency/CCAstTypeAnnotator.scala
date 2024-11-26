@@ -59,7 +59,7 @@ class CCAstTypeAnnotationData {
   }
 }
 
-/*
+/**
   Vistor to create a copy of an AST with EvarWithType nodes substituted for
   Evar nodes.
 */
@@ -89,7 +89,7 @@ class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] 
     result
   } 
 
-  /*
+  /**
     Add an entry in the symbol table for the defined function.
     Parse the body in function name scope.
   */
@@ -104,7 +104,7 @@ class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] 
     }
   }
 
-  /*
+  /**
     Add an entry in the symbol table for each declaration
     in the statement.
   */
@@ -140,7 +140,7 @@ class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] 
     super.visit(param, symTab)
   }
 
-  /*
+  /**
     Create an EvarWithType node for any Evar node.
   */
   override def visit(eVar: Evar, symTab: CCAstTypeAnnotationData): Exp = {
