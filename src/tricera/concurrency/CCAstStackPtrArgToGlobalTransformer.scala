@@ -441,7 +441,9 @@ object  CCAstStackPtrArgToGlobalTransformer {
   import CallSiteTransform.CallSiteTransforms
   def apply(program: Program, entryFunctionId: String) = {
     val transformer = new CCAstStackPtrArgToGlobalTransformer(entryFunctionId)
-    program.accept(transformer, new CallSiteTransforms)
+    val transforms = new CallSiteTransforms
+    val transformedProg = program.accept(transformer, transforms)
+    (transformedProg, transforms)
   }
 }
 

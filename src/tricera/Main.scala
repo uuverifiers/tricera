@@ -45,6 +45,7 @@ import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
 import tricera.parsers.YAMLParser._
+import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -363,7 +364,7 @@ class Main (args: Array[String]) {
     // todo: add a switch for this, also benchmark/profile
     val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
       new java.io.FileReader(new java.io.File(ppFileName))))
-    val (reader, modelledHeapRes) =
+    val (reader, modelledHeapRes, callSiteTransforms) =
       try {
         CCReader(bufferedReader, funcName, propertiesToCheck)
       } catch {
@@ -577,13 +578,24 @@ class Main (args: Array[String]) {
               println("="*80 + "\n")
             }
 
+            // SSSOWO: Populate ProgramAnnotations class with function
+            //   names to contracts (from solution)
+            //   Apply back translation on annotations
+            //   Q: We want the ACSL processors to operate on the
+            //      complete solution. And we want ACSL for functions whose
+            //      contract is the result of the meet operation. Isn't this
+            //      spot too early for creating program annotations and 
+            //      applying the meet operation on those here? Then this will
+            //      be ignored by the ACSL processors.
+
             val contexts = reader.getFunctionContexts
             val loopInvariants = reader.getLoopInvariants
             if ((displayACSL || log) &&
               (contexts.nonEmpty || loopInvariants.nonEmpty)) {
 
               val solutionProcessors = Seq(
-                ADTExploder
+                ADTExploder,
+                MergeTransformedFunctionsContracts(callSiteTransforms, contexts)
                 // add additional solution processors here
               )
               var processedSolution: SolutionProcessor.Solution = solution
@@ -597,7 +609,13 @@ class Main (args: Array[String]) {
 
               var printedACSLHeader = false
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
-              for ((fun, ctx) <- contexts
+
+              // SSSOWO: We are using function contexts here, but this refers to 
+              //   transformed functions. How do we solve it for a back translated
+              //   solution? Is it possible to "back translate" contexts? 
+              val ctxs = contexts.filter({ case (funcName, ctx) => MergeTransformedFunctionsContracts(callSiteTransforms, contexts).funcGroups.keySet.contains(funcName)})
+
+              for ((fun, ctx) <- ctxs
                    if maybeEnc.isEmpty ||
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {

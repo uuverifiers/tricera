@@ -64,7 +64,7 @@ object CCReader {
   def apply(input : java.io.Reader, entryFunction : String,
             propertiesToCheck : Set[properties.Property] = Set(
               properties.Reachability))
-  : (CCReader, Boolean) = { // second ret. arg is true if modelled heap
+  : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
 //    println(printer print prog)
@@ -72,7 +72,7 @@ object CCReader {
 
 // SSSOWO: start
     val typeAnnotProg = CCAstTypeAnnotator(prog)
-    val transformedCallsProg = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
+    val (transformedCallsProg, callSiteTransforms) = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
 
     val pp = new PrettyPrinterNonStatic()
     val prgStr = pp.print(prog)
@@ -95,7 +95,7 @@ object CCReader {
           modelHeap = true
         }
       }
-    (reader, modelHeap)
+    (reader, modelHeap, callSiteTransforms)
   }
 
   /**
