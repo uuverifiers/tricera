@@ -616,6 +616,21 @@ class CCReader private (prog              : Program,
                   f.listannotation_)
       }
     }
+    def apply(extDecl : External_declaration) : FuncDecl = {
+      extDecl match {
+        case af : Afunc => FuncDecl(af.function_def_)
+        case g : Global => g.dec_ match {
+          case a : AnnotatedFuncDeclarator =>
+            FuncDecl(None, a.declarator_,
+              getSourceInfo(a.declarator_),
+              Some(a.listdeclaration_specifier_),
+              a.listannotation_
+            )
+          case _ => throw new TranslationException("not yet implemented, this class was created" +
+                    "to deal with annotated function declarations")
+        }
+      }
+    }
   }
   // If function is only declared but not defined, no body exists
   case class FuncDecl(body : Option[Compound_stm],
@@ -872,9 +887,17 @@ class CCReader private (prog              : Program,
 
 
     globalPreconditions = globalPreconditions &&& globalVarSymex.getGuard
-
+    // distribute the same source info to all annotations
+    // todo: can we be more fine-grained? e.g., to pinpoint which post-condition is failing
+    def distributeSourceToAnnots(fun : FuncDecl, annots : Seq[Annotation]) = {
+      implicit def flattenAnnotationInfos(pair: (Seq[AnnotationInfo], SourceInfo)) :
+      Iterable[(AnnotationInfo, SourceInfo)] = pair._1.map(info => (info, pair._2))
+      (fun, (for (annot <- annots) yield {
+        (AnnotationParser(annot), getSourceInfo(annot))
+      }).flatten)
+    }
     // todo: what about functions without definitions? replace Afunc type
-    val functionAnnotations : Map[Afunc, Seq[(AnnotationInfo, SourceInfo)]] =
+    val functionAnnotations : Map[FuncDecl, Seq[(AnnotationInfo, SourceInfo)]] =
       prog.asInstanceOf[Progr].listexternal_declaration_.collect {
         case f : Afunc  =>
           val annots : Seq[Annotation] = f.function_def_ match {
@@ -882,49 +905,48 @@ class CCReader private (prog              : Program,
             case f: NewFuncInt    => f.listannotation_.toList
             case _: NewFunc       => Nil
           }
-          // distribute the same source info to all annotations
-          // todo: can we be more fine-grained? e.g., to pinpoint which post-condition is failing
-          implicit def flattenAnnotationInfos(pair: (Seq[AnnotationInfo], SourceInfo)) :
-          Iterable[(AnnotationInfo, SourceInfo)] =
-            pair._1.map(info => (info, pair._2))
-
-          (f, (for (annot <- annots) yield {
-            (AnnotationParser(annot), getSourceInfo(annot))
-          }).flatten)
+          distributeSourceToAnnots(FuncDecl(f), annots)
+        case g : Global if (g.dec_ match {
+                          case _ : AnnotatedFuncDeclarator => true
+                          case _ => false}) => {
+            val annots : Seq[Annotation] = g.dec_ match { //TODO: Avoid repeating match twice
+              case a : AnnotatedFuncDeclarator => a.listannotation_.toList
+            }
+            distributeSourceToAnnots(FuncDecl(g), annots)
+          }
       }.toMap
 
     // functions for which contracts should be generated
     // todo: generate contracts for ACSL annotated funs
-    val contractFuns : Seq[Afunc] =
+    val contractFuns : Seq[FuncDecl] =
       functionAnnotations.filter(_._2.exists(_._1 == ContractGen)).keys.toSeq
 
-    val funsThatMightHaveACSLContracts : Map[Afunc, Seq[(AnnotationInfo, SourceInfo)]] =
+    val funsThatMightHaveACSLContracts : Map[FuncDecl, Seq[(AnnotationInfo, SourceInfo)]] =
       functionAnnotations.filter(_._2.exists(_._1.isInstanceOf[MaybeACSLAnnotation]))
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
-      val funDef = FuncDecl(fun.function_def_)
       LocalVars.pushFrame
-      pushArguments(fun.function_def_)
+      pushArguments(fun)
       val functionParams = LocalVars getVarsInTopFrame
 
       val oldVars = allFormalVars map (v =>
         new CCVar(v.name + "_old", v.srcInfo, v.typ, v.storage))
       // the pre-condition: f_pre(preOldVars)
-      val prePred = newPred(funDef.name + "_pre", oldVars,
-        Some(getSourceInfo(fun)))
+      val prePred = newPred(fun.name + "_pre", oldVars,
+        Some(fun.sourceInfo))
 
       // the post-condition: f_post(oldVars, postGlobalVars, postResVar)
       // we first pass all current vars in context as old vars (oldVars)
       // then we pass all effected output vars (which are globals + resVar)
       val postGlobalVars = GlobalVars.vars map (v =>
         new CCVar(v.name + "_post", v.srcInfo, v.typ, v.storage))
-      val postResVar = getType(fun.function_def_) match {
+      val postResVar = getType(fun) match {
         case CCVoid => None
-        case _ => Some(new CCVar(funDef.name + "_res",
-          Some(funDef.sourceInfo), getType(fun.function_def_), AutoStorage)) // todo: clean this (and similar code) up a bit
+        case _ => Some(new CCVar(fun.name + "_res",
+          Some(fun.sourceInfo), getType(fun), AutoStorage)) // todo: clean this (and similar code) up a bit
       }
       val postVars = oldVars ++ postGlobalVars ++ postResVar
-      functionPostOldArgs.put(funDef.name, oldVars)
+      functionPostOldArgs.put(fun.name, oldVars)
 
       val prePredArgACSLNames = allFormalVars map (_.name)
       val postPredACSLArgNames =
@@ -937,8 +959,8 @@ class CCReader private (prog              : Program,
       val postGlobalVarsMap: Map[String, CCVar] =
         (GlobalVars.vars.map(_ name) zip postGlobalVars).toMap
 
-      val postPred = newPred(funDef.name + "_post", postVars,
-        Some(getSourceInfo(fun))) // todo: end line of fun?
+      val postPred = newPred(fun.name + "_post", postVars,
+        Some(fun.sourceInfo)) // todo: end line of fun?
 
       LocalVars.popFrame
 
@@ -996,7 +1018,7 @@ class CCReader private (prog              : Program,
         override val getStructMap: Map[IFunction, CCStruct] =
           structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
-        override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
+        override val annotationBeginSourceInfo : SourceInfo = fun.sourceInfo
 
         override val annotationNumLines : Int = // todo: this is currently incorrect - to be fixed!
           functionAnnotations(fun).head._1 match {
@@ -1007,14 +1029,14 @@ class CCReader private (prog              : Program,
 
       val funContext = new FunctionContext(prePred, postPred,
         new ReaderFunctionContext, prePredArgACSLNames, postPredACSLArgNames)
-      functionContexts += ((funDef.name, funContext))
+      functionContexts += ((fun.name, funContext))
     }
 
-    val annotatedFuns : Map[Afunc, FunctionContract] =
+    val annotatedFuns : Map[FuncDecl, FunctionContract] =
       for ((fun, annots) <- funsThatMightHaveACSLContracts;
         (annot, srcInfo) <- annots if annot.isInstanceOf[MaybeACSLAnnotation]) yield {
 
-        val name = getName(fun.function_def_)
+        val name = fun.name
         val funContext = functionContexts(name)
         val possibleACSLAnnotation = annot.asInstanceOf[MaybeACSLAnnotation]
         // todo: try / catch and print msg?
@@ -1035,64 +1057,68 @@ class CCReader private (prog              : Program,
     // ... and generate clauses for those functions
     for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
       import HornClauses._
+      f.body match {
+        case Some(b) => { //Body exists, create clauses
+          val name = f.name
+          val typ = getType(f)
+          val funContext = functionContexts(name)
+          val (prePred, postPred) = (funContext.prePred, funContext.postPred)
+          setPrefix(name)
 
-      val funDef = FuncDecl(f.function_def_)
-      val name = funDef.name
-      val typ = getType(f.function_def_)
-      val funContext = functionContexts(name)
-      val (prePred, postPred) = (funContext.prePred, funContext.postPred)
-      setPrefix(name)
+          LocalVars.pushFrame
+          val stm = pushArguments(f).get
 
-      LocalVars.pushFrame
-      val stm = pushArguments(f.function_def_)
+          val prePredArgs = allFormalVarTerms.toList
 
-      val prePredArgs = allFormalVarTerms.toList
+          for (v <- functionPostOldArgs(name)) LocalVars addVar v
 
-      for (v <- functionPostOldArgs(name)) LocalVars addVar v
+          val entryPred = newPred(Nil, Some(f.sourceInfo))
 
-      val entryPred = newPred(Nil, Some(getSourceInfo(f)))
+          val resVar = getResVar(typ)
+          val exitPred = newPred(resVar, Some(getLastSourceInfo(b)))
 
-      val resVar = getResVar(typ)
-      val exitPred = newPred(resVar, Some(getLastSourceInfo(funDef.body)))
+          output(addRichClause(
+            entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
+            Some(f.sourceInfo)))// todo: correct source info?
 
-      output(addRichClause(
-        entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
-        Some(funDef.sourceInfo)))// todo: correct source info?
+          val translator = FunctionTranslator(exitPred, name)
+          val finalPred = typ match {
+            case CCVoid =>
+              translator.translateNoReturn(stm, entryPred)
+              exitPred
+            case _          =>
+              translator.translateWithReturn(stm, entryPred)
+          }
 
-      val translator = FunctionTranslator(exitPred, name)
-      val finalPred = typ match {
-        case CCVoid =>
-          translator.translateNoReturn(stm, entryPred)
-          exitPred
-        case _          =>
-          translator.translateWithReturn(stm, entryPred)
+          val globalVarTerms : Seq[ITerm] = GlobalVars.formalVarTerms
+          val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
+            globalVarTerms ++ resVar.map(v => IConstant(v.term))
+
+          output(addRichClause(
+            postPred(postArgs) :-
+              exitPred(allFormalVarTerms ++ resVar.map(v => IConstant(v.term))),
+            Some(f.sourceInfo) // todo: get last line number of function
+          ))
+
+          if (timeInvariants nonEmpty)
+            throw new TranslationException(
+              "Contracts cannot be used for functions with time invariants")
+          if (clauses exists (_._2 != ParametricEncoder.NoSync))
+            throw new TranslationException(
+              "Contracts cannot be used for functions using communication channels")
+
+          functionClauses.put(name, functionClauses.getOrElse(name, Nil) ++ clauses)
+          functionAssertionClauses.put(name,
+            functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
+
+          clauses.clear
+          assertionClauses.clear
+
+          LocalVars popFrame
+        }
+        case None => //Nothing (no body so no clauses to create)
       }
 
-      val globalVarTerms : Seq[ITerm] = GlobalVars.formalVarTerms
-      val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
-        globalVarTerms ++ resVar.map(v => IConstant(v.term))
-
-      output(addRichClause(
-        postPred(postArgs) :-
-          exitPred(allFormalVarTerms ++ resVar.map(v => IConstant(v.term))),
-        Some(funDef.sourceInfo) // todo: get last line number of function
-      ))
-
-      if (timeInvariants nonEmpty)
-        throw new TranslationException(
-          "Contracts cannot be used for functions with time invariants")
-      if (clauses exists (_._2 != ParametricEncoder.NoSync))
-        throw new TranslationException(
-          "Contracts cannot be used for functions using communication channels")
-
-      functionClauses.put(name, functionClauses.getOrElse(name, Nil) ++ clauses)
-      functionAssertionClauses.put(name,
-        functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
-
-      clauses.clear
-      assertionClauses.clear
-
-      LocalVars popFrame
     }
 
     // then translate the threads
@@ -1156,7 +1182,7 @@ class CCReader private (prog              : Program,
           val exitVar = getResVar(returnType)
           val exitPred = newPred(exitVar, Some(getLastSourceInfo(f.body.get)))
 
-          val stm = pushArguments(funDef)
+          val stm = pushArguments(f).get //We assume entry function has body
 
           val translator = FunctionTranslator(exitPred, f.name)
 
@@ -1342,6 +1368,29 @@ class CCReader private (prog              : Program,
   def collectVarDecls(dec      : Dec,
                       isGlobal : Boolean) : Seq[CCDeclaration] = {
     dec match {
+      //A bit code duplication here with below, not ideal
+      case annFunDecl : AnnotatedFuncDeclarator => {
+        val specType = getType(annFunDecl.listdeclaration_specifier_)
+        val isStatic = annFunDecl.listdeclaration_specifier_.exists {
+          case s : Storage =>
+            s.storage_class_specifier_.isInstanceOf[LocalProgram]
+          case _ => false
+        }
+        val name = getName(annFunDecl.declarator_)
+        val (typeWithPtrs, directDecl) = annFunDecl.declarator_ match {
+          case decl: NoPointer =>
+            (specType, decl.direct_declarator_)
+          case decl: BeginPointer =>
+            (getPtrType(decl.pointer_, specType), decl.direct_declarator_)
+        }
+        directDecl match {
+          // function declaration
+          case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
+            Seq(CCFunctionDeclaration(name, typeWithPtrs, directDecl,
+              getSourceInfo(annFunDecl.declarator_)))
+          case _ => throw new TranslationException("annotated declarations can only be function declarations")
+        }
+      }
       case decl: Declarators => {
         // S D1, D2, D3, ...
         // in C, the type of a variable is the spec type that can be further
@@ -2198,15 +2247,19 @@ private def collectVarDecls(dec                    : Dec,
     typ
   }
 
-  private def getType(functionDef : Function_def) : CCType = {
-    val f = FuncDecl(functionDef)
+  private def getType(f : FuncDecl) : CCType = {
     val typ = f.declSpecs match {
       case Some(listDeclSpecs) =>
-        getType(listDeclSpecs)
+      getType(listDeclSpecs)
       case None => CCInt
     }
     if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // todo: can be stack pointer too, this needs to be fixed
     else typ
+  }
+
+  private def getType(functionDef : Function_def) : CCType = {
+    val f = FuncDecl(functionDef)
+    getType(f)
   }
 
   private def translateClockValue(expr : CCExpr) : CCExpr = {
@@ -3816,8 +3869,10 @@ private def collectVarDecls(dec                    : Dec,
 //          assert(!(pointerArgs exists (_.isInstanceOf[CCStackPointer])),
 //                 "function contracts do not support pointer arguments yet")
 
-          val funDef = functionDefs(name)
-
+          val funType = functionDefs.get(name) match {
+            case Some(fd) => getType(fd)
+            case None => functionDecls.get(name).get._2
+          }
           var argTerms : List[ITerm] = List()
           for (_ <- 0 until argCount)
             argTerms = popVal.toTerm :: argTerms
@@ -3841,7 +3896,7 @@ private def collectVarDecls(dec                    : Dec,
 
           val prePredArgs : Seq[ITerm] = globals ++ argTerms
 
-          val resVar : Seq[CCVar] = getResVar(getType(funDef))
+          val resVar : Seq[CCVar] = getResVar(funType)
           val postPredArgs : Seq[ITerm] =
             prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
             //postGlobalVars ++ argTerms ++ globals ++ resVar.map(c => IConstant(c.term))
@@ -4015,7 +4070,7 @@ private def collectVarDecls(dec                    : Dec,
                              isNoReturn : Boolean,
                              functionName : String) : Unit = {
     LocalVars pushFrame
-    val stm = pushArguments(functionDef, args)
+    val stm = pushArguments(FuncDecl(functionDef), args).get
 
     // this might be an inlined function in an expression where we need to
     // carry along other terms that were generated in the expression, so this
@@ -4073,9 +4128,9 @@ private def collectVarDecls(dec                    : Dec,
   }
 
   // todo: refactor this to separate parsing and pushing
-  private def pushArguments(functionDef : Function_def,
-                            pointerArgs : List[CCType] = Nil) : Compound_stm = {
-    val f = FuncDecl(functionDef)
+  private def pushArguments(f : FuncDecl,
+                            pointerArgs : List[CCType] = Nil) : Option[Compound_stm] = {
+    // val f = FuncDecl(functionDecl)
     val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
@@ -4132,7 +4187,7 @@ private def collectVarDecls(dec                    : Dec,
       case dec : OldFuncDec =>
         // arguments are not specified ...
     }
-    f.body.get
+    f.body
   }
 
   //////////////////////////////////////////////////////////////////////////////
