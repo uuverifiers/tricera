@@ -597,27 +597,28 @@ class CCReader private (prog              : Program,
     str.substring(2, str.length-2) // removes the annotation markers
   }
 
-  object FuncDef {
-    def apply(funDef : Function_def) : FuncDef = {
+  object FuncDecl {
+    def apply(funDef : Function_def) : FuncDecl = {
       funDef match {
         case f : NewFunc =>
-          FuncDef(f.compound_stm_, f.declarator_,
+          FuncDecl(Some(f.compound_stm_), f.declarator_,
                   getSourceInfo(f),
                   Some(f.listdeclaration_specifier_),
                   Nil)
         case f : NewFuncInt =>
-          FuncDef(f.compound_stm_, f.declarator_,
+          FuncDecl(Some(f.compound_stm_), f.declarator_,
                   getSourceInfo(f), None,
                   f.listannotation_)
         case f : AnnotatedFunc =>
-          FuncDef(f.compound_stm_, f.declarator_,
+          FuncDecl(Some(f.compound_stm_), f.declarator_,
                   getSourceInfo(f),
                   Some(f.listdeclaration_specifier_),
                   f.listannotation_)
       }
     }
   }
-  case class FuncDef(body : Compound_stm,
+  // If function is only declared but not defined, no body exists
+  case class FuncDecl(body : Option[Compound_stm],
                      decl : Declarator,
                      sourceInfo : SourceInfo,
                      declSpecs : Option[ListDeclaration_specifier] = None,
@@ -629,7 +630,7 @@ class CCReader private (prog              : Program,
     decl match {
       case decl: Global => collectStructDefs(decl.dec_)
       case fun: Afunc =>
-        val comp = FuncDef(fun.function_def_).body
+        val comp = FuncDecl(fun.function_def_).body.get
         collectStructDefsFromComp(comp)
       case thread : Athread =>
         val comp = thread.thread_def_ match {
@@ -822,8 +823,8 @@ class CCReader private (prog              : Program,
     for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_) {
       val funNameAndBody : Option[(String, Compound_stm)] = decl match {
         case decl : Afunc =>
-          val funcDef = FuncDef(decl.function_def_)
-          Some(funcDef.name, funcDef.body)
+          val funcDef = FuncDecl(decl.function_def_)
+          Some(funcDef.name, funcDef.body.get)
         case decl : Athread =>
           val name = getName(decl.thread_def_)
           val body = decl.thread_def_ match {
@@ -901,7 +902,7 @@ class CCReader private (prog              : Program,
       functionAnnotations.filter(_._2.exists(_._1.isInstanceOf[MaybeACSLAnnotation]))
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
-      val funDef = FuncDef(fun.function_def_)
+      val funDef = FuncDecl(fun.function_def_)
       LocalVars.pushFrame
       pushArguments(fun.function_def_)
       val functionParams = LocalVars getVarsInTopFrame
@@ -972,19 +973,19 @@ class CCReader private (prog              : Program,
 
         def sortGetter(s: Sort): Option[MonoSortedIFunction] =
           sortGetterMap.get(s)
-        
+
         def wrapperSort(wrapper: IFunction): Option[Sort] = wrapper match {
-          case w: MonoSortedIFunction => 
+          case w: MonoSortedIFunction =>
             wrapperSortMap.get(w)
           case _ => None
         }
 
         def getterSort(getter: IFunction): Option[Sort] = getter match {
-          case g: MonoSortedIFunction => 
+          case g: MonoSortedIFunction =>
             getterSortMap.get(g)
           case _ => None
         }
-      
+
         def getTypOfPointer(t: CCType): CCType = t match {
           case p: CCHeapPointer => p.typ
           case t => t
@@ -992,7 +993,7 @@ class CCReader private (prog              : Program,
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        override val getStructMap: Map[IFunction, CCStruct] = 
+        override val getStructMap: Map[IFunction, CCStruct] =
           structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
         override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
@@ -1035,7 +1036,7 @@ class CCReader private (prog              : Program,
     for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
       import HornClauses._
 
-      val funDef = FuncDef(f.function_def_)
+      val funDef = FuncDecl(f.function_def_)
       val name = funDef.name
       val typ = getType(f.function_def_)
       val funContext = functionContexts(name)
@@ -1143,17 +1144,17 @@ class CCReader private (prog              : Program,
 
           LocalVars pushFrame
 
-          val f = FuncDef(funDef)
+          val f = FuncDecl(funDef)
 
           val returnType = {
-            FuncDef(funDef).declSpecs match {
+            FuncDecl(funDef).declSpecs match {
               case Some(declSpec) => getType(declSpec)
               case None => CCVoid
             }
           }
 
           val exitVar = getResVar(returnType)
-          val exitPred = newPred(exitVar, Some(getLastSourceInfo(f.body)))
+          val exitPred = newPred(exitVar, Some(getLastSourceInfo(f.body.get)))
 
           val stm = pushArguments(funDef)
 
@@ -1277,6 +1278,7 @@ class CCReader private (prog              : Program,
       }
       case preddecl : PredDeclarator => // nothing
       case interpPredDecl : InterpPredDeclarator => // nothing
+      case annotdecl : AnnotatedFuncDeclarator => //nothing
     }
   }
 
@@ -1781,7 +1783,7 @@ private def collectVarDecls(dec                    : Dec,
           }
     }
 
-  private def getName (f : Function_def) : String = getName(FuncDef(f).decl)
+  private def getName (f : Function_def) : String = getName(FuncDecl(f).decl)
   private def getName (t : Thread_def) : String = t match {
     case decl : SingleThread => decl.cident_
     case decl : ParaThread => decl.cident_2
@@ -2197,7 +2199,7 @@ private def collectVarDecls(dec                    : Dec,
   }
 
   private def getType(functionDef : Function_def) : CCType = {
-    val f = FuncDef(functionDef)
+    val f = FuncDecl(functionDef)
     val typ = f.declSpecs match {
       case Some(listDeclSpecs) =>
         getType(listDeclSpecs)
@@ -3889,7 +3891,7 @@ private def collectVarDecls(dec                    : Dec,
           val exitVar =
             if (isNoReturn) Nil
             else List(new CCVar("_" + name + "Ret", None, typ, AutoStorage)) // todo: return line no?
-          val srcInfo = Some(FuncDef(fundef).sourceInfo)
+          val srcInfo = Some(FuncDecl(fundef).sourceInfo)
           val functionExit = newPred(exitVar, srcInfo) // todo: return line no?
 
           inlineFunction(fundef, functionEntry, functionExit, pointerArgs,
@@ -4044,7 +4046,7 @@ private def collectVarDecls(dec                    : Dec,
     }
 
   private def getFunctionArgNames(functionDef : Function_def) : Seq[String] = {
-    val f = FuncDef(functionDef)
+    val f = FuncDecl(functionDef)
     val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
@@ -4073,7 +4075,7 @@ private def collectVarDecls(dec                    : Dec,
   // todo: refactor this to separate parsing and pushing
   private def pushArguments(functionDef : Function_def,
                             pointerArgs : List[CCType] = Nil) : Compound_stm = {
-    val f = FuncDef(functionDef)
+    val f = FuncDecl(functionDef)
     val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
@@ -4130,7 +4132,7 @@ private def collectVarDecls(dec                    : Dec,
       case dec : OldFuncDec =>
         // arguments are not specified ...
     }
-    f.body
+    f.body.get
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -4358,16 +4360,16 @@ private def collectVarDecls(dec                    : Dec,
               sortGetterMap get s
             override def wrapperSort(wrapper: IFunction): Option[Sort] =
               wrapper match {
-                case w: MonoSortedIFunction => 
+                case w: MonoSortedIFunction =>
                   wrapperSortMap.get(w)
                 case _ => None
               }
             override def getterSort(getter: IFunction): Option[Sort] =
               getter match {
-                case g: MonoSortedIFunction => 
+                case g: MonoSortedIFunction =>
                   getterSortMap.get(g)
                 case _ => None
-              } 
+              }
 
             override def getCtor(s: Sort): Int = sortCtorIdMap(s)
             override def getTypOfPointer(t: CCType): CCType =
@@ -4388,7 +4390,7 @@ private def collectVarDecls(dec                    : Dec,
               else throw new TranslationException("getOldHeapTerm called with no heap!")
             } // todo: heap term for exit predicate?
 
-            override val getStructMap: Map[IFunction, CCStruct] = 
+            override val getStructMap: Map[IFunction, CCStruct] =
               structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
@@ -4444,16 +4446,16 @@ private def collectVarDecls(dec                    : Dec,
               sortGetterMap get s
             override def wrapperSort(wrapper: IFunction): Option[Sort] =
               wrapper match {
-                case w: MonoSortedIFunction => 
+                case w: MonoSortedIFunction =>
                   wrapperSortMap.get(w)
                 case _ => None
               }
             override def getterSort(getter: IFunction): Option[Sort] =
               getter match {
-                case g: MonoSortedIFunction => 
+                case g: MonoSortedIFunction =>
                   getterSortMap.get(g)
                 case _ => None
-              } 
+              }
             override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
             override def getTypOfPointer(t : CCType) : CCType =
               t match {
@@ -4469,8 +4471,8 @@ private def collectVarDecls(dec                    : Dec,
               else throw NeedsHeapModelException
             override def getOldHeapTerm : ITerm =
               getHeapTerm // todo: heap term for exit predicate?
-            
-            override val getStructMap: Map[IFunction, CCStruct] = 
+
+            override val getStructMap: Map[IFunction, CCStruct] =
               structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
