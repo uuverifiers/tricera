@@ -49,7 +49,7 @@ class CCReaderCollectVarDecls extends AnyFlatSpec {
   // arithmetic mode must be implicitly declared for the correct types
   // would need to be changed or scoped to test different arith. modes
 
-  val (reader, modelledHeap) = CCReader(input = testFileReader,
+  val (reader, modelledHeap, transforms) = CCReader(input = testFileReader,
                                         entryFunction = "main")
 
   private def testCollectVarDeclsNoInit(dec : String,

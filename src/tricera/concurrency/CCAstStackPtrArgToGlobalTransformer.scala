@@ -227,7 +227,9 @@ class CallSiteTransform(
         wrapperDec.toAfunc(createWrapperBody()),
         transDec.toGlobal(),
         transDec.toAfunc(addAnnotationMarkers("contract"), body),
-        globalVariableDeclarations())
+        globalVariableDeclarations(),
+        globalVariableIdsToParameterIds(),
+        MHashMap((transDec.getId() -> originalFuncName)))
 
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))
     }
@@ -260,6 +262,12 @@ class CallSiteTransform(
       globals.add(toGlobalDeclaration(param).toGlobal())
     }
     globals
+  }
+
+  private def globalVariableIdsToParameterIds() = {
+    val mapping = new MHashMap[String, String]
+    removedParams.asScala.foreach(p => mapping.put(toGlobalDeclaration(p).getId(), p.accept(getName,())))
+    mapping
   }
 
   private def toGlobalDeclaration(param: Parameter_declaration) = {
@@ -399,13 +407,17 @@ object AstAddition {
     wrapperDefinition: External_declaration,
     transformedDeclaration: External_declaration,
     transformedDefinition: External_declaration,
-    introducedGlobalVariables: ListExternal_declaration): AstAddition = {
+    introducedGlobalVariables: ListExternal_declaration,
+    globalVariableIdToParameterId: MHashMap[String, String],
+    transformedFunctionIdToOriginalId: MHashMap[String, String]): AstAddition = {
     val addition = new AstAddition
     addition.transformedFunctionDefinitions.put(transformedDefinition.accept(getName, ()), transformedDefinition)
     addition.transformedFunctionDeclarations.put(transformedDeclaration.accept(getName, ()), transformedDeclaration)
     addition.wrapperDeclarations.put(wrapperDeclaration.accept(getName, ()), wrapperDeclaration)
     addition.wrapperDefinitions.put(wrapperDefinition.accept(getName, ()), wrapperDefinition)
     introducedGlobalVariables.asScala.foreach(g => addition.introducedGlobalVariables.put(g.accept(getName, ()), g))
+    addition.globalVariableIdToParameterId ++= globalVariableIdToParameterId
+    addition.transformedFunctionIdToOriginalId ++= transformedFunctionIdToOriginalId
     addition
   }
 }
@@ -415,7 +427,9 @@ class AstAddition(
   val wrapperDefinitions: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
   val transformedFunctionDeclarations: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
   val transformedFunctionDefinitions: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
-  val introducedGlobalVariables: MHashMap[String, External_declaration] = MHashMap[String, External_declaration]()) {
+  val introducedGlobalVariables: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
+  val globalVariableIdToParameterId: MHashMap[String, String] = MHashMap[String, String](),
+  val transformedFunctionIdToOriginalId: MHashMap[String, String] = MHashMap[String, String]()) {
 
   def +(that: AstAddition) = {
     new AstAddition(
@@ -423,7 +437,9 @@ class AstAddition(
       this.wrapperDefinitions ++ that.wrapperDefinitions,
       this.transformedFunctionDeclarations ++ that.transformedFunctionDeclarations,
       this.transformedFunctionDefinitions ++ that.transformedFunctionDefinitions,
-      this.introducedGlobalVariables ++ that.introducedGlobalVariables)
+      this.introducedGlobalVariables ++ that.introducedGlobalVariables,
+      this.globalVariableIdToParameterId ++ that.globalVariableIdToParameterId,
+      this.transformedFunctionIdToOriginalId ++ that.transformedFunctionIdToOriginalId)
   }
 
   def +=(that: AstAddition) = {
@@ -432,6 +448,8 @@ class AstAddition(
     this.transformedFunctionDeclarations ++= that.transformedFunctionDeclarations
     this.transformedFunctionDefinitions ++= that.transformedFunctionDefinitions
     this.introducedGlobalVariables ++= that.introducedGlobalVariables
+    this.globalVariableIdToParameterId ++= that.globalVariableIdToParameterId
+    this.transformedFunctionIdToOriginalId ++= that.transformedFunctionIdToOriginalId
     this
   }
 }
@@ -489,16 +507,20 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String) extends C
     }
 
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
-    val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
 
-    val additions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
+    if (callSiteTransforms.nonEmpty) {
+      val additions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
 
-    declarations.addAll(mainDefIndex, additions.wrapperDefinitions.map(i => i._2).asJavaCollection)
-    declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions.map(i => i._2).asJavaCollection)
-    declarations.addAll(mainDefIndex, additions.wrapperDeclarations.map(i => i._2).asJavaCollection)
-    declarations.addAll(mainDefIndex, additions.introducedGlobalVariables.map(i => i._2).asJavaCollection)
+      val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
+      declarations.addAll(mainDefIndex, additions.wrapperDefinitions.map(i => i._2).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions.map(i => i._2).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.wrapperDeclarations.map(i => i._2).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables.map(i => i._2).asJavaCollection)
 
-    return new Progr(declarations);
+      new Progr(declarations);
+    } else {
+      progr
+    }
   }
 
   override def visit(func: Afunc, transforms: CallSiteTransforms): External_declaration = {
