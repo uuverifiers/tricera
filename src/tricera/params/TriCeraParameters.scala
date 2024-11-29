@@ -123,7 +123,7 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  private val version = "0.3.1-sssowo"
+  private val version = "0.3.2-alpha"
 
   private val greeting =
     "TriCera v" + version + ".\n(C) Copyright " +

@@ -588,14 +588,13 @@ class Main (args: Array[String]) {
             //      applying the meet operation on those here? Then this will
             //      be ignored by the ACSL processors.
 
-            val contexts = reader.getFunctionContexts
+            var contexts = reader.getFunctionContexts
             val loopInvariants = reader.getLoopInvariants
             if ((displayACSL || log) &&
               (contexts.nonEmpty || loopInvariants.nonEmpty)) {
 
               val solutionProcessors = Seq(
-                ADTExploder,
-                MergeTransformedFunctionsContracts(callSiteTransforms, contexts)
+                ADTExploder
                 // add additional solution processors here
               )
               var processedSolution: SolutionProcessor.Solution = solution
@@ -607,15 +606,19 @@ class Main (args: Array[String]) {
                   processor(processedSolution)() // will process all predicates
               }
 
+              val (mergedSolution, ctxs) = MergeTransformedFunctionsContracts(callSiteTransforms, contexts, processedSolution)
+              contexts = ctxs
+              processedSolution = mergedSolution
+
               var printedACSLHeader = false
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
 
               // SSSOWO: We are using function contexts here, but this refers to 
               //   transformed functions. How do we solve it for a back translated
               //   solution? Is it possible to "back translate" contexts? 
-              val ctxs = contexts.filter({ case (funcName, ctx) => MergeTransformedFunctionsContracts(callSiteTransforms, contexts).funcGroups.keySet.contains(funcName)})
+              //val ctxs = contexts.filter({ case (funcName, ctx) => MergeTransformedFunctionsContracts(callSiteTransforms, contexts).funcGroups.keySet.contains(funcName)})
 
-              for ((fun, ctx) <- ctxs
+              for ((fun, ctx) <- contexts
                    if maybeEnc.isEmpty ||
                       !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
                       !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {

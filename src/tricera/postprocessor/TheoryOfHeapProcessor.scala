@@ -46,7 +46,7 @@ import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.Heap
 import ap.theories.Heap.HeapFunExtractor
 import ContractConditionType._
-import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
+// import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 import ap.types.Sort
 
 object TheoryOfHeapProcessor

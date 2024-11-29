@@ -48,7 +48,7 @@ import ap.theories.Heap
 import ap.theories.Theory
 import ContractConditionType._
 import ap.types.MonoSortedIFunction
-import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
+// import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 
 object ACSLExpressionProcessor
     extends ContractProcessor {
