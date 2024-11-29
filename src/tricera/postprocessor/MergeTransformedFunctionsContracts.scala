@@ -51,6 +51,12 @@ private class MergableContract(
       globalToParam.getOrElse(nameNoSuffix, nameNoSuffix) + suffix
     }
 
+    def lookupOld(name: String) = {
+      val suffix = name.substring(name.lastIndexOf("_"))
+      val nameNoSuffix = name.stripSuffix(suffix)
+      globalToParam.getOrElse(nameNoSuffix, nameNoSuffix) + "_old"
+    }
+
     def mapPrePredVars() = {
       val ctxArgNameToIndex = targetCtx.prePred.argVars.map(v => v.name).zipWithIndex.toMap
 
@@ -100,13 +106,18 @@ private class MergableContract(
         val p = lookup(name)
         ctxArgNameToIndex.get(lookup(name)) match {
           case Some(i) => printlnDebug(f"${ix} -> name: ${name} -> param: ${p} -> ${i}")
-          case None => assert(false, f"Missing predicate argument ${p}")
+          case None => ctxArgNameToIndex.get(lookupOld(name)) match {
+            case Some(i) => printlnDebug(f"${ix} -> name: ${name} -> param: ${p} -> ${i}")
+            case None => assert(false, f"Missing predicate argument ${p}")
+          }
         }
       }
 
       val predVarShifts = funcContext.postPred.argVars
         .zipWithIndex
-        .map({ case (v, i) => ctxArgNameToIndex(lookup(v.name))-i })
+        .map({ case (v, i) => 
+            ctxArgNameToIndex.getOrElse(lookup(v.name),
+              ctxArgNameToIndex(lookupOld(v.name)))-i })
         .toList
 
       predVarShifts.foreach(i => printlnDebug(f"diff: ${i}"))
