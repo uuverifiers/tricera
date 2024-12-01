@@ -1,0 +1,17 @@
+
+/*@
+  ensures *p == \old(*q) && *q == \old(*p);
+*/
+void swap(int *p, int *q);
+
+extern int non_det_int();
+
+void main() {
+  int *x = malloc(sizeof(int));
+  int *y = malloc(sizeof(int));
+  *x = non_det_int();
+  *y = non_det_int();
+  assume(*x > 0 && *y < 0);
+  swap(x, y);
+  assert(*x < 0 && *y > 0);
+}
