@@ -35,6 +35,9 @@ private class MergableContract(
   private var postPredArgIndexToName = 
     funcContext.postPred.argVars.zipWithIndex.map({ case (v, i) => (i, v.name) }).toMap
 
+  private var postPredArgNameToIndex = 
+    funcContext.postPred.argVars.zipWithIndex.map({ case (v, i) => (v.name, i) }).toMap
+
   /**
     * Map contract from one function context to another.
     * 
@@ -58,21 +61,21 @@ private class MergableContract(
     }
 
     def mapPrePredVars() = {
-      val ctxArgNameToIndex = targetCtx.prePred.argVars.map(v => v.name).zipWithIndex.toMap
+      val targetCtxArgNameToIndex = targetCtx.prePred.argVars.map(v => v.name).zipWithIndex.toMap
 
-      printlnDebug("# mapTo 1 ############################################")
+      printlnDebug("# prePred: prePredArgIndexToName ############################################")
       for ((key, value) <- prePredArgIndexToName) {
           printlnDebug(f"key: ${key} -> value: ${value}")
       }
       
-      printlnDebug("# mapTo 2 ############################################")
-      for ((key, value) <- ctxArgNameToIndex) {
+      printlnDebug("# prePred: targetCtxArgNameToIndex mapTo 2 ############################################")
+      for ((key, value) <- targetCtxArgNameToIndex) {
           printlnDebug(f"key: ${key} -> value: ${value}")
       }
 
       for ((ix, name) <- prePredArgIndexToName) {
         val p = lookup(name)
-        ctxArgNameToIndex.get(lookup(name)) match {
+        targetCtxArgNameToIndex.get(lookup(name)) match {
           case Some(i) => printlnDebug(f"${ix} -> name: ${name} -> param: ${p} -> ${i}")
           case None => assert(false, f"Missing predicate argument ${p}")
         }
@@ -80,7 +83,7 @@ private class MergableContract(
 
       val predVarShifts = funcContext.prePred.argVars
         .zipWithIndex
-        .map({ case (v, i) => ctxArgNameToIndex(lookup(v.name))-i })
+        .map({ case (v, i) => targetCtxArgNameToIndex(lookup(v.name))-i })
         .toList
 
       predVarShifts.foreach(i => printlnDebug(f"diff: ${i}"))
@@ -92,12 +95,12 @@ private class MergableContract(
       val ctxArgNameToIndex = targetCtx.postPred.argVars.map(v => v.name).zipWithIndex.toMap
 
 
-      printlnDebug("# mapTo 3 ############################################")
+      printlnDebug("# postPred: postPredArgIndexToName mapTo 3 ############################################")
       for ((key, value) <- postPredArgIndexToName) {
           printlnDebug(f"key: ${key} -> value: ${value}")
       }
       
-      printlnDebug("# mapTo 4 ############################################")
+      printlnDebug("# postPred: ctxArgNameToIndex mapTo 4 ############################################")
       for ((key, value) <- ctxArgNameToIndex) {
           printlnDebug(f"key: ${key} -> value: ${value}")
       }
@@ -107,7 +110,7 @@ private class MergableContract(
         ctxArgNameToIndex.get(lookup(name)) match {
           case Some(i) => printlnDebug(f"${ix} -> name: ${name} -> param: ${p} -> ${i}")
           case None => ctxArgNameToIndex.get(lookupOld(name)) match {
-            case Some(i) => printlnDebug(f"${ix} -> name: ${name} -> param: ${p} -> ${i}")
+            case Some(i) => printlnDebug(f"${ix} -> name: ${name} -> param: ${lookupOld(name)} -> ${i}")
             case None => assert(false, f"Missing predicate argument ${p}")
           }
         }
@@ -122,7 +125,7 @@ private class MergableContract(
 
       predVarShifts.foreach(i => printlnDebug(f"diff: ${i}"))
 
-      VariablePermVisitor(pre, IVarShift(predVarShifts, 0))
+      VariablePermVisitor(post, IVarShift(predVarShifts, 0))
     }
     
     MergableContract(funcContext, mapPrePredVars(), mapPostPredVars())
@@ -135,8 +138,35 @@ private class MergableContract(
    * @param other Contract to meet with
    */
   def meet(other: MergableContract): MergableContract = {
+    val preToPostIndexShifts = 
+      prePredArgIndexToName
+        .mapValues(name => postPredArgNameToIndex(name))
+        .toList.map({ case (preIndex, postIndex) => postIndex - preIndex})
+
+    printlnDebug("# meet #########################")
+    printlnDebug("Pre index to name:")
+    for ((index, name) <- prePredArgIndexToName) {
+      printlnDebug(f"${index} -> ${name}")
+    }
+    printlnDebug("Post name to index:")
+    for ((name, index) <- postPredArgNameToIndex) {
+      printlnDebug(f"${name} -> ${index}")
+    }
+    printlnDebug(f"Shift list: ${preToPostIndexShifts.toString()}")
+    
+//    for (shift <- preToPostIndexShifts) {
+//      printlnDebug(f"")
+//    }
+
+    def preToPostIndex(formula: IFormula) = {
+      VariablePermVisitor(formula, IVarShift(preToPostIndexShifts, 0))
+    }
+
     val newPrePredFormula = pre ||| other.pre
-    val newPostPredFormula = (pre ===> post) &&& (other.pre ===> other.post)
+    val newPostPredFormula = 
+      (preToPostIndex(pre) ===> post) &&& (preToPostIndex(other.pre) ===> other.post)
+    printlnDebug(f"PRE: ${pre.toString} ||| ${other.pre} = ${newPrePredFormula.toString}")
+    printlnDebug(f"POST ${(preToPostIndex(pre) ==> post).toString()} & ${(preToPostIndex(other.pre) ==> other.post)} = ${newPostPredFormula.toString}")
     new MergableContract(funcContext, newPrePredFormula, newPostPredFormula)
   }
 }

@@ -587,6 +587,9 @@ class Main (args: Array[String]) {
             //      spot too early for creating program annotations and 
             //      applying the meet operation on those here? Then this will
             //      be ignored by the ACSL processors.
+            //   A: No. The ACSL processors only work on pre/post-conditions.
+            //      They could equally well work on annotations as long as
+            //      they contain formulas.
 
             var contexts = reader.getFunctionContexts
             val loopInvariants = reader.getLoopInvariants
@@ -607,8 +610,8 @@ class Main (args: Array[String]) {
               }
 
               val (mergedSolution, ctxs) = MergeTransformedFunctionsContracts(callSiteTransforms, contexts, processedSolution)
-              contexts = ctxs
-              processedSolution = mergedSolution
+//              contexts = ctxs
+//              processedSolution = mergedSolution
 
               var printedACSLHeader = false
               // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
