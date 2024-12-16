@@ -201,5 +201,8 @@ object ToInvariantFormVisitor
         ISortedVariable(index - quantifierIds.size, sort)
       }
     case _ => t update (subres)
+    // SSSOWO: Variables are shifted, but the IVariableBinder is
+    //   never removed. Seems to me any binder in scope will bind
+    //   new variables. Is this correct?
   }
 }

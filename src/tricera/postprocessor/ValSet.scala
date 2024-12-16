@@ -225,6 +225,9 @@ object ValSetReader {
       extends CollectingVisitor[Unit, ValSet]
       with ExpressionUtils {
 
+    // SSSOWO: The de Bruijn version disregards disjunctions,
+    //   should this do the same? If not, why not?
+
     override def postVisit(
         t: IExpression,
         arg: Unit,

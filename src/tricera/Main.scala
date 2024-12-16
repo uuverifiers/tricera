@@ -46,6 +46,9 @@ import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
 import tricera.parsers.YAMLParser._
 
+import lazabs.horn.preprocessor.HornPreprocessor
+import tricera.postprocessor.SolutionProcessor
+
 ////////////////////////////////////////////////////////////////////////////////
 
 object Main {
@@ -513,254 +516,281 @@ class Main (args: Array[String]) {
         }
       }
 
-    val result = verificationLoop.result
+    def toTriceraResult(
+      reader: CCReader,
+      result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
+      : Result = {
+
+      def replacePredVarWithFunctionParam(formula: IFormula, funcParameters: Seq[String]): IFormula = {
+        VariableSubstVisitor.visit(
+          formula, (funcParameters.map(p => IConstant(new ConstantTerm(p))).toList, 0))
+        .asInstanceOf[IFormula]
+      }
+
+      def toFunctionInvariants(ctx: CCReader.FunctionContext, solution: SolutionProcessor.Solution) = {
+        FunctionInvariants(
+          replacePredVarWithFunctionParam(solution(ctx.prePred.pred), ctx.prePred.argVars.map(v => v.name)),
+          replacePredVarWithFunctionParam(solution(ctx.postPred.pred), ctx.postPred.argVars.map(v => v.name)),
+          List())
+      }
+
+      result match {
+        case Left(Some(solution)) =>
+          // SSSOWO TODO: Add loop invariants.
+          Solution(
+            reader.getFunctionContexts.map(
+              {case (funcId, ctx) => (funcId, toFunctionInvariants(ctx, solution))}))
+        case Left(None) => Empty()
+        case Right(cex) => CounterExample(cex)
+      }
+    }
+
+    val result = toTriceraResult(reader, verificationLoop.result)
 
     if (printIntermediateClauseSets || dumpSimplifiedClauses ||
         printHornSimplified || printHornSimplifiedSMT)
       return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
     val executionResult = result match {
-      case Left(res) =>
-        res match {
-          case Some(solution) =>
-            import tricera.postprocessor._
-            import lazabs.horn.global._
-            import lazabs.horn.bottomup.HornPredAbs
-            import lazabs.ast.ASTree.Parameter
+      case solution: Solution => 
+        import tricera.postprocessor._
+        import lazabs.horn.global._
+        import lazabs.horn.bottomup.HornPredAbs
+        import lazabs.ast.ASTree.Parameter
 
-            def clausifySolution(predAndSol  : (Predicate, IFormula),
-                                 argNames    : Seq[String],
-                                 newPredName : Option[String] = None) : Clause = {
-              val (pred, sol) = predAndSol
-              val predArgs = for (predArgName <- argNames) yield
-                IConstant(new ConstantTerm(predArgName))
-              val constraint  = VariableSubstVisitor.visit(
-                sol, (predArgs.toList, 0)).asInstanceOf[IFormula]
-              val newPred = newPredName match {
-                case Some(newName) => new Predicate(newName, pred.arity)
-                case None => pred
+        def clausifySolution(predAndSol  : (Predicate, IFormula),
+                             argNames    : Seq[String],
+                             newPredName : Option[String] = None) : Clause = {
+          val (pred, sol) = predAndSol
+          val predArgs = for (predArgName <- argNames) yield
+            IConstant(new ConstantTerm(predArgName))
+          val constraint  = VariableSubstVisitor.visit(
+            sol, (predArgs.toList, 0)).asInstanceOf[IFormula]
+          val newPred = newPredName match {
+            case Some(newName) => new Predicate(newName, pred.arity)
+            case None => pred
+          }
+          Clause(IAtom(newPred, predArgs), Nil, constraint)
+        }
+
+        if(displaySolutionProlog) {
+          println("\nSolution (Prolog)")
+          println("="*80)
+          val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
+          for((pred,sol) <- sortedSol) {
+            val predArgNames = reader.PredPrintContext.predArgNames(pred)
+            val solClause = clausifySolution(
+              (pred, sol), predArgNames, Some(pred.name.stripPrefix("inv_")))
+            println(solClause.toPrologString)
+          }
+          println("="*80 + "\n")
+        }
+
+        if (lazabs.GlobalParameters.get.displaySolutionSMT) {
+          // TODO: this should probably just use the function for printing
+          // models in SMTLineariser. But will change the syntax a bit
+          // and require tests to be updated
+          // todo: replace args with actual ones from the clauses
+          println("\nSolution (SMT-LIB)")
+          println("="*80)
+          val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
+          for((pred,sol) <- sortedSol) {
+            val cl = HornClause(RelVar(pred.name,
+              (0 until pred.arity).zip(HornPredAbs.predArgumentSorts(pred).map(
+                lazabs.prover.PrincessWrapper.sort2Type(_))).map(p =>
+                Parameter("_" + p._1,p._2)
+              ).toList),
+              List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
+                Map[ap.terfor.ConstantTerm,String]().empty,false))))
+            println(lazabs.viewer.HornSMTPrinter.printFull(cl, true))
+          }
+          println("="*80 + "\n")
+        }
+
+        val contexts = reader.getFunctionContexts
+        val loopInvariants = reader.getLoopInvariants
+        if ((displayACSL || log) &&
+          (contexts.nonEmpty || loopInvariants.nonEmpty)) {
+
+          val solutionProcessors = Seq(
+            ADTExploder
+            // add additional solution processors here
+          )
+          var processedSolution: SolutionProcessor.Solution = solution
+          // iteratively process the solution using all solution processors
+          // this will only process the pre/post predicates' solutions due
+          // to the second argument
+          for (processor <- solutionProcessors) {
+            processedSolution =
+              processor(processedSolution)() // will process all predicates
+          }
+
+          var printedACSLHeader = false
+          // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
+          for ((fun, ctx) <- contexts
+               if maybeEnc.isEmpty ||
+                  !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
+                  !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
+            
+            var acslProcessedSolution = processedSolution
+
+            if (modelledHeapRes) {
+              def applyProcessor(processor: ContractProcessor, 
+                                solution: SolutionProcessor.Solution
+                                ): SolutionProcessor.Solution = {
+                printlnDebug(s"----- Applying $processor to $fun.")
+                val (newPrecondition, newPostcondition) =
+                  processor(solution, fun, ctx)
+                printlnDebug("----- Precondition:")
+                printlnDebug(solution(ctx.prePred.pred).toString)
+                printlnDebug("----- New Precondition:")
+                printlnDebug(newPrecondition.toString)
+                printlnDebug("----- Postcondition:")
+                printlnDebug(solution(ctx.postPred.pred).toString)
+                printlnDebug("----- New Postcondition:")
+                printlnDebug(newPostcondition.toString)
+                solution + (ctx.prePred.pred -> newPrecondition) +
+                  (ctx.postPred.pred -> newPostcondition)
               }
-              Clause(IAtom(newPred, predArgs), Nil, constraint)
-            }
 
-            if(displaySolutionProlog) {
-              println("\nSolution (Prolog)")
-              println("="*80)
-              val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
-              for((pred,sol) <- sortedSol) {
-                val predArgNames = reader.PredPrintContext.predArgNames(pred)
-                val solClause = clausifySolution(
-                  (pred, sol), predArgNames, Some(pred.name.stripPrefix("inv_")))
-                println(solClause.toPrologString)
+              import ap.parser.IFormula
+              import ap.parser.IExpression.Predicate
+              def addClauses(clauses: Option[IFormula],
+                             predicate: Predicate,
+                             solution: SolutionProcessor.Solution)
+              : SolutionProcessor.Solution = {
+                clauses match {
+                  case Some(clauseFormula) =>
+                    val newContractCondition =
+                      solution(predicate).asInstanceOf[IFormula] &
+                      clauseFormula
+                    solution + (predicate -> newContractCondition)
+                  case None =>
+                    solution
+                }  
               }
-              println("="*80 + "\n")
-            }
-            if (lazabs.GlobalParameters.get.displaySolutionSMT) {
-              // TODO: this should probably just use the function for printing
-              // models in SMTLineariser. But will change the syntax a bit
-              // and require tests to be updated
 
-              // todo: replace args with actual ones from the clauses
-              println("\nSolution (SMT-LIB)")
-              println("="*80)
-              val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
-              for((pred,sol) <- sortedSol) {
-                val cl = HornClause(RelVar(pred.name,
-                  (0 until pred.arity).zip(HornPredAbs.predArgumentSorts(pred).map(
-                    lazabs.prover.PrincessWrapper.sort2Type(_))).map(p =>
-                    Parameter("_" + p._1,p._2)
-                  ).toList),
-                  List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
-                    Map[ap.terfor.ConstantTerm,String]().empty,false))))
-                println(lazabs.viewer.HornSMTPrinter.printFull(cl, true))
-              }
-              println("="*80 + "\n")
-            }
+              acslProcessedSolution =
+                applyProcessor(PostconditionSimplifier, acslProcessedSolution)
 
-            val contexts = reader.getFunctionContexts
-            val loopInvariants = reader.getLoopInvariants
-            if ((displayACSL || log) &&
-              (contexts.nonEmpty || loopInvariants.nonEmpty)) {
-
-              val solutionProcessors = Seq(
-                ADTExploder
-                // add additional solution processors here
+              val heapPropProcessors = Seq(
+                PointerPropProcessor,
+                AssignmentProcessor
               )
-              var processedSolution: SolutionProcessor.Solution = solution
-              // iteratively process the solution using all solution processors
-              // this will only process the pre/post predicates' solutions due
-              // to the second argument
-              for (processor <- solutionProcessors) {
-                processedSolution =
-                  processor(processedSolution)() // will process all predicates
-              }
 
-              var printedACSLHeader = false
-              // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
-              for ((fun, ctx) <- contexts
-                   if maybeEnc.isEmpty ||
-                      !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
-                      !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
-                
-                var acslProcessedSolution = processedSolution
+              for (prsor <- heapPropProcessors) {
+                val contractInfo = ContractInfo(solution, fun, ctx)
+                val preCCI =
+                  ContractConditionInfo(ctx.prePred.pred, contractInfo)
+                val postCCI =
+                  ContractConditionInfo(ctx.postPred.pred, contractInfo)
 
-                if (modelledHeapRes) {
-                  def applyProcessor(processor: ContractProcessor, 
-                                    solution: SolutionProcessor.Solution
-                                    ): SolutionProcessor.Solution = {
-                    printlnDebug(s"----- Applying $processor to $fun.")
-                    val (newPrecondition, newPostcondition) =
-                      processor(solution, fun, ctx)
-                    printlnDebug("----- Precondition:")
-                    printlnDebug(solution(ctx.prePred.pred).toString)
-                    printlnDebug("----- New Precondition:")
-                    printlnDebug(newPrecondition.toString)
-                    printlnDebug("----- Postcondition:")
-                    printlnDebug(solution(ctx.postPred.pred).toString)
-                    printlnDebug("----- New Postcondition:")
-                    printlnDebug(newPostcondition.toString)
-                    solution + (ctx.prePred.pred -> newPrecondition) +
-                      (ctx.postPred.pred -> newPostcondition)
-                  }
+                printlnDebug(s"----- Applying $prsor to precondition of $fun")
+                printlnDebug("----- Precondition:")
+                printlnDebug(preCCI.contractCondition.toString)
 
-                  import ap.parser.IFormula
-                  import ap.parser.IExpression.Predicate
-                  def addClauses(clauses: Option[IFormula],
-                                 predicate: Predicate,
-                                 solution: SolutionProcessor.Solution)
-                  : SolutionProcessor.Solution = {
-                    clauses match {
-                      case Some(clauseFormula) =>
-                        val newContractCondition =
-                          solution(predicate).asInstanceOf[IFormula] &
-                          clauseFormula
-                        solution + (predicate -> newContractCondition)
-                      case None =>
-                        solution
-                    }  
-                  }
+                val preClauses =
+                  prsor.getClauses(preCCI.contractCondition, preCCI)
 
-                  acslProcessedSolution =
-                    applyProcessor(PostconditionSimplifier, acslProcessedSolution)
+                printlnDebug("Result:")
+                printlnDebug(preClauses.toString)
 
-                  val heapPropProcessors = Seq(
-                    PointerPropProcessor,
-                    AssignmentProcessor
-                  )
+                acslProcessedSolution = addClauses(
+                  preClauses, ctx.prePred.pred, acslProcessedSolution)
 
-                  for (prsor <- heapPropProcessors) {
-                    val contractInfo = ContractInfo(solution, fun, ctx)
-                    val preCCI =
-                      ContractConditionInfo(ctx.prePred.pred, contractInfo)
-                    val postCCI =
-                      ContractConditionInfo(ctx.postPred.pred, contractInfo)
+                printlnDebug(s"----- Applying $prsor to postcondition of $fun")
+                printlnDebug("----- Postcondition:")
+                printlnDebug(postCCI.contractCondition.toString)
 
-                    printlnDebug(s"----- Applying $prsor to precondition of $fun")
-                    printlnDebug("----- Precondition:")
-                    printlnDebug(preCCI.contractCondition.toString)
-
-                    val preClauses =
-                      prsor.getClauses(preCCI.contractCondition, preCCI)
-
-                    printlnDebug("Result:")
-                    printlnDebug(preClauses.toString)
-
-                    acslProcessedSolution = addClauses(
-                      preClauses, ctx.prePred.pred, acslProcessedSolution)
-
-                    printlnDebug(s"----- Applying $prsor to postcondition of $fun")
-                    printlnDebug("----- Postcondition:")
-                    printlnDebug(postCCI.contractCondition.toString)
-
-                    val postClauses =
-                      prsor.getClauses(postCCI.contractCondition, postCCI)
-
-                    printlnDebug("----- Result:")
-                    printlnDebug(postClauses.toString)
-
-                    acslProcessedSolution = addClauses(
-                      postClauses,ctx.postPred.pred, acslProcessedSolution)
-                  }
-
-                  val printHeapExprProcessors = Seq(
-                    TheoryOfHeapProcessor,
-                    ADTSimplifier,
-                    ADTExploder,
-                    ToVariableForm,
-                    ACSLExpressionProcessor,
-                    ClauseRemover)
-
-                  for (processor <- printHeapExprProcessors) {
-                    acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
-                  }
-                }
-
-                printlnDebug("----- Applying ACSLLineariser to precondition:")
-                printlnDebug(acslProcessedSolution(ctx.prePred.pred).toString)
-
-                val fPre = ACSLLineariser asString
-                             acslProcessedSolution(ctx.prePred.pred)
+                val postClauses =
+                  prsor.getClauses(postCCI.contractCondition, postCCI)
 
                 printlnDebug("----- Result:")
-                printlnDebug(fPre.toString)
-                printlnDebug("----- Applying ACSLLineariser to postcondition:")
-                printlnDebug(acslProcessedSolution(ctx.postPred.pred).toString)
+                printlnDebug(postClauses.toString)
 
-                val fPost = ACSLLineariser asString acslProcessedSolution(ctx.postPred.pred)
-                printlnDebug("----- Result:")
-                printlnDebug(fPost)
-
-                // todo: implement replaceArgs as a solution processor
-                def funContractToACSLString(fPred    : Predicate,
-                                            argNames : Seq[String]) : String = {
-                  val fPredToSol  = fPred -> acslProcessedSolution(fPred)
-                  val fPredClause = clausifySolution(fPredToSol, argNames)
-                  ACSLLineariser asString fPredClause.constraint
-                }
-                val fPreACSLString = funContractToACSLString(
-                  ctx.prePred.pred, ctx.prePredACSLArgNames)
-
-                val fPostACSLString = funContractToACSLString(
-                  ctx.postPred.pred, ctx.postPredACSLArgNames)
-
-                if (!printedACSLHeader) {
-                  println("\nInferred ACSL annotations")
-                  println("=" * 80)
-                  printedACSLHeader = true
-                }
-                println("/* contracts for " + fun + " */")
-                println("/*@")
-                print(  "  requires "); println(fPreACSLString + ";")
-                print(  "  ensures "); println(fPostACSLString + ";")
-                println("*/")
+                acslProcessedSolution = addClauses(
+                  postClauses,ctx.postPred.pred, acslProcessedSolution)
               }
-              if(loopInvariants nonEmpty) {
-                println("/* loop invariants */")
-                for ((name, (inv, srcInfo)) <- loopInvariants) {
-                  val fInvSol = processedSolution.find(
-                    p => p._1.name.stripPrefix("inv_") == inv.pred.name).get
-                  val fInvString = ACSLLineariser asString clausifySolution(
-                    fInvSol, inv.argVars.map(_.name), Some(name)).constraint
-                  if (!printedACSLHeader) {
-                    println("\nInferred ACSL annotations")
-                    println("=" * 80)
-                    printedACSLHeader = true
-                  }
-                  println("\n/* loop invariant for the loop at line " +
-                          srcInfo.line + " */")
-                  println("/*@")
-                  print(  "  loop invariant "); println(fInvString + ";")
-                  println("*/")
-                }
-              }
-              if (printedACSLHeader) {
-                println("=" * 80 + "\n")
+
+              val printHeapExprProcessors = Seq(
+                TheoryOfHeapProcessor,
+                ADTSimplifier,
+                ADTExploder,
+                ToVariableForm,
+                ACSLExpressionProcessor,
+                ClauseRemover)
+
+              for (processor <- printHeapExprProcessors) {
+                acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
               }
             }
-          case None =>
+
+            printlnDebug("----- Applying ACSLLineariser to precondition:")
+            printlnDebug(acslProcessedSolution(ctx.prePred.pred).toString)
+
+            val fPre = ACSLLineariser asString
+                         acslProcessedSolution(ctx.prePred.pred)
+
+            printlnDebug("----- Result:")
+            printlnDebug(fPre.toString)
+            printlnDebug("----- Applying ACSLLineariser to postcondition:")
+            printlnDebug(acslProcessedSolution(ctx.postPred.pred).toString)
+
+            val fPost = ACSLLineariser asString acslProcessedSolution(ctx.postPred.pred)
+            printlnDebug("----- Result:")
+            printlnDebug(fPost)
+
+            // todo: implement replaceArgs as a solution processor
+            def funContractToACSLString(fPred    : Predicate,
+                                        argNames : Seq[String]) : String = {
+              val fPredToSol  = fPred -> acslProcessedSolution(fPred)
+              val fPredClause = clausifySolution(fPredToSol, argNames)
+              ACSLLineariser asString fPredClause.constraint
+            }
+            val fPreACSLString = funContractToACSLString(
+              ctx.prePred.pred, ctx.prePredACSLArgNames)
+
+            val fPostACSLString = funContractToACSLString(
+              ctx.postPred.pred, ctx.postPredACSLArgNames)
+
+            if (!printedACSLHeader) {
+              println("\nInferred ACSL annotations")
+              println("=" * 80)
+              printedACSLHeader = true
+            }
+            println("/* contracts for " + fun + " */")
+            println("/*@")
+            print(  "  requires "); println(fPreACSLString + ";")
+            print(  "  ensures "); println(fPostACSLString + ";")
+            println("*/")
+          }
+          if(loopInvariants nonEmpty) {
+            println("/* loop invariants */")
+            for ((name, (inv, srcInfo)) <- loopInvariants) {
+              val fInvSol = processedSolution.find(
+                p => p._1.name.stripPrefix("inv_") == inv.pred.name).get
+              val fInvString = ACSLLineariser asString clausifySolution(
+                fInvSol, inv.argVars.map(_.name), Some(name)).constraint
+              if (!printedACSLHeader) {
+                println("\nInferred ACSL annotations")
+                println("=" * 80)
+                printedACSLHeader = true
+              }
+              println("\n/* loop invariant for the loop at line " +
+                      srcInfo.line + " */")
+              println("/*@")
+              print(  "  loop invariant "); println(fInvString + ";")
+              println("*/")
+            }
+          }
+          if (printedACSLHeader) {
+            println("=" * 80 + "\n")
+          }
         }
         Safe
-      case Right(cex) => {
+      case _: Empty =>
+        Safe
+      case CounterExample(cex) => {
         val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
           case (_, clause) =>
             val richClauses : Seq[CCClause] = mergedToOriginal get clause
@@ -846,7 +876,7 @@ class Main (args: Array[String]) {
 
     val trackResult = for ((prop, expected) <- propertyToExpected) yield {
 //      println(prop)
-      val verdictMatches =  expected == result.isLeft
+      val verdictMatches =  expected == result.isSolution
 //      printVerdictComparison(verdictMatches)
       (prop, verdictMatches)
     }
