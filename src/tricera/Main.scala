@@ -516,6 +516,72 @@ class Main (args: Array[String]) {
         }
       }
 
+    if (printIntermediateClauseSets || dumpSimplifiedClauses ||
+        printHornSimplified || printHornSimplifiedSMT)
+      return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
+
+    verificationLoop.result match {
+      case Left(res) =>
+        res match {
+          case Some(solution) => 
+            import tricera.postprocessor._
+            import lazabs.horn.global._
+            import lazabs.horn.bottomup.HornPredAbs
+            import lazabs.ast.ASTree.Parameter
+    
+            def clausifySolution(predAndSol  : (Predicate, IFormula),
+                                 argNames    : Seq[String],
+                                 newPredName : Option[String] = None) : Clause = {
+              val (pred, sol) = predAndSol
+              val predArgs = for (predArgName <- argNames) yield
+                IConstant(new ConstantTerm(predArgName))
+              val constraint  = VariableSubstVisitor.visit(
+                sol, (predArgs.toList, 0)).asInstanceOf[IFormula]
+              val newPred = newPredName match {
+                case Some(newName) => new Predicate(newName, pred.arity)
+                case None => pred
+              }
+              Clause(IAtom(newPred, predArgs), Nil, constraint)
+            }
+    
+            if(displaySolutionProlog) {
+              println("\nSolution (Prolog)")
+              println("="*80)
+              val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
+              for((pred,sol) <- sortedSol) {
+                val predArgNames = reader.PredPrintContext.predArgNames(pred)
+                val solClause = clausifySolution(
+                  (pred, sol), predArgNames, Some(pred.name.stripPrefix("inv_")))
+                println(solClause.toPrologString)
+              }
+              println("="*80 + "\n")
+            }
+    
+            if (lazabs.GlobalParameters.get.displaySolutionSMT) {
+              // TODO: this should probably just use the function for printing
+              // models in SMTLineariser. But will change the syntax a bit
+              // and require tests to be updated
+              // todo: replace args with actual ones from the clauses
+              println("\nSolution (SMT-LIB)")
+              println("="*80)
+              val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
+              for((pred,sol) <- sortedSol) {
+                val cl = HornClause(RelVar(pred.name,
+                  (0 until pred.arity).zip(HornPredAbs.predArgumentSorts(pred).map(
+                    lazabs.prover.PrincessWrapper.sort2Type(_))).map(p =>
+                    Parameter("_" + p._1,p._2)
+                  ).toList),
+                  List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
+                    Map[ap.terfor.ConstantTerm,String]().empty,false))))
+                println(lazabs.viewer.HornSMTPrinter.printFull(cl, true))
+              }
+              println("="*80 + "\n")
+            }
+          case _ => /* Do nothing */        
+        }
+      case _ => /* Do nothing */
+    }
+
     def toTriceraResult(
       reader: CCReader,
       result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
@@ -527,8 +593,9 @@ class Main (args: Array[String]) {
         .asInstanceOf[IFormula]
       }
 
-      def toFunctionInvariants(ctx: CCReader.FunctionContext, solution: SolutionProcessor.Solution) = {
+      def toFunctionInvariants(funcId: String, ctx: CCReader.FunctionContext, solution: SolutionProcessor.Solution) = {
         FunctionInvariants(
+          funcId,
           replacePredVarWithFunctionParam(solution(ctx.prePred.pred), ctx.prePred.argVars.map(v => v.name)),
           replacePredVarWithFunctionParam(solution(ctx.postPred.pred), ctx.postPred.argVars.map(v => v.name)),
           List())
@@ -538,18 +605,17 @@ class Main (args: Array[String]) {
         case Left(Some(solution)) =>
           // SSSOWO TODO: Add loop invariants.
           Solution(
+            modelledHeap,
             reader.getFunctionContexts.map(
-              {case (funcId, ctx) => (funcId, toFunctionInvariants(ctx, solution))}))
+              {case (funcId, ctx) => toFunctionInvariants(funcId, ctx, solution)}).toSeq)
         case Left(None) => Empty()
         case Right(cex) => CounterExample(cex)
       }
     }
 
-    val result = toTriceraResult(reader, verificationLoop.result)
 
-    if (printIntermediateClauseSets || dumpSimplifiedClauses ||
-        printHornSimplified || printHornSimplifiedSMT)
-      return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
+
+    val result = toTriceraResult(reader, verificationLoop.result)
 
     val executionResult = result match {
       case solution: Solution => 
@@ -558,65 +624,16 @@ class Main (args: Array[String]) {
         import lazabs.horn.bottomup.HornPredAbs
         import lazabs.ast.ASTree.Parameter
 
-        def clausifySolution(predAndSol  : (Predicate, IFormula),
-                             argNames    : Seq[String],
-                             newPredName : Option[String] = None) : Clause = {
-          val (pred, sol) = predAndSol
-          val predArgs = for (predArgName <- argNames) yield
-            IConstant(new ConstantTerm(predArgName))
-          val constraint  = VariableSubstVisitor.visit(
-            sol, (predArgs.toList, 0)).asInstanceOf[IFormula]
-          val newPred = newPredName match {
-            case Some(newName) => new Predicate(newName, pred.arity)
-            case None => pred
-          }
-          Clause(IAtom(newPred, predArgs), Nil, constraint)
-        }
-
-        if(displaySolutionProlog) {
-          println("\nSolution (Prolog)")
-          println("="*80)
-          val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
-          for((pred,sol) <- sortedSol) {
-            val predArgNames = reader.PredPrintContext.predArgNames(pred)
-            val solClause = clausifySolution(
-              (pred, sol), predArgNames, Some(pred.name.stripPrefix("inv_")))
-            println(solClause.toPrologString)
-          }
-          println("="*80 + "\n")
-        }
-
-        if (lazabs.GlobalParameters.get.displaySolutionSMT) {
-          // TODO: this should probably just use the function for printing
-          // models in SMTLineariser. But will change the syntax a bit
-          // and require tests to be updated
-          // todo: replace args with actual ones from the clauses
-          println("\nSolution (SMT-LIB)")
-          println("="*80)
-          val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
-          for((pred,sol) <- sortedSol) {
-            val cl = HornClause(RelVar(pred.name,
-              (0 until pred.arity).zip(HornPredAbs.predArgumentSorts(pred).map(
-                lazabs.prover.PrincessWrapper.sort2Type(_))).map(p =>
-                Parameter("_" + p._1,p._2)
-              ).toList),
-              List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
-                Map[ap.terfor.ConstantTerm,String]().empty,false))))
-            println(lazabs.viewer.HornSMTPrinter.printFull(cl, true))
-          }
-          println("="*80 + "\n")
-        }
-
-        val contexts = reader.getFunctionContexts
+//        val contexts = reader.getFunctionContexts
         val loopInvariants = reader.getLoopInvariants
         if ((displayACSL || log) &&
-          (contexts.nonEmpty || loopInvariants.nonEmpty)) {
+          (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
 
           val solutionProcessors = Seq(
             ADTExploder
             // add additional solution processors here
           )
-          var processedSolution: SolutionProcessor.Solution = solution
+          var processedSolution = solution
           // iteratively process the solution using all solution processors
           // this will only process the pre/post predicates' solutions due
           // to the second argument
@@ -634,7 +651,7 @@ class Main (args: Array[String]) {
             
             var acslProcessedSolution = processedSolution
 
-            if (modelledHeapRes) {
+            if (solution.isHeapUsed) {
               def applyProcessor(processor: ContractProcessor, 
                                 solution: SolutionProcessor.Solution
                                 ): SolutionProcessor.Solution = {
