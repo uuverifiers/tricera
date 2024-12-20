@@ -33,6 +33,7 @@ import ap.parser._
 import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
+import tricera.{Solution, FunctionInvariants, Invariant, LoopInvariant}
 
 object ADTExploder extends SolutionProcessor 
                       with ContractProcessor {
@@ -45,6 +46,116 @@ object ADTExploder extends SolutionProcessor
     apply(cci.contractCondition)
   }
 
+  case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
+  object adtTermExploder extends CollectingVisitor[Object, IExpression] {
+    def getADTTerm(t : IExpression) : Option[ADTTerm] = {
+      t match {
+        case f @ IFunApp(fun, _) if ADT.Constructor.unapply(fun).nonEmpty =>
+          val sortedFun = fun.asInstanceOf[MonoSortedIFunction]
+          val adtSort = sortedFun.resSort.asInstanceOf[ADT.ADTProxySort]
+          Some(ADTTerm(f, adtSort))
+        case c@IConstant(SortedConstantTerm(_, sort))
+          if sort.isInstanceOf[ADTProxySort] =>
+          Some(ADTTerm(c, sort.asInstanceOf[ADTProxySort]))
+        case _ => None
+      }
+    }
+
+    override def postVisit(t: IExpression, none : Object,
+                           subres: Seq[IExpression]) : IExpression = {
+
+      import IExpression._
+      def checkExplodable(originalEq : IEquation, ctorFun : IFunction,
+                       lhsIsCtor : Boolean) : Boolean = {
+        val newEq = originalEq update subres
+        val (newFunApp, selectorTerms, newRootTerm) =
+          if (lhsIsCtor) {
+            val Eq(newFunApp@IFunApp(_, selectorTerms), newRootTerm) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          } else {
+            val Eq(newRootTerm, newFunApp@IFunApp(_, selectorTerms)) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          }
+        val adtTerm = getADTTerm(newFunApp).get
+        val adt = adtTerm.adtSort.adtTheory
+        val ctorIndex = adt.constructors.indexOf(ctorFun)
+        ctorIndex != -1
+      }
+
+      def explodeADTSelectors (originalEq : IEquation, ctorFun : IFunction,
+                               lhsIsCtor : Boolean) = {
+        val newEq = originalEq update subres
+        val (newFunApp, selectorTerms, newRootTerm) =
+          if (lhsIsCtor) {
+            val Eq(newFunApp@IFunApp(_, selectorTerms), newRootTerm) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          } else {
+            val Eq(newRootTerm, newFunApp@IFunApp(_, selectorTerms)) = newEq
+            (newFunApp, selectorTerms, newRootTerm)
+          }
+        val adtTerm = getADTTerm(newFunApp).get
+        val adt = adtTerm.adtSort.adtTheory
+        val ctorIndex = adt.constructors.indexOf(ctorFun)
+        val selectors = adt.selectors(ctorIndex)
+        (for ((fieldTerm, selectorInd) <- selectorTerms zipWithIndex)
+          yield selectors(selectorInd)(newRootTerm) ===
+            fieldTerm).reduce(_ &&& _)
+      }
+
+      t match {
+        case e@Eq(funApp@IFunApp(fun, _), _) if getADTTerm(funApp).nonEmpty &&
+              checkExplodable(e.asInstanceOf[IEquation], fun, lhsIsCtor = true) =>
+                explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = true)
+        case e@Eq(_, funApp@IFunApp(fun, _)) if getADTTerm(funApp).nonEmpty &&
+              checkExplodable(e.asInstanceOf[IEquation], fun, lhsIsCtor = false) =>
+                explodeADTSelectors(e.asInstanceOf[IEquation], fun, lhsIsCtor = false)
+        case t@IFunApp(f,_) =>
+          val newApp = t update subres
+          (for (theory <- TheoryRegistry lookupSymbol f;
+                res <- theory evalFun newApp) yield res) getOrElse newApp
+        case _ =>
+          t update subres
+      }
+    }
+  }
+
+  // converts "s = S(a, b)" to "f1(s) = a & f2(s) = b"
+  private def explodeADTs(expr : IExpression) : IExpression =
+    adtTermExploder.visit(expr, null)
+
+}
+
+
+object _ADTExploder extends ResultProcessor {
+
+  override def applyTo(solution: Solution): Solution = solution match {
+    case Solution(isHeapUsed, functionInvariants) =>
+      Solution(isHeapUsed, functionInvariants.map(i => rewrite(i)))
+  }
+
+  def rewrite(funcInv: FunctionInvariants): FunctionInvariants = funcInv match {
+    case FunctionInvariants(id, preCond, postCond, loopInvs) =>
+      FunctionInvariants(
+        id,
+        rewrite(preCond),
+        rewrite(postCond),
+        loopInvs.map(i => rewrite(i)))
+  }
+
+  def rewrite(inv: Invariant): Invariant = inv match {
+    case Invariant(expression, sourceInfo) =>
+      Invariant(rewrite(expression), sourceInfo)
+  }
+
+  def rewrite(inv: LoopInvariant): LoopInvariant = inv match {
+    case LoopInvariant(expression, sourceInfo) =>
+      LoopInvariant(rewrite(expression), sourceInfo)
+  }
+
+  def rewrite(expr : IFormula): IFormula = {
+    Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
+  }
+  
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
     def getADTTerm(t : IExpression) : Option[ADTTerm] = {

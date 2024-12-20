@@ -48,6 +48,7 @@ import tricera.parsers.YAMLParser._
 
 import lazabs.horn.preprocessor.HornPreprocessor
 import tricera.postprocessor.SolutionProcessor
+import tricera.postprocessor.FunctionInvariantsFilter
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -589,15 +590,15 @@ class Main (args: Array[String]) {
 
       def replacePredVarWithFunctionParam(formula: IFormula, funcParameters: Seq[String]): IFormula = {
         VariableSubstVisitor.visit(
-          formula, (funcParameters.map(p => IConstant(new ConstantTerm(p))).toList, 0))
+          formula, (funcParameters.map(p => IFuncParam(new ConstantTerm(p))).toList, 0))
         .asInstanceOf[IFormula]
       }
 
       def toFunctionInvariants(funcId: String, ctx: CCReader.FunctionContext, solution: SolutionProcessor.Solution) = {
         FunctionInvariants(
           funcId,
-          replacePredVarWithFunctionParam(solution(ctx.prePred.pred), ctx.prePred.argVars.map(v => v.name)),
-          replacePredVarWithFunctionParam(solution(ctx.postPred.pred), ctx.postPred.argVars.map(v => v.name)),
+          Invariant(replacePredVarWithFunctionParam(solution(ctx.prePred.pred), ctx.prePred.argVars.map(v => v.name)), ctx.prePred.srcInfo),
+          Invariant(replacePredVarWithFunctionParam(solution(ctx.postPred.pred), ctx.postPred.argVars.map(v => v.name)), ctx.postPred.srcInfo),
           List())
       }
 
@@ -605,15 +606,26 @@ class Main (args: Array[String]) {
         case Left(Some(solution)) =>
           // SSSOWO TODO: Add loop invariants.
           Solution(
-            modelledHeap,
             reader.getFunctionContexts.map(
-              {case (funcId, ctx) => toFunctionInvariants(funcId, ctx, solution)}).toSeq)
+              {case (funcId, ctx) => toFunctionInvariants(funcId, ctx, solution)}).toSeq,
+            reader.getHeap.map(h => HeapInfo(h)))
         case Left(None) => Empty()
         case Right(cex) => CounterExample(cex)
       }
     }
 
 
+    def createAnnotatedFunctionsFilter(encoder: Option[Encoder], funcContexts: Map[String, CCReader.FunctionContext]) = {
+      def isAnnotatedFunction(funcInvs: FunctionInvariants): Boolean = {
+        encoder match {
+          case Some(enc) if (
+            enc.prePredsToReplace.contains(funcContexts(funcInvs.id).prePred.pred) || 
+            enc.postPredsToReplace.contains(funcContexts(funcInvs.id).postPred.pred)) => true
+          case _ => false
+        }
+      }
+      FunctionInvariantsFilter(!isAnnotatedFunction(_))
+    }
 
     val result = toTriceraResult(reader, verificationLoop.result)
 
@@ -624,37 +636,37 @@ class Main (args: Array[String]) {
         import lazabs.horn.bottomup.HornPredAbs
         import lazabs.ast.ASTree.Parameter
 
-//        val contexts = reader.getFunctionContexts
+        val contexts = reader.getFunctionContexts
         val loopInvariants = reader.getLoopInvariants
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
 
+          var processedSolution = result
+
           val solutionProcessors = Seq(
-            ADTExploder
+            _ADTExploder,
+            LoopInvariantsACSLPrinter,
+            createAnnotatedFunctionsFilter(maybeEnc, reader.getFunctionContexts)
             // add additional solution processors here
           )
-          var processedSolution = solution
           // iteratively process the solution using all solution processors
           // this will only process the pre/post predicates' solutions due
           // to the second argument
           for (processor <- solutionProcessors) {
-            processedSolution =
-              processor(processedSolution)() // will process all predicates
+            processedSolution = processor(processedSolution)
           }
 
           var printedACSLHeader = false
           // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
-          for ((fun, ctx) <- contexts
-               if maybeEnc.isEmpty ||
-                  !maybeEnc.get.prePredsToReplace.contains(ctx.prePred.pred) &&
-                  !maybeEnc.get.postPredsToReplace.contains(ctx.postPred.pred)) {
+          for ((fun, ctx) <- contexts) {
             
             var acslProcessedSolution = processedSolution
 
             if (solution.isHeapUsed) {
-              def applyProcessor(processor: ContractProcessor, 
-                                solution: SolutionProcessor.Solution
-                                ): SolutionProcessor.Solution = {
+/*
+              def applyProcessor(processor: ResultProcessor, 
+                                solution: Result
+                                ): Result = {
                 printlnDebug(s"----- Applying $processor to $fun.")
                 val (newPrecondition, newPostcondition) =
                   processor(solution, fun, ctx)
@@ -669,7 +681,7 @@ class Main (args: Array[String]) {
                 solution + (ctx.prePred.pred -> newPrecondition) +
                   (ctx.postPred.pred -> newPostcondition)
               }
-
+*/
               import ap.parser.IFormula
               import ap.parser.IExpression.Predicate
               def addClauses(clauses: Option[IFormula],
@@ -688,13 +700,13 @@ class Main (args: Array[String]) {
               }
 
               acslProcessedSolution =
-                applyProcessor(PostconditionSimplifier, acslProcessedSolution)
+                PostconditionSimplifier(acslProcessedSolution)
 
               val heapPropProcessors = Seq(
                 PointerPropProcessor,
                 AssignmentProcessor
               )
-
+/*
               for (prsor <- heapPropProcessors) {
                 val contractInfo = ContractInfo(solution, fun, ctx)
                 val preCCI =
@@ -740,8 +752,9 @@ class Main (args: Array[String]) {
               for (processor <- printHeapExprProcessors) {
                 acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
               }
+*/
             }
-
+/*
             printlnDebug("----- Applying ACSLLineariser to precondition:")
             printlnDebug(acslProcessedSolution(ctx.prePred.pred).toString)
 
@@ -780,7 +793,9 @@ class Main (args: Array[String]) {
             print(  "  requires "); println(fPreACSLString + ";")
             print(  "  ensures "); println(fPostACSLString + ";")
             println("*/")
+*/
           }
+          /*
           if(loopInvariants nonEmpty) {
             println("/* loop invariants */")
             for ((name, (inv, srcInfo)) <- loopInvariants) {
@@ -800,6 +815,7 @@ class Main (args: Array[String]) {
               println("*/")
             }
           }
+          */
           if (printedACSLHeader) {
             println("=" * 80 + "\n")
           }

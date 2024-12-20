@@ -41,41 +41,59 @@ package tricera.postprocessor
 
 import ap.parser._
 import scala.collection.immutable.Stack
+import tricera.{Solution, Invariant, HeapInfo, IFuncParam}
+import tricera.FunctionInvariants
+import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
-object PointerPropProcessor extends ContractProcessor with ClauseCreator {
-  def processContractCondition(cci: ContractConditionInfo) = {
-    getSafePointers(cci.contractCondition, cci) match {
-      case safePointers if safePointers.size >= 2 =>
-        cci.contractCondition
-          .&(ACSLExpression.separatedPointers(safePointers, 0, cci))
-          .&(ACSLExpression.validPointers(safePointers, 0, cci))
-      case _ => 
-        cci.contractCondition
-    }
+object PointerPropProcessor extends ResultProcessor {
+  // SSSOWO: TODO: Should heapInfo be part of constructor call instead?
+  //   If it's done like that we don't have to check for a valid heap
+  //   in the applyTo functions.
+  //   The drawback is that we might apply a processor instantiated
+  //   with the heap from one solution and apply it to another.
+
+  override def applyTo(solution: Solution) = solution match {
+    case Solution(functionInvariants, Some(heapInfo)) =>
+      Solution(functionInvariants.map(applyTo(_, heapInfo)), Some(heapInfo))
+    case _ =>
+      throw NeedsHeapModelException
   }
 
-  def getClauses(expr: IExpression, cci: ContractConditionInfo): Option[IFormula] = {
-    getSafePointers(expr, cci) match {
+  private def applyTo(funcInv: FunctionInvariants, heapInfo: HeapInfo)
+  : FunctionInvariants = funcInv match {
+    case FunctionInvariants(id, preCondition, postCondition, loopInvariants) =>
+      FunctionInvariants(
+        id,
+        addPtrAtoms(preCondition, heapInfo),
+        addPtrAtoms(postCondition, heapInfo),
+        loopInvariants)
+  }
+
+  private def addPtrAtoms(invariant: Invariant, heapInfo: HeapInfo): Invariant = invariant match {
+    case Invariant(form, srcInfo) =>
+      val newForm = getSafePointers(form, heapInfo) match {
         case safePointers if safePointers.size >= 2 =>
-          Some(ACSLExpression.separatedPointers(safePointers, 0, cci)
-            .&(ACSLExpression.validPointers(safePointers, 0, cci)))
+          form
+          .&(ACSLExpression.separatedPointers(safePointers))
+          .&(ACSLExpression.validPointers(safePointers))
         case safePointers if safePointers.size == 1 =>
-          Some(ACSLExpression.validPointers(safePointers, 0, cci))
+          form
+          .&(ACSLExpression.validPointers(safePointers))
         case _ => 
-            None
-    }
+          form
+      }
+      Invariant(newForm, srcInfo)
   }
 
-  def getSafePointers(expr: IExpression, cci: ContractConditionInfo): Set[ISortedVariable] = {
-    val invForm = ToInvariantFormVisitor(expr)
+  def getSafePointers(invForm: IFormula, heapInfo: HeapInfo): Set[IFuncParam] = {
     val valueSet = ValSetReader.invariant(invForm)
-    val explForm = ToExplicitForm.invariant(invForm, valueSet, cci)
-    val redForm = HeapReducer(explForm, cci)
-    HeapExtractor(redForm, cci) match {
+    val explForm = ToExplicitForm.invariant(invForm, valueSet)
+    val redForm = HeapReducer(explForm, heapInfo)
+    HeapExtractor(redForm, heapInfo) match {
       case Some(heap) =>
         val redValueSet = ValSetReader.invariant(redForm)
         readSafeVariables(heap, redValueSet)
-      case _ => Set.empty[ISortedVariable]
+      case _ => Set.empty[IFuncParam]
     }
   }
 
@@ -92,16 +110,16 @@ object PointerPropProcessor extends ContractProcessor with ClauseCreator {
 object HeapExtractor {
   def apply(
       expr: IExpression,
-      cci: ContractConditionInfo
+      heapInfo: HeapInfo
   ): Option[HeapState] = {
-    (new InvariantHeapExtractor(cci)).visit(expr, ())
+    (new InvariantHeapExtractor(heapInfo)).visit(expr, ())
   }
 }
 
-class InvariantHeapExtractor(cci: ContractConditionInfo)
+class InvariantHeapExtractor(cci: HeapInfo)
     extends CollectingVisitor[Unit, Option[HeapState]] {
   override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case IEquation(h: ISortedVariable, heap: HeapState) if cci.isCurrentHeap(h, 0) =>
+    case IEquation(h: IFuncParam, heap: HeapState) if cci.isCurrentHeap(h) =>
       ShortCutResult(Some(heap))
     case _ =>
       KeepArg
@@ -120,14 +138,23 @@ class InvariantHeapExtractor(cci: ContractConditionInfo)
 object HeapReducer {
   def apply(
       invariantExpression: IExpression,
-      cci: ContractConditionInfo
+      cci: HeapInfo
   ): IExpression = {
     (new HeapReducer(cci)).visit(invariantExpression, Stack[String]())
   }
 }
 
-class HeapReducer(cci: ContractConditionInfo)
-    extends CollectingVisitor[Stack[String], IExpression] {
+class HeapReducer(cci: HeapInfo)
+    extends CollectingVisitor[Stack[String], IExpression]
+    with IdGenerator {
+
+  override def preVisit(
+      t: IExpression,
+      quantifierIds: Stack[String]
+  ): PreVisitResult = t match {
+    case v: IVariableBinder => UniSubArgs(quantifierIds.push(generateId))
+    case _                  => KeepArg
+  }
 
   override def postVisit(
       t: IExpression,
@@ -137,9 +164,8 @@ class HeapReducer(cci: ContractConditionInfo)
     t update subres match {
       case IFunApp(fun, args) if (fun.name == "emptyHeap" && args.isEmpty) => 
         HeapState.empty
-      case QuantifiedVarWithId(ISortedVariable(_, sort), id)
-          if sort.name == "Heap" =>
-        HeapState.heapById(id)
+      case ISortedVariable(index, sort) if sort.name == "Heap" => // TODO: Move magic constants to HeapInfo
+        HeapState.heapById(quantifierIds(index))
       case TheoryOfHeapFunApp(
             writeFun,
             Seq(heap: HeapState, addr: Address, obj)
@@ -166,6 +192,7 @@ class HeapReducer(cci: ContractConditionInfo)
   }
 }
 
+/*
 case class QuantifiedVarWithId(variable: ISortedVariable, id: String)
     extends ITerm {
   override def toString = {
@@ -206,3 +233,4 @@ object ToInvariantFormVisitor
     //   new variables. Is this correct?
   }
 }
+*/

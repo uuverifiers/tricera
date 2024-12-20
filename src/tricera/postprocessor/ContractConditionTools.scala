@@ -84,20 +84,6 @@ object ContainsQuantifiedVisitor extends CollectingVisitor[Int, Boolean] {
     if (subres.isEmpty) false else subres.reduce(_ || _)
 }
 
-// Returns the number of free variables minus 1
-object MaxIndexVisitor extends CollectingVisitor[Unit, Int] {
-  def apply(expr: IExpression): Int = {
-    MaxIndexVisitor.visit(expr, ())
-  }
-
-  override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case v: IVariable => ShortCutResult(v.index)
-    case _            => KeepArg
-  }
-
-  override def postVisit(t: IExpression, arg: Unit, subres: Seq[Int]): Int =
-    if (subres.isEmpty) 0 else subres.max
-}
 
 // Returns an IExpression where simplifications related to the literals
 // true and false have been made

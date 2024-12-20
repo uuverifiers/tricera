@@ -701,6 +701,8 @@ class CCReader private (prog              : Program,
     variableHints += List()
   }
 
+  def getHeap = if (modelHeap) { Some(heap)} else { None }
+
   /**
    * For checking [[properties.MemValidCleanup]], a prophecy variable is used.
    */

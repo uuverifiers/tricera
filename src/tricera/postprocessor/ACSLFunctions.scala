@@ -38,6 +38,7 @@ import ap.parser._
 import ap.terfor.ConstantTerm
 import IExpression._
 import ap.types.MonoSortedIFunction
+import tricera.{ResultUtils, IFuncParam}
 
 object ACSLExpression {
   val valid = new Predicate("\\valid", 1)
@@ -85,11 +86,7 @@ object ACSLExpression {
     )
   }
 
-  def separatedPointers(
-      pointers: Set[ISortedVariable],
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
-  ): IFormula = {
+  def separatedPointers(pointers: Set[IFuncParam]): IFormula = {
 
     def separatedAtom(p1: String, p2: String): IFormula = {
       IAtom(
@@ -98,7 +95,10 @@ object ACSLExpression {
       ).asInstanceOf[IFormula]
     }
 
-    val pointerNames = variableSetToRawNameSeq(pointers, quantifierDepth, cci)
+    val pointerNames = pointers.map(p => {
+      val IFuncParam(constTerm) = p
+      IFuncParam(new ConstantTerm(ResultUtils.stripOld(constTerm.name)))
+    })
     if (pointerNames.size >= 2) {
       pointerNames
         .combinations(2)

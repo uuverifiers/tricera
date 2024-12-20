@@ -42,8 +42,9 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import tricera.postprocessor.ContractConditionType._
+import tricera.{ResultUtils, IFuncParam}
 
-object ToVariableForm extends ContractProcessor {
+object ToVariableForm extends ContractProcessor with ResultUtils {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IFormula = {
@@ -56,33 +57,34 @@ object ToVariableForm extends ContractProcessor {
           ValSetReader.deBrujin(cci.postcondition)
         )
     }
-    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap, cci).asInstanceOf[IFormula]
+    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap).asInstanceOf[IFormula]
   }
 }
 
 object ToExplicitForm {
-  def deBrujin(expr: IExpression, valueSet: ValSet, cci: ContractConditionInfo) = {
-    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap, cci)
+  def deBrujin(expr: IExpression, valueSet: ValSet) = {
+    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap)
   } 
 
-  def invariant(expr: IExpression, valueSet: ValSet, cci: ContractConditionInfo) = {
-    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap, cci)
+  def invariant(expr: IExpression, valueSet: ValSet) = {
+    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap)
   } 
 }
 
 object EqualitySwapper {
-  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo) = {
-    (new EqualitySwapper(swapMap, cci))(expr)
+  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm]) = {
+    (new EqualitySwapper(swapMap))(expr)
   }
 
-  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo) = {
-    (new InvariantEqualitySwapper(swapMap, cci))(expr)
+  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm]) = {
+    (new InvariantEqualitySwapper(swapMap))(expr)
   }
 }
 
-class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo)
+class EqualitySwapper(swapMap: Map[IExpression, ITerm])
     extends CollectingVisitor[Int, IExpression] 
-    with ExpressionUtils {
+    with ExpressionUtils
+    with ResultUtils {
 
   // swaps every expression except equalities but including the @h expression
   def apply(contractCondition: IExpression): IExpression = {
@@ -96,9 +98,9 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionIn
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: ISortedVariable, term) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(v: IFuncParam, term) if !isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: ISortedVariable) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(term, v: IFuncParam) if !isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)
@@ -113,33 +115,27 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionIn
       quantifierDepth: Int,
       subres: Seq[IExpression]
   ): IExpression = t match {
-    case h: ISortedVariable if cci.isCurrentHeap(h, quantifierDepth) =>
+    case h: IFuncParam if isCurrentHeap(h) =>
       t update subres 
     case term: ITerm =>
-      val res = t update subres
-      val shiftedTerm =
-        VariableShiftVisitor(term, quantifierDepth, -quantifierDepth)
-      swapMap.get(shiftedTerm) match {
-        case Some(variable) =>
-          val newVariable =
-            VariableShiftVisitor(variable, 0, quantifierDepth)
-          newVariable
-        case None =>
-          res
+      swapMap.get(term) match {
+        case Some(variable) => variable
+        case None => t update subres
       }
     case default => t update subres
   }
 }
 
-class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo) extends EqualitySwapper(swapMap, cci) {
+class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm]) 
+  extends EqualitySwapper(swapMap) with ResultUtils {
 
   override def preVisit(
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: ISortedVariable, term) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(v: IFuncParam, term) if !isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: ISortedVariable) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(term, v: IFuncParam) if !isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)

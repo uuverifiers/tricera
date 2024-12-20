@@ -40,6 +40,7 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.ADT
+import tricera.{IFuncParam}
 
 object Val {
   def apply(term1: ITerm, term2: ITerm): Val = {
@@ -63,7 +64,7 @@ case class Val(variants: Set[ITerm]) {
   }
 
   def getVariableForm: Option[ITerm] = variants find {
-    case v: ISortedVariable => true
+    case v: IFuncParam => true
     case _                  => false
   }
 
