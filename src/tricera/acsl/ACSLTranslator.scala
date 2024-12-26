@@ -229,13 +229,17 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
               val oldGlobals : Seq[ITerm] =
                 ctx.getGlobals.map(g => funCtx.getOldVar(g.name).get.term)
               val globToOld : Map[ITerm, ITerm] =
-                globals.zip(oldGlobals).toMap
+                globals.zip(oldGlobals).toMap   
+              val postGlobals : Seq[ITerm] =
+                ctx.getGlobals.map(g => funCtx.getPostGlobalVar(g.name).get.term)
+              val globToPost : Map[ITerm, ITerm] =
+                globals.zip(postGlobals).toMap   
 
               val nonAssignedGlobals : Set[ITerm] =
                 globals.toSet.diff(idents.map(_.toTerm))
 
               nonAssignedGlobals.foldLeft(IBoolLit(true) : IFormula) (
-                (formula, term) => formula &&& term === globToOld(term)
+                (formula, term) => formula &&& globToPost(term) === globToOld(term)
               )
             }
 
