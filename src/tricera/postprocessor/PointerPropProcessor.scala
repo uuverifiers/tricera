@@ -100,10 +100,10 @@ object PointerPropProcessor extends ResultProcessor {
   def readSafeVariables(
       heap: HeapState,
       valueSetWithAddresses: ValSet
-  ): Set[ISortedVariable] = {
+  ): Set[IFuncParam] = {
     heap.storage.keys
       .flatMap(valueSetWithAddresses.getVariableForm(_))
-      .asInstanceOf[Set[ISortedVariable]]
+      .asInstanceOf[Set[IFuncParam]]
   }
 }
 
@@ -162,6 +162,8 @@ class HeapReducer(cci: HeapInfo)
       subres: Seq[IExpression]
   ): IExpression = {
     t update subres match {
+      // SSSOWO TODO: Why does this need special handling? "emptyHeap" is
+      //   part of Heap.functions and should work with TheoryOfHeapFunApp
       case IFunApp(fun, args) if (fun.name == "emptyHeap" && args.isEmpty) => 
         HeapState.empty
       case ISortedVariable(index, sort) if sort.name == "Heap" => // TODO: Move magic constants to HeapInfo

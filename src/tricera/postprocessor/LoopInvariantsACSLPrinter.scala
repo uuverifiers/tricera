@@ -10,7 +10,7 @@ object LoopInvariantsACSLPrinter extends ResultProcessor {
 
 final case class LoopInvariantsACSLPrinter() extends ResultProcessor {
   override def applyTo(solution: Solution) = solution match {
-    case Solution(isHeapUsed, functionInvariants) => 
+    case Solution(functionInvariants, heapInfo) => 
       printLoopInvariants(functionInvariants.flatMap(f => f.loopInvariants))
       solution
   }

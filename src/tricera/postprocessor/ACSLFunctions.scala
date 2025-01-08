@@ -87,60 +87,39 @@ object ACSLExpression {
   }
 
   def separatedPointers(pointers: Set[IFuncParam]): IFormula = {
-
-    def separatedAtom(p1: String, p2: String): IFormula = {
-      IAtom(
-        separated,
-        Seq(IConstant(new ConstantTerm(p1)), IConstant(new ConstantTerm(p2)))
-      ).asInstanceOf[IFormula]
+    def asSeparatedAtom(p1: IFuncParam, p2: IFuncParam): IFormula = {
+      IAtom(separated, Seq(p1, p2))
     }
 
-    val pointerNames = pointers.map(p => {
-      val IFuncParam(constTerm) = p
-      IFuncParam(new ConstantTerm(ResultUtils.stripOld(constTerm.name)))
-    })
-    if (pointerNames.size >= 2) {
-      pointerNames
+    val ptrs = pointers.map(p => stripOld(p))
+    if (ptrs.size >= 2) {
+      ptrs
+        .toSeq
         .combinations(2)
-        .map({ case Seq(p1, p2) =>
-          separatedAtom(p1, p2)
-        })
+        .map({ case Seq(p1, p2) => asSeparatedAtom(p1, p2) })
         .reduceLeft(_ & _)
     } else {
       IBoolLit(true)
     }
   }
 
-  def validPointers(
-      pointers: Set[ISortedVariable],
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
-  ): IFormula = {
-    def validAtom(p: String) = {
-      IAtom(valid, Seq(IConstant(new ConstantTerm(p)))).asInstanceOf[IFormula]
-    }
+  def validPointers(pointers: Set[IFuncParam]): IFormula = {
+    def validAtom(p: IFuncParam):IFormula = IAtom(valid, Seq(p)) 
 
-    val pointerNames = variableSetToRawNameSeq(pointers, quantifierDepth, cci)
-    pointerNames.size match {
+    val ptrs = pointers.map(p => stripOld(p))
+    ptrs.size match {
       case s if s >= 2 =>
-        pointerNames
+        ptrs
           .map((p) => validAtom(p))
           .reduceLeft(_ & _)
       case s if s == 1 =>
-        validAtom(pointerNames.head)
+        validAtom(ptrs.head)
       case _ => IBoolLit(true)
     }
   }
 
-  def variableSetToRawNameSeq(
-      variableSet: Set[ISortedVariable],
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
-  ): Seq[String] = {
-    variableSet
-      .map(pointer =>
-        cci.stripOld(cci.getVarName(pointer, quantifierDepth).get)
-      )
-      .toSeq
+  private def stripOld(p: IFuncParam): IFuncParam = {
+    val IFuncParam(constTerm) = p
+    IFuncParam(new ConstantTerm(ResultUtils.stripOld(constTerm.name)))  
   }
 }

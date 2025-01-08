@@ -129,8 +129,8 @@ object ADTExploder extends SolutionProcessor
 object _ADTExploder extends ResultProcessor {
 
   override def applyTo(solution: Solution): Solution = solution match {
-    case Solution(isHeapUsed, functionInvariants) =>
-      Solution(isHeapUsed, functionInvariants.map(i => rewrite(i)))
+    case Solution(functionInvariants, heapInfo) =>
+      Solution(functionInvariants.map(i => rewrite(i)), heapInfo)
   }
 
   def rewrite(funcInv: FunctionInvariants): FunctionInvariants = funcInv match {

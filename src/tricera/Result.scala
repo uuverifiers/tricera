@@ -62,6 +62,7 @@ case class Empty() extends Result {
 
 object ResultUtils {
   // SSSOWO: TODO: This magic constant should be placed somewhere else.
+  //   It is used in more than this place.
   def stripOld(str: String) = str.stripSuffix("_old")
 
 }

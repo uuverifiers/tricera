@@ -50,7 +50,7 @@ import tricera.params.TriCeraParameters
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
-import tricera.{Util, properties}
+import tricera.{Util, properties, HeapInfo}
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -702,6 +702,7 @@ class CCReader private (prog              : Program,
   }
 
   def getHeap = if (modelHeap) { Some(heap)} else { None }
+  def getHeapInfo = getHeap.map(h => new HeapInfo(heap, heapTermName))
 
   /**
    * For checking [[properties.MemValidCleanup]], a prophecy variable is used.

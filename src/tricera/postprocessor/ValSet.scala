@@ -65,7 +65,7 @@ case class Val(variants: Set[ITerm]) {
 
   def getVariableForm: Option[ITerm] = variants find {
     case v: IFuncParam => true
-    case _                  => false
+    case _             => false
   }
 
   def +(term: ITerm): Val = {

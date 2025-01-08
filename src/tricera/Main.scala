@@ -608,7 +608,7 @@ class Main (args: Array[String]) {
           Solution(
             reader.getFunctionContexts.map(
               {case (funcId, ctx) => toFunctionInvariants(funcId, ctx, solution)}).toSeq,
-            reader.getHeap.map(h => HeapInfo(h)))
+            reader.getHeapInfo)
         case Left(None) => Empty()
         case Right(cex) => CounterExample(cex)
       }
