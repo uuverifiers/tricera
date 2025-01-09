@@ -87,7 +87,7 @@ object PointerPropProcessor extends ResultProcessor {
 
   def getSafePointers(invForm: IFormula, heapInfo: HeapInfo): Set[IFuncParam] = {
     val valueSet = ValSetReader.invariant(invForm)
-    val explForm = ToExplicitForm.invariant(invForm, valueSet)
+    val explForm = ToExplicitForm.invariant(invForm, valueSet, heapInfo)
     val redForm = HeapReducer(explForm, heapInfo)
     HeapExtractor(redForm, heapInfo) match {
       case Some(heap) =>

@@ -42,9 +42,9 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import tricera.postprocessor.ContractConditionType._
-import tricera.{ResultUtils, IFuncParam}
+import tricera.{ResultUtils, HeapInfo, IFuncParam}
 
-object ToVariableForm extends ContractProcessor with ResultUtils {
+object ToVariableForm extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
   ): IFormula = {
@@ -57,34 +57,34 @@ object ToVariableForm extends ContractProcessor with ResultUtils {
           ValSetReader.deBrujin(cci.postcondition)
         )
     }
-    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap).asInstanceOf[IFormula]
+    val heapInfo = new HeapInfo(cci.heapTheory, "@h") // SSSOWO FIX ME: Name constant is temporary 
+    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap, heapInfo).asInstanceOf[IFormula]
   }
 }
 
 object ToExplicitForm {
-  def deBrujin(expr: IExpression, valueSet: ValSet) = {
-    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap)
+  def deBrujin(expr: IExpression, valueSet: ValSet, heapInfo: HeapInfo) = {
+    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap, heapInfo)
   } 
 
-  def invariant(expr: IExpression, valueSet: ValSet) = {
-    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap)
+  def invariant(expr: IExpression, valueSet: ValSet, heapInfo: HeapInfo) = {
+    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap, heapInfo)
   } 
 }
 
 object EqualitySwapper {
-  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm]) = {
-    (new EqualitySwapper(swapMap))(expr)
+  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo) = {
+    (new EqualitySwapper(swapMap, heapInfo))(expr)
   }
 
-  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm]) = {
-    (new InvariantEqualitySwapper(swapMap))(expr)
+  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo) = {
+    (new InvariantEqualitySwapper(swapMap, heapInfo))(expr)
   }
 }
 
-class EqualitySwapper(swapMap: Map[IExpression, ITerm])
+class EqualitySwapper(swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo)
     extends CollectingVisitor[Int, IExpression] 
-    with ExpressionUtils
-    with ResultUtils {
+    with ExpressionUtils {
 
   // swaps every expression except equalities but including the @h expression
   def apply(contractCondition: IExpression): IExpression = {
@@ -98,9 +98,9 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm])
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: IFuncParam, term) if !isCurrentHeap(v) =>
+    case IEquation(v: IFuncParam, term) if !heapInfo.isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: IFuncParam) if !isCurrentHeap(v) =>
+    case IEquation(term, v: IFuncParam) if !heapInfo.isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)
@@ -115,7 +115,7 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm])
       quantifierDepth: Int,
       subres: Seq[IExpression]
   ): IExpression = t match {
-    case h: IFuncParam if isCurrentHeap(h) =>
+    case h: IFuncParam if heapInfo.isCurrentHeap(h) =>
       t update subres 
     case term: ITerm =>
       swapMap.get(term) match {
@@ -126,16 +126,16 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm])
   }
 }
 
-class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm]) 
-  extends EqualitySwapper(swapMap) with ResultUtils {
+class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo) 
+  extends EqualitySwapper(swapMap, heapInfo) {
 
   override def preVisit(
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: IFuncParam, term) if !isCurrentHeap(v) =>
+    case IEquation(v: IFuncParam, term) if !heapInfo.isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: IFuncParam) if !isCurrentHeap(v) =>
+    case IEquation(term, v: IFuncParam) if !heapInfo.isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)
