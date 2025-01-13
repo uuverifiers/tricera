@@ -18,6 +18,8 @@ jobs:
       with:
         java-version: '11'
         distribution: 'adopt'
+    - name: Set up sbt
+      uses: sbt/setup-sbt@v1
     - name: Build
       run: sbt assembly
     - name: Test
