@@ -14,7 +14,7 @@ class IFuncParam(c: ConstantTerm) extends IConstant(c) {
     case that: IFuncParam => this.c == that.c
     case _ => false
   }
-  override def hashCode: Int = c.hashCode
+  //override def hashCode: Int = c.hashCode
 }
 
 object IFuncParam {

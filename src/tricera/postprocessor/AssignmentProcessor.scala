@@ -40,50 +40,51 @@
 
 package tricera.postprocessor
 
+import tricera.{Solution, Invariant, HeapInfo, IFuncParam}
+import tricera.FunctionInvariants
+import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+
 import tricera.postprocessor.ContractConditionType._
 import ap.parser._
 
-object AssignmentProcessor extends ContractProcessor with ClauseCreator {
-  def apply(
-      expr: IExpression,
-      valueSet: ValSet,
-      separatedSet: Set[ISortedVariable],
-      cci: ContractConditionInfo
-  ): Option[IFormula] = {
-    (new AssignmentProcessor(valueSet, separatedSet, cci)).visit(expr, 0)
+object AssignmentProcessor extends ResultProcessor {
+  override def applyTo(solution: Solution) = solution match {
+    case Solution(functionInvariants, Some(heapInfo)) =>
+      Solution(functionInvariants.map(applyTo(_, heapInfo)), Some(heapInfo))
+    case _ =>
+      throw NeedsHeapModelException
   }
 
-  def processContractCondition(cci: ContractConditionInfo) = {
-    getClauses(cci.contractCondition, cci) match {
-      case Some(clauses) =>
-        cci.contractCondition
-          .&(clauses)
-      case _ =>
-        cci.contractCondition
-    }
+  private def applyTo(funcInv: FunctionInvariants, heapInfo: HeapInfo)
+  : FunctionInvariants = funcInv match {
+    case FunctionInvariants(id, preCondition, postCondition, loopInvariants) =>
+      FunctionInvariants(
+        id,
+        preCondition, // Note: This processor is only applicable to the post condition
+        addAssignmentAtoms(postCondition, heapInfo),
+        loopInvariants)
   }
 
-  def getClauses(
-      expr: IExpression,
-      cci: ContractConditionInfo
-  ): Option[IFormula] = {
-    cci.contractConditionType match {
-      case Precondition =>
-        None
-      case Postcondition =>
-        val valueSet = ValSetReader.deBrujin(cci.contractCondition)
-        val separatedSet =
-          PointerPropProcessor.getSafePointers(cci.contractCondition, cci)
-        AssignmentProcessor(expr, valueSet, separatedSet, cci)
-    }
+  private def addAssignmentAtoms(invariant: Invariant, heapInfo: HeapInfo) = invariant match {
+    case Invariant(form, srcInfo) =>
+      val visitor = new AssignmentProcessor(
+        ValSetReader.deBrujin(form),
+        PointerPropProcessor.getSafePointers(form, heapInfo),
+        heapInfo)
+      val newForm = visitor.visit(form, 0) match {
+        case None => form
+        case Some(assignments) => form.&(assignments)
+      }
+      Invariant(newForm, srcInfo)
   }
 }
 
-class AssignmentProcessor(
-    valueSet: ValSet,
-    separatedSet: Set[ISortedVariable],
-    cci: ContractConditionInfo
-) extends CollectingVisitor[Int, Option[IFormula]] {
+
+private class AssignmentProcessor(
+  valueSet: ValSet,
+  separatedSet: Set[IFuncParam],
+  cci: HeapInfo) 
+  extends CollectingVisitor[Int, Option[IFormula]] {
 
   private def getReverseAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
     t match {
@@ -101,26 +102,24 @@ class AssignmentProcessor(
   def assignmentToEquality(
       pointer: ITerm,
       value: ITerm,
-      heapVar: ISortedVariable
+      heapVar: IFuncParam
   ): Option[IFormula] = {
-    cci.getGetter(value) match {
-      case Some(selector) =>
-        Some(
-          IEquation(
+    value match {
+      case IFunApp(objCtor, _) =>
+        cci.objectCtorToSelector(objCtor)
+          .map(selector => IEquation(
             IFunApp(
               selector,
-              Seq(IFunApp(cci.heapTheory.read, Seq(heapVar, pointer)))
+              Seq(IFunApp(cci.getReadFun, Seq(heapVar, pointer)))
             ),
-            IFunApp(selector, Seq(value))
-          ).asInstanceOf[IFormula]
-        )
+            IFunApp(selector, Seq(value))).asInstanceOf[IFormula])
       case _ => None
     }
   }
 
   def extractEqualitiesFromWriteChain(
       funApp: IExpression,
-      heapVar: ISortedVariable
+      heapVar: IFuncParam
   ): Option[IFormula] = {
     def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) = {
       if (separatedSet.isEmpty) {
@@ -177,7 +176,7 @@ class AssignmentProcessor(
 
   override def preVisit(
       t: IExpression,
-      quantifierDepth: Int
+      quantifierDepth: Int 
   ): PreVisitResult = t match {
     case v: IVariableBinder => UniSubArgs(quantifierDepth + 1)
     case _                  => KeepArg
@@ -193,8 +192,8 @@ class AssignmentProcessor(
       // addresses must be separated and pointers valid
       case IEquation(
             heapFunApp @ IFunApp(function, _),
-            Var(h)
-          ) if cci.isCurrentHeap(h, quantifierDepth) =>
+            h @ IFuncParam(_)
+          ) if cci.isCurrentHeap(h) =>
         shiftFormula(
           extractEqualitiesFromWriteChain(heapFunApp, h),
           quantifierDepth
@@ -202,9 +201,9 @@ class AssignmentProcessor(
 
       // other order..
       case IEquation(
-            Var(h),
+            h @ IFuncParam(_),
             heapFunApp @ IFunApp(function, _)
-          ) if cci.isCurrentHeap(h, quantifierDepth) =>
+          ) if cci.isCurrentHeap(h) =>
         shiftFormula(
           extractEqualitiesFromWriteChain(heapFunApp, h),
           quantifierDepth

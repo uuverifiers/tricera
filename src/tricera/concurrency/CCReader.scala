@@ -702,7 +702,7 @@ class CCReader private (prog              : Program,
   }
 
   def getHeap = if (modelHeap) { Some(heap)} else { None }
-  def getHeapInfo = getHeap.map(h => new HeapInfo(heap, heapTermName))
+  def getHeapInfo = getHeap.map(h => new HeapInfo(h, heapTermName))
 
   /**
    * For checking [[properties.MemValidCleanup]], a prophecy variable is used.
