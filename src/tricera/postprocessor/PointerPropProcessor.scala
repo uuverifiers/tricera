@@ -59,14 +59,16 @@ object PointerPropProcessor extends ResultProcessor {
       throw NeedsHeapModelException
   }
 
-  private def applyTo(funcInv: FunctionInvariants, heapInfo: HeapInfo)
-  : FunctionInvariants = funcInv match {
+  private def applyTo(funcInvs: FunctionInvariants, heapInfo: HeapInfo)
+  : FunctionInvariants = funcInvs match {
     case FunctionInvariants(id, preCondition, postCondition, loopInvariants) =>
-      FunctionInvariants(
+      val newInvs = FunctionInvariants(
         id,
         addPtrAtoms(preCondition, heapInfo),
         addPtrAtoms(postCondition, heapInfo),
         loopInvariants)
+      DebugPrinter.oldAndNew(PostconditionSimplifier, funcInvs, newInvs)
+      newInvs
   }
 
   private def addPtrAtoms(invariant: Invariant, heapInfo: HeapInfo): Invariant = invariant match {

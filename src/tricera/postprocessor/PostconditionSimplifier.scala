@@ -49,6 +49,8 @@ import ap.SimpleAPI.TimeoutException
 import ap.theories._
 import ap.SimpleAPI
 
+import scala.collection.mutable.{Set, HashSet}
+
 object PostconditionSimplifier extends ResultProcessor {
 
   override def applyTo(solution: Solution) = solution match {
@@ -124,6 +126,7 @@ object PostconditionSimplifier extends ResultProcessor {
         precondition
           .==>(postcondition.<=>(simplifiedPostcondition))
           .asInstanceOf[IFormula]
+      p.addConstants(CollectConstants(formula))
       collectAndAddTheories(p, formula)
 
       p.??(formula)
@@ -145,5 +148,21 @@ object PostconditionSimplifier extends ResultProcessor {
           false
       }
     }
+  }
+}
+
+private object CollectConstants {
+  def apply(formula: IFormula) = {
+    val constants = new HashSet[ITerm]()
+    (new CollectConstantsVisitor()).visit(formula, constants)
+    constants
+  }
+}
+
+private class CollectConstantsVisitor extends CollectingVisitor[Set[ITerm], Unit] {
+  override def postVisit(t: IExpression, constants: Set[ITerm], subres: Seq[Unit]): Unit = t match {
+    case c: IConstant =>
+      constants.add(c)
+    case _ =>
   }
 }

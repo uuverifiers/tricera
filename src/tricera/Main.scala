@@ -706,8 +706,10 @@ class Main (args: Array[String]) {
                 PointerPropProcessor,
                 AssignmentProcessor
               )
-/*
+
               for (prsor <- heapPropProcessors) {
+                acslProcessedSolution = prsor(acslProcessedSolution)
+/*
                 val contractInfo = ContractInfo(solution, fun, ctx)
                 val preCCI =
                   ContractConditionInfo(ctx.prePred.pred, contractInfo)
@@ -739,8 +741,9 @@ class Main (args: Array[String]) {
 
                 acslProcessedSolution = addClauses(
                   postClauses,ctx.postPred.pred, acslProcessedSolution)
+*/
               }
-
+/*
               val printHeapExprProcessors = Seq(
                 TheoryOfHeapProcessor,
                 ADTSimplifier,

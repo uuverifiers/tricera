@@ -32,12 +32,12 @@ object DebugPrinter {
     = {
     printlnDebug(f"----- Applying ${processor} to ${oldInvs.id}.")
     printlnDebug("----- Precondition:")
-    printlnDebug(oldInvs.preCondition.toString)
+    printlnDebug(oldInvs.preCondition.expression.toString)
     printlnDebug("----- New Precondition:")
-    printlnDebug(newInvs.preCondition.toString)
+    printlnDebug(newInvs.preCondition.expression.toString)
     printlnDebug("----- Postcondition:")
-    printlnDebug(oldInvs.postCondition.toString)
+    printlnDebug(oldInvs.postCondition.expression.toString)
     printlnDebug("----- New Postcondition:")
-    printlnDebug(newInvs.postCondition.toString)
+    printlnDebug(newInvs.postCondition.expression.toString)
   }
 }
