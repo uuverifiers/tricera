@@ -67,7 +67,7 @@ object PointerPropProcessor extends ResultProcessor {
         addPtrAtoms(preCondition, heapInfo),
         addPtrAtoms(postCondition, heapInfo),
         loopInvariants)
-      DebugPrinter.oldAndNew(PostconditionSimplifier, funcInvs, newInvs)
+      DebugPrinter.oldAndNew(PointerPropProcessor, funcInvs, newInvs)
       newInvs
   }
 
@@ -168,7 +168,7 @@ class HeapReducer(cci: HeapInfo)
       //   part of Heap.functions and should work with TheoryOfHeapFunApp
       case IFunApp(fun, args) if (fun.name == "emptyHeap" && args.isEmpty) => 
         HeapState.empty
-      case ISortedVariable(index, sort) if sort.name == "Heap" => // TODO: Move magic constants to HeapInfo
+      case ISortedVariable(index, sort) if cci.isHeapSortName(sort.name) =>
         HeapState.heapById(quantifierIds(index))
       case TheoryOfHeapFunApp(
             writeFun,

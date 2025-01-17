@@ -658,7 +658,7 @@ class Main (args: Array[String]) {
 
           var printedACSLHeader = false
           // line numbers in contract vars (e.g. x/1) are due to CCVar.toString
-          for ((fun, ctx) <- contexts) {
+//          for ((fun, ctx) <- contexts) {
             
             var acslProcessedSolution = processedSolution
 
@@ -682,6 +682,7 @@ class Main (args: Array[String]) {
                   (ctx.postPred.pred -> newPostcondition)
               }
 */
+/*
               import ap.parser.IFormula
               import ap.parser.IExpression.Predicate
               def addClauses(clauses: Option[IFormula],
@@ -698,10 +699,7 @@ class Main (args: Array[String]) {
                     solution
                 }  
               }
-
-              acslProcessedSolution =
-                PostconditionSimplifier(acslProcessedSolution)
-
+*/
               val heapPropProcessors = Seq(
                 PointerPropProcessor,
                 AssignmentProcessor
@@ -756,6 +754,8 @@ class Main (args: Array[String]) {
                 acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
               }
 */
+              acslProcessedSolution =
+                PostconditionSimplifier(acslProcessedSolution)
             }
 /*
             printlnDebug("----- Applying ACSLLineariser to precondition:")
@@ -797,7 +797,7 @@ class Main (args: Array[String]) {
             print(  "  ensures "); println(fPostACSLString + ";")
             println("*/")
 */
-          }
+//          }
           /*
           if(loopInvariants nonEmpty) {
             println("/* loop invariants */")
