@@ -22,8 +22,59 @@ object IFuncParam {
   def unapply(p: IFuncParam): Option[ConstantTerm] = Some(p.c)
 }
 
-case class Invariant(expression: IFormula, sourceInfo: Option[SourceInfo]) {}
-case class LoopInvariant(expression: IFormula, sourceInfo: SourceInfo) {}
+class FuncParamUtils(preSuffix: String, postSuffix: String) {
+  def isPreCondName(p: IFuncParam): Boolean = {
+    p.toString().endsWith(preSuffix)
+  }
+
+  def isPostCondName(p: IFuncParam): Boolean = {
+    p.toString().endsWith(postSuffix)
+  }
+
+  def isPreCondHeap(p: IFuncParam, heapInfo: HeapInfo): Boolean = {
+    isPreCondName(p) && heapInfo.isHeap(stripPreSuffix(p))
+  }
+
+  def isPostCondHeap(p: IFuncParam, heapInfo: HeapInfo): Boolean = {
+    isPostCondName(p) && heapInfo.isHeap(stripPostSuffix(p))
+  }
+
+  def stripPreSuffix(p: IFuncParam): IFuncParam = {
+    stripAnySuffix(p, preSuffix)
+  }
+
+  def stripPostSuffix(p: IFuncParam): IFuncParam = {
+    stripAnySuffix(p, postSuffix)
+  }
+
+  def stripSuffix(p: IFuncParam): IFuncParam = {
+    val stripped = stripPreSuffix(p)
+    if (stripped != p) {
+      stripped
+    } else {
+      stripPostSuffix(p)
+    }
+  }
+
+  private def stripAnySuffix(p: IFuncParam, suffix: String): IFuncParam = {
+    val name = p.toString()
+    if (name.endsWith(suffix)) {
+      IFuncParam(new ConstantTerm(name.dropRight(suffix.size)))
+    } else {
+      p
+    }
+  }
+}
+
+case class Invariant(
+  expression: IFormula,
+  utils: FuncParamUtils,
+  sourceInfo: Option[SourceInfo]) {}
+
+case class LoopInvariant(
+  expression: IFormula,
+  util: FuncParamUtils,
+  sourceInfo: SourceInfo) {}
 
 case class FunctionInvariants(
   id: String,
@@ -58,11 +109,4 @@ case class CounterExample(
 
 case class Empty() extends Result {
   override def isEmpty = true
-}
-
-object ResultUtils {
-  // SSSOWO: TODO: This magic constant should be placed somewhere else.
-  //   It is used in more than this place.
-  def stripOld(str: String) = str.stripSuffix("_old")
-
 }

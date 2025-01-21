@@ -42,8 +42,8 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import tricera.postprocessor.ContractConditionType._
-import tricera.{ResultUtils, HeapInfo, IFuncParam}
-
+import tricera.{HeapInfo, IFuncParam}
+/*
 object ToVariableForm extends ContractProcessor {
   def processContractCondition(
       cci: ContractConditionInfo
@@ -61,28 +61,29 @@ object ToVariableForm extends ContractProcessor {
     EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap, heapInfo).asInstanceOf[IFormula]
   }
 }
+*/
 
 object ToExplicitForm {
-  def deBrujin(expr: IExpression, valueSet: ValSet, heapInfo: HeapInfo) = {
-    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap, heapInfo)
+  def deBrujin(expr: IExpression, valueSet: ValSet, isCurrentHeap: IFuncParam => Boolean) = {
+    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap, isCurrentHeap)
   } 
 
-  def invariant(expr: IExpression, valueSet: ValSet, heapInfo: HeapInfo) = {
-    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap, heapInfo)
+  def invariant(expr: IExpression, valueSet: ValSet, isCurrentHeap: IFuncParam => Boolean) = {
+    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap, isCurrentHeap)
   } 
 }
 
 object EqualitySwapper {
-  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo) = {
-    (new EqualitySwapper(swapMap, heapInfo))(expr)
+  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm], isCurrentHeap: IFuncParam => Boolean) = {
+    (new EqualitySwapper(swapMap, isCurrentHeap))(expr)
   }
 
-  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo) = {
-    (new InvariantEqualitySwapper(swapMap, heapInfo))(expr)
+  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm], isCurrentHeap: IFuncParam => Boolean) = {
+    (new InvariantEqualitySwapper(swapMap, isCurrentHeap))(expr)
   }
 }
 
-class EqualitySwapper(swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo)
+class EqualitySwapper(swapMap: Map[IExpression, ITerm], isCurrentHeap: IFuncParam => Boolean)
     extends CollectingVisitor[Int, IExpression] 
     with ExpressionUtils {
 
@@ -98,9 +99,9 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo)
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: IFuncParam, term) if !heapInfo.isCurrentHeap(v) =>
+    case IEquation(v: IFuncParam, term) if !isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: IFuncParam) if !heapInfo.isCurrentHeap(v) =>
+    case IEquation(term, v: IFuncParam) if !isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)
@@ -115,7 +116,7 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo)
       quantifierDepth: Int,
       subres: Seq[IExpression]
   ): IExpression = t match {
-    case h: IFuncParam if heapInfo.isCurrentHeap(h) =>
+    case h: IFuncParam if isCurrentHeap(h) =>
       t update subres 
     case term: ITerm =>
       swapMap.get(term) match {
@@ -126,16 +127,16 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo)
   }
 }
 
-class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], heapInfo: HeapInfo) 
-  extends EqualitySwapper(swapMap, heapInfo) {
+class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], isCurrentHeap: IFuncParam => Boolean) 
+  extends EqualitySwapper(swapMap, isCurrentHeap) {
 
   override def preVisit(
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: IFuncParam, term) if !heapInfo.isCurrentHeap(v) =>
+    case IEquation(v: IFuncParam, term) if !isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: IFuncParam) if !heapInfo.isCurrentHeap(v) =>
+    case IEquation(term, v: IFuncParam) if !isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)

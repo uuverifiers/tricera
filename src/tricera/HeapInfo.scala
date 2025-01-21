@@ -9,7 +9,7 @@ final case class HeapInfo(val heap: Heap, val heapTermName: String) {
     heap.userADTCtors
       .zip(heap.userADTSels)
       .withFilter({
-        case (ctor, sels) => ctor.resSort == heap.objectSortId
+        case (ctor, sels) => ctor.resSort == heap.ObjectSort
       })
       .map({
         // Object sorts have at most one corresponding selector,
@@ -42,7 +42,7 @@ final case class HeapInfo(val heap: Heap, val heapTermName: String) {
   def isNewAddrFun(function: IFunction): Boolean =
     function == heap.newAddr
 
-  def isCurrentHeap(constant: IFuncParam): Boolean = {
+  def isHeap(constant: IFuncParam): Boolean = {
     constant.toString() == heapTermName
   }
 

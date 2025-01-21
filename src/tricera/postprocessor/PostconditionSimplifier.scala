@@ -66,6 +66,7 @@ object PostconditionSimplifier extends ResultProcessor {
         preCondition,
         Invariant(
           simplify(preCondition.expression, postCondition.expression),
+          postCondition.utils,
           postCondition.sourceInfo),
         loopInvariants)
       DebugPrinter.oldAndNew(PostconditionSimplifier, funcInvs, newInvs)

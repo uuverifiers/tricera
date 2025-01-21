@@ -46,6 +46,7 @@ import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
 import tricera.postprocessor.ContractConditionType._
 import ap.parser._
+import ap.terfor.ConstantTerm
 
 object AssignmentProcessor extends ResultProcessor {
   override def applyTo(solution: Solution) = solution match {
@@ -58,24 +59,34 @@ object AssignmentProcessor extends ResultProcessor {
   private def applyTo(funcInv: FunctionInvariants, heapInfo: HeapInfo)
   : FunctionInvariants = funcInv match {
     case FunctionInvariants(id, preCondition, postCondition, loopInvariants) =>
-      FunctionInvariants(
+      val newInv = FunctionInvariants(
         id,
         preCondition, // Note: This processor is only applicable to the post condition
-        addAssignmentAtoms(postCondition, heapInfo),
+        addAssignmentAtoms(
+          postCondition,
+          postCondition.utils.isPostCondHeap(_,heapInfo),
+          heapInfo),
         loopInvariants)
+      DebugPrinter.oldAndNew(AssignmentProcessor, funcInv, newInv)
+      newInv
   }
 
-  private def addAssignmentAtoms(invariant: Invariant, heapInfo: HeapInfo) = invariant match {
-    case Invariant(form, srcInfo) =>
+  private def addAssignmentAtoms(
+    invariant: Invariant,
+    isCurrentHeap: IFuncParam => Boolean,
+    heapInfo: HeapInfo)
+    = invariant match {
+    case Invariant(form, utils, srcInfo) =>
       val visitor = new AssignmentProcessor(
         ValSetReader.deBrujin(form),
-        PointerPropProcessor.getSafePointers(form, heapInfo),
+        PointerPropProcessor.getSafePointers(form, heapInfo, isCurrentHeap),
+        isCurrentHeap,
         heapInfo)
       val newForm = visitor.visit(form, 0) match {
         case None => form
         case Some(assignments) => form.&(assignments)
       }
-      Invariant(newForm, srcInfo)
+      Invariant(newForm, utils, srcInfo)
   }
 }
 
@@ -83,6 +94,7 @@ object AssignmentProcessor extends ResultProcessor {
 private class AssignmentProcessor(
   valueSet: ValSet,
   separatedSet: Set[IFuncParam],
+  isCurrentHeap: IFuncParam => Boolean,
   cci: HeapInfo) 
   extends CollectingVisitor[Int, Option[IFormula]] {
 
@@ -193,7 +205,7 @@ private class AssignmentProcessor(
       case IEquation(
             heapFunApp @ IFunApp(function, _),
             h @ IFuncParam(_)
-          ) if cci.isCurrentHeap(h) =>
+          ) if isCurrentHeap(h) =>
         shiftFormula(
           extractEqualitiesFromWriteChain(heapFunApp, h),
           quantifierDepth
@@ -203,7 +215,7 @@ private class AssignmentProcessor(
       case IEquation(
             h @ IFuncParam(_),
             heapFunApp @ IFunApp(function, _)
-          ) if cci.isCurrentHeap(h) =>
+          ) if isCurrentHeap(h) =>
         shiftFormula(
           extractEqualitiesFromWriteChain(heapFunApp, h),
           quantifierDepth

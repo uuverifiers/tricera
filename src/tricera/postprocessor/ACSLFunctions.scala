@@ -38,7 +38,7 @@ import ap.parser._
 import ap.terfor.ConstantTerm
 import IExpression._
 import ap.types.MonoSortedIFunction
-import tricera.{ResultUtils, IFuncParam}
+import tricera.{IFuncParam, FuncParamUtils}
 
 object ACSLExpression {
   val valid = new Predicate("\\valid", 1)
@@ -86,12 +86,12 @@ object ACSLExpression {
     )
   }
 
-  def separatedPointers(pointers: Set[IFuncParam]): IFormula = {
+  def separatedPointers(pointers: Set[IFuncParam], utils: FuncParamUtils): IFormula = {
     def asSeparatedAtom(p1: IFuncParam, p2: IFuncParam): IFormula = {
       IAtom(separated, Seq(p1, p2))
     }
 
-    val ptrs = pointers.map(p => stripOld(p))
+    val ptrs = pointers.map(p => utils.stripPreSuffix(p))
     if (ptrs.size >= 2) {
       ptrs
         .toSeq
@@ -103,10 +103,10 @@ object ACSLExpression {
     }
   }
 
-  def validPointers(pointers: Set[IFuncParam]): IFormula = {
+  def validPointers(pointers: Set[IFuncParam], utils: FuncParamUtils): IFormula = {
     def validAtom(p: IFuncParam):IFormula = IAtom(valid, Seq(p)) 
 
-    val ptrs = pointers.map(p => stripOld(p))
+    val ptrs = pointers.map(p => utils.stripPreSuffix(p))
     ptrs.size match {
       case s if s >= 2 =>
         ptrs
@@ -116,10 +116,5 @@ object ACSLExpression {
         validAtom(ptrs.head)
       case _ => IBoolLit(true)
     }
-  }
-
-  private def stripOld(p: IFuncParam): IFuncParam = {
-    val IFuncParam(constTerm) = p
-    IFuncParam(new ConstantTerm(ResultUtils.stripOld(constTerm.name)))  
   }
 }

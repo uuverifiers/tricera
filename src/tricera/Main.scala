@@ -594,20 +594,36 @@ class Main (args: Array[String]) {
         .asInstanceOf[IFormula]
       }
 
-      def toFunctionInvariants(funcId: String, ctx: CCReader.FunctionContext, solution: SolutionProcessor.Solution) = {
+      def toFunctionInvariants(
+        funcId: String,
+        utils: FuncParamUtils,
+        ctx: CCReader.FunctionContext,
+        solution: SolutionProcessor.Solution)
+        = {
         FunctionInvariants(
           funcId,
-          Invariant(replacePredVarWithFunctionParam(solution(ctx.prePred.pred), ctx.prePred.argVars.map(v => v.name)), ctx.prePred.srcInfo),
-          Invariant(replacePredVarWithFunctionParam(solution(ctx.postPred.pred), ctx.postPred.argVars.map(v => v.name)), ctx.postPred.srcInfo),
+          Invariant(
+            replacePredVarWithFunctionParam(
+              solution(ctx.prePred.pred),
+              ctx.prePred.argVars.map(v => v.name)),
+            utils,
+            ctx.prePred.srcInfo),
+          Invariant(
+            replacePredVarWithFunctionParam(
+              solution(ctx.postPred.pred),
+              ctx.postPred.argVars.map(v => v.name)),
+            utils,
+            ctx.postPred.srcInfo),
           List())
       }
 
       result match {
         case Left(Some(solution)) =>
           // SSSOWO TODO: Add loop invariants.
+          val utils = new FuncParamUtils("_old", "_post") // SSSOWO TODO: These constants should be provided by the CCRreader somehow ...
           Solution(
             reader.getFunctionContexts.map(
-              {case (funcId, ctx) => toFunctionInvariants(funcId, ctx, solution)}).toSeq,
+              {case (funcId, ctx) => toFunctionInvariants(funcId, utils, ctx, solution)}).toSeq,
             reader.getHeapInfo)
         case Left(None) => Empty()
         case Right(cex) => CounterExample(cex)

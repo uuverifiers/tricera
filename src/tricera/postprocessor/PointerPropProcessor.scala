@@ -64,34 +64,38 @@ object PointerPropProcessor extends ResultProcessor {
     case FunctionInvariants(id, preCondition, postCondition, loopInvariants) =>
       val newInvs = FunctionInvariants(
         id,
-        addPtrAtoms(preCondition, heapInfo),
-        addPtrAtoms(postCondition, heapInfo),
+        addPtrAtoms(preCondition, heapInfo, preCondition.utils.isPreCondHeap(_, heapInfo)),
+        addPtrAtoms(postCondition, heapInfo, postCondition.utils.isPostCondHeap(_,heapInfo)),
         loopInvariants)
       DebugPrinter.oldAndNew(PointerPropProcessor, funcInvs, newInvs)
       newInvs
   }
 
-  private def addPtrAtoms(invariant: Invariant, heapInfo: HeapInfo): Invariant = invariant match {
-    case Invariant(form, srcInfo) =>
-      val newForm = getSafePointers(form, heapInfo) match {
+  private def addPtrAtoms(
+    invariant: Invariant,
+    heapInfo: HeapInfo,
+    isCurrentHeap: IFuncParam => Boolean)
+    : Invariant = invariant match {
+    case Invariant(form, utils, srcInfo) =>
+      val newForm = getSafePointers(form, heapInfo, isCurrentHeap) match {
         case safePointers if safePointers.size >= 2 =>
           form
-          .&(ACSLExpression.separatedPointers(safePointers))
-          .&(ACSLExpression.validPointers(safePointers))
+          .&(ACSLExpression.separatedPointers(safePointers, utils))
+          .&(ACSLExpression.validPointers(safePointers, utils))
         case safePointers if safePointers.size == 1 =>
           form
-          .&(ACSLExpression.validPointers(safePointers))
+          .&(ACSLExpression.validPointers(safePointers, utils))
         case _ => 
           form
       }
-      Invariant(newForm, srcInfo)
+      Invariant(newForm, utils, srcInfo)
   }
 
-  def getSafePointers(invForm: IFormula, heapInfo: HeapInfo): Set[IFuncParam] = {
+  def getSafePointers(invForm: IFormula, heapInfo: HeapInfo, isCurrentHeap: IFuncParam => Boolean): Set[IFuncParam] = {
     val valueSet = ValSetReader.invariant(invForm)
-    val explForm = ToExplicitForm.invariant(invForm, valueSet, heapInfo)
+    val explForm = ToExplicitForm.invariant(invForm, valueSet, isCurrentHeap)
     val redForm = HeapReducer(explForm, heapInfo)
-    HeapExtractor(redForm, heapInfo) match {
+    HeapExtractor(redForm, isCurrentHeap) match {
       case Some(heap) =>
         val redValueSet = ValSetReader.invariant(redForm)
         readSafeVariables(heap, redValueSet)
@@ -112,16 +116,16 @@ object PointerPropProcessor extends ResultProcessor {
 object HeapExtractor {
   def apply(
       expr: IExpression,
-      heapInfo: HeapInfo
+      isCurrentHeap: IFuncParam => Boolean
   ): Option[HeapState] = {
-    (new InvariantHeapExtractor(heapInfo)).visit(expr, ())
+    (new InvariantHeapExtractor(isCurrentHeap)).visit(expr, ())
   }
 }
 
-class InvariantHeapExtractor(cci: HeapInfo)
+class InvariantHeapExtractor(isCurrentHeap: IFuncParam => Boolean)
     extends CollectingVisitor[Unit, Option[HeapState]] {
   override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case IEquation(h: IFuncParam, heap: HeapState) if cci.isCurrentHeap(h) =>
+    case IEquation(h: IFuncParam, heap: HeapState) if isCurrentHeap(h) =>
       ShortCutResult(Some(heap))
     case _ =>
       KeepArg

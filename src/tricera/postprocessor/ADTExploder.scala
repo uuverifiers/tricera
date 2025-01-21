@@ -143,13 +143,13 @@ object _ADTExploder extends ResultProcessor {
   }
 
   def rewrite(inv: Invariant): Invariant = inv match {
-    case Invariant(expression, sourceInfo) =>
-      Invariant(rewrite(expression), sourceInfo)
+    case Invariant(expression, utils, sourceInfo) =>
+      Invariant(rewrite(expression), utils, sourceInfo)
   }
 
   def rewrite(inv: LoopInvariant): LoopInvariant = inv match {
-    case LoopInvariant(expression, sourceInfo) =>
-      LoopInvariant(rewrite(expression), sourceInfo)
+    case LoopInvariant(expression, utils, sourceInfo) =>
+      LoopInvariant(rewrite(expression), utils, sourceInfo)
   }
 
   def rewrite(expr : IFormula): IFormula = {
