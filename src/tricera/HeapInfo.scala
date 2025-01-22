@@ -46,6 +46,16 @@ final case class HeapInfo(val heap: Heap, val heapTermName: String) {
     constant.toString() == heapTermName
   }
 
+  def isObjCtor(func: IFunction): Boolean = {
+    objectCtorToSel.get(func).isDefined
+  }
+
+  def isObjSelector(func: IFunction): Boolean = {
+    objectCtorToSel.values.exists(
+      value => value.map(v => v == func).getOrElse(false)) 
+  }
+
+
   def getReadFun: IFunction = heap.read
 
   def objectCtorToSelector(objectCtor: IFunction): Option[IFunction] = {

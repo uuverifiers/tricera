@@ -41,8 +41,7 @@ package tricera.postprocessor
 
 import ap.parser._
 import scala.collection.immutable.Stack
-import tricera.{Solution, Invariant, HeapInfo, IFuncParam}
-import tricera.FunctionInvariants
+import tricera.{FunctionInvariants, HeapInfo, IFuncParam, Invariant, Solution}
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
 object PointerPropProcessor extends ResultProcessor {

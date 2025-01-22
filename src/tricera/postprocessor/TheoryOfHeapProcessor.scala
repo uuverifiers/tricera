@@ -40,32 +40,43 @@
 package tricera.postprocessor
 
 import ap.parser._
-import ap.theories.ADT
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import ap.theories.Heap
-import ap.theories.Heap.HeapFunExtractor
-import ContractConditionType._
-import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
-import ap.types.Sort
 
-object TheoryOfHeapProcessor
-    extends ContractProcessor {
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    TheoryOfHeapRewriter(cci).asInstanceOf[IFormula]
+import tricera.{FunctionInvariants, HeapInfo, IFuncParam, Invariant, Solution}
+import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+
+object TheoryOfHeapProcessor extends ResultProcessor {
+  override def applyTo(solution: Solution): Solution = solution match {
+    case Solution(functionInvariants, Some(heapInfo)) =>
+      Solution(functionInvariants.map(applyTo(_, heapInfo)), Some(heapInfo))
+    case _ =>
+      throw NeedsHeapModelException
+  }
+
+  private def applyTo(funcInvs :FunctionInvariants, heapInfo: HeapInfo)
+  : FunctionInvariants = funcInvs match {
+      case FunctionInvariants(id, preCondition, postCondition, loopInvariants) => 
+        val newInvs = FunctionInvariants(
+          id,
+          TheoryOfHeapRewriter(preCondition, heapInfo),
+          TheoryOfHeapRewriter(postCondition, heapInfo),
+          loopInvariants)
+        DebugPrinter.oldAndNew(TheoryOfHeapProcessor, funcInvs, newInvs)
+        newInvs
   }
 
   object TheoryOfHeapRewriter extends ExpressionUtils {
-    def apply(cci: ContractConditionInfo): IExpression = {
-      val theoryOfHeapRewriter = new TheoryOfHeapRewriter(cci)
-      iterateUntilFixedPoint(cci.contractCondition, theoryOfHeapRewriter.apply)
+    def apply(inv: Invariant, heapInfo: HeapInfo): Invariant = inv match {
+      case Invariant(expression, utils, sourceInfo) => 
+        val theoryOfHeapRewriter = new TheoryOfHeapRewriter(heapInfo)
+        Invariant(
+          iterateUntilFixedPoint(expression, theoryOfHeapRewriter.apply).asInstanceOf[IFormula],
+          utils,
+          sourceInfo)
     }
   }
 
   class TheoryOfHeapRewriter(
-      cci: ContractConditionInfo
+      heapInfo: HeapInfo
   ) extends CollectingVisitor[Unit, IExpression] {
 
     def apply(contractCondition: IExpression): IExpression = {
@@ -80,25 +91,25 @@ object TheoryOfHeapProcessor
 
         // o.get<sort>.O_<sort> -> o
         case IFunApp(wrapper, Seq(IFunApp(getter, Seq(obj))))
-            if (cci.isWrapper(wrapper)
-              && cci.isGetter(getter)) =>
+            if (heapInfo.isObjCtor(wrapper)
+              && heapInfo.isObjSelector(getter)) =>
           obj
 
         // o.O_<sort>.get<sort> -> o
         case IFunApp(getter, Seq(IFunApp(wrapper, Seq(obj))))
-            if (cci.isWrapper(wrapper)
-              && cci.isGetter(getter)) =>
+            if (heapInfo.isObjCtor(wrapper)
+              && heapInfo.isObjSelector(getter)) =>
           obj
 
         // read(write(h,p,o),p) -> o
         case TheoryOfHeapFunApp(
               readFun,
-              Seq(TheoryOfHeapFunApp(writeFun, Seq(Var(h), p2, o)), p1)
+              Seq(TheoryOfHeapFunApp(writeFun, Seq(Var(h), p2, obj)), p1)
             )
-            if (cci.isReadFun(readFun)
-              && cci.isWriteFun(writeFun)
+            if (heapInfo.isReadFun(readFun)
+              && heapInfo.isWriteFun(writeFun)
               && p1 == p2) =>
-          o
+          obj
 
         case _ => t update subres
     }
