@@ -719,7 +719,8 @@ class Main (args: Array[String]) {
               val heapPropProcessors = Seq(
                 PointerPropProcessor,
                 AssignmentProcessor,
-                TheoryOfHeapProcessor
+                TheoryOfHeapProcessor,
+                ADTSimplifier
               )
 
               for (prsor <- heapPropProcessors) {

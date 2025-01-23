@@ -66,10 +66,10 @@ object TheoryOfHeapProcessor extends ResultProcessor {
 
   object TheoryOfHeapRewriter extends ExpressionUtils {
     def apply(inv: Invariant, heapInfo: HeapInfo): Invariant = inv match {
-      case Invariant(expression, utils, sourceInfo) => 
+      case Invariant(form, utils, sourceInfo) => 
         val theoryOfHeapRewriter = new TheoryOfHeapRewriter(heapInfo)
         Invariant(
-          iterateUntilFixedPoint(expression, theoryOfHeapRewriter.apply).asInstanceOf[IFormula],
+          iterateUntilFixedPoint(form, theoryOfHeapRewriter.apply).asInstanceOf[IFormula],
           utils,
           sourceInfo)
     }
