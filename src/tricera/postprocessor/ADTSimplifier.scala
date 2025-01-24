@@ -65,8 +65,7 @@ object ADTSimplifier extends ResultProcessor {
   private def simplify(invariant: Invariant): Invariant = invariant match {
     case Invariant(form, utils, srcInfo) =>
       val simplifier = new ADTTermSimplifier()
-      val q = simplifier.visit(form, ())
-      Invariant(q.asInstanceOf[IFormula], utils, srcInfo)
+      Invariant(simplifier(form).asInstanceOf[IFormula], utils, srcInfo)
   }
 }
 

@@ -721,6 +721,7 @@ class Main (args: Array[String]) {
                 AssignmentProcessor,
                 TheoryOfHeapProcessor,
                 ADTSimplifier
+//                ToVariableForm
               )
 
               for (prsor <- heapPropProcessors) {
