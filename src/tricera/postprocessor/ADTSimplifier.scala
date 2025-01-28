@@ -41,9 +41,12 @@ package tricera.postprocessor
 import ap.parser._
 
 import ap.theories.ADT
+import ap.theories.TheoryRegistry
+
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import tricera.{FunctionInvariants, Invariant, Solution}
 import tricera.Util.printlnDebug
+import ap.theories.Theory
 
 object ADTSimplifier extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
@@ -105,7 +108,6 @@ private class ADTTermSimplifier extends CollectingVisitor[Unit, IExpression] {
         case _ => None
       }
     }
-
 
     t match {
       // S(x,y).a -> x
