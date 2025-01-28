@@ -720,8 +720,8 @@ class Main (args: Array[String]) {
                 PointerPropProcessor,
                 AssignmentProcessor,
                 TheoryOfHeapProcessor,
-                ADTSimplifier
-//                ToVariableForm
+                ADTSimplifier,
+                ToVariableForm
               )
 
               for (prsor <- heapPropProcessors) {

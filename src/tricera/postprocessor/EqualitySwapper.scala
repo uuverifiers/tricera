@@ -42,26 +42,51 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import tricera.postprocessor.ContractConditionType._
-import tricera.{HeapInfo, IFuncParam}
-/*
-object ToVariableForm extends ContractProcessor {
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    val valueSet = cci.contractConditionType match {
-      case Precondition =>
-        ValSetReader.deBrujin(cci.precondition)
-      case Postcondition =>
-        ValSet.merge(
-          ValSetReader.deBrujin(cci.precondition),
-          ValSetReader.deBrujin(cci.postcondition)
-        )
-    }
-    val heapInfo = new HeapInfo(cci.heapTheory, "@h") // SSSOWO FIX ME: Name constant is temporary 
-    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap, heapInfo).asInstanceOf[IFormula]
+import tricera.{HeapInfo, FunctionInvariants, IFuncParam, Invariant}
+import tricera.Solution
+import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+
+object ToVariableForm extends ResultProcessor {
+
+  override def applyTo(solution: Solution) = solution match {
+    case Solution(functionInvariants, Some(heapInfo)) =>
+      Solution(functionInvariants.map(applyTo(_, heapInfo)), Some(heapInfo))
+    case _ =>
+      throw NeedsHeapModelException
+  }
+
+  private def applyTo(funcInvs: FunctionInvariants, heapInfo: HeapInfo)
+  : FunctionInvariants = funcInvs match {
+    case FunctionInvariants(id, preCondition, postCondition, loopInvariants) =>
+      val preCondValSet = ValSetReader.deBrujin(preCondition.expression)
+      val postCondValSet = ValSet.merge(
+          ValSetReader.deBrujin(preCondition.expression),
+          ValSetReader.deBrujin(postCondition.expression))
+      val newInvs = FunctionInvariants(
+        id,
+        toVariableForm(preCondition, preCondValSet, preCondition.utils.isPreCondHeap(_, heapInfo)),
+        toVariableForm(postCondition, postCondValSet, postCondition.utils.isPostCondHeap(_,heapInfo)),
+        loopInvariants)
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
+  }
+
+  def toVariableForm(
+    invariant: Invariant,
+    valSet: ValSet,
+    isCurrentHeap: IFuncParam => Boolean): Invariant = invariant match {
+      case Invariant(form, utils, sourceInfo) => 
+        val valueSet = ValSetReader.deBrujin(form)
+        Invariant(
+          EqualitySwapper.deBrujin(
+            form,
+            valueSet.toVariableFormMap,
+            isCurrentHeap).asInstanceOf[IFormula],
+          utils,
+          sourceInfo)
   }
 }
-*/
+
 
 object ToExplicitForm {
   def deBrujin(expr: IExpression, valueSet: ValSet, isCurrentHeap: IFuncParam => Boolean) = {

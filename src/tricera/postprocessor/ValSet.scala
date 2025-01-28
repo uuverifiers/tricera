@@ -54,7 +54,7 @@ object Val {
 case class Val(variants: Set[ITerm]) {
   def getExplicitForm: Option[ITerm] = variants find {
     case a: Address         => false
-    case v: ISortedVariable => false
+    case v: ISortedVariable => false // SSSOWO TODO: Should this be changed to IFuncParam?
     case _                  => true
   }
 
@@ -174,11 +174,11 @@ case class ValSet(vals: Set[Val]) {
     }
   }
 
-  def toVariableFormMap: Map[IExpression, ISortedVariable] = {
+  def toVariableFormMap: Map[IExpression, IFuncParam] = {
     vals
       .collect {
         case value if value.getVariableForm.isDefined =>
-          val variable = value.getVariableForm.get.asInstanceOf[ISortedVariable]
+          val variable = value.getVariableForm.get.asInstanceOf[IFuncParam]
           value.variants
             .filterNot(_ == variable)
             .map(_ -> variable)
