@@ -42,8 +42,8 @@ final case class HeapInfo(val heap: Heap, val heapTermName: String) {
   def isNewAddrFun(function: IFunction): Boolean =
     function == heap.newAddr
 
-  def isHeap(constant: IFuncParam): Boolean = {
-    constant.toString() == heapTermName
+  def isHeap(constant: ProgVarProxy): Boolean = {
+    constant.name == heapTermName
   }
 
   def isObjCtor(func: IFunction): Boolean = {

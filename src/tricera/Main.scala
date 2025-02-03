@@ -587,44 +587,66 @@ class Main (args: Array[String]) {
       reader: CCReader,
       result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
       : Result = {
+      // SSSOWO TODO: These constants should be defined in a single place.
+      //   Currently they are literal strings in CCReader.
+      val preExecSuffix = "_old"
+      val postExecSuffix = "_post"
 
       def replacePredVarWithFunctionParam(formula: IFormula, funcParameters: Seq[String]): IFormula = {
+        def stripSuffix(name: String) = {
+          if (name.endsWith(preExecSuffix)) {
+            name.dropRight(preExecSuffix.size)
+          } else if (name.endsWith(postExecSuffix)) {
+            name.dropRight(postExecSuffix.size)
+          } else {
+            throw ProgVarContextException(f"Undefined suffix in predicate variable name: ${name}")
+          }
+        }
+
+        def nameToContext(name: String):ProgVarProxy.Context = {
+          if (name.endsWith(preExecSuffix)) {
+            ProgVarProxy.Context.PreExec
+          } else if (name.endsWith(postExecSuffix)) {
+            ProgVarProxy.Context.PostExec
+          } else {
+            throw ProgVarContextException(f"Undefined suffix in predicate variable name: ${name}")
+          }
+        }
         VariableSubstVisitor.visit(
-          formula, (funcParameters.map(p => IFuncParam(new ConstantTerm(p))).toList, 0))
+          formula, (funcParameters.map(p => IConstant(ProgVarProxy(stripSuffix(p), nameToContext(p)))).toList, 0))
         .asInstanceOf[IFormula]
       }
 
       def toFunctionInvariants(
         funcId: String,
-        utils: FuncParamUtils,
+        heapInfo: Option[HeapInfo],
         ctx: CCReader.FunctionContext,
         solution: SolutionProcessor.Solution)
         = {
         FunctionInvariants(
           funcId,
-          Invariant(
+          PreCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.prePred.pred),
               ctx.prePred.argVars.map(v => v.name)),
-            utils,
-            ctx.prePred.srcInfo),
-          Invariant(
+            heapInfo,
+            ctx.prePred.srcInfo)),
+          PostCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.postPred.pred),
               ctx.postPred.argVars.map(v => v.name)),
-            utils,
-            ctx.postPred.srcInfo),
+            heapInfo,
+            ctx.postPred.srcInfo)),
           List())
       }
 
       result match {
         case Left(Some(solution)) =>
+          val heapInfo = reader.getHeapInfo
           // SSSOWO TODO: Add loop invariants.
-          val utils = new FuncParamUtils("_old", "_post") // SSSOWO TODO: These constants should be provided by the CCRreader somehow ...
           Solution(
             reader.getFunctionContexts.map(
-              {case (funcId, ctx) => toFunctionInvariants(funcId, utils, ctx, solution)}).toSeq,
-            reader.getHeapInfo)
+              {case (funcId, ctx) => toFunctionInvariants(funcId, heapInfo, ctx, solution)}).toSeq)
         case Left(None) => Empty()
         case Right(cex) => CounterExample(cex)
       }
@@ -722,6 +744,7 @@ class Main (args: Array[String]) {
                 TheoryOfHeapProcessor,
                 ADTSimplifier,
                 ToVariableForm
+//                ACSLExpressionProcessor
               )
 
               for (prsor <- heapPropProcessors) {

@@ -40,32 +40,31 @@
 
 package tricera.postprocessor
 
-import tricera.{Solution, Invariant, HeapInfo, IFuncParam}
+import tricera.{ConstantAsProgVarProxy, HeapInfo, Invariant, PostCondition, ProgVarProxy, Solution}
 import tricera.FunctionInvariants
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
 import tricera.postprocessor.ContractConditionType._
 import ap.parser._
 import ap.terfor.ConstantTerm
+import tricera.ProgVarProxy
+
+// SSSOWO TODO: This should be rewritten to pick up the "valid" elements from
+//   the expression instead of recalculating safe pointers again.
 
 object AssignmentProcessor extends ResultProcessor {
   override def applyTo(solution: Solution) = solution match {
-    case Solution(functionInvariants, Some(heapInfo)) =>
-      Solution(functionInvariants.map(applyTo(_, heapInfo)), Some(heapInfo))
-    case _ =>
-      throw NeedsHeapModelException
+    case Solution(functionInvariants) =>
+      Solution(functionInvariants.map(applyTo(_)))
   }
 
-  private def applyTo(funcInv: FunctionInvariants, heapInfo: HeapInfo)
+  private def applyTo(funcInv: FunctionInvariants)
   : FunctionInvariants = funcInv match {
-    case FunctionInvariants(id, preCondition, postCondition, loopInvariants) =>
+    case FunctionInvariants(id, preCondition, postCondition @ PostCondition(postInv), loopInvariants) =>
       val newInv = FunctionInvariants(
         id,
         preCondition, // Note: This processor is only applicable to the post condition
-        addAssignmentAtoms(
-          postCondition,
-          postCondition.utils.isPostCondHeap(_,heapInfo),
-          heapInfo),
+        PostCondition(addAssignmentAtoms(postInv, postCondition.isCurrentHeap)),
         loopInvariants)
       DebugPrinter.oldAndNew(AssignmentProcessor, funcInv, newInv)
       newInv
@@ -73,10 +72,9 @@ object AssignmentProcessor extends ResultProcessor {
 
   private def addAssignmentAtoms(
     invariant: Invariant,
-    isCurrentHeap: IFuncParam => Boolean,
-    heapInfo: HeapInfo)
+    isCurrentHeap: ProgVarProxy => Boolean)
     = invariant match {
-    case Invariant(form, utils, srcInfo) =>
+    case Invariant(form, Some(heapInfo), srcInfo) =>
       val visitor = new AssignmentProcessor(
         ValSetReader.deBrujin(form),
         PointerPropProcessor.getSafePointers(form, heapInfo, isCurrentHeap),
@@ -86,15 +84,17 @@ object AssignmentProcessor extends ResultProcessor {
         case None => form
         case Some(assignments) => form.&(assignments)
       }
-      Invariant(newForm, utils, srcInfo)
+      Invariant(newForm, Some(heapInfo), srcInfo)
+    case _ =>
+      throw NeedsHeapModelException
   }
 }
 
 
 private class AssignmentProcessor(
   valueSet: ValSet,
-  separatedSet: Set[IFuncParam],
-  isCurrentHeap: IFuncParam => Boolean,
+  separatedSet: Set[ProgVarProxy],
+  isCurrentHeap: ProgVarProxy => Boolean,
   cci: HeapInfo) 
   extends CollectingVisitor[Int, Option[IFormula]] {
 
@@ -114,7 +114,7 @@ private class AssignmentProcessor(
   def assignmentToEquality(
       pointer: ITerm,
       value: ITerm,
-      heapVar: IFuncParam
+      heapVar: ProgVarProxy
   ): Option[IFormula] = {
     value match {
       case IFunApp(objCtor, _) =>
@@ -122,7 +122,7 @@ private class AssignmentProcessor(
           .map(selector => IEquation(
             IFunApp(
               selector,
-              Seq(IFunApp(cci.getReadFun, Seq(heapVar, pointer)))
+              Seq(IFunApp(cci.getReadFun, Seq(IConstant(heapVar), pointer)))
             ),
             IFunApp(selector, Seq(value))).asInstanceOf[IFormula])
       case _ => None
@@ -131,7 +131,7 @@ private class AssignmentProcessor(
 
   def extractEqualitiesFromWriteChain(
       funApp: IExpression,
-      heapVar: IFuncParam
+      heapVar: ProgVarProxy
   ): Option[IFormula] = {
     def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) = {
       if (separatedSet.isEmpty) {
@@ -204,7 +204,7 @@ private class AssignmentProcessor(
       // addresses must be separated and pointers valid
       case IEquation(
             heapFunApp @ IFunApp(function, _),
-            h @ IFuncParam(_)
+            ConstantAsProgVarProxy(h)
           ) if isCurrentHeap(h) =>
         shiftFormula(
           extractEqualitiesFromWriteChain(heapFunApp, h),
@@ -213,7 +213,7 @@ private class AssignmentProcessor(
 
       // other order..
       case IEquation(
-            h @ IFuncParam(_),
+            ConstantAsProgVarProxy(h),
             heapFunApp @ IFunApp(function, _)
           ) if isCurrentHeap(h) =>
         shiftFormula(

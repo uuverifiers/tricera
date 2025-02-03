@@ -43,7 +43,7 @@ package tricera.postprocessor
 import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
-import tricera.{Solution, FunctionInvariants, Invariant}
+import tricera.{FunctionInvariants, Invariant, PostCondition, Solution}
 import ap.SimpleAPI.ProverStatus
 import ap.SimpleAPI.TimeoutException
 import ap.theories._
@@ -54,20 +54,20 @@ import scala.collection.mutable.{Set, HashSet}
 object PostconditionSimplifier extends ResultProcessor {
 
   override def applyTo(solution: Solution) = solution match {
-    case Solution(functionInvariants, heapInfo) =>
-      Solution(functionInvariants.map(simplifyPostCondition(_)), heapInfo)
+    case Solution(functionInvariants) =>
+      Solution(functionInvariants.map(simplifyPostCondition(_)))
   }
 
   private def simplifyPostCondition(funcInvs: FunctionInvariants)
   : FunctionInvariants = funcInvs match {
-    case FunctionInvariants(id, preCondition, postCondition, loopInvariants) => 
+    case FunctionInvariants(id, preCondition, PostCondition(postInv), loopInvariants) => 
       val newInvs = FunctionInvariants(
         id,
         preCondition,
-        Invariant(
-          simplify(preCondition.expression, postCondition.expression),
-          postCondition.utils,
-          postCondition.sourceInfo),
+        PostCondition(Invariant(
+          simplify(preCondition.invariant.expression, postInv.expression),
+          postInv.heapInfo,
+          postInv.sourceInfo)),
         loopInvariants)
       DebugPrinter.oldAndNew(PostconditionSimplifier, funcInvs, newInvs)
       newInvs

@@ -9,7 +9,7 @@ import tricera.{Result, Solution, FunctionInvariants}
   */
 case class FunctionInvariantsFilter(p: FunctionInvariants => Boolean)  extends ResultProcessor {
   override def applyTo(solution: Solution) = solution match {
-    case Solution(functionInvariants, heapInfo) =>
-      Solution(functionInvariants.filter(p), heapInfo)
+    case Solution(functionInvariants) =>
+      Solution(functionInvariants.filter(p))
   }
 }

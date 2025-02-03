@@ -33,8 +33,10 @@ import ap.parser._
 import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
-import tricera.{Solution, FunctionInvariants, Invariant, LoopInvariant}
-
+import tricera.{
+  FunctionInvariants, Invariant, LoopInvariant,
+  PostCondition, PreCondition, Solution}
+/*
 object ADTExploder extends SolutionProcessor 
                       with ContractProcessor {
   def apply(expr : IFormula) : IFormula =
@@ -124,32 +126,32 @@ object ADTExploder extends SolutionProcessor
     adtTermExploder.visit(expr, null)
 
 }
-
+*/
 
 object _ADTExploder extends ResultProcessor {
 
   override def applyTo(solution: Solution): Solution = solution match {
-    case Solution(functionInvariants, heapInfo) =>
-      Solution(functionInvariants.map(i => rewrite(i)), heapInfo)
+    case Solution(functionInvariants) =>
+      Solution(functionInvariants.map(i => rewrite(i)))
   }
 
   def rewrite(funcInv: FunctionInvariants): FunctionInvariants = funcInv match {
-    case FunctionInvariants(id, preCond, postCond, loopInvs) =>
+    case FunctionInvariants(id, PreCondition(preInv), PostCondition(postInv), loopInvs) =>
       FunctionInvariants(
         id,
-        rewrite(preCond),
-        rewrite(postCond),
+        PreCondition(rewrite(preInv)),
+        PostCondition(rewrite(postInv)),
         loopInvs.map(i => rewrite(i)))
   }
 
   def rewrite(inv: Invariant): Invariant = inv match {
-    case Invariant(expression, utils, sourceInfo) =>
-      Invariant(rewrite(expression), utils, sourceInfo)
+    case Invariant(expression, heapInfo, sourceInfo) =>
+      Invariant(rewrite(expression), heapInfo, sourceInfo)
   }
 
   def rewrite(inv: LoopInvariant): LoopInvariant = inv match {
-    case LoopInvariant(expression, utils, sourceInfo) =>
-      LoopInvariant(rewrite(expression), utils, sourceInfo)
+    case LoopInvariant(expression, heapInfo, sourceInfo) =>
+      LoopInvariant(rewrite(expression), heapInfo, sourceInfo)
   }
 
   def rewrite(expr : IFormula): IFormula = {

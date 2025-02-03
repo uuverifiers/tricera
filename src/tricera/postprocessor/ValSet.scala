@@ -40,7 +40,7 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.ADT
-import tricera.{IFuncParam}
+import tricera.{ConstantAsProgVarProxy, ProgVarProxy}
 
 object Val {
   def apply(term1: ITerm, term2: ITerm): Val = {
@@ -54,7 +54,7 @@ object Val {
 case class Val(variants: Set[ITerm]) {
   def getExplicitForm: Option[ITerm] = variants find {
     case a: Address         => false
-    case v: ISortedVariable => false // SSSOWO TODO: Should this be changed to IFuncParam?
+    case ConstantAsProgVarProxy(_) => false
     case _                  => true
   }
 
@@ -64,7 +64,7 @@ case class Val(variants: Set[ITerm]) {
   }
 
   def getVariableForm: Option[ITerm] = variants find {
-    case v: IFuncParam => true
+    case ConstantAsProgVarProxy(_) => true
     case _             => false
   }
 
@@ -174,11 +174,11 @@ case class ValSet(vals: Set[Val]) {
     }
   }
 
-  def toVariableFormMap: Map[IExpression, IFuncParam] = {
+  def toVariableFormMap: Map[IExpression, IConstant] = {
     vals
       .collect {
         case value if value.getVariableForm.isDefined =>
-          val variable = value.getVariableForm.get.asInstanceOf[IFuncParam]
+          val variable = value.getVariableForm.get.asInstanceOf[IConstant]
           value.variants
             .filterNot(_ == variable)
             .map(_ -> variable)

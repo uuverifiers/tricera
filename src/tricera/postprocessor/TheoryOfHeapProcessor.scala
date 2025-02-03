@@ -41,37 +41,37 @@ package tricera.postprocessor
 
 import ap.parser._
 
-import tricera.{FunctionInvariants, HeapInfo, IFuncParam, Invariant, Solution}
+import tricera.{FunctionInvariants, HeapInfo, Invariant, PostCondition, PreCondition, Solution}
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
 object TheoryOfHeapProcessor extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
-    case Solution(functionInvariants, Some(heapInfo)) =>
-      Solution(functionInvariants.map(applyTo(_, heapInfo)), Some(heapInfo))
-    case _ =>
-      throw NeedsHeapModelException
+    case Solution(functionInvariants) =>
+      Solution(functionInvariants.map(applyTo(_)))
   }
 
-  private def applyTo(funcInvs :FunctionInvariants, heapInfo: HeapInfo)
+  private def applyTo(funcInvs :FunctionInvariants)
   : FunctionInvariants = funcInvs match {
-      case FunctionInvariants(id, preCondition, postCondition, loopInvariants) => 
+      case FunctionInvariants(id, PreCondition(preInv), PostCondition(postInv), loopInvariants) => 
         val newInvs = FunctionInvariants(
           id,
-          TheoryOfHeapRewriter(preCondition, heapInfo),
-          TheoryOfHeapRewriter(postCondition, heapInfo),
+          PreCondition(TheoryOfHeapRewriter(preInv)),
+          PostCondition(TheoryOfHeapRewriter(postInv)),
           loopInvariants)
         DebugPrinter.oldAndNew(TheoryOfHeapProcessor, funcInvs, newInvs)
         newInvs
   }
 
   object TheoryOfHeapRewriter extends ExpressionUtils {
-    def apply(inv: Invariant, heapInfo: HeapInfo): Invariant = inv match {
-      case Invariant(form, utils, sourceInfo) => 
+    def apply(inv: Invariant): Invariant = inv match {
+      case Invariant(form, Some(heapInfo), sourceInfo) => 
         val theoryOfHeapRewriter = new TheoryOfHeapRewriter(heapInfo)
         Invariant(
           iterateUntilFixedPoint(form, theoryOfHeapRewriter.apply).asInstanceOf[IFormula],
-          utils,
+          Some(heapInfo),
           sourceInfo)
+      case _ =>
+        throw NeedsHeapModelException
     }
   }
 
