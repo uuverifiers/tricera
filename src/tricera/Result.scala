@@ -10,14 +10,22 @@ import ap.theories.{Heap}
  * to program variables (function parameters and global variables)
  * in the original program.
 */
-case class ProgVarProxy(_name: String, context: ProgVarProxy.Context) extends ConstantTerm(_name) {
+case class ProgVarProxy(
+  _name: String,
+  context: ProgVarProxy.Context,
+  scope: ProgVarProxy.Scope)
+  extends ConstantTerm(_name) {
+
   import tricera.ProgVarProxy.Context._
+  import tricera.ProgVarProxy.Scope._
 
   def isPreExec: Boolean = context == PreExec
   def isPostExec: Boolean = context == PostExec
+  def isParameter: Boolean = scope == Parameter
+  def isGlobal: Boolean = scope == Global
 
-  override def clone: ProgVarProxy = ProgVarProxy(name, context)
-  override def toString: String = f"${super.toString()}`${context.toString()}"
+  override def clone: ProgVarProxy = ProgVarProxy(name, context, scope)
+  override def toString: String = f"${super.toString()}`${context.toString()}`${scope.toString()}"
 
 /*
   def isPreExecHeap(heapInfo: HeapInfo): Boolean = {
@@ -35,9 +43,17 @@ object ProgVarProxy {
   object Context {
     case object PreExec extends Context
     case object PostExec extends Context
+    case object Result extends Context
   }
   import Context._
 
+  sealed trait Scope
+  object Scope {
+    case object Global extends Scope
+    case object Parameter extends Scope
+    case object Temporary extends Scope
+  }
+  import Scope._
 //  def apply(c: ConstantTerm): IFuncParam = new IFuncParam(c)
 //  def unapply(p: IFuncParam): Option[ConstantTerm] = Some(p.c)
 }
@@ -45,7 +61,7 @@ object ProgVarProxy {
 object ConstantAsProgVarProxy {
   def unapply(constant: IConstant): Option[ProgVarProxy] =
     constant match {
-      case IConstant(h @ ProgVarProxy(_,_)) => Some(h)
+      case IConstant(p @ ProgVarProxy(_,_,_)) => Some(p)
       case _ => None
   }
 }
@@ -108,14 +124,16 @@ case class LoopInvariant(
   heapInfo: Option[HeapInfo],
   sourceInfo: SourceInfo) {}
 
-case class PreCondition(invariant: Invariant) {
+sealed trait InvariantContext
+
+case class PreCondition(invariant: Invariant) extends InvariantContext {
   def isCurrentHeap(varProxy: ProgVarProxy): Boolean = invariant.heapInfo match {
     case Some(heapInfo) => varProxy.isPreExec && heapInfo.isHeap(varProxy)
     case _ => false
   }
 }
 
-case class PostCondition(invariant: Invariant) {
+case class PostCondition(invariant: Invariant) extends InvariantContext {
   def isCurrentHeap(varProxy: ProgVarProxy): Boolean = invariant.heapInfo match {
     case Some(heapInfo) => varProxy.isPostExec && heapInfo.isHeap(varProxy)
     case _ => false

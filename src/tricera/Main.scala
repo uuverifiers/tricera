@@ -591,13 +591,16 @@ class Main (args: Array[String]) {
       //   Currently they are literal strings in CCReader.
       val preExecSuffix = "_old"
       val postExecSuffix = "_post"
+      val resultExecSuffix = "_res"
 
-      def replacePredVarWithFunctionParam(formula: IFormula, funcParameters: Seq[String]): IFormula = {
+      def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[String], funcParams: Seq[String]): IFormula = {
         def stripSuffix(name: String) = {
           if (name.endsWith(preExecSuffix)) {
             name.dropRight(preExecSuffix.size)
           } else if (name.endsWith(postExecSuffix)) {
             name.dropRight(postExecSuffix.size)
+          } else if (name.endsWith(resultExecSuffix)) {
+            name.dropRight(resultExecSuffix.size)
           } else {
             throw ProgVarContextException(f"Undefined suffix in predicate variable name: ${name}")
           }
@@ -608,12 +611,25 @@ class Main (args: Array[String]) {
             ProgVarProxy.Context.PreExec
           } else if (name.endsWith(postExecSuffix)) {
             ProgVarProxy.Context.PostExec
+          } else if (name.endsWith(resultExecSuffix)) {
+            ProgVarProxy.Context.Result
           } else {
             throw ProgVarContextException(f"Undefined suffix in predicate variable name: ${name}")
           }
         }
+
+        def getScope(name: String): ProgVarProxy.Scope = {
+          if (funcParams.contains(stripSuffix(name))) {
+            ProgVarProxy.Scope.Parameter
+          } else if (name.endsWith(resultExecSuffix)) {
+            ProgVarProxy.Scope.Temporary
+          } else {
+            ProgVarProxy.Scope.Global
+          }
+        }
+
         VariableSubstVisitor.visit(
-          formula, (funcParameters.map(p => IConstant(ProgVarProxy(stripSuffix(p), nameToContext(p)))).toList, 0))
+          formula, (predVars.map(p => IConstant(ProgVarProxy(stripSuffix(p), nameToContext(p), getScope(p)))).toList, 0))
         .asInstanceOf[IFormula]
       }
 
@@ -628,13 +644,15 @@ class Main (args: Array[String]) {
           PreCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.prePred.pred),
-              ctx.prePred.argVars.map(v => v.name)),
+              ctx.prePred.argVars.map(v => v.name),
+              ctx.acslContext.getParams.map(v => v.name)),
             heapInfo,
             ctx.prePred.srcInfo)),
           PostCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.postPred.pred),
-              ctx.postPred.argVars.map(v => v.name)),
+              ctx.postPred.argVars.map(v => v.name),
+              ctx.acslContext.getParams.map(v => v.name)),
             heapInfo,
             ctx.postPred.srcInfo)),
           List())
@@ -743,8 +761,8 @@ class Main (args: Array[String]) {
                 AssignmentProcessor,
                 TheoryOfHeapProcessor,
                 ADTSimplifier,
-                ToVariableForm
-//                ACSLExpressionProcessor
+                ToVariableForm,
+                ACSLExpressionProcessor
               )
 
               for (prsor <- heapPropProcessors) {

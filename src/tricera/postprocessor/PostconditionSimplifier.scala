@@ -129,6 +129,7 @@ object PostconditionSimplifier extends ResultProcessor {
           .asInstanceOf[IFormula]
       p.addConstants(CollectConstants(formula))
       p.addRelations(ACSLExpression.predicates)
+      ACSLExpression.functions.foreach(f => p.addFunction(f))
       collectAndAddTheories(p, formula)
 
       p.??(formula)

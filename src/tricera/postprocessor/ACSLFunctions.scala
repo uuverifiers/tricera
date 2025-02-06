@@ -55,33 +55,23 @@ object ACSLExpression {
   val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer, oldArrow)
   val predicates = Set(valid, separated)
 
-  // Here a ConstantTerm is introduced as a container for the variable name
   def derefFunApp(
       derefFunction: IFunction,
-      pointer: ISortedVariable,
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
+      pointer: ProgVarProxy
   ) = {
-    val name = cci.stripOld(cci.getVarName(pointer, quantifierDepth).get)
-    IFunApp(derefFunction, Seq(IConstant(new ConstantTerm(name))))
+    IFunApp(derefFunction, Seq(IConstant(pointer)))
   }
 
   def arrowFunApp(
       arrowFunction: IFunction,
-      pointer: ISortedVariable,
-      selector: MonoSortedIFunction,
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
+      pointer: ProgVarProxy,
+      selector: MonoSortedIFunction
   ) = {
-    val pointerName = cci.stripOld(
-      cci.getVarName(pointer, quantifierDepth).get
-    )
-    val selectorName = selector.name
     IFunApp(
       arrowFunction,
       Seq(
-        IConstant(new ConstantTerm(pointerName)),
-        IConstant(new ConstantTerm(selectorName))
+        IConstant(pointer),
+        IConstant(new ConstantTerm(selector.name))
       )
     )
   }
