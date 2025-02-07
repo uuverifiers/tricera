@@ -13,7 +13,8 @@ import ap.theories.{Heap}
 case class ProgVarProxy(
   _name: String,
   context: ProgVarProxy.Context,
-  scope: ProgVarProxy.Scope)
+  scope: ProgVarProxy.Scope,
+  private val _isPointer: Boolean)
   extends ConstantTerm(_name) {
 
   import tricera.ProgVarProxy.Context._
@@ -23,8 +24,9 @@ case class ProgVarProxy(
   def isPostExec: Boolean = context == PostExec
   def isParameter: Boolean = scope == Parameter
   def isGlobal: Boolean = scope == Global
+  def isPointer: Boolean = _isPointer
 
-  override def clone: ProgVarProxy = ProgVarProxy(name, context, scope)
+  override def clone: ProgVarProxy = ProgVarProxy(name, context, scope, _isPointer)
   override def toString: String = f"${super.toString()}`${context.toString()}`${scope.toString()}"
 
 /*
@@ -61,7 +63,7 @@ object ProgVarProxy {
 object ConstantAsProgVarProxy {
   def unapply(constant: IConstant): Option[ProgVarProxy] =
     constant match {
-      case IConstant(p @ ProgVarProxy(_,_,_)) => Some(p)
+      case IConstant(p @ ProgVarProxy(_,_,_,_)) => Some(p)
       case _ => None
   }
 }

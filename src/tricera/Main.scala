@@ -44,6 +44,7 @@ import tricera.Util.{SourceInfo, printlnDebug}
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
+import tricera.concurrency.ccreader.{CCVar, CCHeapPointer, CCHeapArrayPointer, CCStackPointer}
 import tricera.parsers.YAMLParser._
 
 import lazabs.horn.preprocessor.HornPreprocessor
@@ -593,7 +594,7 @@ class Main (args: Array[String]) {
       val postExecSuffix = "_post"
       val resultExecSuffix = "_res"
 
-      def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[String], funcParams: Seq[String]): IFormula = {
+      def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[CCVar], funcParams: Seq[String]): IFormula = {
         def stripSuffix(name: String) = {
           if (name.endsWith(preExecSuffix)) {
             name.dropRight(preExecSuffix.size)
@@ -628,8 +629,23 @@ class Main (args: Array[String]) {
           }
         }
 
+        def isPointer(name: CCVar): Boolean = {
+          name.typ match {
+            case _: CCHeapPointer => true
+            case _: CCStackPointer => true
+            case _: CCHeapArrayPointer => true
+            case _ => false
+          }
+        }
+
         VariableSubstVisitor.visit(
-          formula, (predVars.map(p => IConstant(ProgVarProxy(stripSuffix(p), nameToContext(p), getScope(p)))).toList, 0))
+          formula, (predVars.map(
+            p => IConstant(
+              ProgVarProxy(
+                stripSuffix(p.name),
+                nameToContext(p.name),
+                getScope(p.name),
+                isPointer(p)))).toList, 0))
         .asInstanceOf[IFormula]
       }
 
@@ -644,14 +660,14 @@ class Main (args: Array[String]) {
           PreCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.prePred.pred),
-              ctx.prePred.argVars.map(v => v.name),
+              ctx.prePred.argVars,
               ctx.acslContext.getParams.map(v => v.name)),
             heapInfo,
             ctx.prePred.srcInfo)),
           PostCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.postPred.pred),
-              ctx.postPred.argVars.map(v => v.name),
+              ctx.postPred.argVars,
               ctx.acslContext.getParams.map(v => v.name)),
             heapInfo,
             ctx.postPred.srcInfo)),
@@ -762,7 +778,8 @@ class Main (args: Array[String]) {
                 TheoryOfHeapProcessor,
                 ADTSimplifier,
                 ToVariableForm,
-                ACSLExpressionProcessor
+                ACSLExpressionProcessor,
+                ClauseRemover
               )
 
               for (prsor <- heapPropProcessors) {

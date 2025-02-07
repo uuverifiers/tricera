@@ -106,3 +106,17 @@ object ACSLExpression {
     }
   }
 }
+
+object ACSLFunction {
+  def unapply(x: IExpression): Option[IFunction] = x match {
+    case IFunApp(fun, _) if ACSLExpression.functions.contains(fun) => Some(fun)
+    case _ => None
+  }
+}
+
+object ACSLPredicate {
+  def unapply(x: IExpression): Option[Predicate] = x match {
+    case  IAtom(pred, _) if ACSLExpression.predicates.contains(pred) => Some(pred)
+    case _ => None
+  }
+}

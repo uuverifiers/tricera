@@ -40,15 +40,8 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import ap.theories.Heap.HeapFunExtractor
 import ap.theories.ADT
-import ap.theories.Heap
-import ap.theories.Theory
-import ContractConditionType._
 import ap.types.MonoSortedIFunction
-import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
   Invariant, InvariantContext, PostCondition, PreCondition,

@@ -66,7 +66,7 @@ object AssignmentProcessor extends ResultProcessor {
         preCondition, // Note: This processor is only applicable to the post condition
         PostCondition(addAssignmentAtoms(postInv, postCondition.isCurrentHeap)),
         loopInvariants)
-      DebugPrinter.oldAndNew(AssignmentProcessor, funcInv, newInv)
+      DebugPrinter.oldAndNew(this, funcInv, newInv)
       newInv
   }
 
