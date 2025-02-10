@@ -834,6 +834,8 @@ class Main (args: Array[String]) {
               acslProcessedSolution =
                 PostconditionSimplifier(acslProcessedSolution)
             }
+
+            val contracts = ACSLLineariser(acslProcessedSolution)
 /*
             printlnDebug("----- Applying ACSLLineariser to precondition:")
             printlnDebug(acslProcessedSolution(ctx.prePred.pred).toString)
@@ -862,18 +864,21 @@ class Main (args: Array[String]) {
 
             val fPostACSLString = funContractToACSLString(
               ctx.postPred.pred, ctx.postPredACSLArgNames)
-
+*/
             if (!printedACSLHeader) {
               println("\nInferred ACSL annotations")
               println("=" * 80)
               printedACSLHeader = true
             }
-            println("/* contracts for " + fun + " */")
-            println("/*@")
-            print(  "  requires "); println(fPreACSLString + ";")
-            print(  "  ensures "); println(fPostACSLString + ";")
-            println("*/")
-*/
+          
+            for (contract <- contracts) {
+              println(f"/* contracts for ${contract.funcName} */")
+              println( "/*@")
+              println(f"  requires ${contract.preCondition};")
+              println(f"  ensures  ${contract.postCondition};")
+              println("*/")
+            }
+
 //          }
           /*
           if(loopInvariants nonEmpty) {

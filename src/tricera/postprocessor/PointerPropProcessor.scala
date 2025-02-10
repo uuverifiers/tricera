@@ -71,7 +71,7 @@ object PointerPropProcessor extends ResultProcessor {
         PreCondition(addPtrAtoms(preInv, preCond.isCurrentHeap)),
         PostCondition(addPtrAtoms(postInv, postCond.isCurrentHeap)),
         loopInvariants)
-      DebugPrinter.oldAndNew(PointerPropProcessor, funcInvs, newInvs)
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
 

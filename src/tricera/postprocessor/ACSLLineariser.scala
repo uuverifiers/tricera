@@ -35,9 +35,48 @@ import ap.terfor.conjunctions.Quantifier
 import ap.parser._
 import IExpression.Sort
 import Sort.:::
+import tricera.{FunctionInvariants, Invariant, PostCondition, PreCondition, Result, Solution}
+import tricera.Util.printlnDebug
+import tricera.ConstantAsProgVarProxy
+import tricera.InvariantContext
+import ap.terfor.ConstantTerm
+
+case class ACSLLinearisedContract(funcName: String, preCondition: String, postCondition: String)
 
 object ACSLLineariser {
 
+  def apply(result: Result): Seq[ACSLLinearisedContract] = result match {
+    case solution: Solution => apply(solution)
+    case _ => Seq()
+  }
+
+  private def apply(solution: Solution): Seq[ACSLLinearisedContract] = solution match {
+    case Solution(functionInvariants) =>
+      val acslContracts = functionInvariants.map(applyTo(_))
+      acslContracts
+  }
+
+  private def applyTo(funcInvs: FunctionInvariants): ACSLLinearisedContract = funcInvs match {
+    case FunctionInvariants(id, preCond @ PreCondition(_), postCond @ PostCondition(_), loopInvariants) => 
+      def mkString(invCtxt: InvariantContext) = {
+        val (conditionName, form) = invCtxt match {
+          case PreCondition(inv) => ("precondition", inv.expression)
+          case PostCondition(inv) => ("postcondition", inv.expression)
+        }
+        printlnDebug(f"----- Applying ACSLLineariser to ${conditionName}:")
+        printlnDebug(form.toString())
+        val formStr = asString(form)
+        printlnDebug("----- Result:")
+        printlnDebug(formStr)
+        formStr
+      }
+      ACSLLinearisedContract(
+        id,
+        mkString(PrepareACSLPrinting(preCond)),
+        mkString(PrepareACSLPrinting(postCond)))
+  }
+
+  // SSSOWO TODO: This doesn't seem to be used anywhere. Remove?
   def apply(formula : IFormula, signature : Signature) = {
     val order = signature.order
 
@@ -122,6 +161,53 @@ object ACSLLineariser {
     def postVisit(t : IExpression,
                   ctxt : Unit, subres : Seq[IExpression]) : IExpression =
       t update subres
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  /**
+   * Visitor to replace ProgVarProxy with ConstantTerm with respect to
+   * the context the ProgVarProxy is in.
+   */
+  private case class PrepSettings(ctxt: InvariantContext, usePlainConstant: Boolean)
+
+  private object PrepareACSLPrinting extends CollectingVisitor[PrepSettings, IExpression]  {
+    def apply(invCtxt: InvariantContext): InvariantContext = invCtxt match {
+      case PreCondition(Invariant(form, heapInfo, srcInfo)) =>
+        PreCondition(
+          Invariant(
+            this.visit(form, PrepSettings(invCtxt, false)).asInstanceOf[IFormula],
+            heapInfo,
+            srcInfo))
+      case PostCondition(Invariant(form, heapInfo, srcInfo)) =>
+        PostCondition(
+          Invariant(
+            this.visit(form, PrepSettings(invCtxt, false)).asInstanceOf[IFormula],
+            heapInfo,
+            srcInfo))
+    }
+
+    override def preVisit(t: IExpression, settings: PrepSettings)
+    : PreVisitResult = t match {
+      case IFunApp(fun, args) if ACSLExpression.functions.contains(fun) =>
+        // Function is an ACSL pseudo-function, which takes care of
+        // "\old()" etc. by itself.
+        SubArgs(args.map(a => settings.copy(usePlainConstant = true)))
+      case _ => 
+        KeepArg
+    }
+
+    override def postVisit(t: IExpression, settings: PrepSettings, subres: Seq[IExpression])
+    : IExpression = t match {
+      case ConstantAsProgVarProxy(p) if settings.usePlainConstant =>
+        IConstant(new ConstantTerm(p.name))
+      case ConstantAsProgVarProxy(p) => 
+        settings.ctxt match {
+          case _: PostCondition if p.isPreExec =>
+            IConstant(new ConstantTerm(f"\\old(${p.name})"))
+          case _ => IConstant(new ConstantTerm(p.name))
+        }
+      case _ => t update subres
+    }
   }
 
   //////////////////////////////////////////////////////////////////////////////

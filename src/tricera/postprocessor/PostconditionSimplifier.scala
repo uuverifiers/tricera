@@ -69,7 +69,7 @@ object PostconditionSimplifier extends ResultProcessor {
           postInv.heapInfo,
           postInv.sourceInfo)),
         loopInvariants)
-      DebugPrinter.oldAndNew(PostconditionSimplifier, funcInvs, newInvs)
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
 
