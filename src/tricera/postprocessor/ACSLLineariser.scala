@@ -30,18 +30,26 @@ package tricera.postprocessor
 
 import ap.Signature
 import ap.theories.{ADT, ModuloArithmetic, MulTheory}
+import ap.terfor.ConstantTerm
 import ap.terfor.preds.Predicate
 import ap.terfor.conjunctions.Quantifier
 import ap.parser._
 import IExpression.Sort
 import Sort.:::
-import tricera.{FunctionInvariants, Invariant, PostCondition, PreCondition, Result, Solution}
-import tricera.Util.printlnDebug
-import tricera.ConstantAsProgVarProxy
-import tricera.InvariantContext
-import ap.terfor.ConstantTerm
+import tricera.{
+  ConstantAsProgVarProxy, FunctionInvariants, Invariant, InvariantContext,
+  LoopInvariant, PostCondition, PreCondition, Result, Solution}
+import tricera.Util.{printlnDebug, SourceInfo}
 
-case class ACSLLinearisedContract(funcName: String, preCondition: String, postCondition: String)
+case class ACSLLinearisedLoopInvariant(
+  srcInfo: SourceInfo,
+  invariant: String)
+
+case class ACSLLinearisedContract(
+  funcName: String,
+  preCondition: String,
+  postCondition: String,
+  loopInvariants: Seq[ACSLLinearisedLoopInvariant])
 
 object ACSLLineariser {
 
@@ -62,6 +70,7 @@ object ACSLLineariser {
         val (conditionName, form) = invCtxt match {
           case PreCondition(inv) => ("precondition", inv.expression)
           case PostCondition(inv) => ("postcondition", inv.expression)
+          case LoopInvariant(expression, _, _) => ("loop invariant", expression)
         }
         printlnDebug(f"----- Applying ACSLLineariser to ${conditionName}:")
         printlnDebug(form.toString())
@@ -73,7 +82,11 @@ object ACSLLineariser {
       ACSLLinearisedContract(
         id,
         mkString(PrepareACSLPrinting(preCond)),
-        mkString(PrepareACSLPrinting(postCond)))
+        mkString(PrepareACSLPrinting(postCond)),
+        loopInvariants.map(
+          i => ACSLLinearisedLoopInvariant(
+            i.sourceInfo,
+            mkString(PrepareACSLPrinting(i)))))
   }
 
   // SSSOWO TODO: This doesn't seem to be used anywhere. Remove?
@@ -184,14 +197,23 @@ object ACSLLineariser {
             this.visit(form, PrepSettings(invCtxt, false)).asInstanceOf[IFormula],
             heapInfo,
             srcInfo))
+      case LoopInvariant(form, heapInfo, sourceInfo) => 
+        LoopInvariant(this.visit(form, PrepSettings(invCtxt, false)).asInstanceOf[IFormula],
+          heapInfo,
+          sourceInfo)
     }
 
     override def preVisit(t: IExpression, settings: PrepSettings)
     : PreVisitResult = t match {
-      case IFunApp(fun, args) if ACSLExpression.functions.contains(fun) =>
-        // Function is an ACSL pseudo-function, which takes care of
-        // "\old()" etc. by itself.
-        SubArgs(args.map(a => settings.copy(usePlainConstant = true)))
+      case ACSLPredicate(p) => //
+        // Avoid '\old()' etc. in arguments to ACSL predicates (\valid and friends).
+        val newSettings = settings.copy(usePlainConstant = true)
+        SubArgs((for (_ <- 0 until p.arity) yield newSettings))
+      case ACSLFunction(f) =>
+        // 'f' is an ACSL pseudo-function, which takes care of
+        // '\old()' etc. by itself.
+        val newSettings = settings.copy(usePlainConstant = true)
+        SubArgs((for (_ <- 0 until f.arity) yield newSettings))
       case _ => 
         KeepArg
     }
@@ -202,9 +224,14 @@ object ACSLLineariser {
         IConstant(new ConstantTerm(p.name))
       case ConstantAsProgVarProxy(p) => 
         settings.ctxt match {
+          case _: LoopInvariant if p.isPreExec =>
+            IConstant(new ConstantTerm(f"\\at(${p.name}, Pre)")) 
           case _: PostCondition if p.isPreExec =>
             IConstant(new ConstantTerm(f"\\old(${p.name})"))
-          case _ => IConstant(new ConstantTerm(p.name))
+          case _ if p.isResult =>
+            IConstant(new ConstantTerm("\\result"))
+          case _ =>
+            IConstant(new ConstantTerm(p.name))
         }
       case _ => t update subres
     }

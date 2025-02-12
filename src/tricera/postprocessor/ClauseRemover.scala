@@ -152,7 +152,7 @@ object ContainsTOHVisitor {
 
 object ExplicitPointerRemover {
   def apply(expr: IExpression): IExpression = {
-    val newExpr = (new ExplicitPointerRemoverVisitor).visit(expr, 0)
+    val newExpr = (new ExplicitPointerRemoverVisitor).visit(expr, ())
     CleanupVisitor(newExpr)
   }
 
@@ -254,7 +254,7 @@ object TrivialEqualityRemover {
 
 object HeapEqualityRemover {
   def apply(expr: IExpression, isCurrentHeap: ProgVarProxy => Boolean): IExpression = {
-    (new HeapEqualityRemover(isCurrentHeap)).visit(expr, 0)
+    (new HeapEqualityRemover(isCurrentHeap)).visit(expr, ())
   }
 
   class HeapEqualityRemover(isCurrentHeap: ProgVarProxy => Boolean)

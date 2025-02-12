@@ -12,22 +12,23 @@ import ap.theories.{Heap}
 */
 case class ProgVarProxy(
   _name: String,
-  context: ProgVarProxy.Context,
+  state: ProgVarProxy.State,
   scope: ProgVarProxy.Scope,
   private val _isPointer: Boolean)
   extends ConstantTerm(_name) {
 
-  import tricera.ProgVarProxy.Context._
+  import tricera.ProgVarProxy.State._
   import tricera.ProgVarProxy.Scope._
 
-  def isPreExec: Boolean = context == PreExec
-  def isPostExec: Boolean = context == PostExec
+  def isPreExec: Boolean = state == PreExec
+  def isPostExec: Boolean = state == PostExec
+  def isResult: Boolean = state == Result
   def isParameter: Boolean = scope == Parameter
   def isGlobal: Boolean = scope == Global
   def isPointer: Boolean = _isPointer
 
-  override def clone: ProgVarProxy = ProgVarProxy(name, context, scope, _isPointer)
-  override def toString: String = f"${super.toString()}`${context.toString()}`${scope.toString()}"
+  override def clone: ProgVarProxy = ProgVarProxy(name, state, scope, _isPointer)
+  override def toString: String = f"${super.toString()}`${state.toString()}`${scope.toString()}"
 
 /*
   def isPreExecHeap(heapInfo: HeapInfo): Boolean = {
@@ -41,17 +42,19 @@ case class ProgVarProxy(
 }
 
 object ProgVarProxy {
-  sealed trait Context
-  object Context {
-    case object PreExec extends Context
-    case object PostExec extends Context
-    case object Result extends Context
+  sealed trait State
+  object State {
+    case object Current extends State
+    case object PreExec extends State
+    case object PostExec extends State
+    case object Result extends State
   }
-  import Context._
+  import State._
 
   sealed trait Scope
   object Scope {
     case object Global extends Scope
+    case object Local extends Scope
     case object Parameter extends Scope
     case object Temporary extends Scope
   }
@@ -121,12 +124,12 @@ case class Invariant(
   heapInfo: Option[HeapInfo],
   sourceInfo: Option[SourceInfo]) {}
 
-case class LoopInvariant(
+sealed trait InvariantContext
+
+case class LoopInvariant (
   expression: IFormula,
   heapInfo: Option[HeapInfo],
-  sourceInfo: SourceInfo) {}
-
-sealed trait InvariantContext
+  sourceInfo: SourceInfo) extends InvariantContext {}
 
 case class PreCondition(invariant: Invariant) extends InvariantContext {
   def isCurrentHeap(varProxy: ProgVarProxy): Boolean = invariant.heapInfo match {

@@ -44,8 +44,8 @@ import ap.theories.ADT
 import ap.types.MonoSortedIFunction
 import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
-  Invariant, InvariantContext, PostCondition, PreCondition,
-  ProgVarProxy, Solution}
+  Invariant, InvariantContext, LoopInvariant, PostCondition,
+  PreCondition, ProgVarProxy, Solution}
 
 
 object ACSLExpressionProcessor extends ResultProcessor {
@@ -173,6 +173,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
                   )
                 case _ => t update subres
               }
+            case _ => t update subres
           }
 
         // read(h,p).get_<sort> ~> *p
@@ -227,6 +228,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
                   )
                 case _ => t update subres
               }
+            case _ => t update subres
           }
         }
 

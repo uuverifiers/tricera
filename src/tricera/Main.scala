@@ -593,6 +593,7 @@ class Main (args: Array[String]) {
       val preExecSuffix = "_old"
       val postExecSuffix = "_post"
       val resultExecSuffix = "_res"
+      val invPrefix = "inv_"
 
       def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[CCVar], funcParams: Seq[String]): IFormula = {
         def stripSuffix(name: String) = {
@@ -603,19 +604,19 @@ class Main (args: Array[String]) {
           } else if (name.endsWith(resultExecSuffix)) {
             name.dropRight(resultExecSuffix.size)
           } else {
-            throw ProgVarContextException(f"Undefined suffix in predicate variable name: ${name}")
+            name
           }
         }
 
-        def nameToContext(name: String):ProgVarProxy.Context = {
+        def nameToState(name: String):ProgVarProxy.State = {
           if (name.endsWith(preExecSuffix)) {
-            ProgVarProxy.Context.PreExec
+            ProgVarProxy.State.PreExec
           } else if (name.endsWith(postExecSuffix)) {
-            ProgVarProxy.Context.PostExec
+            ProgVarProxy.State.PostExec
           } else if (name.endsWith(resultExecSuffix)) {
-            ProgVarProxy.Context.Result
+            ProgVarProxy.State.Result
           } else {
-            throw ProgVarContextException(f"Undefined suffix in predicate variable name: ${name}")
+            ProgVarProxy.State.Current
           }
         }
 
@@ -625,7 +626,16 @@ class Main (args: Array[String]) {
           } else if (name.endsWith(resultExecSuffix)) {
             ProgVarProxy.Scope.Temporary
           } else {
-            ProgVarProxy.Scope.Global
+            val globalVars = predVars
+              .withFilter(
+                v => v.name.endsWith(preExecSuffix) && 
+                funcParams.find(p => stripSuffix(v.name) == p).isEmpty)
+              .map(v => stripSuffix(v.name))
+            if (globalVars.contains(stripSuffix(name))) {
+              ProgVarProxy.Scope.Global
+            } else {
+              ProgVarProxy.Scope.Local
+            }
           }
         }
 
@@ -643,44 +653,62 @@ class Main (args: Array[String]) {
             p => IConstant(
               ProgVarProxy(
                 stripSuffix(p.name),
-                nameToContext(p.name),
+                nameToState(p.name),
                 getScope(p.name),
                 isPointer(p)))).toList, 0))
         .asInstanceOf[IFormula]
+      }
+
+      def toLoopInvariants(
+        funcId: String,
+        loopInvariants: Map[String,(CCReader.CCPredicate, SourceInfo)],
+        solution: SolutionProcessor.Solution,
+        heapInfo: Option[HeapInfo],
+        paramNames: Seq[String])
+        : Iterable[LoopInvariant] = {
+        loopInvariants
+          .withFilter(i => i._1.startsWith(funcId))
+          .map({ case (_, (ccPred, srcInfo)) =>
+            val (_, form) = solution.find(
+              p => p._1.name.stripPrefix(invPrefix) == ccPred.pred.name).get
+            LoopInvariant(replacePredVarWithFunctionParam(form, ccPred.argVars, paramNames), heapInfo, srcInfo)
+          })
       }
 
       def toFunctionInvariants(
         funcId: String,
         heapInfo: Option[HeapInfo],
         ctx: CCReader.FunctionContext,
-        solution: SolutionProcessor.Solution)
+        solution: SolutionProcessor.Solution,
+        loopInvs: Map[String,(CCReader.CCPredicate, SourceInfo)])
         = {
+        val paramNames = ctx.acslContext.getParams.map(v => v.name)
         FunctionInvariants(
           funcId,
           PreCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.prePred.pred),
               ctx.prePred.argVars,
-              ctx.acslContext.getParams.map(v => v.name)),
+              paramNames),
             heapInfo,
             ctx.prePred.srcInfo)),
           PostCondition(Invariant(
             replacePredVarWithFunctionParam(
               solution(ctx.postPred.pred),
               ctx.postPred.argVars,
-              ctx.acslContext.getParams.map(v => v.name)),
+              paramNames),
             heapInfo,
             ctx.postPred.srcInfo)),
-          List())
+          toLoopInvariants(funcId, loopInvs, solution, heapInfo, paramNames).toList)
       }
 
       result match {
         case Left(Some(solution)) =>
           val heapInfo = reader.getHeapInfo
-          // SSSOWO TODO: Add loop invariants.
+          val loopInvs = reader.getLoopInvariants
           Solution(
             reader.getFunctionContexts.map(
-              {case (funcId, ctx) => toFunctionInvariants(funcId, heapInfo, ctx, solution)}).toSeq)
+              {case (funcId, ctx) => toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs)}).toSeq)
         case Left(None) => Empty()
         case Right(cex) => CounterExample(cex)
       }
@@ -708,8 +736,6 @@ class Main (args: Array[String]) {
         import lazabs.horn.bottomup.HornPredAbs
         import lazabs.ast.ASTree.Parameter
 
-        val contexts = reader.getFunctionContexts
-        val loopInvariants = reader.getLoopInvariants
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
 
@@ -717,7 +743,6 @@ class Main (args: Array[String]) {
 
           val solutionProcessors = Seq(
             _ADTExploder,
-            LoopInvariantsACSLPrinter,
             createAnnotatedFunctionsFilter(maybeEnc, reader.getFunctionContexts)
             // add additional solution processors here
           )
@@ -773,6 +798,7 @@ class Main (args: Array[String]) {
               }
 */
               val heapPropProcessors = Seq(
+                PostconditionSimplifier,
                 PointerPropProcessor,
                 AssignmentProcessor,
                 TheoryOfHeapProcessor,
@@ -831,8 +857,8 @@ class Main (args: Array[String]) {
                 acslProcessedSolution = applyProcessor(processor, acslProcessedSolution)
               }
 */
-              acslProcessedSolution =
-                PostconditionSimplifier(acslProcessedSolution)
+//              acslProcessedSolution =
+//                PostconditionSimplifier(acslProcessedSolution)
             }
 
             val contracts = ACSLLineariser(acslProcessedSolution)
@@ -877,6 +903,14 @@ class Main (args: Array[String]) {
               println(f"  requires ${contract.preCondition};")
               println(f"  ensures  ${contract.postCondition};")
               println("*/")
+              if (!contract.loopInvariants.isEmpty) {
+                for (loopInv <- contract.loopInvariants) {
+                  println(f"/* loop invariant for the loop on line ${loopInv.srcInfo.line} */")
+                  println( "/*@")
+                  println(f"  loop invariant ${loopInv.invariant};")
+                  println("*/")
+                }
+              }
             }
 
 //          }
