@@ -9,7 +9,7 @@ import ap.theories.bitvectors.ModuloArithmetic._
 
 import tricera.postprocessor.ADTSimplifier
 import ap.terfor.ConstantTerm
-import tricera.{FunctionInvariants, FuncParamUtils, Invariant, Result, Solution}
+import tricera.{FunctionInvariants, Invariant, PostCondition, PreCondition, Result, Solution}
 import ap.types.MonoSortedIFunction
 import ap.theories.TheoryRegistry
 
@@ -44,10 +44,9 @@ class ADTSimplifierTests extends AnyFlatSpec {
     Solution(Seq(
       FunctionInvariants(
         "someId", 
-        Invariant(form, new FuncParamUtils("_p", "_q"), None),
-        Invariant(form, new FuncParamUtils("_p", "_q"), None),
-        List())),
-      None)
+        PreCondition(Invariant(form, None, None)),
+        PostCondition(Invariant(form, None, None)),
+        List())))
   }
 
   "ADTSimplifier" should "extract a value when a constructor is nested within a selector" in {
@@ -58,9 +57,9 @@ class ADTSimplifierTests extends AnyFlatSpec {
     val expected = IEquation(yValue, someValue)
 
     ADTSimplifier(makeSolution(form)) match {
-      case Solution(Seq(functionInvariants), heapInfo) => 
-        assert(functionInvariants.preCondition.expression == expected)
-        assert(functionInvariants.postCondition.expression == expected)
+      case Solution(Seq(functionInvariants)) => 
+        assert(functionInvariants.preCondition.invariant.expression == expected)
+        assert(functionInvariants.postCondition.invariant.expression == expected)
       case _ => fail("Result was of unexpected type")
     }
   }
@@ -74,9 +73,9 @@ class ADTSimplifierTests extends AnyFlatSpec {
     val expected = form
 
     ADTSimplifier(makeSolution(form)) match {
-      case Solution(Seq(functionInvariants), heapInfo) => 
-        assert(functionInvariants.preCondition.expression == expected)
-        assert(functionInvariants.postCondition.expression == expected)
+      case Solution(Seq(functionInvariants)) => 
+        assert(functionInvariants.preCondition.invariant.expression == expected)
+        assert(functionInvariants.postCondition.invariant.expression == expected)
       case _ => fail("Result was of unexpected type")
     }
 
