@@ -901,7 +901,7 @@ class Main (args: Array[String]) {
               println(f"/* contracts for ${contract.funcName} */")
               println( "/*@")
               println(f"  requires ${contract.preCondition};")
-              println(f"  ensures  ${contract.postCondition};")
+              println(f"  ensures ${contract.postCondition};")
               println("*/")
               if (!contract.loopInvariants.isEmpty) {
                 for (loopInv <- contract.loopInvariants) {
