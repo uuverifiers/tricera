@@ -37,7 +37,7 @@
  * assignments to the heap and can only be done whenever the post heap state is 
  * expressed. The precondition is left unchanged.
  */
-
+/*
 package tricera.postprocessor
 
 import tricera.{ConstantAsProgVarProxy, HeapInfo, Invariant, PostCondition, ProgVarProxy, Solution}
@@ -225,3 +225,4 @@ private class AssignmentProcessor(
     }
   }
 }
+*/

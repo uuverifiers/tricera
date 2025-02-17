@@ -797,10 +797,11 @@ class Main (args: Array[String]) {
                 }  
               }
 */
+
               val heapPropProcessors = Seq(
                 PostconditionSimplifier,
-                PointerPropProcessor,
-                AssignmentProcessor,
+                PointerPropProcessor(acslProcessedSolution),
+                AssignmentProcessor(acslProcessedSolution),
                 TheoryOfHeapProcessor,
                 ADTSimplifier,
                 ToVariableForm,

@@ -50,6 +50,7 @@ import ap.theories._
 import ap.SimpleAPI
 
 import scala.collection.mutable.{Set, HashSet}
+import tricera.Util.printlnDebug
 
 object PostconditionSimplifier extends ResultProcessor {
 
@@ -73,22 +74,30 @@ object PostconditionSimplifier extends ResultProcessor {
       newInvs
   }
 
-  private def simplify(precondition: IFormula, postcond: IFormula): IFormula = {
-    var postcondition = postcond
+  private def simplify(precondition: IFormula, postcondition: IFormula): IFormula = {
+    // We replace ACSL related predicates with true in the precondition so that
+    // they don't get removed from the postcondition during simplification.
+    //val precond = ReplaceACSLPredicatesWithTrue(precondition)
+    //printlnDebug(f"Before replacement: ${precondition}")
+    //printlnDebug(f"After replacement: ${precond}")
+    var postcond = postcondition
 
     def attemptReplacingIFormulasBy(replaceByFormula: IFormula) = {
       var i = 0
       var cont = true
       while (cont) {
-        ReplaceNthIFormulaVisitor(postcondition, i, replaceByFormula) match {
+        ReplaceNthIFormulaVisitor(postcond, i, replaceByFormula) match {
           case (newPostcondition, Some(replacedFormula)) =>
             isEquivalentPostcondition(
               precondition,
-              postcondition,
+              postcond,
               newPostcondition.asInstanceOf[IFormula]
             ) match {
               case true =>
-                postcondition = newPostcondition.asInstanceOf[IFormula]
+                postcond = newPostcondition.asInstanceOf[IFormula]
+
+                printlnDebug(f"simplified formula: ${postcond.toString()}")
+
                 val removedIFormulas =
                   IFormulaCounterVisitor(replacedFormula) - 1
                 i = i + 1 - removedIFormulas
@@ -100,12 +109,12 @@ object PostconditionSimplifier extends ResultProcessor {
         }
       }
       // Note: Cleanup rules for false literals are not yet implemented in CleanupVisitor
-      // SSSOWO: Actually I think they are. Please check!
-      postcondition = CleanupVisitor(postcondition).asInstanceOf[IFormula]
+      // SSSOWO TODO: Actually I think they are. Please check!
+      postcond = CleanupVisitor(postcond).asInstanceOf[IFormula]
     }
     attemptReplacingIFormulasBy(IBoolLit(true))
     attemptReplacingIFormulasBy(IBoolLit(false))
-    postcondition
+    postcond
   }
 
   def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
@@ -160,12 +169,27 @@ private object CollectConstants {
     (new CollectConstantsVisitor()).visit(formula, constants)
     constants
   }
-}
 
-private class CollectConstantsVisitor extends CollectingVisitor[Set[ITerm], Unit] {
-  override def postVisit(t: IExpression, constants: Set[ITerm], subres: Seq[Unit]): Unit = t match {
-    case c: IConstant =>
-      constants.add(c)
-    case _ =>
+  private class CollectConstantsVisitor extends CollectingVisitor[Set[ITerm], Unit] {
+    override def postVisit(t: IExpression, constants: Set[ITerm], subres: Seq[Unit]): Unit = t match {
+      case c: IConstant =>
+        constants.add(c)
+      case _ =>
+    }
   }
 }
+
+/*
+private object ReplaceACSLPredicatesWithTrue {
+  def apply(formula: IFormula): IFormula = {
+    (new ReplaceACSLPredicatesWithTrue).visit(formula, ()).asInstanceOf[IFormula]
+  }
+
+  private class ReplaceACSLPredicatesWithTrue extends CollectingVisitor[Unit, IExpression] {
+    override def postVisit(t: IExpression, arg: Unit, subres: Seq[IExpression]): IExpression = t match {
+      case ACSLPredicate(_) => IBoolLit(true)
+      case _ => t update subres
+    }
+  }
+}
+  */

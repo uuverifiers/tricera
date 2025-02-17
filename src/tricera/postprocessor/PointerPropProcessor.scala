@@ -36,7 +36,7 @@
  * deduced are extracted. This can only be done whenever the heap state is 
  * expressed.
  */
-
+/*
 package tricera.postprocessor
 
 import ap.parser._
@@ -210,7 +210,7 @@ class HeapReducer(cci: HeapInfo)
     }
   }
 }
-
+*/
 /*
 case class QuantifiedVarWithId(variable: ISortedVariable, id: String)
     extends ITerm {
