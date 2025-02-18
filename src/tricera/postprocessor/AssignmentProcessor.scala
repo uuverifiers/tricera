@@ -37,22 +37,28 @@
  * assignments to the heap and can only be done whenever the post heap state is 
  * expressed. The precondition is left unchanged.
  */
-/*
+
 package tricera.postprocessor
 
-import tricera.{ConstantAsProgVarProxy, HeapInfo, Invariant, PostCondition, ProgVarProxy, Solution}
-import tricera.FunctionInvariants
+import tricera.{
+  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
+  Invariant, PostCondition, ProgVarProxy, Result, Solution}
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
-import tricera.postprocessor.ContractConditionType._
 import ap.parser._
 import ap.terfor.ConstantTerm
-import tricera.ProgVarProxy
 
 // SSSOWO TODO: This should be rewritten to pick up the "valid" elements from
 //   the expression instead of recalculating safe pointers again.
 
-object AssignmentProcessor extends ResultProcessor {
+object AssignmentProcessor {
+  def apply(result: Result): ResultProcessor = result match {
+    case Solution(funcInvs) => new AssignmentProcessor(funcInvs)
+    case _ => throw new Exception("BOOM!")
+  }
+}
+
+private class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
   override def applyTo(solution: Solution) = solution match {
     case Solution(functionInvariants) =>
       Solution(functionInvariants.map(applyTo(_)))
@@ -61,10 +67,11 @@ object AssignmentProcessor extends ResultProcessor {
   private def applyTo(funcInv: FunctionInvariants)
   : FunctionInvariants = funcInv match {
     case FunctionInvariants(id, preCondition, postCondition @ PostCondition(postInv), loopInvariants) =>
+      val src = srcs.find(i => i.id == id).get
       val newInv = FunctionInvariants(
         id,
         preCondition, // Note: This processor is only applicable to the post condition
-        PostCondition(addAssignmentAtoms(postInv, postCondition.isCurrentHeap)),
+        PostCondition(addAssignmentAtoms(postInv, src.postCondition.invariant, postCondition.isCurrentHeap)),
         loopInvariants)
       DebugPrinter.oldAndNew(this, funcInv, newInv)
       newInv
@@ -72,12 +79,13 @@ object AssignmentProcessor extends ResultProcessor {
 
   private def addAssignmentAtoms(
     invariant: Invariant,
+    src: Invariant,
     isCurrentHeap: ProgVarProxy => Boolean)
     = invariant match {
     case Invariant(form, Some(heapInfo), srcInfo) =>
-      val visitor = new AssignmentProcessor(
-        ValSetReader.deBrujin(form),
-        PointerPropProcessor.getSafePointers(form, heapInfo, isCurrentHeap),
+      val visitor = new AssignmentProcessor_(
+        ValSetReader.deBrujin(src.expression),
+        (new PointerPropProcessor(srcs)).getSafePointers(src.expression, heapInfo, isCurrentHeap),
         isCurrentHeap,
         heapInfo)
       val newForm = visitor.visit(form, 0) match {
@@ -91,7 +99,7 @@ object AssignmentProcessor extends ResultProcessor {
 }
 
 
-private class AssignmentProcessor(
+private class AssignmentProcessor_(
   valueSet: ValSet,
   separatedSet: Set[ProgVarProxy],
   isCurrentHeap: ProgVarProxy => Boolean,
@@ -225,4 +233,3 @@ private class AssignmentProcessor(
     }
   }
 }
-*/

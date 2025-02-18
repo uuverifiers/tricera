@@ -36,18 +36,26 @@
  * deduced are extracted. This can only be done whenever the heap state is 
  * expressed.
  */
-/*
+
 package tricera.postprocessor
 
 import ap.parser._
 import scala.collection.immutable.Stack
 import tricera.{
   ConstantAsProgVarProxy,FunctionInvariants, HeapInfo, Invariant,
-  PostCondition, PreCondition, ProgVarProxy, Solution}
+  PostCondition, PreCondition, ProgVarProxy, Result, Solution}
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
 
-object PointerPropProcessor extends ResultProcessor {
+object PointerPropProcessor {
+  def apply(result: Result): ResultProcessor = result match {
+    case Solution(funcInvs) => new PointerPropProcessor(funcInvs)
+    case _ => throw new Exception("BOOM!")
+  }
+}
+
+
+class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
   // SSSOWO: TODO: Should heapInfo be part of constructor call instead?
   //   If it's done like that we don't have to check for a valid heap
   //   in the applyTo functions.
@@ -66,10 +74,11 @@ object PointerPropProcessor extends ResultProcessor {
       preCond @ PreCondition(preInv),
       postCond @ PostCondition(postInv),
       loopInvariants) =>
+      val src = srcs.find(i => i.id == id).get
       val newInvs = FunctionInvariants(
         id,
-        PreCondition(addPtrAtoms(preInv, preCond.isCurrentHeap)),
-        PostCondition(addPtrAtoms(postInv, postCond.isCurrentHeap)),
+        PreCondition(addPtrAtoms(preInv, src.preCondition.invariant, preCond.isCurrentHeap)),
+        PostCondition(addPtrAtoms(postInv, src.postCondition.invariant, postCond.isCurrentHeap)),
         loopInvariants)
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
@@ -77,10 +86,11 @@ object PointerPropProcessor extends ResultProcessor {
 
   private def addPtrAtoms(
     invariant: Invariant,
+    src: Invariant,
     isCurrentHeap: ProgVarProxy => Boolean)
     : Invariant = invariant match {
     case Invariant(form, Some(heapInfo), srcInfo) =>
-      val newForm = getSafePointers(form, heapInfo, isCurrentHeap) match {
+      val newForm = getSafePointers(src.expression, heapInfo, isCurrentHeap) match {
         case safePointers if safePointers.size >= 2 =>
           form
           .&(ACSLExpression.separatedPointers(safePointers))
@@ -210,46 +220,3 @@ class HeapReducer(cci: HeapInfo)
     }
   }
 }
-*/
-/*
-case class QuantifiedVarWithId(variable: ISortedVariable, id: String)
-    extends ITerm {
-  override def toString = {
-    variable.toString + "(Q" + id.take(4) + ")"
-  }
-}
-
-object ToInvariantFormVisitor
-    extends CollectingVisitor[Stack[String], IExpression]
-    with IdGenerator {
-
-  def apply(contractCondition: IExpression): IExpression = {
-    visit(contractCondition, Stack[String]())
-  }
-
-  override def preVisit(
-      t: IExpression,
-      quantifierIds: Stack[String]
-  ): PreVisitResult = t match {
-    case v: IVariableBinder => UniSubArgs(quantifierIds.push(generateId))
-    case _                  => KeepArg
-  }
-
-  override def postVisit(
-      t: IExpression,
-      quantifierIds: Stack[String],
-      subres: Seq[IExpression]
-  ): IExpression = t match {
-    case v @ ISortedVariable(index, sort) =>
-      if (index < quantifierIds.size) { // quantified variable
-        QuantifiedVarWithId(v, quantifierIds(index))
-      } else {
-        ISortedVariable(index - quantifierIds.size, sort)
-      }
-    case _ => t update (subres)
-    // SSSOWO: Variables are shifted, but the IVariableBinder is
-    //   never removed. Seems to me any binder in scope will bind
-    //   new variables. Is this correct?
-  }
-}
-*/

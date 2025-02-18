@@ -742,7 +742,7 @@ class Main (args: Array[String]) {
           var processedSolution = result
 
           val solutionProcessors = Seq(
-            _ADTExploder,
+            ADTExploder,
             createAnnotatedFunctionsFilter(maybeEnc, reader.getFunctionContexts)
             // add additional solution processors here
           )

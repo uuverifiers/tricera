@@ -75,13 +75,9 @@ object PostconditionSimplifier extends ResultProcessor {
   }
 
   private def simplify(precondition: IFormula, postcondition: IFormula): IFormula = {
-    // We replace ACSL related predicates with true in the precondition so that
-    // they don't get removed from the postcondition during simplification.
-    //val precond = ReplaceACSLPredicatesWithTrue(precondition)
-    //printlnDebug(f"Before replacement: ${precondition}")
-    //printlnDebug(f"After replacement: ${precond}")
     var postcond = postcondition
 
+    // SSSOWO TODO: Make more functional and avoid side effects!
     def attemptReplacingIFormulasBy(replaceByFormula: IFormula) = {
       var i = 0
       var cont = true
@@ -95,9 +91,6 @@ object PostconditionSimplifier extends ResultProcessor {
             ) match {
               case true =>
                 postcond = newPostcondition.asInstanceOf[IFormula]
-
-                printlnDebug(f"simplified formula: ${postcond.toString()}")
-
                 val removedIFormulas =
                   IFormulaCounterVisitor(replacedFormula) - 1
                 i = i + 1 - removedIFormulas
@@ -108,8 +101,6 @@ object PostconditionSimplifier extends ResultProcessor {
             cont = false
         }
       }
-      // Note: Cleanup rules for false literals are not yet implemented in CleanupVisitor
-      // SSSOWO TODO: Actually I think they are. Please check!
       postcond = CleanupVisitor(postcond).asInstanceOf[IFormula]
     }
     attemptReplacingIFormulasBy(IBoolLit(true))
@@ -178,18 +169,3 @@ private object CollectConstants {
     }
   }
 }
-
-/*
-private object ReplaceACSLPredicatesWithTrue {
-  def apply(formula: IFormula): IFormula = {
-    (new ReplaceACSLPredicatesWithTrue).visit(formula, ()).asInstanceOf[IFormula]
-  }
-
-  private class ReplaceACSLPredicatesWithTrue extends CollectingVisitor[Unit, IExpression] {
-    override def postVisit(t: IExpression, arg: Unit, subres: Seq[IExpression]): IExpression = t match {
-      case ACSLPredicate(_) => IBoolLit(true)
-      case _ => t update subres
-    }
-  }
-}
-  */

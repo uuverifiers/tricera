@@ -40,13 +40,11 @@ package tricera.postprocessor
 
 import ap.parser._
 
-import ap.theories.ADT
-import ap.theories.TheoryRegistry
-
+import ap.theories.{ADT, Theory, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
+
 import tricera.{FunctionInvariants, Invariant, PostCondition, PreCondition, Solution}
-import tricera.Util.printlnDebug
-import ap.theories.Theory
+
 
 object ADTSimplifier extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {

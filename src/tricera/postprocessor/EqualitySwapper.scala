@@ -40,14 +40,11 @@ package tricera.postprocessor
 
 import ap.parser._
 import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import tricera.postprocessor.ContractConditionType._
+
 import tricera.{
   ConstantAsProgVarProxy, HeapInfo, FunctionInvariants,
-  PostCondition, PreCondition, ProgVarProxy, Invariant}
-import tricera.Solution
+  PostCondition, PreCondition, ProgVarProxy, Invariant, Solution}
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
-import tricera.Util.printlnDebug
 
 object ToVariableForm extends ResultProcessor {
 
@@ -67,8 +64,6 @@ object ToVariableForm extends ResultProcessor {
       val postCondValSet = ValSet.merge(
           ValSetReader.deBrujin(preInv.expression),
           ValSetReader.deBrujin(postInv.expression))
-      printlnDebug(f"ToVariableForm preCondValSet := \n${preCondValSet.toString()}\n")
-      printlnDebug(f"ToVariableForm postCondValSet := \n${postCondValSet.toString()}\n")
       val newInvs = FunctionInvariants(
         id,
         PreCondition(toVariableForm(preInv, preCondValSet, preCondition.isCurrentHeap)),

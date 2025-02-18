@@ -40,14 +40,10 @@ package tricera.postprocessor
 
 import ap.parser._
 import IExpression.Predicate
-//import tricera.concurrency.CCReader.FunctionContext
-//import ContractConditionType._
 
 import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant,
-  PostCondition, PreCondition, Solution}
-import tricera.ProgVarProxy
-
+  PostCondition, PreCondition, ProgVarProxy, Solution}
 
 object ClauseRemover extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
