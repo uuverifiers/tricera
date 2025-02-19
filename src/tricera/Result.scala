@@ -89,6 +89,7 @@ case class PostCondition(invariant: Invariant) extends InvariantContext {
 
 case class FunctionInvariants(
   id: String,
+  isSrcAnnotated: Boolean,
   preCondition: PreCondition,
   postCondition: PostCondition,
   loopInvariants: List[LoopInvariant]) {

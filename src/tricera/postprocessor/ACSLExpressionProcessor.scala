@@ -59,11 +59,13 @@ object ACSLExpressionProcessor extends ResultProcessor {
   : FunctionInvariants = funcInvs match {
     case FunctionInvariants(
       id,
+      isSrcAnnotated,
       preCondition @ PreCondition(preInv),
       postCondition @ PostCondition(postInv),
       loopInvariants) =>
       val newInvs = FunctionInvariants(
         id,
+        isSrcAnnotated,
         PreCondition(ACSLExpressionVisitor(preInv, preCondition)),
         PostCondition(ACSLExpressionVisitor(postInv, postCondition)),
         loopInvariants)

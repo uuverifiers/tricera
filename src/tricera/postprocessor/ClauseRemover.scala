@@ -54,11 +54,13 @@ object ClauseRemover extends ResultProcessor {
   private def applyTo(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {
     case FunctionInvariants(
       id,
+      isSrcAnnotated,
       preCond @ PreCondition(preInv),
       postCond @ PostCondition(postInv),
       loopInvariants) => 
       val newInvs = FunctionInvariants(
         id,
+        isSrcAnnotated,
         PreCondition(applyTo(preInv, preCond.isCurrentHeap)),
         PostCondition(applyTo(postInv, postCond.isCurrentHeap)),
         loopInvariants)

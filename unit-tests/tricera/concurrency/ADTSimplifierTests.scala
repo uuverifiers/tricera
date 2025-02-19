@@ -43,7 +43,8 @@ class ADTSimplifierTests extends AnyFlatSpec {
   def makeSolution(form: IFormula) = {
     Solution(Seq(
       FunctionInvariants(
-        "someId", 
+        "someId",
+        false, 
         PreCondition(Invariant(form, None, None)),
         PostCondition(Invariant(form, None, None)),
         List())))

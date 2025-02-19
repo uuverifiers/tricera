@@ -71,12 +71,14 @@ class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcesso
   : FunctionInvariants = funcInvs match {
     case FunctionInvariants(
       id,
+      isSrcAnnotated,
       preCond @ PreCondition(preInv),
       postCond @ PostCondition(postInv),
       loopInvariants) =>
       val src = srcs.find(i => i.id == id).get
       val newInvs = FunctionInvariants(
         id,
+        isSrcAnnotated,
         PreCondition(addPtrAtoms(preInv, src.preCondition.invariant, preCond.isCurrentHeap)),
         PostCondition(addPtrAtoms(postInv, src.postCondition.invariant, postCond.isCurrentHeap)),
         loopInvariants)
@@ -106,7 +108,7 @@ class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcesso
       throw NeedsHeapModelException
 
   }
-
+/*
   def getSafePointers(invForm: IFormula, heapInfo: HeapInfo, isCurrentHeap: ProgVarProxy => Boolean): Set[ProgVarProxy] = {
     val valueSet = ValSetReader.invariant(invForm)
     val explForm = ToExplicitForm.invariant(invForm, valueSet, isCurrentHeap)
@@ -219,4 +221,5 @@ class HeapReducer(cci: HeapInfo)
       case _ => t update subres
     }
   }
+    */
 }

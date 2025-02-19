@@ -53,9 +53,10 @@ object ADTSimplifier extends ResultProcessor {
   }
 
   private def applyTo(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {
-    case FunctionInvariants(id, PreCondition(preInv), PostCondition(postInv), loopInvariants) => 
+    case FunctionInvariants(id, isSrcAnnotated, PreCondition(preInv), PostCondition(postInv), loopInvariants) => 
       val newInvs = FunctionInvariants(
         id,
+        isSrcAnnotated,
         PreCondition(simplify(preInv)),
         PostCondition(simplify(postInv)),
         loopInvariants)

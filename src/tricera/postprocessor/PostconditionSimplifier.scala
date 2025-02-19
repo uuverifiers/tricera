@@ -61,9 +61,10 @@ object PostconditionSimplifier extends ResultProcessor {
 
   private def simplifyPostCondition(funcInvs: FunctionInvariants)
   : FunctionInvariants = funcInvs match {
-    case FunctionInvariants(id, preCondition, PostCondition(postInv), loopInvariants) => 
+    case FunctionInvariants(id, isSrcAnnotated, preCondition, PostCondition(postInv), loopInvariants) => 
       val newInvs = FunctionInvariants(
         id,
+        isSrcAnnotated,
         preCondition,
         PostCondition(Invariant(
           simplify(preCondition.invariant.expression, postInv.expression),

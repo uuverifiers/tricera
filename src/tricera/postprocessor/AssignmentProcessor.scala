@@ -66,10 +66,11 @@ private class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultP
 
   private def applyTo(funcInv: FunctionInvariants)
   : FunctionInvariants = funcInv match {
-    case FunctionInvariants(id, preCondition, postCondition @ PostCondition(postInv), loopInvariants) =>
+    case FunctionInvariants(id, isSrcAnnotated, preCondition, postCondition @ PostCondition(postInv), loopInvariants) =>
       val src = srcs.find(i => i.id == id).get
       val newInv = FunctionInvariants(
         id,
+        isSrcAnnotated,
         preCondition, // Note: This processor is only applicable to the post condition
         PostCondition(addAssignmentAtoms(postInv, src.postCondition.invariant, postCondition.isCurrentHeap)),
         loopInvariants)

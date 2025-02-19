@@ -57,6 +57,7 @@ object ToVariableForm extends ResultProcessor {
   : FunctionInvariants = funcInvs match {
     case FunctionInvariants(
       id,
+      isSrcAnnotated,
       preCondition @ PreCondition(preInv),
       postCondition @ PostCondition(postInv),
       loopInvariants) =>
@@ -66,6 +67,7 @@ object ToVariableForm extends ResultProcessor {
           ValSetReader.deBrujin(postInv.expression))
       val newInvs = FunctionInvariants(
         id,
+        isSrcAnnotated,
         PreCondition(toVariableForm(preInv, preCondValSet, preCondition.isCurrentHeap)),
         PostCondition(toVariableForm(postInv, postCondValSet, postCondition.isCurrentHeap)),
         loopInvariants)

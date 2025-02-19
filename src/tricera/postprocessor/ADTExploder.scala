@@ -45,9 +45,10 @@ object ADTExploder extends ResultProcessor {
   }
 
   def rewrite(funcInv: FunctionInvariants): FunctionInvariants = funcInv match {
-    case FunctionInvariants(id, PreCondition(preInv), PostCondition(postInv), loopInvs) =>
+    case FunctionInvariants(id, isSrcAnnotated, PreCondition(preInv), PostCondition(postInv), loopInvs) =>
       FunctionInvariants(
         id,
+        isSrcAnnotated,
         PreCondition(rewrite(preInv)),
         PostCondition(rewrite(postInv)),
         loopInvs.map(i => rewrite(i)))

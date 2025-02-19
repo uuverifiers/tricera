@@ -45,10 +45,8 @@ import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
 import tricera.concurrency.ccreader.{CCVar, CCHeapPointer, CCHeapArrayPointer, CCStackPointer}
-import tricera.parsers.YAMLParser._
 
 import lazabs.horn.preprocessor.HornPreprocessor
-import tricera.postprocessor.SolutionProcessor
 import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
 
@@ -131,6 +129,7 @@ object Main {
                                    Map[properties.Property, Boolean]) = {
     val params = tricera.params.TriCeraParameters.get
     import params._
+    import tricera.parsers.YAMLParser._
     // Check if an accompanying .yml file exists (SV-COMP style).
     val yamlFileName = fileName.replaceAll("\\.[^.]*$", "") + ".yml"
     val bmInfo : Option[BenchmarkInfo] =
@@ -523,276 +522,42 @@ class Main (args: Array[String]) {
         printHornSimplified || printHornSimplifiedSMT)
       return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
-    def printSolutionSMT(shouldPrint: Boolean)(solution: HornPreprocessor.Solution) = {
-      import lazabs.horn.global._
-      import lazabs.horn.bottomup.HornPredAbs
-      import lazabs.ast.ASTree.Parameter
-      if (shouldPrint) {
-        // TODO: this should probably just use the function for printing
-        // models in SMTLineariser. But will change the syntax a bit
-        // and require tests to be updated
-        // todo: replace args with actual ones from the clauses
-        println("\nSolution (SMT-LIB)")
-        println("="*80)
-        val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
-        for((pred,sol) <- sortedSol) {
-          val cl = HornClause(RelVar(pred.name,
-            (0 until pred.arity).zip(HornPredAbs.predArgumentSorts(pred).map(
-              lazabs.prover.PrincessWrapper.sort2Type(_))).map(p =>
-              Parameter("_" + p._1,p._2)
-            ).toList),
-            List(Interp(lazabs.prover.PrincessWrapper.formula2Eldarica(sol,
-              Map[ap.terfor.ConstantTerm,String]().empty,false))))
-          println(lazabs.viewer.HornSMTPrinter.printFull(cl, true))
-        }
-        println("="*80 + "\n")
-      }
-    }
+    import tricera.Util._
+    import tricera.postprocessor.ResultPrinters.{printSolutionProlog, printSolutionSMT}
+    import tricera.postprocessor.ResultConverter.hornSolverSolutionToResult
 
-    def printSolutionProlog(shouldPrint: Boolean)(solution: HornPreprocessor.Solution) {
-      def clausifySolution(predAndSol  : (Predicate, IFormula),
-                           argNames    : Seq[String],
-                           newPredName : Option[String] = None) : Clause = {
-        val (pred, sol) = predAndSol
-        val predArgs = for (predArgName <- argNames) yield
-          IConstant(new ConstantTerm(predArgName))
-        val constraint  = VariableSubstVisitor.visit(
-          sol, (predArgs.toList, 0)).asInstanceOf[IFormula]
-        val newPred = newPredName match {
-          case Some(newName) => new Predicate(newName, pred.arity)
-          case None => pred
-        }
-        Clause(IAtom(newPred, predArgs), Nil, constraint)
-      }
-
-      
-      if(shouldPrint) {
-        println("\nSolution (Prolog)")
-        println("="*80)
-        val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
-        for((pred,sol) <- sortedSol) {
-          val predArgNames = reader.PredPrintContext.predArgNames(pred)
-          val solClause = clausifySolution(
-            (pred, sol), predArgNames, Some(pred.name.stripPrefix("inv_")))
-          println(solClause.toPrologString)
-        }
-        println("="*80 + "\n")
-      }      
-    }
-
-    verificationLoop.result match {
-      case Left(res) =>
-        res match {
-          case Some(solution) => 
-    
-            printSolutionProlog(displaySolutionProlog)(solution)
-            printSolutionSMT(lazabs.GlobalParameters.get.displaySolutionSMT)(solution)
-
-          case _ => /* Do nothing */        
-        }
-      case _ => /* Do nothing */
-    }
-
-    def toTriceraResult(
-      reader: CCReader,
-      result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
-      : Result = {
-      // SSSOWO TODO: These constants should be defined in a single place.
-      //   Currently they are literal strings in CCReader.
-      val preExecSuffix = "_old"
-      val postExecSuffix = "_post"
-      val resultExecSuffix = "_res"
-      val invPrefix = "inv_"
-
-      def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[CCVar], funcParams: Seq[String]): IFormula = {
-        def stripSuffix(name: String) = {
-          if (name.endsWith(preExecSuffix)) {
-            name.dropRight(preExecSuffix.size)
-          } else if (name.endsWith(postExecSuffix)) {
-            name.dropRight(postExecSuffix.size)
-          } else if (name.endsWith(resultExecSuffix)) {
-            name.dropRight(resultExecSuffix.size)
-          } else {
-            name
-          }
-        }
-
-        def nameToState(name: String):ProgVarProxy.State = {
-          if (name.endsWith(preExecSuffix)) {
-            ProgVarProxy.State.PreExec
-          } else if (name.endsWith(postExecSuffix)) {
-            ProgVarProxy.State.PostExec
-          } else if (name.endsWith(resultExecSuffix)) {
-            ProgVarProxy.State.Result
-          } else {
-            ProgVarProxy.State.Current
-          }
-        }
-
-        def getScope(name: String): ProgVarProxy.Scope = {
-          if (funcParams.contains(stripSuffix(name))) {
-            ProgVarProxy.Scope.Parameter
-          } else if (name.endsWith(resultExecSuffix)) {
-            ProgVarProxy.Scope.Temporary
-          } else {
-            val globalVars = predVars
-              .withFilter(
-                v => v.name.endsWith(preExecSuffix) && 
-                funcParams.find(p => stripSuffix(v.name) == p).isEmpty)
-              .map(v => stripSuffix(v.name))
-            if (globalVars.contains(stripSuffix(name))) {
-              ProgVarProxy.Scope.Global
-            } else {
-              ProgVarProxy.Scope.Local
-            }
-          }
-        }
-
-        def isPointer(name: CCVar): Boolean = {
-          name.typ match {
-            case _: CCHeapPointer => true
-            case _: CCStackPointer => true
-            case _: CCHeapArrayPointer => true
-            case _ => false
-          }
-        }
-
-        VariableSubstVisitor.visit(
-          formula, (predVars.map(
-            p => IConstant(
-              ProgVarProxy(
-                stripSuffix(p.name),
-                nameToState(p.name),
-                getScope(p.name),
-                isPointer(p)))).toList, 0))
-        .asInstanceOf[IFormula]
-      }
-
-      def toLoopInvariants(
-        funcId: String,
-        loopInvariants: Map[String,(CCReader.CCPredicate, SourceInfo)],
-        solution: SolutionProcessor.Solution,
-        heapInfo: Option[HeapInfo],
-        paramNames: Seq[String])
-        : Iterable[LoopInvariant] = {
-        loopInvariants
-          .withFilter(i => i._1.startsWith(funcId))
-          .map({ case (_, (ccPred, srcInfo)) =>
-            val (_, form) = solution.find(
-              p => p._1.name.stripPrefix(invPrefix) == ccPred.pred.name).get
-            LoopInvariant(replacePredVarWithFunctionParam(form, ccPred.argVars, paramNames), heapInfo, srcInfo)
-          })
-      }
-
-      def toFunctionInvariants(
-        funcId: String,
-        heapInfo: Option[HeapInfo],
-        ctx: CCReader.FunctionContext,
-        solution: SolutionProcessor.Solution,
-        loopInvs: Map[String,(CCReader.CCPredicate, SourceInfo)])
-        = {
-        val paramNames = ctx.acslContext.getParams.map(v => v.name)
-        FunctionInvariants(
-          funcId,
-          PreCondition(Invariant(
-            replacePredVarWithFunctionParam(
-              solution(ctx.prePred.pred),
-              ctx.prePred.argVars,
-              paramNames),
-            heapInfo,
-            ctx.prePred.srcInfo)),
-          PostCondition(Invariant(
-            replacePredVarWithFunctionParam(
-              solution(ctx.postPred.pred),
-              ctx.postPred.argVars,
-              paramNames),
-            heapInfo,
-            ctx.postPred.srcInfo)),
-          toLoopInvariants(funcId, loopInvs, solution, heapInfo, paramNames).toList)
-      }
-
-      result match {
-        case Left(Some(solution)) =>
-          val heapInfo = reader.getHeapInfo
-          val loopInvs = reader.getLoopInvariants
-          Solution(
-            reader.getFunctionContexts.map(
-              {case (funcId, ctx) => toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs)}).toSeq)
-        case Left(None) => Empty()
-        case Right(cex) => CounterExample(cex)
-      }
-    }
-
-
-    def noAnnotatedFunctionsFilter(encoder: Option[Encoder], funcContexts: Map[String, CCReader.FunctionContext]) = {
-      def isAnnotatedFunction(funcInvs: FunctionInvariants): Boolean = {
-        encoder match {
-          case Some(enc) if (
-            // SSSOWO TODO: Is there a ways to do this without the funcContexts?
-            enc.prePredsToReplace.contains(funcContexts(funcInvs.id).prePred.pred) || 
-            enc.postPredsToReplace.contains(funcContexts(funcInvs.id).postPred.pred)) => true
-          case _ => false
-        }
-      }
-      FunctionInvariantsFilter(!isAnnotatedFunction(_))
-    }
-
-    def printContracts(contracts: Seq[ACSLLinearisedContract]) = {
-      if (!contracts.isEmpty) {
-        println("\nInferred ACSL annotations")
-        println("=" * 80)
-        
-        for (contract <- contracts) {
-          println(f"/* contracts for ${contract.funcName} */")
-          println( "/*@")
-          println(f"  requires ${contract.preCondition};")
-          println(f"  ensures ${contract.postCondition};")
-          println("*/")
-          if (!contract.loopInvariants.isEmpty) {
-            for (loopInv <- contract.loopInvariants) {
-              println(f"/* loop invariant for the loop on line ${loopInv.srcInfo.line} */")
-              println( "/*@")
-              println(f"  loop invariant ${loopInv.invariant};")
-              println("*/")
-            }
-          }
-        }
-        println("=" * 80 + "\n")
-      }
-    }
-
-    val result = toTriceraResult(reader, verificationLoop.result)
+    val result = verificationLoop.result
+      .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
+      .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
+      .through(hornSolverSolutionToResult(reader))
 
     val executionResult = result match {
       case solution: Solution => 
         import tricera.postprocessor._
-        import tricera.Util._
 
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
-
-          val processedSolution = 
-            result
-              .through(ADTExploder.apply)
-              .through(noAnnotatedFunctionsFilter(maybeEnc, reader.getFunctionContexts)(_))
-              .through(r => 
-                if (solution.isHeapUsed) {
-                   r.through(PostconditionSimplifier.apply)
-                    .through(PointerPropProcessor(r)(_))
-                    .through(AssignmentProcessor(r)(_))
-                    .through(TheoryOfHeapProcessor.apply)
-                    .through(ADTSimplifier.apply)
-                    .through(ToVariableForm.apply)
-                    .through(ACSLExpressionProcessor.apply)
-                    .through(ClauseRemover.apply)
-                } else {
-                  r
-                }
-              )
-              .tap(r => r
-                .through(ACSLLineariser.apply)
-                .through(printContracts) 
-              )
+          result
+            .through(ADTExploder.apply)
+            .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
+            .through(r => 
+              if (solution.isHeapUsed) {
+                 r.through(PostconditionSimplifier.apply)
+                  .through(PointerPropProcessor(r)(_))
+                  .through(AssignmentProcessor(r)(_))
+                  .through(TheoryOfHeapProcessor.apply)
+                  .through(ADTSimplifier.apply)
+                  .through(ToVariableForm.apply)
+                  .through(ACSLExpressionProcessor.apply)
+                  .through(ClauseRemover.apply)
+              } else {
+                r
+              }
+            )
+            .tap(r => r
+              .through(ACSLLineariser.apply)
+              .through(ResultPrinters.printContracts) 
+            ).ignore
         }
         Safe
       case _: Empty =>

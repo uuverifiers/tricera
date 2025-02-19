@@ -65,7 +65,7 @@ object ACSLLineariser {
   }
 
   private def applyTo(funcInvs: FunctionInvariants): ACSLLinearisedContract = funcInvs match {
-    case FunctionInvariants(id, preCond @ PreCondition(_), postCond @ PostCondition(_), loopInvariants) => 
+    case FunctionInvariants(id, isSrcAnnotated, preCond @ PreCondition(_), postCond @ PostCondition(_), loopInvariants) => 
       def mkString(invCtxt: InvariantContext) = {
         val (conditionName, form) = invCtxt match {
           case PreCondition(inv) => ("precondition", inv.expression)
