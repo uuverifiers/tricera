@@ -48,8 +48,8 @@ import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
 
 object PointerPropProcessor {
-  def apply(result: Result): ResultProcessor = result match {
-    case Solution(funcInvs) => new PointerPropProcessor(funcInvs)
+  def apply(result: Result) = result match {
+    case Solution(funcInvs) => (new PointerPropProcessor(funcInvs))
     case _ => throw new Exception("BOOM!")
   }
 }

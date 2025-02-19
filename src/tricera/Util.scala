@@ -43,6 +43,13 @@ import tricera.params.TriCeraParameters
 import scala.collection.mutable.{ArrayBuffer => MArray, HashMap => MHashMap, Stack => MStack}
 
 object Util {
+
+  implicit class FSharpisms[+A](val a : A) extends AnyVal {
+    def through [B](f: A => B) = f(a)
+
+    def tap[B](f: A => Unit): A = {f(a); a}
+  }
+  
   def warn(msg : String) : Unit =
     Console.err.println("Warning: " + msg)
 

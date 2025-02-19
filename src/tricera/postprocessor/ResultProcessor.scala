@@ -38,7 +38,7 @@ trait ResultProcessor {
     case solution: Solution => applyTo(solution)
     case cex: CounterExample => applyTo(cex)
     case empty: Empty => applyTo(empty)
-  }
+  } 
 
   def applyTo(solution: Solution): Solution = {
     solution
