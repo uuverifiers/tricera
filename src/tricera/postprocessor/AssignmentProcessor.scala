@@ -108,7 +108,7 @@ private class AssignmentProcessorVisitor(
   valueSet: ValSet,
   separatedSet: Set[ProgVarProxy],
   isCurrentHeap: ProgVarProxy => Boolean,
-  cci: HeapInfo) 
+  heapInfo: HeapInfo) 
   extends CollectingVisitor[Int, Option[IFormula]] {
 
   private def getReverseAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
@@ -116,7 +116,7 @@ private class AssignmentProcessorVisitor(
       case IFunApp(
             writeFun,
             Seq(heap, pointer, value)
-          ) if (cci.isWriteFun(writeFun)) =>
+          ) if (heapInfo.isWriteFun(writeFun)) =>
         val assignment =
           (pointer.asInstanceOf[ITerm], value.asInstanceOf[ITerm])
         assignment +: getReverseAssignments(heap)
@@ -131,11 +131,11 @@ private class AssignmentProcessorVisitor(
   ): Option[IFormula] = {
     value match {
       case IFunApp(objCtor, _) =>
-        cci.objectCtorToSelector(objCtor)
+        heapInfo.objectCtorToSelector(objCtor)
           .map(selector => IEquation(
             IFunApp(
               selector,
-              Seq(IFunApp(cci.getReadFun, Seq(IConstant(heapVar), pointer)))
+              Seq(IFunApp(heapInfo.getReadFun, Seq(IConstant(heapVar), pointer)))
             ),
             IFunApp(selector, Seq(value))).asInstanceOf[IFormula])
       case _ => None

@@ -139,13 +139,13 @@ private class InvariantHeapExtractor(isCurrentHeap: ProgVarProxy => Boolean)
 private object HeapReducer {
   def apply(
       invariantExpression: IExpression,
-      cci: HeapInfo
+      heapInfo: HeapInfo
   ): IExpression = {
-    (new HeapReducer(cci)).visit(invariantExpression, Stack[String]())
+    (new HeapReducer(heapInfo)).visit(invariantExpression, Stack[String]())
   }
 }
 
-private class HeapReducer(cci: HeapInfo)
+private class HeapReducer(heapInfo: HeapInfo)
     extends CollectingVisitor[Stack[String], IExpression]
     with IdGenerator {
 
@@ -167,28 +167,28 @@ private class HeapReducer(cci: HeapInfo)
       //   part of Heap.functions and should work with TheoryOfHeapFunApp
       case IFunApp(fun, args) if (fun.name == "emptyHeap" && args.isEmpty) => 
         HeapState.empty
-      case ISortedVariable(index, sort) if cci.isHeapSortName(sort.name) =>
+      case ISortedVariable(index, sort) if heapInfo.isHeapSortName(sort.name) =>
         HeapState.heapById(quantifierIds(index))
       case TheoryOfHeapFunApp(
             writeFun,
             Seq(heap: HeapState, addr: Address, obj)
-          ) if cci.isWriteFun(writeFun) =>
+          ) if heapInfo.isWriteFun(writeFun) =>
         heap.write(addr, obj.asInstanceOf[ITerm])
       case TheoryOfHeapFunApp(
             readFun,
             Seq(heap: HeapState, addr: Address)
-          ) if cci.isReadFun(readFun) =>
+          ) if heapInfo.isReadFun(readFun) =>
         heap.read(addr)
       case TheoryOfHeapFunApp(
             allocFun,
             Seq(heap: HeapState, obj)
-          ) if cci.isAllocFun(allocFun) =>
+          ) if heapInfo.isAllocFun(allocFun) =>
         heap.alloc(obj.asInstanceOf[ITerm])
       case TheoryOfHeapFunApp(newHeapFun, Seq(allocRes: AllocRes))
-          if cci.isNewHeapFun(newHeapFun) =>
+          if heapInfo.isNewHeapFun(newHeapFun) =>
         allocRes.newHeap
       case TheoryOfHeapFunApp(newAddrFun, Seq(allocRes: AllocRes))
-          if cci.isNewAddrFun(newAddrFun) =>
+          if heapInfo.isNewAddrFun(newAddrFun) =>
         allocRes.newAddr
       case _ => t update subres
     }

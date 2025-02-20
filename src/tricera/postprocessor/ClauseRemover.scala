@@ -84,11 +84,11 @@ object ClauseRemover extends ResultProcessor {
 }
 
 object TheoryOfHeapRemoverVisitor {
-  def apply(expr: IExpression, cci: HeapInfo): IExpression = {
-    (new TheoryOfHeapRemoverVisitor(cci)).visit(expr, ())
+  def apply(expr: IExpression, heapInfo: HeapInfo): IExpression = {
+    (new TheoryOfHeapRemoverVisitor(heapInfo)).visit(expr, ())
   }
 
-  class TheoryOfHeapRemoverVisitor(cci: HeapInfo)
+  class TheoryOfHeapRemoverVisitor(heapInfo: HeapInfo)
     extends CollectingVisitor[Unit, IExpression] {
 
     override def postVisit(
@@ -99,7 +99,7 @@ object TheoryOfHeapRemoverVisitor {
       case IBinFormula(IBinJunctor.And, _, _) =>
         val f1 = subres(0)
         val f2 = subres(1)
-        (ContainsTOHVisitor(f1, cci), ContainsTOHVisitor(f2, cci)) match {
+        (ContainsTOHVisitor(f1, heapInfo), ContainsTOHVisitor(f2, heapInfo)) match {
           case (false, false) =>
             t update subres
           case (true, false) =>
@@ -118,11 +118,11 @@ object TheoryOfHeapRemoverVisitor {
 
 
 object ContainsTOHVisitor {
-  def apply(expr: IExpression, cci: HeapInfo): Boolean = {
-    (new ContainsTOHVisitor(cci))(expr)
+  def apply(expr: IExpression, heapInfo: HeapInfo): Boolean = {
+    (new ContainsTOHVisitor(heapInfo))(expr)
   }
 
-  class ContainsTOHVisitor(cci: HeapInfo)
+  class ContainsTOHVisitor(heapInfo: HeapInfo)
       extends CollectingVisitor[Unit, Boolean] {
   
     def apply(expr: IExpression): Boolean = {
@@ -132,7 +132,7 @@ object ContainsTOHVisitor {
     override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
       case TheoryOfHeapFunApp(_, _) =>
         ShortCutResult(true)
-      case IFunApp(fun, args) if (cci.isObjSelector(fun) || cci.isObjCtor(fun)) =>
+      case IFunApp(fun, args) if (heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun)) =>
         ShortCutResult(true)
       case _ =>
         KeepArg

@@ -85,7 +85,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
   }
 
   class ACSLExpressionVisitor(
-    cci: HeapInfo,
+    heapInfo: HeapInfo,
     context: InvariantContext
   ) extends CollectingVisitor[Unit, IExpression] {
 
@@ -94,11 +94,11 @@ object ACSLExpressionProcessor extends ResultProcessor {
     }
 
     private def isSelector(func: MonoSortedIFunction): Boolean = func match {
-      case ADT.Selector(_) if !cci.isObjSelector(func) => true
+      case ADT.Selector(_) if !heapInfo.isObjSelector(func) => true
       case _ => false
     }
 
-    private def isOldHeap(p: ProgVarProxy): Boolean = cci.isHeap(p) && p.isPreExec
+    private def isOldHeap(p: ProgVarProxy): Boolean = heapInfo.isHeap(p) && p.isPreExec
 
     override def postVisit(
         t: IExpression,
@@ -121,10 +121,10 @@ object ACSLExpressionProcessor extends ResultProcessor {
                 )
               )
             )
-            if (cci.isObjSelector(getFun) &&
-              cci.isReadFun(readFun) &&
+            if (heapInfo.isObjSelector(getFun) &&
+              heapInfo.isReadFun(readFun) &&
               isSelector(selector) &&
-              cci.isHeap(h)) =>
+              heapInfo.isHeap(h)) =>
           context match {
             case _: PreCondition =>
               ACSLExpression.arrowFunApp(
@@ -188,9 +188,9 @@ object ACSLExpressionProcessor extends ResultProcessor {
                 )
               )
             )
-            if (cci.isObjSelector(getFun) &&
-              cci.isReadFun(readFun) &&
-              cci.isHeap(h)) => {
+            if (heapInfo.isObjSelector(getFun) &&
+              heapInfo.isReadFun(readFun) &&
+              heapInfo.isHeap(h)) => {
           context match {
             case _: PreCondition =>
               ACSLExpression.derefFunApp(
