@@ -534,22 +534,23 @@ class Main (args: Array[String]) {
     val executionResult = result match {
       case solution: Solution => 
         import tricera.postprocessor._
+        import tricera.postprocessor.PointerTools._
 
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
           result
             .through(ADTExploder.apply)
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
-            .through(r => 
-              if (solution.isHeapUsed) {
-                 r.through(PostconditionSimplifier.apply)
-                  .through(PointerPropProcessor(r)(_))
-                  .through(AssignmentProcessor(r)(_))
-                  .through(TheoryOfHeapProcessor.apply)
-                  .through(ADTSimplifier.apply)
-                  .through(ToVariableForm.apply)
-                  .through(ACSLExpressionProcessor.apply)
-                  .through(ClauseRemover.apply)
+            .through(r =>
+              if (solution.isHeapUsed) { r
+                 .through(PostconditionSimplifier.apply)
+                 .through(addPointerPredicatesFrom(r))
+                 .through(addPointerAssignmentsFrom(r))
+                 .through(TheoryOfHeapProcessor.apply)
+                 .through(ADTSimplifier.apply)
+                 .through(ToVariableForm.apply)
+                 .through(ACSLExpressionProcessor.apply)
+                 .through(ClauseRemover.apply)
               } else {
                 r
               }

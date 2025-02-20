@@ -44,25 +44,14 @@ import scala.collection.immutable.Stack
 import tricera.{
   ConstantAsProgVarProxy,FunctionInvariants, HeapInfo, Invariant,
   PostCondition, PreCondition, ProgVarProxy, Result, Solution}
+
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
 
-object PointerPropProcessor {
-  def apply(result: Result) = result match {
-    case Solution(funcInvs) => (new PointerPropProcessor(funcInvs))
-    case _ => throw new Exception("BOOM!")
-  }
-}
-
-
 class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
-  // SSSOWO: TODO: Should heapInfo be part of constructor call instead?
-  //   If it's done like that we don't have to check for a valid heap
-  //   in the applyTo functions.
-  //   The drawback is that we might apply a processor instantiated
-  //   with the heap from one solution and apply it to another.
+  import tricera.postprocessor.PointerTools._
 
-  override def applyTo(solution: Solution) = solution match {
+  override def applyTo(target: Solution) = target match {
     case Solution(functionInvariants) =>
       Solution(functionInvariants.map(applyTo(_)))
   }
@@ -75,151 +64,37 @@ class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcesso
       preCond @ PreCondition(preInv),
       postCond @ PostCondition(postInv),
       loopInvariants) =>
-      val src = srcs.find(i => i.id == id).get
-      val newInvs = FunctionInvariants(
-        id,
-        isSrcAnnotated,
-        PreCondition(addPtrAtoms(preInv, src.preCondition.invariant, preCond.isCurrentHeap)),
-        PostCondition(addPtrAtoms(postInv, src.postCondition.invariant, postCond.isCurrentHeap)),
-        loopInvariants)
+      val newInvs = srcs.find(p => p.id == id) match {
+        case Some(srcInv) => 
+          FunctionInvariants(
+            id,
+            isSrcAnnotated,
+            PreCondition(addPtrAtoms(preInv, inferSafeHeapPointers(srcInv.preCondition))),
+            PostCondition(addPtrAtoms(postInv, inferSafeHeapPointers(srcInv.postCondition))),
+            loopInvariants)
+        case None =>
+          funcInvs
+      }
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
 
-  private def addPtrAtoms(
-    invariant: Invariant,
-    src: Invariant,
-    isCurrentHeap: ProgVarProxy => Boolean)
-    : Invariant = invariant match {
-    case Invariant(form, Some(heapInfo), srcInfo) =>
-      val newForm = getSafePointers(src.expression, heapInfo, isCurrentHeap) match {
-        case safePointers if safePointers.size >= 2 =>
+  private def addPtrAtoms(targetInv: Invariant, safePtrs: Set[ProgVarProxy])
+    : Invariant = targetInv match {
+    case Invariant(form, heapInfo, srcInfo) =>
+      val newForm = safePtrs.size match {
+        case 0 => 
           form
-          .&(ACSLExpression.separatedPointers(safePointers))
-          .&(ACSLExpression.validPointers(safePointers))
-        case safePointers if safePointers.size == 1 =>
+        case 1 =>
           form
-          .&(ACSLExpression.validPointers(safePointers))
-        case _ => 
+          .&(ACSLExpression.validPointers(safePtrs))
+        case _ =>
           form
+          .&(ACSLExpression.separatedPointers(safePtrs))
+          .&(ACSLExpression.validPointers(safePtrs))
       }
-      Invariant(newForm, Some(heapInfo), srcInfo)
+      Invariant(newForm, heapInfo, srcInfo)
     case _ =>
-      throw NeedsHeapModelException
-
+      targetInv
   }
-/*
-  def getSafePointers(invForm: IFormula, heapInfo: HeapInfo, isCurrentHeap: ProgVarProxy => Boolean): Set[ProgVarProxy] = {
-    val valueSet = ValSetReader.invariant(invForm)
-    val explForm = ToExplicitForm.invariant(invForm, valueSet, isCurrentHeap)
-    val redForm = HeapReducer(explForm, heapInfo)
-    HeapExtractor(redForm, isCurrentHeap) match {
-      case Some(heap) =>
-        val redValueSet = ValSetReader.invariant(redForm)
-        readSafeVariables(heap, redValueSet)
-      case _ => Set.empty[ProgVarProxy]
-    }
-  }
-
-  def readSafeVariables(
-      heap: HeapState,
-      valueSetWithAddresses: ValSet
-  ): Set[ProgVarProxy] = {
-    heap.storage.keys
-      .flatMap(
-        valueSetWithAddresses.getVariableForm(_) match {
-          case Some(ConstantAsProgVarProxy(p)) => Some(p)
-          case None => None
-        }
-      )
-      .asInstanceOf[Set[ProgVarProxy]]
-  }
-}
-
-object HeapExtractor {
-  def apply(
-      expr: IExpression,
-      isCurrentHeap: ProgVarProxy => Boolean
-  ): Option[HeapState] = {
-    (new InvariantHeapExtractor(isCurrentHeap)).visit(expr, ())
-  }
-}
-
-class InvariantHeapExtractor(isCurrentHeap: ProgVarProxy => Boolean)
-    extends CollectingVisitor[Unit, Option[HeapState]] {
-  override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case IEquation(ConstantAsProgVarProxy(h), heap: HeapState) if isCurrentHeap(h) =>
-      ShortCutResult(Some(heap))
-    case _ =>
-      KeepArg
-  }
-
-  override def postVisit(
-      t: IExpression,
-      arg: Unit,
-      subres: Seq[Option[HeapState]]
-  ): Option[HeapState] = t match {
-    case h: HeapState => Some(h)
-    case _            => subres.collectFirst { case Some(h) => h }
-  }
-}
-
-object HeapReducer {
-  def apply(
-      invariantExpression: IExpression,
-      cci: HeapInfo
-  ): IExpression = {
-    (new HeapReducer(cci)).visit(invariantExpression, Stack[String]())
-  }
-}
-
-class HeapReducer(cci: HeapInfo)
-    extends CollectingVisitor[Stack[String], IExpression]
-    with IdGenerator {
-
-  override def preVisit(
-      t: IExpression,
-      quantifierIds: Stack[String]
-  ): PreVisitResult = t match {
-    case v: IVariableBinder => UniSubArgs(quantifierIds.push(generateId))
-    case _                  => KeepArg
-  }
-
-  override def postVisit(
-      t: IExpression,
-      quantifierIds: Stack[String],
-      subres: Seq[IExpression]
-  ): IExpression = {
-    t update subres match {
-      // SSSOWO TODO: Why does this need special handling? "emptyHeap" is
-      //   part of Heap.functions and should work with TheoryOfHeapFunApp
-      case IFunApp(fun, args) if (fun.name == "emptyHeap" && args.isEmpty) => 
-        HeapState.empty
-      case ISortedVariable(index, sort) if cci.isHeapSortName(sort.name) =>
-        HeapState.heapById(quantifierIds(index))
-      case TheoryOfHeapFunApp(
-            writeFun,
-            Seq(heap: HeapState, addr: Address, obj)
-          ) if cci.isWriteFun(writeFun) =>
-        heap.write(addr, obj.asInstanceOf[ITerm])
-      case TheoryOfHeapFunApp(
-            readFun,
-            Seq(heap: HeapState, addr: Address)
-          ) if cci.isReadFun(readFun) =>
-        heap.read(addr)
-      case TheoryOfHeapFunApp(
-            allocFun,
-            Seq(heap: HeapState, obj)
-          ) if cci.isAllocFun(allocFun) =>
-        heap.alloc(obj.asInstanceOf[ITerm])
-      case TheoryOfHeapFunApp(newHeapFun, Seq(allocRes: AllocRes))
-          if cci.isNewHeapFun(newHeapFun) =>
-        allocRes.newHeap
-      case TheoryOfHeapFunApp(newAddrFun, Seq(allocRes: AllocRes))
-          if cci.isNewAddrFun(newAddrFun) =>
-        allocRes.newAddr
-      case _ => t update subres
-    }
-  }
-    */
 }

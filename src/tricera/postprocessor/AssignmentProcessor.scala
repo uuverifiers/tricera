@@ -40,25 +40,20 @@
 
 package tricera.postprocessor
 
-import tricera.{
-  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
-  Invariant, PostCondition, ProgVarProxy, Result, Solution}
-import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
-
 import ap.parser._
 import ap.terfor.ConstantTerm
 
-// SSSOWO TODO: This should be rewritten to pick up the "valid" elements from
-//   the expression instead of recalculating safe pointers again.
+import tricera.{
+  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
+  Invariant, InvariantContext, LoopInvariant, PostCondition, PreCondition,
+  ProgVarProxy, Result, Solution}
 
-object AssignmentProcessor {
-  def apply(result: Result): ResultProcessor = result match {
-    case Solution(funcInvs) => new AssignmentProcessor(funcInvs)
-    case _ => throw new Exception("BOOM!")
-  }
-}
+import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
 
-private class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
+
+class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
+  import tricera.postprocessor.PointerTools._
+
   override def applyTo(solution: Solution) = solution match {
     case Solution(functionInvariants) =>
       Solution(functionInvariants.map(applyTo(_)))
@@ -67,26 +62,35 @@ private class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultP
   private def applyTo(funcInv: FunctionInvariants)
   : FunctionInvariants = funcInv match {
     case FunctionInvariants(id, isSrcAnnotated, preCondition, postCondition @ PostCondition(postInv), loopInvariants) =>
-      val src = srcs.find(i => i.id == id).get
-      val newInv = FunctionInvariants(
-        id,
-        isSrcAnnotated,
-        preCondition, // Note: This processor is only applicable to the post condition
-        PostCondition(addAssignmentAtoms(postInv, src.postCondition.invariant, postCondition.isCurrentHeap)),
-        loopInvariants)
+      val newInv = srcs.find(p => p.id == id) match {
+        case Some(srcInv) => 
+          FunctionInvariants(
+            id,
+            isSrcAnnotated,
+            preCondition, // Note: This processor is only applicable to the post condition
+            PostCondition(addAssignmentAtoms(postInv, srcInv.postCondition, postCondition.isCurrentHeap)),
+            loopInvariants)
+        case None =>
+          funcInv
+      }
       DebugPrinter.oldAndNew(this, funcInv, newInv)
       newInv
   }
 
   private def addAssignmentAtoms(
     invariant: Invariant,
-    src: Invariant,
+    srcInv: InvariantContext,
     isCurrentHeap: ProgVarProxy => Boolean)
     = invariant match {
     case Invariant(form, Some(heapInfo), srcInfo) =>
-      val visitor = new AssignmentProcessor_(
-        ValSetReader.deBrujin(src.expression),
-        (new PointerPropProcessor(srcs)).getSafePointers(src.expression, heapInfo, isCurrentHeap),
+      val srcExp = srcInv match {
+        case PreCondition(inv) => inv.expression
+        case PostCondition(inv) => inv.expression
+        case LoopInvariant(exp, _, _) => exp
+      }
+      val visitor = new AssignmentProcessorVisitor(
+        ValSetReader.deBrujin(srcExp),
+        inferSafeHeapPointers(srcInv),
         isCurrentHeap,
         heapInfo)
       val newForm = visitor.visit(form, 0) match {
@@ -100,7 +104,7 @@ private class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultP
 }
 
 
-private class AssignmentProcessor_(
+private class AssignmentProcessorVisitor(
   valueSet: ValSet,
   separatedSet: Set[ProgVarProxy],
   isCurrentHeap: ProgVarProxy => Boolean,
