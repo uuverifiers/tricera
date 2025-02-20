@@ -76,22 +76,20 @@ object PostconditionSimplifier extends ResultProcessor {
   }
 
   private def simplify(precondition: IFormula, postcondition: IFormula): IFormula = {
-    var postcond = postcondition
-
-    // SSSOWO TODO: Make more functional and avoid side effects!
-    def attemptReplacingIFormulasBy(replaceByFormula: IFormula) = {
+    def attemptReplacingIFormulasBy(replaceByFormula: IFormula, preCond :IFormula, postCond: IFormula) = {
+      var currentPostCond = postCond
       var i = 0
       var cont = true
       while (cont) {
-        ReplaceNthIFormulaVisitor(postcond, i, replaceByFormula) match {
+        ReplaceNthIFormulaVisitor(currentPostCond, i, replaceByFormula) match {
           case (newPostcondition, Some(replacedFormula)) =>
             isEquivalentPostcondition(
-              precondition,
-              postcond,
+              preCond,
+              currentPostCond,
               newPostcondition.asInstanceOf[IFormula]
             ) match {
               case true =>
-                postcond = newPostcondition.asInstanceOf[IFormula]
+                currentPostCond = newPostcondition.asInstanceOf[IFormula]
                 val removedIFormulas =
                   IFormulaCounterVisitor(replacedFormula) - 1
                 i = i + 1 - removedIFormulas
@@ -102,11 +100,16 @@ object PostconditionSimplifier extends ResultProcessor {
             cont = false
         }
       }
-      postcond = CleanupVisitor(postcond).asInstanceOf[IFormula]
+      CleanupVisitor(currentPostCond).asInstanceOf[IFormula]
     }
-    attemptReplacingIFormulasBy(IBoolLit(true))
-    attemptReplacingIFormulasBy(IBoolLit(false))
-    postcond
+    
+    attemptReplacingIFormulasBy(
+      IBoolLit(false),
+      precondition,
+      attemptReplacingIFormulasBy(
+        IBoolLit(true),
+        precondition,
+        postcondition))
   }
 
   def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
