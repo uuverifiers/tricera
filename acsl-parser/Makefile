@@ -27,7 +27,7 @@ all: download-jars acsl-parser.jar tricera/acsl/Test.class
 
 include $(PARSER_BASEDIR)/../cc-parser/download_jars.mk
 
-acsl-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class $(PARSER_BINDIR)/tricera/acsl/sym.class $(PARSER_BINDIR)/tricera/acsl/Yylex.class $(PARSER_BINDIR)/tricera/acsl/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/acsl/parser.class
+acsl-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class $(PARSER_BINDIR)/tricera/acsl/sym.class $(PARSER_BINDIR)/tricera/acsl/Yylex.class $(PARSER_BINDIR)/tricera/acsl/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/acsl/parser.class $(PARSER_BINDIR)/tricera/acsl/AllVisitor.class $(PARSER_BINDIR)/tricera/acsl/AbstractVisitor.class $(PARSER_BINDIR)/tricera/acsl/ComposVisitor.class $(PARSER_BINDIR)/tricera/acsl/FoldVisitor.class
 	cd $(PARSER_BINDIR) && jar cf $(PARSER_BASEDIR)/acsl-parser.jar tricera
 
 $(PARSER_BINDIR):
@@ -69,6 +69,18 @@ $(PARSER_BINDIR)/tricera/acsl/Yylex.class: tricera/acsl/Yylex.java tricera/acsl/
 
 $(PARSER_BINDIR)/tricera/acsl/sym.class: tricera/acsl/sym.java
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/sym.java
+
+$(PARSER_BINDIR)/tricera/acsl/AllVisitor.class: tricera/acsl/AllVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/AllVisitor.java
+
+$(PARSER_BINDIR)/tricera/acsl/AbstractVisitor.class: tricera/acsl/AbstractVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/AbstractVisitor.java
+
+$(PARSER_BINDIR)/tricera/acsl/ComposVisitor.class: tricera/acsl/ComposVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/ComposVisitor.java
+
+$(PARSER_BINDIR)/tricera/acsl/FoldVisitor.class: tricera/acsl/FoldVisitor.java
+	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/FoldVisitor.java
 
 $(PARSER_BINDIR)/tricera/acsl/parser.class: tricera/acsl/parser.java tricera/acsl/sym.java
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/parser.java

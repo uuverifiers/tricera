@@ -1477,6 +1477,16 @@ class CCReader private (prog              : Program,
           processHints(argDec.listannotation_) // todo: does this work??
           (actualType, name)
         }
+        case argDec : Abstract => {
+          val typ  = getType(argDec.listdeclaration_specifier_)
+          val actualType = argDec.abstract_declarator_ match {
+            case p : PointerStart => createHeapPointer(p, typ)
+            case _ => throw new TranslationException(
+              s"Unsupported declaration inside predicate declaration: ${printer.print(argDec)}")
+          }
+          val argName = declName + "_" + ind
+          (actualType, argName)
+        }
       }
     }
   }
@@ -4034,6 +4044,9 @@ private def collectVarDecls(dec                    : Dec,
   }
 
   private def createHeapPointer(decl : BeginPointer, typ : CCType) :
+  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+
+  private def createHeapPointer(decl : PointerStart, typ : CCType) :
   CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
 
   private def createHeapPointerHelper(decl : Pointer, typ : CCType) :

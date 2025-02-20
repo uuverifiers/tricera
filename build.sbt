@@ -1,6 +1,7 @@
-import scala.sys.process._ // needed for url to fetch tri-pp
+import scala.sys.process._
 import java.nio.file.{Paths, Files}
-import java.nio.file.attribute.PosixFilePermission._
+import java.nio.file.attribute.PosixFilePermissions
+import scala.util.Try
 
 lazy val commonSettings = Seq(
     name                 := "TriCera",
@@ -45,13 +46,28 @@ pp := {
   val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.3/tri-pp")
   f #> file("tri-pp") !
 }
-def addExecutePermissions(file : File) {
-  val rf = fileToRichFile(file)
-  val permissions = Seq(OTHERS_EXECUTE, OWNER_EXECUTE, GROUP_EXECUTE).toSet
-  if(!permissions.subsetOf(rf.permissions)) {
-    permissions.foreach(rf.addPermission(_))
+
+def addExecutePermissions(file: File): Unit = {
+  val path = Paths.get(file.getAbsolutePath)
+  if (Files.exists(path)) {
+    val fileSystem = path.getFileSystem
+    if (fileSystem.supportedFileAttributeViews().contains("posix")) {
+      Try {
+        val permissions = PosixFilePermissions.fromString("rwxr-xr-x")
+        Files.setPosixFilePermissions(path, permissions)
+        println(s"Set execute permissions on ${file.getAbsolutePath}")
+      }.getOrElse {
+        println(s"Could not set execute permissions on ${file.getAbsolutePath}")
+      }
+    } else {
+      println(s"Skipping permission changes: " +
+        s"${file.getAbsolutePath} is on a non-POSIX filesystem (${fileSystem.provider()}).")
+    }
+  } else {
+    println(s"File not found: ${file.getAbsolutePath}")
   }
 }
+
 lazy val ppWithErrorHandling = taskKey[Unit]("Download the preprocessor")
 ppWithErrorHandling := {
   if ({val f = baseDirectory.value / "tri-pp"
