@@ -6,7 +6,7 @@ import ap.parser.{IFormula, VariablePermVisitor, IVarShift}
 import ap.terfor.preds.Predicate
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 import tricera.concurrency.CallSiteTransform
-import tricera.postprocessor.SolutionProcessor.Solution
+import tricera.Solution
 import tricera.concurrency.CCReader
 import ap.parser.Environment.Constant
 import ap.parser.Environment.Variable
@@ -14,6 +14,14 @@ import _root_.ap.parser.IBoolLit
 import tricera.concurrency.ccreader.CCVar
 
 import tricera.Util.printlnDebug
+import tricera.Result
+import tricera.FunctionInvariants
+import ap.parser.CollectingVisitor
+import ap.parser.IExpression
+import tricera.{
+  ConstantAsProgVarProxy, Invariant, InvariantContext,
+  LoopInvariant, PostCondition, PreCondition, ProgVarProxy}
+import ap.parser.IConstant
 
 private object MergableContract {
   def apply(
@@ -172,18 +180,84 @@ private class MergableContract(
 }
 
 object MergeTransformedFunctionsContracts {
-  def apply(
-    callSiteTransforms: CallSiteTransforms,
-    contexts: Map[String, CCReader.FunctionContext],
-    solution : Solution) = {
-      (new MergeTransformedFunctionsContracts(callSiteTransforms, contexts, solution)).apply()
+  def apply(callSiteTransforms: CallSiteTransforms)(result : Result) = {
+      (new MergeTransformedFunctionsContracts(callSiteTransforms)(result))
   }
 }
 
-class MergeTransformedFunctionsContracts(
+private object RenameProgVarProxies extends CollectingVisitor[MHashMap[String, String], IExpression] {
+  def apply(funcInvs: FunctionInvariants, nameMap: MHashMap[String, String])
+  : FunctionInvariants = funcInvs match {
+    case FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      PreCondition(preInv),
+      PostCondition(postInv),
+      loopInvariants) =>
+      FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(applyTo(preInv, nameMap)),
+        PostCondition(applyTo(postInv, nameMap)),
+        loopInvariants.map(i => applyTo(i, nameMap)))
+  }
+
+  private def applyTo(inv: Invariant, nameMap: MHashMap[String, String])
+  : Invariant = inv match {
+    case Invariant(form, heapInfo, srcInfo) => 
+      Invariant(visit(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
+  }
+
+  private def applyTo(inv: LoopInvariant, nameMap: MHashMap[String, String])
+  : LoopInvariant = inv match {
+    case LoopInvariant(form, heapInfo, srcInfo) => 
+      LoopInvariant(visit(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
+  }
+
+
+  override def postVisit(
+    t: IExpression,
+    transformedToOriginalId: MHashMap[String,String],
+    subres: Seq[IExpression])
+  : IExpression = t match {
+      case ConstantAsProgVarProxy(proxy) if transformedToOriginalId.get(proxy.name).isDefined =>
+//        val ProgVarProxy(a,b,c,d,e) = proxy
+        printlnDebug(f"=====> swapping ${proxy.name} for ${transformedToOriginalId(proxy.name)}")
+        IConstant(proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true))
+      case _: IExpression => 
+        t.update(subres)
+    }
+}
+
+private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTransforms) extends ResultProcessor {
+  override def applyTo(solution: tricera.Solution): Solution = solution match {
+    case Solution(functionInvariants) if !callSiteTransforms.isEmpty => 
+      Solution(mergeInvariantsOfTransformedFunctions(functionInvariants))
+    case _ =>
+      solution
+  }
+
+  private def mergeInvariantsOfTransformedFunctions(funcInvs: Seq[FunctionInvariants])
+  : Seq[FunctionInvariants] = {
+    val astAdditions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
+
+    val transformedFuncInvsByOriginalId = astAdditions.transformedFunctionIdToOriginalId
+      .groupBy({case (transformedId, origId) => origId })
+      .mapValues(_.keySet.map(funcId => funcInvs.find(i => i.id == funcId).get))
+
+    transformedFuncInvsByOriginalId.map({case (originalId, transformedFuncInvs) => {
+      transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
+        (original, transformed) => 
+          original.meet(RenameProgVarProxies(transformed, astAdditions.globalVariableIdToParameterId)))
+    }}).toSeq
+  }
+}
+
+/*
+class _MergeTransformedFunctionsContracts(
     callSiteTransforms: CallSiteTransforms,
     functionContexts: Map[String,CCReader.FunctionContext],
-    solution : Solution) {
+    solution : tricera.postprocessor.SolutionProcessor.Solution) {
 
   def apply(): (Solution, Map[String,CCReader.FunctionContext]) = {
     def isAssociatedWithTransformedFunction(pred: Predicate) = {
@@ -216,3 +290,4 @@ class MergeTransformedFunctionsContracts(
     (mergedSolution, functionContexts.filterKeys(funcId => contractsByOriginalFuncId.contains(funcId)))
   }
 }
+*/

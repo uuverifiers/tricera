@@ -50,6 +50,7 @@ import lazabs.horn.preprocessor.HornPreprocessor
 import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
+import _root_.tricera.postprocessor.MergeTransformedFunctionsContracts
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -527,10 +528,20 @@ class Main (args: Array[String]) {
     import tricera.postprocessor.ResultPrinters.{printSolutionProlog, printSolutionSMT}
     import tricera.postprocessor.ResultConverter.hornSolverSolutionToResult
 
+//    for ((c, ctx) <- reader.getFunctionContexts) {
+//      printlnDebug(f"| ${ctx.prePred} : ${ctx.postPred} ${ctx.a}")
+//    }
+
     val result = verificationLoop.result
       .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
-      .through(hornSolverSolutionToResult(reader))
+//      .tap({ case Left(Some(solution)) =>
+//        for ((p, f) <- solution) {
+//          printlnDebug(f"|| ${p.toString()} :: ${f.toString()}")
+//        }
+//      })
+      .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
+      .through(MergeTransformedFunctionsContracts(callSiteTransforms))
 
     val executionResult = result match {
       case solution: Solution => 
@@ -540,13 +551,14 @@ class Main (args: Array[String]) {
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
           result
-            .through(ADTExploder.apply)
+//            .through(ADTExploder.apply)
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(PostconditionSimplifier.apply)
                  .through(addPointerPredicatesFrom(r))
                  .through(addPointerAssignmentsFrom(r))
+                 .through(ADTExploder.apply)
                  .through(TheoryOfHeapProcessor.apply)
                  .through(ADTSimplifier.apply)
                  .through(ToVariableForm.apply)

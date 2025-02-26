@@ -47,7 +47,7 @@ import tricera.Util.printlnDebug
 
 object ResultConverter {
   def hornSolverSolutionToResult
-    (reader: CCReader)
+    (reader: CCReader, entryFunction: String)
     (result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
     : Result = {
     import scala.collection.mutable.HashSet
@@ -138,6 +138,9 @@ object ResultConverter {
       annotatedFuncs: HashSet[String])
       = {
       val paramNames = ctx.acslContext.getParams.map(v => v.name)
+
+//      printlnDebug(f"Looking for: ${funcId}")
+
       FunctionInvariants(
         funcId,
         annotatedFuncs(funcId),

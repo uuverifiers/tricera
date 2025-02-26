@@ -11,7 +11,7 @@ import ap.theories.{Heap}
  * in the original program.
 */
 case class ProgVarProxy(
-  _name: String,
+  private val _name: String,
   state: ProgVarProxy.State,
   scope: ProgVarProxy.Scope,
   private val _isPointer: Boolean)
@@ -93,6 +93,30 @@ case class FunctionInvariants(
   preCondition: PreCondition,
   postCondition: PostCondition,
   loopInvariants: List[LoopInvariant]) {
+
+  /**
+    * Calculates the "meet" of two FunctionInvariants instances'
+    * pre- and post-conditions. It is defined by
+    *   [pre1, post1] meet [pre2, post2] <=>
+    *   [(pre1 \/ pre2), (pre1 => post1) /\ (pre2 => post2)]
+    * 
+    * Any loop invariants will be aggregated into a single set.
+    *
+    * @param other The pre-/post-condition pair to meet with.
+    * @return 
+    */
+  def meet(other: FunctionInvariants): FunctionInvariants = {
+    val PreCondition(Invariant(pre1, preHeapInfo, preSourceInfo)) = preCondition
+    val PostCondition(Invariant(post1, postHeapInfo, postSrcInfo)) = postCondition
+    val PreCondition(Invariant(pre2, _, _)) = other.preCondition
+    val PostCondition(Invariant(post2, _, _)) = other.postCondition
+    FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      PreCondition(Invariant((pre1 ||| pre2), preHeapInfo, preSourceInfo)),
+      PostCondition(Invariant((pre1 ===> post1) &&& (pre2 ===> post2), postHeapInfo, postSrcInfo)),
+      loopInvariants ::: other.loopInvariants)
+  }
 }
 
 sealed trait Result {

@@ -44,6 +44,7 @@ import IExpression.Predicate
 import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant,
   PostCondition, PreCondition, ProgVarProxy, Solution}
+import tricera.Util.FSharpisms
 
 object ClauseRemover extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
@@ -71,12 +72,15 @@ object ClauseRemover extends ResultProcessor {
   private def applyTo(invariant: Invariant, isCurrentHeap: ProgVarProxy => Boolean)
     : Invariant = invariant match {
     case Invariant(expression, Some(heapInfo), sourceInfo) =>
-      val noTOHExpr = CleanupVisitor(TheoryOfHeapRemoverVisitor(expression, heapInfo))
-      val noTOHOrExplPtrExpr = CleanupVisitor(ExplicitPointerRemover(noTOHExpr))
-      val noTrivialEqExpr = CleanupVisitor(TrivialEqualityRemover(noTOHOrExplPtrExpr))
-      val newForm = CleanupVisitor(
-        HeapEqualityRemover(noTrivialEqExpr, isCurrentHeap)).asInstanceOf[IFormula]
-      Invariant(newForm, Some(heapInfo), sourceInfo)
+      Invariant(
+        expression
+          .through(e => CleanupVisitor(TheoryOfHeapRemoverVisitor(e, heapInfo)))
+//          .through(e => CleanupVisitor(ExplicitPointerRemover(e)))
+          .through(e => CleanupVisitor(TrivialEqualityRemover(e)))
+          .through(e => CleanupVisitor(HeapEqualityRemover(e, isCurrentHeap))
+          .asInstanceOf[IFormula]),
+        Some(heapInfo),
+        sourceInfo)
     case Invariant(expression, None, sourceInfo) => 
       val newForm = CleanupVisitor(TrivialEqualityRemover(expression)).asInstanceOf[IFormula]
       Invariant(newForm, None, sourceInfo)
@@ -182,13 +186,6 @@ object ContainsExplicitPointerVisitor {
       extends CollectingVisitor[Unit, Boolean] {
     def apply(expr: IExpression): Boolean = {
       visit(expr, ())
-    }
-  
-    private def isACSLFunction(fun: IFunction): Boolean = {
-      ACSLExpression.functions.contains(fun)
-    }
-    private def isACSLPredicate(pred: Predicate): Boolean = {
-      ACSLExpression.predicates.contains(pred)
     }
   
     override def preVisit(

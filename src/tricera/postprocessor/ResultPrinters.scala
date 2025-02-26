@@ -38,7 +38,6 @@ import lazabs.horn.bottomup.HornClauses.Clause
 import hornconcurrency.VerificationLoop
 import tricera.Literals
 import tricera.LoopInvariant
-//import lazabs.horn.concurrency.VerificationLoop
 
 object ResultPrinters {
 
