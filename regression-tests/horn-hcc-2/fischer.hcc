@@ -1,4 +1,5 @@
 int lock = 0;
+int tid = _;
 
 thread[tid] Proc {
   clock C;

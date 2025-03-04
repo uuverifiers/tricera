@@ -161,7 +161,7 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
 /*
   Vistor to copy an AST.
 */
-class CCAstCopyVisitor extends ComposVisitor[Unit] {
+class CCAstCopyVisitor extends CCAstCopyWithLocation[Unit] {
   def apply(annotations: ListAnnotation): ListAnnotation = {
     val copy = new ListAnnotation
     copy.addAll(annotations.asScala.map(a => a.accept(this, ())).asJava)
@@ -229,7 +229,7 @@ class CCAstGetDeclaratorVistor extends AbstractVisitor[Declarator, Unit] {
 /*
   Vistor class to remove one level of indirection ("dereference a pointer").
 */
-class CCAstRemovePointerLevelVistor extends ComposVisitor[Unit] {
+class CCAstRemovePointerLevelVistor extends CCAstCopyWithLocation[Unit] {
   /* Declarator */
   override def visit(dec: BeginPointer, arg: Unit) = { new NoPointer(dec.direct_declarator_.accept(this, arg)); }
 }
@@ -237,7 +237,7 @@ class CCAstRemovePointerLevelVistor extends ComposVisitor[Unit] {
 /*
   Vistor class to rename a declaration or definition.
 */
-class CCAstRenameInDeclarationVistor extends ComposVisitor[String => String] {
+class CCAstRenameInDeclarationVistor extends CCAstCopyWithLocation[String => String] {
   /* Direct_declarator */
   override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
 }
@@ -246,7 +246,7 @@ class CCAstRenameInDeclarationVistor extends ComposVisitor[String => String] {
   Vistor class to transform any declaration to a scalar variable declaration,
   removing e.g. array or function declaration elements.
 */
-class CCAstDeclaratorToNameVistor extends ComposVisitor[String => String] {
+class CCAstDeclaratorToNameVistor extends CCAstCopyWithLocation[String => String] {
   /* Direct_declarator */
   override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
   override def visit(dec: ParenDecl, rename: String => String): Name = { dec.declarator_ match {
@@ -264,7 +264,7 @@ class CCAstDeclaratorToNameVistor extends ComposVisitor[String => String] {
 /*
   Vistor class to replace one function declaration with another.
 */
-class CCAstReplaceFunctionDeclarationVistor extends ComposVisitor[Direct_declarator] {
+class CCAstReplaceFunctionDeclarationVistor extends CCAstCopyWithLocation[Direct_declarator] {
   /* Direct_declarator */
   override def visit(dec: NewFuncDec, replacement: Direct_declarator) = { replacement }
   override def visit(dec: OldFuncDec, replacement: Direct_declarator) = { replacement }
@@ -273,7 +273,7 @@ class CCAstReplaceFunctionDeclarationVistor extends ComposVisitor[Direct_declara
 /*
   Vistor class to replace one initialization with another.
 */
-class CCAstReplaceInitializerVistor extends ComposVisitor[Option[Initializer]] {
+class CCAstReplaceInitializerVistor extends CCAstCopyWithLocation[Option[Initializer]] {
   private val copyAst = new CCAstCopyVisitor
 
   /* Init_declarator */

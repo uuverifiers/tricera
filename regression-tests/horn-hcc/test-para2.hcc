@@ -1,5 +1,6 @@
 int N = _;
 int offset = _;
+int tid = _;
 
 int writeLoc = -1;
 

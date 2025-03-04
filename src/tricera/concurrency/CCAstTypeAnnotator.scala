@@ -39,10 +39,22 @@ class CCAstTypeAnnotator {
       CCAstDeclaration(createDeclSpecifiers(tps), new OnlyDecl(new BeginPointer(new Point, new Name(name))))
     }
 
+    //def createFunctionDeclaration(name: String, tps: List[Type_specifier], params: )
+
+    // SSSOWO TODO: What about function arguments? Why don't we add them?
     val symTab = new CCAstTypeAnnotationData
     symTab.put("assume", createDeclaration("assume", List(new Tint)))
     symTab.put("assert", createDeclaration("assert", List(new Tvoid)))
     symTab.put("malloc", createPointerDeclaration("malloc", List(new Tunsigned, new Tlong)))
+    symTab.put("calloc", createPointerDeclaration("calloc", List(new Tunsigned, new Tlong)))
+    symTab.put("alloca", createPointerDeclaration("alloca", List(new Tunsigned, new Tlong)))
+    symTab.put("free", createPointerDeclaration("free", List(new Tvoid)))
+    symTab.put("reach_error", createPointerDeclaration("reach_error", List(new Tvoid)))
+    symTab.put("chan_send", createPointerDeclaration("chan_send", List(new Tvoid)))
+    symTab.put("chan_receive", createPointerDeclaration("chan_receive", List(new Tvoid)))
+    symTab.put("__builtin_alloca", createPointerDeclaration("__builtin_alloca", List(new Tvoid)))
+    symTab.put("realloc", createPointerDeclaration("realloc", List(new Tvoid)))
+    symTab.put("static_assert", createPointerDeclaration("static_assert", List(new Tvoid)))
     symTab
   }
 }
@@ -63,7 +75,7 @@ class CCAstTypeAnnotationData {
   Vistor to create a copy of an AST with EvarWithType nodes substituted for
   Evar nodes.
 */
-class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] {
+class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotationData] {
   val getName = new CCAstGetNameVistor
   val copyAst = new CCAstCopyVisitor
   val getDeclaration = new CCAstGetFunctionDeclarationVistor
