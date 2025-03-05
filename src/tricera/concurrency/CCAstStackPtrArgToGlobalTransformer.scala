@@ -44,7 +44,7 @@ private object CCAstUtils {
 
   NOTE: This is very simplistic in it's interpretation of
     what is considered a stack pointer. However, something
-    more refined will require more exlaborate data flow
+    more refined will require more elaborate data flow
     analysis.
 */
 class CCAstIsStackPointerVisitor extends AbstractVisitor[Boolean, Unit] {
@@ -148,16 +148,13 @@ object CallSiteTransform {
 }
 
 class CallSiteTransform(
-  // TODO: Introduce suffix to indicate which arguments that
-  //   where replaced. Add this suffix to generated identifiers
-  //   to enable generation of multiple global functions in case
-  //   there are multiple parameters and they are replaced to
-  //   varying degree.
   stackPtrTransformer:CCAstStackPtrArgToGlobalTransformer,
   originalDef: Function_def,
   args: ListExp) {
   import CallSiteTransform._
   import CCAstUtils.isStackPtr
+
+  private val getAnnotations = new CCAstGetFunctionAnnotationVisitor
 
   private val (specifiers, declarator) = {
     val (spec, dec) = originalDef.accept(getFunctionDeclaration, ())
@@ -191,6 +188,13 @@ class CallSiteTransform(
     new Efunkpar(wrapperDeclaration().toEvarWithType(), copyAst(args))
   }
 
+  def shouldInferContract()
+    : Boolean = getAnnotations(originalDef)
+      .asScala.toList.map({case a: Annot1 => a.annotationstring_}) match {
+        case head::tail if (head == addAnnotationMarkers("contract")) => true
+        case _ => false
+    }
+
   private def wrapIdentifier(id: String) = {
     f"wrapped${separator}${id}${suffix}"
   }
@@ -211,12 +215,12 @@ class CallSiteTransform(
     f"global${separator}${functionName}${suffix}${separator}${name}"
   }
 
-  private def accumulateAdditions(knownAdditions: AstAddition):Unit = {
-    def addAnnotationMarkers(str: String) = {
-      import tricera.parsers.CommentPreprocessor.annotationMarker
+  private def addAnnotationMarkers(str: String) = {
+    import tricera.parsers.CommentPreprocessor.annotationMarker
       annotationMarker + str + annotationMarker
-    }
+  }
 
+  private def accumulateAdditions(knownAdditions: AstAddition):Unit = {
     val transDec = transformedDeclaration()
     if (!knownAdditions.transformedFunctionDefinitions.contains(transDec.getId())) {
       val wrapperDec = wrapperDeclaration()
@@ -226,7 +230,9 @@ class CallSiteTransform(
         wrapperDec.toGlobal(),
         wrapperDec.toAfunc(createWrapperBody()),
         transDec.toGlobal(),
-        transDec.toAfunc(addAnnotationMarkers("contract"), body),
+        transDec.toAfunc(
+          if (shouldInferContract()) {addAnnotationMarkers("contract")} else {""},
+          body),
         globalVariableDeclarations(),
         globalVariableIdsToParameterIds(),
         MHashMap((transDec.getId() -> originalFuncName)))
@@ -532,17 +538,21 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String) extends C
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {
     callSite.listexp_.asScala.find(CCAstUtils.isStackPtr) match {
-      case None =>
-        super.visit(callSite, transforms)
       case Some(_) => 
-        super.visit(callSite, transforms)
+        val exp = super.visit(callSite, transforms)
         // TODO: This will not work if function is invoked through
         //   a pointer. Then we don't know the name of the function
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
         val tform = CallSiteTransform(this, functionDefinitions(callSite.accept(getName, ())), callSite.listexp_)
-        transforms += tform
-        tform.wrapperInvocation()
+        if (tform.shouldInferContract()) {
+          transforms += tform
+          tform.wrapperInvocation()
+        } else {
+          exp
+        }
+      case _ =>
+        super.visit(callSite, transforms)
     }
   }
 }

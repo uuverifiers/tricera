@@ -8,15 +8,15 @@ object CCAstCopyWithLocation {
   private def copyLocationInformation[T](src: T, dest: T): T = {
     for (field <- Set[String]("col_num", "line_num", "offset")) {
       dest.getClass.getDeclaredField(field).setInt(dest, src.getClass().getDeclaredField(field).getInt(src))
-      printlnDebug(f"${src.getClass().getDeclaredField(field).getInt(src)} : ${dest.getClass.getDeclaredField(field).getInt(dest)}")
     }
     dest
-//        src.getClass().getDeclaredField("col_num");
-//        src.getClass().getDeclaredField("offset");
-//        ;
-    }
+  }
 }
 
+/**
+ * Visitor that copies the original nodes, including the source
+ * location information.
+ */
 class CCAstCopyWithLocation[A] extends  ComposVisitor[A] {
   import CCAstCopyWithLocation._
 

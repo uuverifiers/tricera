@@ -215,7 +215,7 @@ class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration
 /*
   Vistor to extract a function annotation from a function definition.
 */
-class CCAstGetFunctionAnnotationVistor extends AbstractVisitor[ListAnnotation, Unit] {
+class CCAstGetFunctionAnnotationVisitor extends AbstractVisitor[ListAnnotation, Unit] {
   val copyAst = new CCAstCopyVisitor
 
   def apply(defn: Function_def) = defn.accept(this, ())

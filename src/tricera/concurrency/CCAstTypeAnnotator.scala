@@ -72,7 +72,7 @@ class CCAstTypeAnnotationData {
 }
 
 /**
-  Vistor to create a copy of an AST with EvarWithType nodes substituted for
+  Visitor to create a copy of an AST with EvarWithType nodes substituted for
   Evar nodes.
 */
 class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotationData] {
