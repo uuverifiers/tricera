@@ -213,6 +213,20 @@ class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration
 }
 
 /*
+  Vistor to extract a function annotation from a function definition.
+*/
+class CCAstGetFunctionAnnotationVistor extends AbstractVisitor[ListAnnotation, Unit] {
+  val copyAst = new CCAstCopyVisitor
+
+  def apply(defn: Function_def) = defn.accept(this, ())
+
+  /* Function_def */
+  override def visit(defn: AnnotatedFunc, arg: Unit) = { copyAst(defn.listannotation_) }
+  override def visit(defn: NewFuncInt, arg: Unit) = { copyAst(defn.listannotation_) }
+  override def visit(defn: NewFunc, arg: Unit) = { new ListAnnotation }
+}
+
+/*
   Vistor to extract the "Declarator" part from an Init_declaration
 */
 class CCAstGetDeclaratorVistor extends AbstractVisitor[Declarator, Unit] {
@@ -230,8 +244,25 @@ class CCAstGetDeclaratorVistor extends AbstractVisitor[Declarator, Unit] {
   Vistor class to remove one level of indirection ("dereference a pointer").
 */
 class CCAstRemovePointerLevelVistor extends CCAstCopyWithLocation[Unit] {
+  private val copyAst = new CCAstCopyVisitor
+
   /* Declarator */
-  override def visit(dec: BeginPointer, arg: Unit) = { new NoPointer(dec.direct_declarator_.accept(this, arg)); }
+  override def visit(dec: BeginPointer, arg: Unit): Declarator = { 
+    dec.pointer_ match {
+      case p: Point =>
+        new NoPointer(dec.direct_declarator_.accept(copyAst, ()))
+      case p: PointQual =>
+        new NoPointer(dec.direct_declarator_.accept(copyAst, ()))
+      case p: PointPoint =>
+        new BeginPointer(
+          p.pointer_.accept(copyAst, ()),
+          dec.direct_declarator_.accept(copyAst, ()))
+      case p: PointQualPoint =>
+        new BeginPointer(
+          p.pointer_.accept(copyAst, ()),
+          dec.direct_declarator_.accept(copyAst, ()))
+    }
+  }
 }
 
 /*
