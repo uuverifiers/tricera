@@ -3,6 +3,7 @@
 LAZABS=../../tri
 
 TESTS="get-1.c  \
+       heapptr-to-stackptr.c \
        incdec-1.c  \
        incdec-2.c  \
        max-1.c  \
