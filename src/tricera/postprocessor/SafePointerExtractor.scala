@@ -163,32 +163,40 @@ private class HeapReducer(heapInfo: HeapInfo)
       subres: Seq[IExpression]
   ): IExpression = {
     t update subres match {
-      // SSSOWO TODO: Why does this need special handling? "emptyHeap" is
-      //   part of Heap.functions and should work with TheoryOfHeapFunApp
-      case IFunApp(fun, args) if (fun.name == "emptyHeap" && args.isEmpty) => 
+      case IFunApp(
+            fun,
+            args
+          ) if (heapInfo.isEmptyHeapFun(fun) && args.isEmpty) => 
         HeapState.empty
-      case ISortedVariable(index, sort) if heapInfo.isHeapSortName(sort.name) =>
+      case ISortedVariable(
+            index,
+            sort
+          ) if heapInfo.isHeapSortName(sort.name) =>
         HeapState.heapById(quantifierIds(index))
-      case TheoryOfHeapFunApp(
+      case IFunApp(
             writeFun,
             Seq(heap: HeapState, addr: Address, obj)
           ) if heapInfo.isWriteFun(writeFun) =>
         heap.write(addr, obj.asInstanceOf[ITerm])
-      case TheoryOfHeapFunApp(
+      case IFunApp(
             readFun,
             Seq(heap: HeapState, addr: Address)
           ) if heapInfo.isReadFun(readFun) =>
         heap.read(addr)
-      case TheoryOfHeapFunApp(
+      case IFunApp(
             allocFun,
             Seq(heap: HeapState, obj)
           ) if heapInfo.isAllocFun(allocFun) =>
         heap.alloc(obj.asInstanceOf[ITerm])
-      case TheoryOfHeapFunApp(newHeapFun, Seq(allocRes: AllocRes))
-          if heapInfo.isNewHeapFun(newHeapFun) =>
+      case IFunApp(
+            newHeapFun,
+            Seq(allocRes: AllocRes)
+          ) if heapInfo.isNewHeapFun(newHeapFun) =>
         allocRes.newHeap
-      case TheoryOfHeapFunApp(newAddrFun, Seq(allocRes: AllocRes))
-          if heapInfo.isNewAddrFun(newAddrFun) =>
+      case IFunApp(
+            newAddrFun,
+            Seq(allocRes: AllocRes)
+          ) if heapInfo.isNewAddrFun(newAddrFun) =>
         allocRes.newAddr
       case _ => t update subres
     }
