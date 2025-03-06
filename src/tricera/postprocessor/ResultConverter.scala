@@ -36,7 +36,7 @@ import lazabs.horn.preprocessor.HornPreprocessor
 
 import tricera.{
     CounterExample, Empty,
-    FunctionInvariants, HeapInfo, Invariant, LoopInvariant, 
+    FunctionInvariants, HeapInfo, Invariant, Literals, LoopInvariant, 
     PostCondition, PreCondition, ProgVarProxy, Result, Solution}
 import tricera.concurrency.CCReader
 import tricera.concurrency.ccreader.{
@@ -50,12 +50,8 @@ object ResultConverter {
     (result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
     : Result = {
     import scala.collection.mutable.HashSet
-    // SSSOWO TODO: These constants should be defined in a single place.
-    //   Currently they are literal strings in CCReader.
-    val preExecSuffix = "_old"
-    val postExecSuffix = "_post"
-    val resultExecSuffix = "_res"
-    val invPrefix = "inv_"
+    import Literals.{invPrefix, postExecSuffix, preExecSuffix, resultExecSuffix}
+
     def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[CCVar], funcParams: Seq[String]): IFormula = {
       def stripSuffix(name: String) = {
         if (name.endsWith(preExecSuffix)) {

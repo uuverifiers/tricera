@@ -36,6 +36,7 @@ import ap.parser._
 import ap.terfor.ConstantTerm
 import lazabs.horn.bottomup.HornClauses.Clause
 import hornconcurrency.VerificationLoop
+import tricera.Literals
 //import lazabs.horn.concurrency.VerificationLoop
 
 object ResultPrinters {
@@ -94,7 +95,7 @@ object ResultPrinters {
         val sortedSol = solution.toArray.sortWith(_._1.name < _._1.name)
         for((pred,sol) <- sortedSol) {
           val solClause = clausifySolution(
-            (pred, sol), predArgNames(pred), Some(pred.name.stripPrefix("inv_")))
+            (pred, sol), predArgNames(pred), Some(pred.name.stripPrefix(Literals.invPrefix)))
           println(solClause.toPrologString)
         }
         println("="*80 + "\n")

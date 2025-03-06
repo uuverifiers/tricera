@@ -51,6 +51,7 @@ import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser._
 import CCExceptions._
 import tricera.{Util, properties, HeapInfo}
+import tricera.Literals
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -777,7 +778,7 @@ class CCReader private (prog              : Program,
     case CCVoid     => Nil
     case t          =>
       funRetCounter += 1
-      List(new CCVar("_res" + funRetCounter, None, typ, AutoStorage)) // todo: line no?
+      List(new CCVar(Literals.resultExecSuffix + funRetCounter, None, typ, AutoStorage)) // todo: line no?
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -786,6 +787,8 @@ class CCReader private (prog              : Program,
     // generous than actual C semantics, where declarations
     // have to be in the right order
     import IExpression._
+    import tricera.Literals
+
     atomicMode = true
     val globalVarSymex = Symex(null)
 
@@ -911,19 +914,19 @@ class CCReader private (prog              : Program,
       val functionParams = LocalVars getVarsInTopFrame
 
       val oldVars = allFormalVars map (v =>
-        new CCVar(v.name + "_old", v.srcInfo, v.typ, v.storage))
+        new CCVar(v.name + Literals.preExecSuffix, v.srcInfo, v.typ, v.storage))
       // the pre-condition: f_pre(preOldVars)
-      val prePred = newPred(funDef.name + "_pre", oldVars,
+      val prePred = newPred(funDef.name + Literals.predPreSuffix, oldVars,
         Some(getSourceInfo(fun)))
 
       // the post-condition: f_post(oldVars, postGlobalVars, postResVar)
       // we first pass all current vars in context as old vars (oldVars)
       // then we pass all effected output vars (which are globals + resVar)
       val postGlobalVars = GlobalVars.vars map (v =>
-        new CCVar(v.name + "_post", v.srcInfo, v.typ, v.storage))
+        new CCVar(v.name + Literals.postExecSuffix, v.srcInfo, v.typ, v.storage))
       val postResVar = getType(fun.function_def_) match {
         case CCVoid => None
-        case _ => Some(new CCVar(funDef.name + "_res",
+        case _ => Some(new CCVar(funDef.name + Literals.resultExecSuffix,
           Some(funDef.sourceInfo), getType(fun.function_def_), AutoStorage)) // todo: clean this (and similar code) up a bit
       }
       val postVars = oldVars ++ postGlobalVars ++ postResVar
@@ -940,7 +943,7 @@ class CCReader private (prog              : Program,
       val postGlobalVarsMap: Map[String, CCVar] =
         (GlobalVars.vars.map(_ name) zip postGlobalVars).toMap
 
-      val postPred = newPred(funDef.name + "_post", postVars,
+      val postPred = newPred(funDef.name + Literals.predPostSuffix, postVars,
         Some(getSourceInfo(fun))) // todo: end line of fun?
 
       LocalVars.popFrame
@@ -3843,7 +3846,7 @@ private def collectVarDecls(dec                    : Dec,
                   //       at a few locations the static variables belonging to
                   //       that function only.
               }
-              IExpression.i(v.sort newConstant(v.name + "_post")) //
+              IExpression.i(v.sort newConstant(v.name + Literals.postExecSuffix)) //
               // todo: refactor
             }
 
@@ -5037,7 +5040,7 @@ private def collectVarDecls(dec                    : Dec,
       predCCPredMap get pred match {
         case Some(ccPred) => ccPred
         case None => predCCPredMap find
-          (p => "inv_" + p._1.name == pred.name) match {
+          (p => Literals.invPrefix + p._1.name == pred.name) match {
           case Some(v) => v._2
           case None => throw new TranslationException("Could not find pred: " +
             pred)
