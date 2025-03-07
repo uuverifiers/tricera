@@ -117,6 +117,21 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
   }
 
   /**
+    Add an entry in the symbol table for each defined channel.
+  */
+  override def visit(chan: AChan, symTab: CCAstTypeAnnotationData): Chan_def = {
+    for (name_ <- chan.listcident_.asScala) {
+      val decSpecifiers = new ListDeclaration_specifier
+      val extraSpecifiers = new ListExtra_specifier
+      val initDec = new OnlyDecl(new NoPointer(new Name(name_)))
+      val name = getScopedName(name_)
+
+      symTab.put(name, CCAstDeclaration(decSpecifiers, initDec, extraSpecifiers))
+    }
+    super.visit(chan, symTab)
+  }
+
+  /**
     Add an entry in the symbol table for each declaration
     in the statement.
   */
@@ -166,7 +181,8 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
     val name = eVar.cident_
     findDeclaration(name) match {
       case None => 
-        throw new TypeAnnotationException(f"Undeclared identifier in expression: ${name}")
+        throw new TypeAnnotationException(
+          f"Undeclared identifier in expression: ${name}, line: ${eVar.line_num} col:${eVar.col_num}")
       case Some(declaration) =>
         val newVar = declaration.toEvarWithType()
         newVar.col_num = eVar.col_num

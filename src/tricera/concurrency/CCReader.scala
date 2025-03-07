@@ -3449,12 +3449,7 @@ private def collectVarDecls(dec                    : Dec,
       case exp : Efunk =>
         val srcInfo = Some(getSourceInfo(exp))
         // inline the called function
-        val funcIdentifier = exp.exp_ match {
-          case v : Evar => v.cident_
-          case v : EvarWithType => v.cident_
-          case _ => (printer print exp.exp_)
-        }
-        funcIdentifier match {
+        GetId.orString(exp) match {
           case "reach_error" =>
             /**
              * A special SV-COMP function used in the unreach-call category.
@@ -3470,29 +3465,24 @@ private def collectVarDecls(dec                    : Dec,
 
       case exp : Efunkpar =>
         val srcInfo = Some(getSourceInfo(exp))
-        val funcIdentifier = exp.exp_ match {
-          case v : Evar => v.cident_
-          case v : EvarWithType => v.cident_
-          case _ => (printer print exp.exp_)
-        }
-        funcIdentifier match {
+        GetId.orString(exp) match {
           case "assert" | "static_assert" if exp.listexp_.size == 1 =>
             val property = exp.listexp_.head match {
               case a : Efunkpar
-                if uninterpPredDecls contains(printer print a.exp_) =>
+                if uninterpPredDecls contains(GetId.orString(a)) =>
                 val args = a.listexp_.map(exp => atomicEval(exp, evalCtx))
                 if(args.exists(a => a.typ.isInstanceOf[CCStackPointer])) {
                   throw new TranslationException(
                     getLineStringShort(srcInfo) + " Unsupported operation: " +
                     "stack pointer argument to uninterpreted predicate.")
                 }
-                val pred = uninterpPredDecls(printer print a.exp_)
+                val pred = uninterpPredDecls(GetId.orString(a))
                 atom(pred, args.map(_.toTerm))
               case interpPred : Efunkpar
-                if interpPredDefs contains(printer print interpPred.exp_) =>
+                if interpPredDefs contains(GetId.orString(interpPred)) =>
                 val args    = interpPred.listexp_.map(
                   exp => atomicEval(exp, evalCtx)).map(_.toTerm)
-                val formula = interpPredDefs(printer print interpPred.exp_)
+                val formula = interpPredDefs(GetId.orString(interpPred))
                 // the formula refers to pred arguments as IVariable(index)
                 // we need to subsitute those for the actual arguments
                 VariableSubstVisitor(formula.f, (args.toList, 0))
@@ -3504,16 +3494,16 @@ private def collectVarDecls(dec                    : Dec,
         case "assume" if (exp.listexp_.size == 1) =>
           val property = exp.listexp_.head match {
             case a : Efunkpar
-              if uninterpPredDecls contains(printer print a.exp_) =>
+              if uninterpPredDecls contains(GetId.orString(a)) =>
               val args = a.listexp_.map(exp => atomicEval(exp, evalCtx))
                                    .map(_.toTerm)
-              val pred = uninterpPredDecls(printer print a.exp_)
+              val pred = uninterpPredDecls(GetId.orString(a))
               atom(pred, args)
             case interpPred : Efunkpar
-              if interpPredDefs contains (printer print interpPred.exp_) =>
+              if interpPredDefs contains (GetId.orString(interpPred)) =>
               val args = interpPred.listexp_.map(
                 exp => atomicEval(exp, evalCtx)).map(_.toTerm)
-              val formula = interpPredDefs(printer print interpPred.exp_)
+              val formula = interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.f, (args.toList, 0))
@@ -3523,7 +3513,7 @@ private def collectVarDecls(dec                    : Dec,
           addGuard(property)
           pushVal(CCFormula(true, CCInt, srcInfo))
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) =>
-          val name = printer print exp.listexp_.head
+          val name = GetId.orString(exp.listexp_.head)
           (channels get name) match {
             case Some(chan) => {
               val sync = cmd match {
