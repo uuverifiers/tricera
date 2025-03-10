@@ -1062,6 +1062,7 @@ class CCReader private (prog              : Program,
       val exitPred = newPred(resVar, Some(getLastSourceInfo(funDef.body)))
 
       output(addRichClause(
+        // SSSOWO : Why are the arguments added twice?
         entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
         Some(funDef.sourceInfo)))// todo: correct source info?
 

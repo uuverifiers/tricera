@@ -46,7 +46,7 @@ import tricera.Util.SourceInfo
 
 object ResultConverter {
   def hornSolverSolutionToResult
-    (reader: CCReader)
+    (reader: CCReader, entryFunction: String)
     (result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
     : Result = {
     import scala.collection.mutable.HashSet
@@ -167,9 +167,15 @@ object ResultConverter {
         val loopInvs = reader.getLoopInvariants
         val annotatedFuncs = reader.funsWithAnnot
         Solution(
-          reader.getFunctionContexts.map(
-            {case (funcId, ctx) =>
-              toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs, annotatedFuncs)}).toSeq)
+          reader.getFunctionContexts
+            .withFilter(
+              // The solution to the horn system does not contain a predicate for the
+              // entry function if it's annotated.
+              {case (funcId, ctx) => !(annotatedFuncs(funcId) && funcId == entryFunction)})
+            .map(
+              {case (funcId, ctx) =>
+                toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs, annotatedFuncs)})
+            .toSeq)
       case Left(None) => Empty()
       case Right(cex) => CounterExample(cex)
     }

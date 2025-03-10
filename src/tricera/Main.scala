@@ -529,7 +529,7 @@ class Main (args: Array[String]) {
     val result = verificationLoop.result
       .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
-      .through(hornSolverSolutionToResult(reader))
+      .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
 
     val executionResult = result match {
       case solution: Solution => 
