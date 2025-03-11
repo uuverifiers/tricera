@@ -133,18 +133,22 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(dec: HintDecl, arg: Unit): String = { dec.declarator_.accept(this, arg); }
     override def visit(dec: HintInitDecl, arg: Unit): String = { dec.declarator_.accept(this, arg); }
 
+    /* Enumerator */
+    override def visit(enum: Plain, arg: Unit): String = { enum.cident_ }
+    override def visit(enum: EnumInit, arg: Unit): String = { enum.cident_ }
+
     /* Declarator */
-    override def visit(dec: BeginPointer, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
-    override def visit(dec: NoPointer, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: BeginPointer, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: NoPointer, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
 
     /* Direct_declarator */
-    override def visit(dec: Name, arg: Unit): String = { return dec.cident_; }
-    override def visit(dec: ParenDecl, arg: Unit): String = { return dec.declarator_.accept(this, arg); }
-    override def visit(dec: InitArray, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
-    override def visit(dec: Incomplete, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
-    override def visit(dec: MathArray, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
-    override def visit(dec: NewFuncDec, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
-    override def visit(dec: OldFuncDec, arg: Unit): String = { return dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: Name, arg: Unit): String = { dec.cident_; }
+    override def visit(dec: ParenDecl, arg: Unit): String = { dec.declarator_.accept(this, arg); }
+    override def visit(dec: InitArray, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: Incomplete, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: MathArray, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: NewFuncDec, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: OldFuncDec, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
 
     /* Parameter_declaration */
     override def visit(param: TypeAndParam, arg: Unit): String = { param.declarator_.accept(this, arg) }
@@ -414,3 +418,18 @@ class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, MutableList[Type_spec
   override def visit(spec: SpecFunc, types: MutableList[Type_specifier]) = { false }
 }
 
+/*
+  Vistor class to replace EnumName instances with EnumVar.
+*/
+class CCAstEnumNameToEnumVarVistor extends CCAstCopyWithLocation[Unit] {
+  def apply(specifiers: ListDeclaration_specifier): ListDeclaration_specifier = {
+    val copy = new ListDeclaration_specifier
+    copy.addAll(specifiers.asScala.map(s => s.accept(this, ())).asJava)
+    copy
+  }
+
+  /* Enum_specifier */
+  override def visit(enum: EnumName, arg: Unit): Enum_specifier = {
+    copyLocationInformation(enum, new EnumVar(enum.cident_))
+  }
+}

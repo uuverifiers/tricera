@@ -79,7 +79,9 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
   val getName = new CCAstGetNameVistor
   val copyAst = new CCAstCopyVisitor
   val getDeclaration = new CCAstGetFunctionDeclarationVistor
+  val enumNameToEnumVar = new CCAstEnumNameToEnumVarVistor
   val nameStack = Stack[String]()
+  val decSpecifiersStack = Stack[ListDeclaration_specifier]()
 
   def getScopedName(name: String): String = {
     // A "scoped name" is an fully qualified identifier where each
@@ -100,6 +102,16 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
     nameStack.pop()
     result
   } 
+
+  def withDeclarationSpecifiers[A](decs: ListDeclaration_specifier)(thunk: => A): A = {
+    decSpecifiersStack.push(decs)
+    val result = thunk
+    decSpecifiersStack.pop()
+    result
+  }
+
+  def currentDecSpecifiers = decSpecifiersStack.top
+
 
   /**
     Add an entry in the symbol table for the defined function.
@@ -131,6 +143,16 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
     super.visit(chan, symTab)
   }
 
+/**
+  This is mainly for keeping track of the current declaration to enable
+  correct types for enum members.
+  */
+  override def visit(dec: NoDeclarator, symTab: CCAstTypeAnnotationData): Dec = {
+    withDeclarationSpecifiers(dec.listdeclaration_specifier_) {
+      super.visit(dec, symTab)
+    }
+  }
+
   /**
     Add an entry in the symbol table for each declaration
     in the statement.
@@ -148,8 +170,34 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
 
       symTab.put(name, CCAstDeclaration(decSpecifiers, initDec, extraSpecifiers))
     }
-    super.visit(dec, symTab)
+
+    withDeclarationSpecifiers(dec.listdeclaration_specifier_) {
+      super.visit(dec, symTab)
+    }
   }
+
+  /**
+    Add an entry in the symbol table for each enum value in an enumeration.
+  */
+  override def visit(enum: EnumDec, symTab: CCAstTypeAnnotationData): Enum_specifier = {
+    addEnumerators(enum.listenumerator_, symTab)
+    super.visit(enum, symTab)
+  }
+
+  override def visit(enum: EnumName, symTab: CCAstTypeAnnotationData): Enum_specifier = {
+    addEnumerators(enum.listenumerator_, symTab)
+    super.visit(enum, symTab)
+  }
+
+  private def addEnumerators(enums: ListEnumerator, symTab: CCAstTypeAnnotationData): Unit = {
+    enums.asScala.foreach(e => {
+      val name = e.accept(getName, ())
+      symTab.put(
+        name, CCAstDeclaration(enumNameToEnumVar(currentDecSpecifiers),
+        new OnlyDecl(new NoPointer(new Name(name)))))
+    })
+  }
+
 
   override def visit(param: TypeAndParam, symTab: CCAstTypeAnnotationData): Parameter_declaration = {
     val name = getScopedName(param.declarator_.accept(getName, ()))

@@ -4,8 +4,8 @@ import concurrent_c._
 import concurrent_c.Absyn._
 import tricera.Util.printlnDebug
 
-object CCAstCopyWithLocation {
-  private def copyLocationInformation[T](src: T, dest: T): T = {
+trait CopyAstLocation {
+  def copyLocationInformation[T](src: T, dest: T): T = {
     for (field <- Set[String]("col_num", "line_num", "offset")) {
       dest.getClass.getDeclaredField(field).setInt(dest, src.getClass().getDeclaredField(field).getInt(src))
     }
@@ -13,13 +13,22 @@ object CCAstCopyWithLocation {
   }
 }
 
+/*
+object CCAstCopyWithLocation {
+  protected  def copyLocationInformation[T](src: T, dest: T): T = {
+    for (field <- Set[String]("col_num", "line_num", "offset")) {
+      dest.getClass.getDeclaredField(field).setInt(dest, src.getClass().getDeclaredField(field).getInt(src))
+    }
+    dest
+  }
+}
+*/
+
 /**
  * Visitor that copies the original nodes, including the source
  * location information.
  */
-class CCAstCopyWithLocation[A] extends  ComposVisitor[A] {
-  import CCAstCopyWithLocation._
-
+class CCAstCopyWithLocation[A] extends  ComposVisitor[A] with CopyAstLocation {
   override def visit(p: Progr, arg: A): Program = {
     copyLocationInformation(p, super.visit(p, arg))
   }
