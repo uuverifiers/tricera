@@ -46,7 +46,7 @@ import tricera.Util.SourceInfo
 
 object ResultConverter {
   def hornSolverSolutionToResult
-    (reader: CCReader, entryFunction: String)
+    (reader: CCReader)
     (result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
     : Result = {
     import scala.collection.mutable.HashSet
@@ -169,9 +169,11 @@ object ResultConverter {
         Solution(
           reader.getFunctionContexts
             .withFilter(
-              // The solution to the horn system does not contain a predicate for the
-              // entry function if it's annotated.
-              {case (funcId, ctx) => !(annotatedFuncs(funcId) && funcId == entryFunction)})
+              // The solution to the horn system does not contain _pre/_post predicates
+              // for the entry function. However the entry function may have a function
+              // context if it is annotated with a contract or marked for contract inference.
+              {case (funcId, ctx) => 
+                (solution.get(ctx.prePred.pred).isDefined && solution.get(ctx.postPred.pred).isDefined)})
             .map(
               {case (funcId, ctx) =>
                 toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs, annotatedFuncs)})
