@@ -50,12 +50,12 @@ object PointerTools {
   def addPointerPredicatesFrom(sourceResult: Result): Result => Result = sourceResult match {
     case CounterExample(counterExample) => identity
     case Empty() => identity
-    case Solution(functionInvariants) => (new PointerPropProcessor(functionInvariants)).apply
+    case Solution(functionInvariants, _) => (new PointerPropProcessor(functionInvariants)).apply
   }
 
   def addPointerAssignmentsFrom(sourceResult: Result): Result => Result = sourceResult match {
     case CounterExample(counterExample) => identity
     case Empty() => identity
-    case Solution(functionInvariants) => (new AssignmentProcessor(functionInvariants)).apply
+    case Solution(functionInvariants, _) => (new AssignmentProcessor(functionInvariants)).apply
   }
 }

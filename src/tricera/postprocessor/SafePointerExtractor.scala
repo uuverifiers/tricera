@@ -53,7 +53,7 @@ case class SafePointers(
 
 object SafePointerExtractor {
   def apply(result: Result): Seq[SafePointers] = result match {
-    case Solution(functionInvariants) => functionInvariants.map(applyTo(_))
+    case Solution(functionInvariants, _) => functionInvariants.map(applyTo)
     case _ => Seq[SafePointers]()
   }
 

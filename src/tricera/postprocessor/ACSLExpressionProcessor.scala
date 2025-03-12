@@ -46,13 +46,16 @@ import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
   Invariant, InvariantContext, LoopInvariant, PostCondition,
   PreCondition, ProgVarProxy, Solution}
+import tricera.postprocessor.ToExplicitForm.invariant
 
 
 object ACSLExpressionProcessor extends ResultProcessor {
 
   override def applyTo(solution: Solution): Solution = solution match {
-    case Solution(functionInvariants) =>
-      Solution(functionInvariants.map(applyTo(_)))
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(
+        functionInvariants.map(applyTo(_)),
+        loopInvariants.map(i => ACSLExpressionVisitor(i,i)))
   }
 
   private def applyTo(funcInvs: FunctionInvariants)
@@ -68,7 +71,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
         isSrcAnnotated,
         PreCondition(ACSLExpressionVisitor(preInv, preCondition)),
         PostCondition(ACSLExpressionVisitor(postInv, postCondition)),
-        loopInvariants)
+        loopInvariants.map(i => ACSLExpressionVisitor(i,i)))
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
@@ -79,6 +82,15 @@ object ACSLExpressionProcessor extends ResultProcessor {
         case Invariant(form, Some(heapInfo), maybeSourceInfo) =>
           val visitor = new ACSLExpressionVisitor(heapInfo, context)
           Invariant(visitor(form), Some(heapInfo), maybeSourceInfo)
+        case _ =>
+          invariant
+    }
+
+    def apply(invariant: LoopInvariant, context: InvariantContext): LoopInvariant =
+      invariant match {
+        case LoopInvariant(form, Some(heapInfo), srcInfo) =>
+          val visitor = new ACSLExpressionVisitor(heapInfo, context)
+          LoopInvariant(visitor(form), Some(heapInfo), srcInfo)
         case _ =>
           invariant
     }
@@ -175,6 +187,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
                   )
                 case _ => t update subres
               }
+            // SSSOWO TODO: What about loop invariants?
             case _ => t update subres
           }
 
@@ -230,6 +243,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
                   )
                 case _ => t update subres
               }
+            // SSSOWO TODO: What about loop invariants?
             case _ => t update subres
           }
         }

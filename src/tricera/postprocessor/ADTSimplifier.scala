@@ -43,13 +43,15 @@ import ap.parser._
 import ap.theories.{ADT, Theory, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 
-import tricera.{FunctionInvariants, Invariant, PostCondition, PreCondition, Solution}
+import tricera.{
+  FunctionInvariants, Invariant, LoopInvariant,
+  PostCondition, PreCondition, Solution}
 
 
 object ADTSimplifier extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
-    case Solution(functionInvariants) => 
-      Solution(functionInvariants.map(applyTo))
+    case Solution(functionInvariants, loopInvariants) => 
+      Solution(functionInvariants.map(applyTo), loopInvariants.map(simplify))
   }
 
   private def applyTo(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {
@@ -59,7 +61,7 @@ object ADTSimplifier extends ResultProcessor {
         isSrcAnnotated,
         PreCondition(simplify(preInv)),
         PostCondition(simplify(postInv)),
-        loopInvariants)
+        loopInvariants.map(simplify))
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
@@ -68,6 +70,12 @@ object ADTSimplifier extends ResultProcessor {
     case Invariant(form, heapInfo, srcInfo) =>
       val simplifier = new ADTTermSimplifier()
       Invariant(simplifier(form).asInstanceOf[IFormula], heapInfo, srcInfo)
+  }
+
+  private def simplify(invariant: LoopInvariant): LoopInvariant = invariant match {
+    case LoopInvariant(form, heapInfo, srcInfo) =>
+      val simplifier = new ADTTermSimplifier()
+      LoopInvariant(simplifier(form).asInstanceOf[IFormula], heapInfo, srcInfo)
   }
 }
 

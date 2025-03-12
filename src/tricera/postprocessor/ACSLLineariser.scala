@@ -51,42 +51,51 @@ case class ACSLLinearisedContract(
   postCondition: String,
   loopInvariants: Seq[ACSLLinearisedLoopInvariant])
 
+case class ACSLResult(
+  contracts: Seq[ACSLLinearisedContract],
+  disassociatedLoopInvariants: Seq[ACSLLinearisedLoopInvariant]) {
+
+  def isEmpty = contracts.isEmpty && disassociatedLoopInvariants.isEmpty
+}
+
 object ACSLLineariser {
 
-  def apply(result: Result): Seq[ACSLLinearisedContract] = result match {
-    case solution: Solution => apply(solution)
-    case _ => Seq()
+  def apply(result: Result): ACSLResult = result match {
+    case solution: Solution => applyTo(solution)
+    case _ => ACSLResult(Seq(), Seq())
   }
 
-  private def apply(solution: Solution): Seq[ACSLLinearisedContract] = solution match {
-    case Solution(functionInvariants) =>
-      val acslContracts = functionInvariants.map(applyTo(_))
-      acslContracts
+  private def applyTo(solution: Solution): ACSLResult = solution match {
+    case Solution(functionInvariants, loopInvariants) =>
+      ACSLResult(functionInvariants.map(applyTo), loopInvariants.map(applyTo))
   }
+
+  private def applyTo(loopInv: LoopInvariant) = 
+    ACSLLinearisedLoopInvariant(
+      loopInv.sourceInfo,
+      mkString(PrepareACSLPrinting(loopInv)))
 
   private def applyTo(funcInvs: FunctionInvariants): ACSLLinearisedContract = funcInvs match {
     case FunctionInvariants(id, isSrcAnnotated, preCond @ PreCondition(_), postCond @ PostCondition(_), loopInvariants) => 
-      def mkString(invCtxt: InvariantContext) = {
-        val (conditionName, form) = invCtxt match {
-          case PreCondition(inv) => ("precondition", inv.expression)
-          case PostCondition(inv) => ("postcondition", inv.expression)
-          case LoopInvariant(expression, _, _) => ("loop invariant", expression)
-        }
-        printlnDebug(f"----- Applying ACSLLineariser to ${conditionName}:")
-        printlnDebug(form.toString())
-        val formStr = asString(form)
-        printlnDebug("----- Result:")
-        printlnDebug(formStr)
-        formStr
-      }
       ACSLLinearisedContract(
         id,
         mkString(PrepareACSLPrinting(preCond)),
         mkString(PrepareACSLPrinting(postCond)),
-        loopInvariants.map(
-          i => ACSLLinearisedLoopInvariant(
-            i.sourceInfo,
-            mkString(PrepareACSLPrinting(i)))))
+        loopInvariants.map(applyTo(_)))
+  }
+
+  private def mkString(invCtxt: InvariantContext) = {
+    val (conditionName, form) = invCtxt match {
+      case PreCondition(inv) => ("precondition", inv.expression)
+      case PostCondition(inv) => ("postcondition", inv.expression)
+      case LoopInvariant(expression, _, _) => ("loop invariant", expression)
+    }
+    printlnDebug(f"----- Applying ACSLLineariser to ${conditionName}:")
+    printlnDebug(form.toString())
+    val formStr = asString(form)
+    printlnDebug("----- Result:")
+    printlnDebug(formStr)
+    formStr
   }
 
   def printExpression(e : IExpression) = {

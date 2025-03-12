@@ -55,8 +55,8 @@ import tricera.Util.printlnDebug
 object PostconditionSimplifier extends ResultProcessor {
 
   override def applyTo(solution: Solution) = solution match {
-    case Solution(functionInvariants) =>
-      Solution(functionInvariants.map(simplifyPostCondition(_)))
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(simplifyPostCondition), loopInvariants)
   }
 
   private def simplifyPostCondition(funcInvs: FunctionInvariants)

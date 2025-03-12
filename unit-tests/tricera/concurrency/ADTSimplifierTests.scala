@@ -2,16 +2,15 @@ package tricera.concurrency
 
 import org.scalatest.flatspec.AnyFlatSpec
 
-import ap.theories.ADT
-import ap.types.Sort
 import ap.parser._
-import ap.theories.bitvectors.ModuloArithmetic._
-
-import tricera.postprocessor.ADTSimplifier
 import ap.terfor.ConstantTerm
-import tricera.{FunctionInvariants, Invariant, PostCondition, PreCondition, Result, Solution}
-import ap.types.MonoSortedIFunction
-import ap.theories.TheoryRegistry
+import ap.theories.{ADT, TheoryRegistry}
+import ap.theories.bitvectors.ModuloArithmetic._
+import ap.types.{MonoSortedIFunction, Sort}
+
+import tricera.{FunctionInvariants, Invariant, LoopInvariant, PostCondition, PreCondition, Result, Solution}
+import tricera.postprocessor.ADTSimplifier
+import tricera.Util.SourceInfo
 
 
 class ADTSimplifierTests extends AnyFlatSpec {
@@ -47,7 +46,8 @@ class ADTSimplifierTests extends AnyFlatSpec {
         false, 
         PreCondition(Invariant(form, None, None)),
         PostCondition(Invariant(form, None, None)),
-        List())))
+        List(LoopInvariant(form, None, SourceInfo(1,1))))),
+        Seq(LoopInvariant(form, None, SourceInfo(1,1))))
   }
 
   "ADTSimplifier" should "extract a value when a constructor is nested within a selector" in {
@@ -58,9 +58,11 @@ class ADTSimplifierTests extends AnyFlatSpec {
     val expected = IEquation(yValue, someValue)
 
     ADTSimplifier(makeSolution(form)) match {
-      case Solution(Seq(functionInvariants)) => 
+      case Solution(Seq(functionInvariants), loopInvariants) => 
         assert(functionInvariants.preCondition.invariant.expression == expected)
         assert(functionInvariants.postCondition.invariant.expression == expected)
+        assert(functionInvariants.loopInvariants.head.expression == expected)
+        assert(loopInvariants.head.expression == expected)
       case _ => fail("Result was of unexpected type")
     }
   }
@@ -74,9 +76,11 @@ class ADTSimplifierTests extends AnyFlatSpec {
     val expected = form
 
     ADTSimplifier(makeSolution(form)) match {
-      case Solution(Seq(functionInvariants)) => 
+      case Solution(Seq(functionInvariants), loopInvariants) => 
         assert(functionInvariants.preCondition.invariant.expression == expected)
         assert(functionInvariants.postCondition.invariant.expression == expected)
+        assert(functionInvariants.loopInvariants.head.expression == expected)
+        assert(loopInvariants.head.expression == expected)
       case _ => fail("Result was of unexpected type")
     }
 

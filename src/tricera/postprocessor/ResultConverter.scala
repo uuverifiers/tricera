@@ -42,6 +42,7 @@ import tricera.concurrency.CCReader
 import tricera.concurrency.ccreader.{
     CCVar, CCHeapPointer, CCHeapArrayPointer, CCStackPointer}
 import tricera.Util.SourceInfo
+import tricera.Util.printlnDebug
 
 
 object ResultConverter {
@@ -116,20 +117,16 @@ object ResultConverter {
       .asInstanceOf[IFormula]
     }
 
-    def toLoopInvariants(
-      funcId: String,
-      loopInvariants: Map[String,(CCReader.CCPredicate, SourceInfo)],
+    def toLoopInvariant(
+      inv: (CCReader.CCPredicate, SourceInfo),
       solution: SolutionProcessor.Solution,
       heapInfo: Option[HeapInfo],
       paramNames: Seq[String])
-      : Iterable[LoopInvariant] = {
-      loopInvariants
-        .withFilter(i => i._1.startsWith(funcId))
-        .map({ case (_, (ccPred, srcInfo)) =>
-          val (_, form) = solution.find(
-            p => p._1.name.stripPrefix(invPrefix) == ccPred.pred.name).get
-          LoopInvariant(replacePredVarWithFunctionParam(form, ccPred.argVars, paramNames), heapInfo, srcInfo)
-        })
+      : LoopInvariant = {
+        val (ccPred, srcInfo) = inv
+        val (_, form) = solution.find(
+          p => p._1.name.stripPrefix(invPrefix) == ccPred.pred.name).get
+        LoopInvariant(replacePredVarWithFunctionParam(form, ccPred.argVars, paramNames), heapInfo, srcInfo)
     }
 
     def toFunctionInvariants(
@@ -158,7 +155,9 @@ object ResultConverter {
             paramNames),
           heapInfo,
           ctx.postPred.srcInfo)),
-        toLoopInvariants(funcId, loopInvs, solution, heapInfo, paramNames).toList)
+        loopInvs
+          .withFilter(i => i._1.startsWith(funcId))
+          .map(i => toLoopInvariant(i._2, solution, heapInfo, paramNames)).toList)
     }
 
     result match {
@@ -166,18 +165,24 @@ object ResultConverter {
         val heapInfo = reader.getHeapInfo
         val loopInvs = reader.getLoopInvariants
         val annotatedFuncs = reader.funsWithAnnot
-        Solution(
-          reader.getFunctionContexts
-            .withFilter(
-              // The solution to the horn system does not contain _pre/_post predicates
-              // for the entry function. However the entry function may have a function
-              // context if it is annotated with a contract or marked for contract inference.
-              {case (funcId, ctx) => 
-                (solution.get(ctx.prePred.pred).isDefined && solution.get(ctx.postPred.pred).isDefined)})
-            .map(
-              {case (funcId, ctx) =>
-                toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs, annotatedFuncs)})
-            .toSeq)
+
+        val funcInvs = reader.getFunctionContexts
+          .withFilter(
+            // The solution to the horn system does not contain _pre/_post predicates
+            // for the entry function. However the entry function may have a function
+            // context if it is annotated with a contract or marked for contract inference.
+            {case (funcId, ctx) => 
+              (solution.get(ctx.prePred.pred).isDefined && solution.get(ctx.postPred.pred).isDefined)})
+          .map(
+            {case (funcId, ctx) =>
+              toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs, annotatedFuncs)})
+          .toSeq
+
+        val disassociatedLoopInvs = loopInvs
+          .withFilter(lInv => !funcInvs.exists(fInv => lInv._1.startsWith(fInv.id)))
+          .map(i => toLoopInvariant(i._2, solution, heapInfo, Seq())).toSeq
+
+        Solution(funcInvs, disassociatedLoopInvs)
       case Left(None) => Empty()
       case Right(cex) => CounterExample(cex)
     }

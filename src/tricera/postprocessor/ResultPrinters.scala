@@ -37,6 +37,7 @@ import ap.terfor.ConstantTerm
 import lazabs.horn.bottomup.HornClauses.Clause
 import hornconcurrency.VerificationLoop
 import tricera.Literals
+import tricera.LoopInvariant
 //import lazabs.horn.concurrency.VerificationLoop
 
 object ResultPrinters {
@@ -103,25 +104,29 @@ object ResultPrinters {
     }
   }
 
-  def printContracts(contracts: Seq[ACSLLinearisedContract]) = {
-    if (!contracts.isEmpty) {
+  def printACSL(result: ACSLResult) = {
+    def print(loopInv: ACSLLinearisedLoopInvariant): Unit = {
+      println(f"/* loop invariant for the loop on line ${loopInv.srcInfo.line} */")
+      println( "/*@")
+      println(f"  loop invariant ${loopInv.invariant};")
+      println("*/")
+    }
+
+    if (!result.isEmpty) {
       println("\nInferred ACSL annotations")
       println("=" * 80)
       
-      for (contract <- contracts) {
-        println(f"/* contracts for ${contract.funcName} */")
+      for (contract <- result.contracts) {
+        println(f"/* contract for ${contract.funcName} */")
         println( "/*@")
         println(f"  requires ${contract.preCondition};")
         println(f"  ensures ${contract.postCondition};")
         println("*/")
-        if (!contract.loopInvariants.isEmpty) {
-          for (loopInv <- contract.loopInvariants) {
-            println(f"/* loop invariant for the loop on line ${loopInv.srcInfo.line} */")
-            println( "/*@")
-            println(f"  loop invariant ${loopInv.invariant};")
-            println("*/")
-          }
-        }
+        contract.loopInvariants.foreach(print)
+      }
+      if (!result.disassociatedLoopInvariants.isEmpty) {
+        println("/* Other loop invariants */")
+        result.disassociatedLoopInvariants.foreach(print)
       }
       println("=" * 80 + "\n")
     }

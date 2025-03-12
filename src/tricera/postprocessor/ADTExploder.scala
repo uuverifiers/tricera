@@ -40,8 +40,8 @@ import tricera.{
 object ADTExploder extends ResultProcessor {
 
   override def applyTo(solution: Solution): Solution = solution match {
-    case Solution(functionInvariants) =>
-      Solution(functionInvariants.map(i => rewrite(i)))
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(rewrite), loopInvariants.map(rewrite))
   }
 
   def rewrite(funcInv: FunctionInvariants): FunctionInvariants = funcInv match {
@@ -51,7 +51,7 @@ object ADTExploder extends ResultProcessor {
         isSrcAnnotated,
         PreCondition(rewrite(preInv)),
         PostCondition(rewrite(postInv)),
-        loopInvs.map(i => rewrite(i)))
+        loopInvs.map(rewrite))
   }
 
   def rewrite(inv: Invariant): Invariant = inv match {

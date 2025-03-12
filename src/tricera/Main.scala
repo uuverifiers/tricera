@@ -557,7 +557,7 @@ class Main (args: Array[String]) {
             )
             .tap(r => r
               .through(ACSLLineariser.apply)
-              .through(ResultPrinters.printContracts) 
+              .through(ResultPrinters.printACSL) 
             ).ignore
         }
         Safe

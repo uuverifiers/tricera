@@ -102,11 +102,15 @@ sealed trait Result {
 }
 
 case class Solution(
-  val functionInvariants: Seq[FunctionInvariants]) extends Result {
+  val functionInvariants: Seq[FunctionInvariants],
+  val disassociatedLoopInvariants: Seq[LoopInvariant])
+  extends Result {
 
   override def isSolution: Boolean = true
   def hasFunctionInvariants = !functionInvariants.isEmpty
-  def hasLoopInvariants = functionInvariants.exists(i => !i.loopInvariants.isEmpty)
+  def hasLoopInvariants =
+    functionInvariants.exists(i => !i.loopInvariants.isEmpty) ||
+    !disassociatedLoopInvariants.isEmpty
 
   def isHeapUsed: Boolean = { 
     functionInvariants.exists(

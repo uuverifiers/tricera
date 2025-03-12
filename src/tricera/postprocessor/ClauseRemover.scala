@@ -47,8 +47,8 @@ import tricera.{
 
 object ClauseRemover extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
-    case Solution(functionInvariants) =>
-      Solution(functionInvariants.map(applyTo(_)))
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(applyTo), loopInvariants)
   }
 
   private def applyTo(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {

@@ -55,8 +55,8 @@ class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor
   import tricera.postprocessor.PointerTools._
 
   override def applyTo(solution: Solution) = solution match {
-    case Solution(functionInvariants) =>
-      Solution(functionInvariants.map(applyTo(_)))
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(applyTo), loopInvariants)
   }
 
   private def applyTo(funcInv: FunctionInvariants)
