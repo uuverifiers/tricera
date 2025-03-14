@@ -551,8 +551,8 @@ class Main (args: Array[String]) {
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
           result
-//            .through(ADTExploder.apply)
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
+            .through(ADTExploder.apply)
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(PostconditionSimplifier.apply)
@@ -560,7 +560,7 @@ class Main (args: Array[String]) {
                  .through(addPointerAssignmentsFrom(r))
                  .through(ADTExploder.apply)
                  .through(TheoryOfHeapProcessor.apply)
-                 .through(ADTSimplifier.apply)
+                 .through(ADTSimplifier.apply) // Rewrite constructors/selectors after heap processing
                  .through(ToVariableForm.apply)
                  .through(ACSLExpressionProcessor.apply)
                  .through(ClauseRemover.apply)

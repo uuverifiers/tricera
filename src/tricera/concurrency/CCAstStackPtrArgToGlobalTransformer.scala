@@ -537,20 +537,28 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String) extends C
   }
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {
-    callSite.listexp_.asScala.find(CCAstUtils.isStackPtr) match {
-      case Some(_) => 
+    (callSite.listexp_.asScala.find(CCAstUtils.isStackPtr),
+     functionDefinitions.get(callSite.accept(getName, ()))) match {
+      case (Some(_), Some(funcDef)) => 
         val exp = super.visit(callSite, transforms)
         // TODO: This will not work if function is invoked through
         //   a pointer. Then we don't know the name of the function
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
-        val tform = CallSiteTransform(this, functionDefinitions(callSite.accept(getName, ())), callSite.listexp_)
-        if (tform.shouldInferContract()) {
+        val tform = CallSiteTransform(this, funcDef, callSite.listexp_)
+//        if (tform.shouldInferContract()) {
           transforms += tform
           tform.wrapperInvocation()
-        } else {
-          exp
-        }
+//        } else {
+//          exp
+//        }
+      case (Some(_), None) =>
+        // We are missing the function definition for the function
+        // at the callsite. This could be either because it is a
+        // library function or because it is a predicate defined in
+        // $...$ comment syntax used as argument to assume/assert.
+        // Either way we can't transform and rewrite the function.
+        super.visit(callSite, transforms) 
       case _ =>
         super.visit(callSite, transforms)
     }

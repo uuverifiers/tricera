@@ -9,6 +9,7 @@ TESTS="get-1.c  \
        max-1.c  \
        max-2.c  \
        multadd-1.c  \
+       qualified-heapptr-to-stackptr.c \
        truck-2.c"
 
 for name in $TESTS; do

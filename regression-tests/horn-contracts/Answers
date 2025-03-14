@@ -118,7 +118,17 @@ false :- main12_3_1(x:12), x:12 != 0. (line:14 col:3) (property: user-assertion)
 UNSAFE
 
 stackptr.hcc
-UNKNOWN (Unsupported C fragment. Function contracts are currently not supported together with stack pointers (10:5))
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for f */
+/*@
+  requires 0 == x;
+  ensures 1 == x;
+*/
+================================================================================
+
+SAFE
 
 struct-name-bug.hcc
 

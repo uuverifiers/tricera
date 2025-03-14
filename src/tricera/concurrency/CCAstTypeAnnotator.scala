@@ -82,6 +82,7 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
   val enumNameToEnumVar = new CCAstEnumNameToEnumVarVistor
   val nameStack = Stack[String]()
   val decSpecifiersStack = Stack[ListDeclaration_specifier]()
+  var ignoreMissingDeclarations = false
 
   def getScopedName(name: String): String = {
     // A "scoped name" is an fully qualified identifier where each
@@ -110,8 +111,14 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
     result
   }
 
-  def currentDecSpecifiers = decSpecifiersStack.top
+  def withIgnoreMissingDeclarations[A](thunk: => A):A = {
+    ignoreMissingDeclarations = true
+    val result = thunk
+    ignoreMissingDeclarations = false
+    result
+  }
 
+  def currentDecSpecifiers = decSpecifiersStack.top
 
   /**
     Add an entry in the symbol table for the defined function.
@@ -215,6 +222,23 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
     super.visit(param, symTab)
   }
 
+  override def visit(efunkpar: Efunkpar, symTab: CCAstTypeAnnotationData)
+  : Exp = efunkpar.exp_.accept(getName, ()) match {
+      case "assume" | "assert" =>
+        /*
+          Set up special treatment of TriCera 'assume' and 'assert'
+          functions. This is needed because the arguments to these
+          functions may contain predicates that are not true C
+          identifiers but defined in $...$ comments. We therefore
+          ignore missing declarations in the arguments.
+        */
+        withIgnoreMissingDeclarations {
+          super.visit(efunkpar, symTab)
+        }
+      case _ =>
+        super.visit(efunkpar, symTab)
+  }
+
   /**
     Create an EvarWithType node for any Evar node.
   */
@@ -228,15 +252,17 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
 
     val name = eVar.cident_
     findDeclaration(name) match {
-      case None => 
-        throw new TypeAnnotationException(
-          f"Undeclared identifier in expression: ${name}, line: ${eVar.line_num} col:${eVar.col_num}")
       case Some(declaration) =>
         val newVar = declaration.toEvarWithType()
         newVar.col_num = eVar.col_num
         newVar.line_num = eVar.line_num
         newVar.offset = eVar.offset
         newVar
+      case None if ignoreMissingDeclarations =>
+        eVar
+      case _ => 
+        throw new TypeAnnotationException(
+          f"Undeclared identifier in expression: ${name}, line: ${eVar.line_num} col:${eVar.col_num}")
     }
   }
 }

@@ -14,6 +14,30 @@ Inferred ACSL annotations
 
 SAFE
 
+heapptr-to-stackptr.c
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                       main0_0_1(emptyHeap, nthAddr(0), nthAddr(0))                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                             |                                                                             
+                                                                             |                                                                             
+                                                                             V                                                                             
+ main0_0_13(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(45))), O_Int(42))), nthAddr(1), nthAddr(2), nthAddr(1), nthAddr(2), 3, 4, nthAddr(0), nthAddr(0)) 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                             |                                                                             
+                                                                             |                                                                             
+                                                                             V                                                                             
+                  main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(45))), O_Int(42))), nthAddr(0), nthAddr(0), nthAddr(2), nthAddr(1))                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+                  main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Int(45))), O_Int(42))), nthAddr(0), nthAddr(0), nthAddr(2), nthAddr(1))                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main_4(@h, globalswap_0_1x:0, globalswap_0_1y:0, a:0, b:0), getInt(read(@h, a:0)) != 42 | getInt(read(@h, b:0)) != 0. (line:0 col:0) (property: user-assertion)
+
+UNSAFE
+
 incdec-1.c
 Warning: no definition of function "non_det_int" available
 Warning: no definition of function "non_det_int_ptr" available
@@ -121,6 +145,11 @@ Inferred ACSL annotations
 ================================================================================
 
 SAFE
+
+qualified-heapptr-to-stackptr.c
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
+(error "Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9")
+Other Error: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
 
 truck-2.c
 
