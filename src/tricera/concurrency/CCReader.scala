@@ -2261,7 +2261,7 @@ private def collectVarDecls(dec                    : Dec,
         getType(listDeclSpecs)
       case None => CCInt
     }
-    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // SSSOWO don't think this is relevant anymore: // todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 

@@ -221,8 +221,6 @@ private object RenameProgVarProxies extends CollectingVisitor[MHashMap[String, S
     subres: Seq[IExpression])
   : IExpression = t match {
       case ConstantAsProgVarProxy(proxy) if transformedToOriginalId.get(proxy.name).isDefined =>
-//        val ProgVarProxy(a,b,c,d,e) = proxy
-        printlnDebug(f"=====> swapping ${proxy.name} for ${transformedToOriginalId(proxy.name)}")
         IConstant(proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true))
       case _: IExpression => 
         t.update(subres)
@@ -243,7 +241,13 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
 
     val transformedFuncInvsByOriginalId = astAdditions.transformedFunctionIdToOriginalId
       .groupBy({case (transformedId, origId) => origId })
-      .mapValues(_.keySet.map(funcId => funcInvs.find(i => i.id == funcId).get))
+      .mapValues(_.keySet
+        .map(funcId => funcInvs.find(i => i.id == funcId))
+        // Due to inlining of functions without annotations, not all transformed
+        // functions have a corresponding FunctionInvariants instance.
+        .withFilter(o => o.isDefined)
+        .map(o => o.get))
+      .filter({ case (id, set) => !set.isEmpty})
 
     transformedFuncInvsByOriginalId.map({case (originalId, transformedFuncInvs) => {
       transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
@@ -252,42 +256,3 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
     }}).toSeq
   }
 }
-
-/*
-class _MergeTransformedFunctionsContracts(
-    callSiteTransforms: CallSiteTransforms,
-    functionContexts: Map[String,CCReader.FunctionContext],
-    solution : tricera.postprocessor.SolutionProcessor.Solution) {
-
-  def apply(): (Solution, Map[String,CCReader.FunctionContext]) = {
-    def isAssociatedWithTransformedFunction(pred: Predicate) = {
-      functionContexts.exists({ case (funcName, ctx) => ctx.prePred.pred == pred || ctx.postPred.pred == pred })
-    }
-
-    def toContract(context: CCReader.FunctionContext, solution: SolutionProcessor.Solution) = {
-      MergableContract(context, solution(context.prePred.pred), solution(context.postPred.pred))
-    }
-
-    val astAdditions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
-
-    val contractsByOriginalFuncId = astAdditions.transformedFunctionIdToOriginalId
-      .groupBy({case (transformedId, origId) => origId })
-      .mapValues(_.keySet.map(funcId => toContract(functionContexts(funcId), solution)))
-
-    var mergedSolution = solution.filter({case (pred, formula) => !isAssociatedWithTransformedFunction(pred)})
-
-    for ((originalId, contracts) <- contractsByOriginalFuncId) {
-      val fullContract = 
-        contracts.fold(toContract(functionContexts(originalId), solution))(
-            (original, transformed) => 
-                original.meet(transformed.mapTo(original.funcContext, astAdditions.globalVariableIdToParameterId)))
-
-      mergedSolution = 
-        mergedSolution + 
-        (fullContract.funcContext.prePred.pred -> fullContract.pre) +
-        (fullContract.funcContext.postPred.pred -> fullContract.post)
-    }
-    (mergedSolution, functionContexts.filterKeys(funcId => contractsByOriginalFuncId.contains(funcId)))
-  }
-}
-*/
