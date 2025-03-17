@@ -3,7 +3,6 @@
 /*@contract@*/
 void swap(int *volatile* x, int *volatile* y){
     int *volatile tmp = *x;
-    int tmp2 = *tmp;
     *x = *y;
     *y = tmp;
 }
@@ -15,4 +14,3 @@ void main() {
   swap(&a, &b);
   assert(*a == 42 && *b == 0);
 }
-

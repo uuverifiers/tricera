@@ -1,18 +1,17 @@
 #include <stdlib.h>
 
 /*@contract@*/
-void swap(int ** x, int ** y){
-    int * tmp = *x;
-    int tmp2 = *tmp;
+void swap(int **x, int **y){
+    int *tmp = *x;
     *x = *y;
     *y = tmp;
 }
 
 void main() {
-  int * a = malloc(sizeof(int));
-  int * b = malloc(sizeof(int));
-  *b = 42;
+  int *a = malloc(sizeof(int));
+  int *b = malloc(sizeof(int));
+  *a = 0;
+  *b = 2;
   swap(&a, &b);
-  assert(*a == 42 && *b == 0);
+  assert(*a == 2 && *b == 0);
 }
-
