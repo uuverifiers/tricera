@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2025 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -123,12 +123,13 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  private val version = "0.3.1"
+  private val version = "0.3.2"
 
   private val greeting =
-    "TriCera v" + version + ".\n(C) Copyright " +
-      "2012-2024 Zafer Esen and Philipp Ruemmer\n" +
-    "Contributors: Pontus Ernstedt, Hossein Hojjat, Oskar Soederberg"
+    s"""TriCera v$version.
+        |(C) Copyright 2012-2025 Zafer Esen and Philipp Ruemmer
+        |Contributors: Pontus Ernstedt, Hossein Hojjat, Oskar Soederberg, Ola Wingbrant""".stripMargin
+
 
   private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
     args match {
