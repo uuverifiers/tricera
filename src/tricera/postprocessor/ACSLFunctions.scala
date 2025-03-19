@@ -38,6 +38,7 @@ import ap.parser._
 import ap.terfor.ConstantTerm
 import IExpression._
 import ap.types.MonoSortedIFunction
+import tricera.{ProgVarProxy}
 
 object ACSLExpression {
   val valid = new Predicate("\\valid", 1)
@@ -54,93 +55,68 @@ object ACSLExpression {
   val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer, oldArrow)
   val predicates = Set(valid, separated)
 
-  // Here a ConstantTerm is introduced as a container for the variable name
   def derefFunApp(
       derefFunction: IFunction,
-      pointer: ISortedVariable,
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
+      pointer: ProgVarProxy
   ) = {
-    val name = cci.stripOld(cci.getVarName(pointer, quantifierDepth).get)
-    IFunApp(derefFunction, Seq(IConstant(new ConstantTerm(name))))
+    IFunApp(derefFunction, Seq(IConstant(pointer)))
   }
 
   def arrowFunApp(
       arrowFunction: IFunction,
-      pointer: ISortedVariable,
-      selector: MonoSortedIFunction,
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
+      pointer: ProgVarProxy,
+      selector: MonoSortedIFunction
   ) = {
-    val pointerName = cci.stripOld(
-      cci.getVarName(pointer, quantifierDepth).get
-    )
-    val selectorName = selector.name
     IFunApp(
       arrowFunction,
       Seq(
-        IConstant(new ConstantTerm(pointerName)),
-        IConstant(new ConstantTerm(selectorName))
+        IConstant(pointer),
+        IConstant(new ConstantTerm(selector.name))
       )
     )
   }
 
-  def separatedPointers(
-      pointers: Set[ISortedVariable],
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
-  ): IFormula = {
-
-    def separatedAtom(p1: String, p2: String): IFormula = {
-      IAtom(
-        separated,
-        Seq(IConstant(new ConstantTerm(p1)), IConstant(new ConstantTerm(p2)))
-      ).asInstanceOf[IFormula]
+  def separatedPointers(pointers: Set[ProgVarProxy]): IFormula = {
+    def asSeparatedAtom(p1: ProgVarProxy, p2: ProgVarProxy): IFormula = {
+      IAtom(separated, Seq(IConstant(p1), IConstant(p2)))
     }
 
-    val pointerNames = variableSetToRawNameSeq(pointers, quantifierDepth, cci)
-    if (pointerNames.size >= 2) {
-      pointerNames
+    if (pointers.size >= 2) {
+      pointers
+        .toSeq
         .combinations(2)
-        .map({ case Seq(p1, p2) =>
-          separatedAtom(p1, p2)
-        })
+        .map({ case Seq(p1, p2) => asSeparatedAtom(p1, p2) })
         .reduceLeft(_ & _)
     } else {
       IBoolLit(true)
     }
   }
 
-  def validPointers(
-      pointers: Set[ISortedVariable],
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
-  ): IFormula = {
-    def validAtom(p: String) = {
-      IAtom(valid, Seq(IConstant(new ConstantTerm(p)))).asInstanceOf[IFormula]
-    }
+  def validPointers(pointers: Set[ProgVarProxy]): IFormula = {
+    def validAtom(p: ProgVarProxy):IFormula = IAtom(valid, Seq(IConstant(p))) 
 
-    val pointerNames = variableSetToRawNameSeq(pointers, quantifierDepth, cci)
-    pointerNames.size match {
+    pointers.size match {
       case s if s >= 2 =>
-        pointerNames
+        pointers
           .map((p) => validAtom(p))
           .reduceLeft(_ & _)
       case s if s == 1 =>
-        validAtom(pointerNames.head)
+        validAtom(pointers.head)
       case _ => IBoolLit(true)
     }
   }
+}
 
-  def variableSetToRawNameSeq(
-      variableSet: Set[ISortedVariable],
-      quantifierDepth: Int,
-      cci: ContractConditionInfo
-  ): Seq[String] = {
-    variableSet
-      .map(pointer =>
-        cci.stripOld(cci.getVarName(pointer, quantifierDepth).get)
-      )
-      .toSeq
+object ACSLFunction {
+  def unapply(x: IExpression): Option[IFunction] = x match {
+    case IFunApp(fun, _) if ACSLExpression.functions.contains(fun) => Some(fun)
+    case _ => None
+  }
+}
+
+object ACSLPredicate {
+  def unapply(x: IExpression): Option[Predicate] = x match {
+    case  IAtom(pred, _) if ACSLExpression.predicates.contains(pred) => Some(pred)
+    case _ => None
   }
 }

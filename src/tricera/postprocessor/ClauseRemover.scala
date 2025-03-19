@@ -40,230 +40,235 @@ package tricera.postprocessor
 
 import ap.parser._
 import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import ContractConditionType._
 
-object ClauseRemover extends ContractProcessor {
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    apply(cci.contractCondition, cci).asInstanceOf[IFormula]
+import tricera.{
+  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant,
+  PostCondition, PreCondition, ProgVarProxy, Solution}
+
+object ClauseRemover extends ResultProcessor {
+  override def applyTo(solution: Solution): Solution = solution match {
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(applyTo), loopInvariants)
   }
 
-  // TODO: Use IFormula instead of IExpression?
-  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    val noTOHExpr = CleanupVisitor(TheoryOfHeapRemoverVisitor(expr, cci))
-    val noTOHOrExplPtrExpr = CleanupVisitor(ExplicitPointerRemover(noTOHExpr, cci))
-    val noTrivialEqExpr = CleanupVisitor(TrivialEqualityRemover(noTOHOrExplPtrExpr, cci))
-    val newContractCondition = CleanupVisitor(HeapEqualityRemover(noTrivialEqExpr, cci))
-    newContractCondition
+  private def applyTo(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {
+    case FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      preCond @ PreCondition(preInv),
+      postCond @ PostCondition(postInv),
+      loopInvariants) => 
+      val newInvs = FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(applyTo(preInv, preCond.isCurrentHeap)),
+        PostCondition(applyTo(postInv, postCond.isCurrentHeap)),
+        loopInvariants)
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
+  }
+
+  private def applyTo(invariant: Invariant, isCurrentHeap: ProgVarProxy => Boolean)
+    : Invariant = invariant match {
+    case Invariant(expression, Some(heapInfo), sourceInfo) =>
+      val noTOHExpr = CleanupVisitor(TheoryOfHeapRemoverVisitor(expression, heapInfo))
+      val noTOHOrExplPtrExpr = CleanupVisitor(ExplicitPointerRemover(noTOHExpr))
+      val noTrivialEqExpr = CleanupVisitor(TrivialEqualityRemover(noTOHOrExplPtrExpr))
+      val newForm = CleanupVisitor(
+        HeapEqualityRemover(noTrivialEqExpr, isCurrentHeap)).asInstanceOf[IFormula]
+      Invariant(newForm, Some(heapInfo), sourceInfo)
+    case Invariant(expression, None, sourceInfo) => 
+      val newForm = CleanupVisitor(TrivialEqualityRemover(expression)).asInstanceOf[IFormula]
+      Invariant(newForm, None, sourceInfo)
   }
 }
 
 object TheoryOfHeapRemoverVisitor {
-  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    (new TheoryOfHeapRemoverVisitor(cci)).visit(expr, 0)
+  def apply(expr: IExpression, heapInfo: HeapInfo): IExpression = {
+    (new TheoryOfHeapRemoverVisitor(heapInfo)).visit(expr, ())
   }
-}
 
-class TheoryOfHeapRemoverVisitor(cci: ContractConditionInfo)
-    extends CollectingVisitor[Int, IExpression] {
+  class TheoryOfHeapRemoverVisitor(heapInfo: HeapInfo)
+    extends CollectingVisitor[Unit, IExpression] {
 
-  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
-    t match {
-      case default =>
-        KeepArg
+    override def postVisit(
+        t: IExpression,
+        dummy: Unit,
+        subres: Seq[IExpression]
+    ): IExpression = t match {
+      case IBinFormula(IBinJunctor.And, _, _) =>
+        val f1 = subres(0)
+        val f2 = subres(1)
+        (ContainsTOHVisitor(f1, heapInfo), ContainsTOHVisitor(f2, heapInfo)) match {
+          case (false, false) =>
+            t update subres
+          case (true, false) =>
+            f2
+          case (false, true) =>
+            f1
+          case (true, true) =>
+            IBoolLit(true)
+        }
+      case q @ ISortedQuantified(_, _, formula) =>
+        q update subres
+      case default => t update subres
     }
-
-  override def postVisit(
-      t: IExpression,
-      quantifierDepth: Int,
-      subres: Seq[IExpression]
-  ): IExpression = t match {
-    case IBinFormula(IBinJunctor.And, _, _) =>
-      val f1 = subres(0)
-      val f2 = subres(1)
-      (ContainsTOHVisitor(f1, cci), ContainsTOHVisitor(f2, cci)) match {
-        case (false, false) =>
-          t update subres
-        case (true, false) =>
-          f2
-        case (false, true) =>
-          f1
-        case (true, true) =>
-          IBoolLit(true)
-      }
-    case q @ ISortedQuantified(_, _, formula) =>
-      q update subres
-    case default => t update subres
   }
 }
+
 
 object ContainsTOHVisitor {
-  def apply(expr: IExpression, cci: ContractConditionInfo): Boolean = {
-    (new ContainsTOHVisitor(cci))(expr)
-  }
-}
-
-class ContainsTOHVisitor(cci: ContractConditionInfo)
-    extends CollectingVisitor[Unit, Boolean] {
-
-  def apply(expr: IExpression): Boolean = {
-    visit(expr, ())
+  def apply(expr: IExpression, heapInfo: HeapInfo): Boolean = {
+    (new ContainsTOHVisitor(heapInfo))(expr)
   }
 
-  override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case TheoryOfHeapFunApp(_, _) =>
-      ShortCutResult(true)
-    case IFunApp(fun, args) if (cci.isGetter(fun) || cci.isWrapper(fun)) =>
-      ShortCutResult(true)
-    case _ =>
-      KeepArg
-  }
-
-  override def postVisit(
-      t: IExpression,
-      arg: Unit,
-      subres: Seq[Boolean]
-  ): Boolean =
-    if (subres.isEmpty) false else subres.reduce(_ || _)
-}
-
-object ExplicitPointerRemover extends ContractProcessor {
-  def processContractCondition(cci: ContractConditionInfo): IFormula = {
-    (new ExplicitPointerRemoverVisitor(cci)).visit(cci.contractCondition, 0).asInstanceOf[IFormula]
-  }
-
-  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    val newExpr = (new ExplicitPointerRemoverVisitor(cci)).visit(expr, 0)
-    CleanupVisitor(newExpr)
-  }
-}
-
-class ExplicitPointerRemoverVisitor(cci: ContractConditionInfo)
-    extends CollectingVisitor[Int, IExpression] {
-
-  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
-    t match {
-      case vb: IVariableBinder =>
-        UniSubArgs(quantifierDepth + 1)
-      case _ =>
-        KeepArg
+  class ContainsTOHVisitor(heapInfo: HeapInfo)
+      extends CollectingVisitor[Unit, Boolean] {
+  
+    def apply(expr: IExpression): Boolean = {
+      visit(expr, ())
     }
-
-  override def postVisit(
-      t: IExpression,
-      quantifierDepth: Int,
-      subres: Seq[IExpression]
-  ): IExpression = {
-    t update subres match {
-    case f: IFormula if ContainsExplicitPointerVisitor(f, quantifierDepth, cci) =>
-      IBoolLit(true)
-    case _ =>
-      t update subres
-    }
-  }
-}
-
-object ContainsExplicitPointerVisitor {
-  def apply(expr: IExpression, quantifierDepth: Int, cci: ContractConditionInfo): Boolean = {
-    (new ContainsExplicitPointerVisitor(cci))(expr, quantifierDepth)
-  }
-}
-
-class ContainsExplicitPointerVisitor(cci: ContractConditionInfo)
-    extends CollectingVisitor[Int, Boolean] {
-  def apply(expr: IExpression, quantifierDepth: Int): Boolean = {
-    visit(expr, quantifierDepth)
-  }
-
-  override def preVisit(
-      t: IExpression,
-      quantifierDepth: Int
-  ): PreVisitResult = {
-    t match {
-      case vb: IVariableBinder =>
-        UniSubArgs(quantifierDepth + 1)
-
-      case IEquation(v1: ISortedVariable, v2: ISortedVariable)
-          if cci.isPointer(v1, quantifierDepth) && cci.isPointer(
-            v2,
-            quantifierDepth
-          ) =>
-        ShortCutResult(false)
+  
+    override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
       case TheoryOfHeapFunApp(_, _) =>
-        ShortCutResult(false)
-      case IFunApp(fun, _) if cci.isACSLFunction(fun) =>
-        ShortCutResult(false)
-      case IAtom(pred, _) if cci.isACSLPredicate(pred) =>
-        ShortCutResult(false)
-      case IBinFormula(IBinJunctor.And, _, _) =>
-        ShortCutResult(false)
+        ShortCutResult(true)
+      case IFunApp(fun, args) if (heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun)) =>
+        ShortCutResult(true)
       case _ =>
         KeepArg
     }
-  }
-
-  override def postVisit(
-      t: IExpression,
-      quantifierDepth: Int,
-      subres: Seq[Boolean]
-  ): Boolean = t match {
-    case v: ISortedVariable if cci.isPointer(v, quantifierDepth) =>
-      true
-    case _ =>
+  
+    override def postVisit(
+        t: IExpression,
+        arg: Unit,
+        subres: Seq[Boolean]
+    ): Boolean =
       if (subres.isEmpty) false else subres.reduce(_ || _)
   }
 }
 
+
+object ExplicitPointerRemover {
+  def apply(expr: IExpression): IExpression = {
+    val newExpr = (new ExplicitPointerRemoverVisitor).visit(expr, ())
+    CleanupVisitor(newExpr)
+  }
+
+  class ExplicitPointerRemoverVisitor
+      extends CollectingVisitor[Unit, IExpression] {
+  
+    override def postVisit(
+        t: IExpression,
+        dummy: Unit,
+        subres: Seq[IExpression]
+    ): IExpression = {
+      t update subres match {
+      case f: IFormula if ContainsExplicitPointerVisitor(f) =>
+        IBoolLit(true)
+      case _ =>
+        t update subres
+      }
+    }
+  }
+}
+
+
+object ContainsExplicitPointerVisitor {
+  def apply(expr: IExpression): Boolean = {
+    (new ContainsExplicitPointerVisitor)(expr)
+  }
+
+  class ContainsExplicitPointerVisitor
+      extends CollectingVisitor[Unit, Boolean] {
+    def apply(expr: IExpression): Boolean = {
+      visit(expr, ())
+    }
+  
+    private def isACSLFunction(fun: IFunction): Boolean = {
+      ACSLExpression.functions.contains(fun)
+    }
+    private def isACSLPredicate(pred: Predicate): Boolean = {
+      ACSLExpression.predicates.contains(pred)
+    }
+  
+    override def preVisit(
+        t: IExpression,
+        dummy: Unit
+    ): PreVisitResult = {
+      t match {
+        case IEquation(
+          ConstantAsProgVarProxy(v1),
+          ConstantAsProgVarProxy(v2))
+            if v1.isPointer && v2.isPointer =>
+          ShortCutResult(false)
+        case TheoryOfHeapFunApp(_, _) =>
+          ShortCutResult(false)
+        case ACSLFunction(fun) =>
+          ShortCutResult(false)
+        case ACSLPredicate(pred) =>
+          ShortCutResult(false)
+        case IBinFormula(IBinJunctor.And, _, _) =>
+          ShortCutResult(false)
+        case _ =>
+          KeepArg
+      }
+    }
+  
+    override def postVisit(
+        t: IExpression,
+        dummy: Unit,
+        subres: Seq[Boolean]
+    ): Boolean = t match {
+      case ConstantAsProgVarProxy(v) if v.isPointer =>
+        true
+      case _ =>
+        if (subres.isEmpty) false else subres.reduce(_ || _)
+    }
+  }
+}
+
+
 object TrivialEqualityRemover {
-  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    (new TrivialEqualityRemover(cci)).visit(expr, ())
+  def apply(expr: IExpression): IExpression = {
+    (new TrivialEqualityRemover).visit(expr, ())
+  }
+
+  class TrivialEqualityRemover()
+      extends CollectingVisitor[Unit, IExpression] {
+  
+    override def postVisit(
+        t: IExpression,
+        arg: Unit,
+        subres: Seq[IExpression]
+    ): IExpression = t match {
+      case IEquation(left, right) if left == right =>
+        IBoolLit(true)
+      case _ =>
+        t update subres
+    }
   }
 }
 
-class TrivialEqualityRemover(cci: ContractConditionInfo)
-    extends CollectingVisitor[Unit, IExpression] {
-
-  override def postVisit(
-      t: IExpression,
-      arg: Unit,
-      subres: Seq[IExpression]
-  ): IExpression = t match {
-    case IEquation(left, right) if left == right =>
-      IBoolLit(true)
-    case _ =>
-      t update subres
-  }
-}
 
 object HeapEqualityRemover {
-  def apply(expr: IExpression, cci: ContractConditionInfo): IExpression = {
-    (new HeapEqualityRemover(cci)).visit(expr, 0)
+  def apply(expr: IExpression, isCurrentHeap: ProgVarProxy => Boolean): IExpression = {
+    (new HeapEqualityRemover(isCurrentHeap)).visit(expr, ())
   }
-}
 
-class HeapEqualityRemover(cci: ContractConditionInfo)
-    extends CollectingVisitor[Int, IExpression] {
-
-  override def preVisit(t: IExpression, quantifierDepth: Int): PreVisitResult =
-    t match {
-      case vb: IVariableBinder =>
-        UniSubArgs(quantifierDepth + 1)
+  class HeapEqualityRemover(isCurrentHeap: ProgVarProxy => Boolean)
+      extends CollectingVisitor[Unit, IExpression] {
+  
+    override def postVisit(
+        t: IExpression,
+        dummy: Unit,
+        subres: Seq[IExpression]
+    ): IExpression = t match {
+      case IEquation(ConstantAsProgVarProxy(left), _) if isCurrentHeap(left) =>
+        IBoolLit(true)
+      case IEquation(_, ConstantAsProgVarProxy(right)) if isCurrentHeap(right) =>
+        IBoolLit(true)
       case _ =>
-        KeepArg
+        t update subres
     }
-
-  override def postVisit(
-      t: IExpression,
-      quantifierDepth: Int,
-      subres: Seq[IExpression]
-  ): IExpression = t match {
-    case IEquation(left: ISortedVariable, _) if cci.isCurrentHeap(left, quantifierDepth) =>
-      IBoolLit(true)
-    case IEquation(_, right: ISortedVariable) if cci.isCurrentHeap(right, quantifierDepth) =>
-      IBoolLit(true)
-    case _ =>
-      t update subres
   }
 }

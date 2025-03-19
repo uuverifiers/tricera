@@ -48,13 +48,10 @@ import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 // FIXME: We should try not to have to pass around the reader object itself,
 //        but only necessary data therein.
 class Encoder(reader : CCReader) {
+  import tricera.Literals.{predPostSuffix, predPreSuffix}
   // FIXME: Static, goes in companion object?
   // FIXME: Check if correct construction of false head.
   val falseHead = new IAtom(FALSE, Seq())
-  // NOTE: Need to match whatever CCReader uses. Ideally we extract it from
-  // there.
-  val preSuffix  : String = "_pre"
-  val postSuffix : String = "_post"
 
   // FIXME: Maybe access these via some Context object?
   val system : System = reader.system
@@ -127,7 +124,7 @@ class Encoder(reader : CCReader) {
           case c@Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
             // Handles entry clause, e.g:
             // f0(..) :- f_pre(..) ==> f0(..) :- <pre>
-            val name    : String   = atom.pred.name.stripSuffix(preSuffix)
+            val name    : String   = atom.pred.name.stripSuffix(predPreSuffix)
             val preAtom : IAtom    = funToPreAtom(name)
             val preCond : IFormula = funToContract(name).pre
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
@@ -157,7 +154,7 @@ class Encoder(reader : CCReader) {
             if prePredsToReplace(atom.pred) => {
             // Handles entry clause, e.g:
             // f0(..) :- f_pre(..) ==> f0(..) :- <pre>
-            val name    : String   = atom.pred.name.stripSuffix(preSuffix)
+            val name    : String   = atom.pred.name.stripSuffix(predPreSuffix)
             val preAtom : IAtom    = funToPreAtom(name)
             val preCond : IFormula = funToContract(name).pre
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
@@ -194,7 +191,7 @@ class Encoder(reader : CCReader) {
       val (toss, keep) = body.partition(a => postPredsToReplace(a.pred))
       val (maybeNewConstr, newSrcInfo) = toss match {
         case atom :: Nil =>
-          val name : String = atom.pred.name.stripSuffix(postSuffix)
+          val name : String = atom.pred.name.stripSuffix(predPostSuffix)
           val postAtom : IAtom = funToPostAtom(name)
           val postCond : IFormula = funToContract(name).post
           val assigns  : IFormula = funToContract(name).assignsAssume
@@ -210,7 +207,7 @@ class Encoder(reader : CCReader) {
   // f_pre(..) :- mainN(..), .. ==> false :- mainN(..), .., !<pre>
   private def buildPreClause(old : CCClause) : CCAssertionClause = {
     assert(prePredsToReplace(old.clause.head.pred))
-    val name    : String   = old.clause.head.pred.name.stripSuffix(preSuffix)
+    val name    : String   = old.clause.head.pred.name.stripSuffix(predPreSuffix)
     val preCond : IFormula = funToContract(name).pre
     val preAtom : IAtom    = funToPreAtom(name)
     val constr  : IFormula = applyArgs(preCond, preAtom, old.clause.head).unary_!
@@ -241,7 +238,7 @@ class Encoder(reader : CCReader) {
       // f_post(..) :- f1(..) ==> false :- f1(..), !(<post> & <assigns>)
       case CCClause(Clause(head, body, oldConstr), srcInfo)
         if postPredsToReplace(head.pred) =>
-        val name     : String   = head.pred.name.stripSuffix(postSuffix)
+        val name     : String   = head.pred.name.stripSuffix(predPostSuffix)
         val postAtom : IAtom    = funToPostAtom(name)
         val postCond : IFormula = funToContract(name).post
         val postSrc  : SourceInfo = funToContract(name).postSrcInfo

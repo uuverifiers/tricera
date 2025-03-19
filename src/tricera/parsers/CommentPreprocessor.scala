@@ -29,6 +29,7 @@
 
 package tricera.parsers
 import java.io.{BufferedReader, BufferedWriter, StringReader, StringWriter}
+import tricera.Literals
 
 // preprocesses ACSL style comments to make life easier for the parser
 object CommentPreprocessor {

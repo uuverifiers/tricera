@@ -26,6 +26,7 @@ run_test ./rundir quantifiers "" -assert -dev -t:60
 run_test ./rundir interpreted-predicates "" -assert -dev -t:60
 run_test ./rundir properties "" -assert -dev -t:60
 run_test ./rundir toh-contract-translation "" -dev -t:60
+run_test ./rundir loop-invariants "" -m:foo -inv -acsl -cex -dev -t:60
 #run_test ./rundir ParametricEncoder ""
 
 if [ $ERRORS -ne 0 ]; then

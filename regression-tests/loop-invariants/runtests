@@ -1,0 +1,14 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="simple-loop.c  \
+       simple-loop-annotate.c  \
+       simple-loop-contract.c  \
+       loop-in-func.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS "$@" $name 2>&1 | grep -v 'at '
+done

@@ -43,39 +43,53 @@ package tricera.postprocessor
 import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
+import tricera.{FunctionInvariants, Invariant, PostCondition, Solution}
 import ap.SimpleAPI.ProverStatus
 import ap.SimpleAPI.TimeoutException
 import ap.theories._
 import ap.SimpleAPI
 
-object PostconditionSimplifier extends ContractProcessor {
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    cci.contractConditionType match {
-      case ContractConditionType.Precondition =>
-        cci.contractCondition
-      case ContractConditionType.Postcondition =>
-        apply(cci.precondition, cci.postcondition)
-    }
+import scala.collection.mutable.{Set, HashSet}
+import tricera.Util.printlnDebug
+
+object PostconditionSimplifier extends ResultProcessor {
+
+  override def applyTo(solution: Solution) = solution match {
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(simplifyPostCondition), loopInvariants)
   }
 
-  def apply(precondition: IFormula, postcond: IFormula): IFormula = {
-    var postcondition = postcond
+  private def simplifyPostCondition(funcInvs: FunctionInvariants)
+  : FunctionInvariants = funcInvs match {
+    case FunctionInvariants(id, isSrcAnnotated, preCondition, PostCondition(postInv), loopInvariants) => 
+      val newInvs = FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        preCondition,
+        PostCondition(Invariant(
+          simplify(preCondition.invariant.expression, postInv.expression),
+          postInv.heapInfo,
+          postInv.sourceInfo)),
+        loopInvariants)
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
+  }
 
-    def attemptReplacingIFormulasBy(replaceByFormula: IFormula) = {
+  private def simplify(precondition: IFormula, postcondition: IFormula): IFormula = {
+    def attemptReplacingIFormulasBy(replaceByFormula: IFormula, preCond :IFormula, postCond: IFormula) = {
+      var currentPostCond = postCond
       var i = 0
       var cont = true
       while (cont) {
-        ReplaceNthIFormulaVisitor(postcondition, i, replaceByFormula) match {
+        ReplaceNthIFormulaVisitor(currentPostCond, i, replaceByFormula) match {
           case (newPostcondition, Some(replacedFormula)) =>
             isEquivalentPostcondition(
-              precondition,
-              postcondition,
+              preCond,
+              currentPostCond,
               newPostcondition.asInstanceOf[IFormula]
             ) match {
               case true =>
-                postcondition = newPostcondition.asInstanceOf[IFormula]
+                currentPostCond = newPostcondition.asInstanceOf[IFormula]
                 val removedIFormulas =
                   IFormulaCounterVisitor(replacedFormula) - 1
                 i = i + 1 - removedIFormulas
@@ -86,18 +100,16 @@ object PostconditionSimplifier extends ContractProcessor {
             cont = false
         }
       }
-      // Note: Cleanup rules for false literals are not yet implemented in CleanupVisitor
-      postcondition = CleanupVisitor(postcondition).asInstanceOf[IFormula]
+      CleanupVisitor(currentPostCond).asInstanceOf[IFormula]
     }
-    attemptReplacingIFormulasBy(IBoolLit(true))
-    attemptReplacingIFormulasBy(IBoolLit(false))
-    postcondition
-  }
-
-  def replaceVarsWithConstants(p: SimpleAPI, formula: IFormula): IFormula = {
-    val maxIndex = MaxIndexVisitor(formula)
-    val constants = p.createConstants("c", 0 to maxIndex).toList
-    VariableSubstVisitor(formula.asInstanceOf[IFormula], (constants, 0))
+    
+    attemptReplacingIFormulasBy(
+      IBoolLit(false),
+      precondition,
+      attemptReplacingIFormulasBy(
+        IBoolLit(true),
+        precondition,
+        postcondition))
   }
 
   def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
@@ -119,10 +131,12 @@ object PostconditionSimplifier extends ContractProcessor {
         precondition
           .==>(postcondition.<=>(simplifiedPostcondition))
           .asInstanceOf[IFormula]
-      val constFormula = replaceVarsWithConstants(p, formula)
+      p.addConstants(CollectConstants(formula))
+      p.addRelations(ACSLExpression.predicates)
+      ACSLExpression.functions.foreach(f => p.addFunction(f))
       collectAndAddTheories(p, formula)
 
-      p.??(constFormula)
+      p.??(formula)
 
       val result =
         try
@@ -140,6 +154,22 @@ object PostconditionSimplifier extends ContractProcessor {
         case _ =>
           false
       }
+    }
+  }
+}
+
+private object CollectConstants {
+  def apply(formula: IFormula) = {
+    val constants = new HashSet[ITerm]()
+    (new CollectConstantsVisitor()).visit(formula, constants)
+    constants
+  }
+
+  private class CollectConstantsVisitor extends CollectingVisitor[Set[ITerm], Unit] {
+    override def postVisit(t: IExpression, constants: Set[ITerm], subres: Seq[Unit]): Unit = t match {
+      case c: IConstant =>
+        constants.add(c)
+      case _ =>
     }
   }
 }
