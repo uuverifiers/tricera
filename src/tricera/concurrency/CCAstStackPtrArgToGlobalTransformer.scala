@@ -70,7 +70,7 @@ class CCAstIsStackPointerVisitor extends AbstractVisitor[Boolean, Unit] {
 /*
   Vistor to replace given pointers with global variables.
 */
-class CCAstPointerToGlobalVisitor extends ComposVisitor[Map[String, CCAstDeclaration]] {
+class CCAstPointerToGlobalVisitor extends CCAstCopyWithLocation[Map[String, CCAstDeclaration]] {
   private val getName = new CCAstGetNameVistor
   /* Stm */
   override def visit(stm: CompS, replacements: Map[String, CCAstDeclaration]): Stm = {
@@ -471,7 +471,8 @@ object  CCAstStackPtrArgToGlobalTransformer {
   }
 }
 
-class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String) extends ComposVisitor[CallSiteTransform.CallSiteTransforms] {
+class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
+  extends CCAstCopyWithLocation[CallSiteTransform.CallSiteTransforms] {
   // Idea: For each function invocation that has arguments that points to
   //   memory allocated on the stack (stack pointers), introduce two new
   //   functions, and for each stack pointer argument a global variable.

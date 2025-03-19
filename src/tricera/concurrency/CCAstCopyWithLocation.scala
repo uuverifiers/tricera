@@ -28,7 +28,7 @@ object CCAstCopyWithLocation {
  * Visitor that copies the original nodes, including the source
  * location information.
  */
-class CCAstCopyWithLocation[A] extends  ComposVisitor[A] with CopyAstLocation {
+class CCAstCopyWithLocation[A] extends ComposVisitor[A] with CopyAstLocation {
   override def visit(p: Progr, arg: A): Program = {
     copyLocationInformation(p, super.visit(p, arg))
   }

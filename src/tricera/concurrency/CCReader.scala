@@ -4091,6 +4091,7 @@ private def collectVarDecls(dec                    : Dec,
                              isNoReturn : Boolean,
                              functionName : String) : Unit = {
     LocalVars pushFrame
+    // SSSOWO TODO: This may introduce terms with names that already exists.
     val stm = pushArguments(functionDef, args)
 
     // this might be an inlined function in an expression where we need to
