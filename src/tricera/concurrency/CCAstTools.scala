@@ -6,11 +6,33 @@ import concurrent_c.Absyn._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{MutableList}
 
-/*
-   The CCAstDeclaration represents a declaration in the AST.
-   It can be used to construct various kinds of nodes when
-   manipulating the tree.
-*/
+/**
+  * This trait defines a function to set the line number of
+  * an arbitrary kind of node in an AST.
+  */
+trait SetLineNumber {
+  def setLineNumber[T](item: T, lineNumber: Int): Unit = {
+    val field =  "line_num"
+    item.getClass.getDeclaredField(field).setInt(item, lineNumber)
+  }
+}
+
+/**
+  * This trait defines a function to get the line number of
+  * an arbitrary kind of node in an AST.
+  */
+trait GetLineNumber {
+  def getLineNumber[T](item: T): Int = {
+    val field =  "line_num"
+    item.getClass.getDeclaredField(field).getInt(item)
+  }
+}
+
+/**
+  * The CCAstDeclaration represents a declaration in the AST.
+  * It can be used to construct various kinds of nodes when
+  * manipulating the tree.
+  */
 object CCAstDeclaration {
   private val copyAst = new CCAstCopyVisitor
   private val getName = new CCAstGetNameVistor
@@ -103,9 +125,9 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
   }
 }
 
-/*
-  Vistor class to extract a name from a declaration or definition.
-*/
+/**
+  * Vistor class to extract a name from a declaration or definition.
+  */
 class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     /* External_declaration */
     override def visit(ext: Afunc, arg: Unit): String = { ext.function_def_.accept(this, arg) }
@@ -162,9 +184,9 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(exp: EvarWithType, arg: Unit): String = { exp.cident_ }
 }
 
-/*
-  Vistor to copy an AST.
-*/
+/**
+  * Vistor to copy an AST including source information.
+  */
 class CCAstCopyVisitor extends CCAstCopyWithLocation[Unit] {
   def apply(annotations: ListAnnotation): ListAnnotation = {
     val copy = new ListAnnotation
@@ -197,9 +219,9 @@ class CCAstCopyVisitor extends CCAstCopyWithLocation[Unit] {
   }
 }
 
-/*
-  Vistor to extract a function declaration from a function definition.
-*/
+/**
+  * Vistor to extract a function declaration from a function definition.
+  */
 class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration_specifier, Init_declarator), Unit] {
   val copyAst = new CCAstCopyVisitor
   /* Function_def */
@@ -216,9 +238,9 @@ class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration
   }
 }
 
-/*
-  Vistor to extract a function annotation from a function definition.
-*/
+/**
+  * Vistor to extract a function annotation from a function definition.
+  */
 class CCAstGetFunctionAnnotationVisitor extends AbstractVisitor[ListAnnotation, Unit] {
   val copyAst = new CCAstCopyVisitor
 
@@ -244,9 +266,9 @@ class CCAstGetDeclaratorVistor extends AbstractVisitor[Declarator, Unit] {
 }
 
 
-/*
-  Vistor class to remove one level of indirection ("dereference a pointer").
-*/
+/**
+  * Vistor class to remove one level of indirection ("dereference a pointer").
+  */
 class CCAstRemovePointerLevelVistor extends CCAstCopyWithLocation[Unit] {
   private val copyAst = new CCAstCopyVisitor
 
@@ -269,18 +291,18 @@ class CCAstRemovePointerLevelVistor extends CCAstCopyWithLocation[Unit] {
   }
 }
 
-/*
-  Vistor class to rename a declaration or definition.
-*/
+/**
+  * Vistor class to rename a declaration or definition.
+  */
 class CCAstRenameInDeclarationVistor extends CCAstCopyWithLocation[String => String] {
   /* Direct_declarator */
   override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
 }
 
-/*
-  Vistor class to transform any declaration to a scalar variable declaration,
-  removing e.g. array or function declaration elements.
-*/
+/**
+  * Vistor class to transform any declaration to a scalar variable declaration,
+  * removing e.g. array or function declaration elements.
+  */
 class CCAstDeclaratorToNameVistor extends CCAstCopyWithLocation[String => String] {
   /* Direct_declarator */
   override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
@@ -296,18 +318,18 @@ class CCAstDeclaratorToNameVistor extends CCAstCopyWithLocation[String => String
   override def visit(dec: OldFuncDec, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
 }
 
-/*
-  Vistor class to replace one function declaration with another.
-*/
+/**
+  * Vistor class to replace one function declaration with another.
+  */
 class CCAstReplaceFunctionDeclarationVistor extends CCAstCopyWithLocation[Direct_declarator] {
   /* Direct_declarator */
   override def visit(dec: NewFuncDec, replacement: Direct_declarator) = { replacement }
   override def visit(dec: OldFuncDec, replacement: Direct_declarator) = { replacement }
 }
 
-/*
-  Vistor class to replace one initialization with another.
-*/
+/**
+  * Vistor class to replace one initialization with another.
+  */
 class CCAstReplaceInitializerVistor extends CCAstCopyWithLocation[Option[Initializer]] {
   private val copyAst = new CCAstCopyVisitor
 
@@ -351,9 +373,9 @@ class CCAstReplaceInitializerVistor extends CCAstCopyWithLocation[Option[Initial
   }
 }
 
-/*
-  Vistor to extract a function body from a function definition.
-*/
+/**
+  * Vistor to extract a function body from a function definition.
+  */
 class CCAstGetFunctionBodyVistor extends AbstractVisitor[Compound_stm, Unit] {
   val copyAst = new CCAstCopyVisitor
   /* Function_def */
@@ -368,9 +390,9 @@ class CCAstGetFunctionBodyVistor extends AbstractVisitor[Compound_stm, Unit] {
   }
 }
 
-/*
-  Vistor to extract the "Parameter_type" part from a Declarator
-*/
+/**
+  * Vistor to extract the "Parameter_type" part from a Declarator
+  */
 class CCAstGetParametersVistor extends AbstractVisitor[ListParameter_declaration, Unit] {
     /* Declarator */
     override def visit(dec: BeginPointer, arg: Unit) = { dec.direct_declarator_.accept(this, ()) }
@@ -384,9 +406,9 @@ class CCAstGetParametersVistor extends AbstractVisitor[ListParameter_declaration
     override def visit(spec: AllSpec, arg: Unit) = { spec.listparameter_declaration_ }
 }
 
-/*
-  Vistor to convert function parameters to CCAstDeclaration.
-*/
+/**
+  * Vistor to convert function parameters to CCAstDeclaration.
+  */
 class CCAstParamToAstDeclarationVistor extends AbstractVisitor[CCAstDeclaration, Unit] {
   private val copyAst = new CCAstCopyVisitor
 
@@ -407,9 +429,9 @@ class CCAstParamToAstDeclarationVistor extends AbstractVisitor[CCAstDeclaration,
   }
 }
 
-/*
-  Vistor to get declared type from a specifier.
-*/
+/**
+  * Vistor to get declared type from a specifier.
+  */
 class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, MutableList[Type_specifier]] {
   /* Declaration_specifier */
   override def visit(spec: Type, types: MutableList[Type_specifier]) = { types += spec.type_specifier_; true }
@@ -418,9 +440,9 @@ class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, MutableList[Type_spec
   override def visit(spec: SpecFunc, types: MutableList[Type_specifier]) = { false }
 }
 
-/*
-  Vistor class to replace EnumName instances with EnumVar.
-*/
+/**
+  * Vistor class to replace EnumName instances with EnumVar.
+  */
 class CCAstEnumNameToEnumVarVistor extends CCAstCopyWithLocation[Unit] {
   def apply(specifiers: ListDeclaration_specifier): ListDeclaration_specifier = {
     val copy = new ListDeclaration_specifier

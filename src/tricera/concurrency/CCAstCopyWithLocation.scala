@@ -13,17 +13,6 @@ trait CopyAstLocation {
   }
 }
 
-/*
-object CCAstCopyWithLocation {
-  protected  def copyLocationInformation[T](src: T, dest: T): T = {
-    for (field <- Set[String]("col_num", "line_num", "offset")) {
-      dest.getClass.getDeclaredField(field).setInt(dest, src.getClass().getDeclaredField(field).getInt(src))
-    }
-    dest
-  }
-}
-*/
-
 /**
  * Visitor that copies the original nodes, including the source
  * location information.

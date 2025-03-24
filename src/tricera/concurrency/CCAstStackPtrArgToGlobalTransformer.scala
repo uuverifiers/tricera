@@ -36,17 +36,17 @@ private object CCAstUtils {
   }
 }
 
-/*
-  Vistor to test if an expression is a pointer to stack allocated data.
-
-  NOTE: This visitor requires a type annotated AST as produced by
-    the CCAstTypeAnnotationVistor.
-
-  NOTE: This is very simplistic in it's interpretation of
-    what is considered a stack pointer. However, something
-    more refined will require more elaborate data flow
-    analysis.
-*/
+/**
+  * Vistor to test if an expression is a pointer to stack allocated data.
+  * 
+  * NOTE: This visitor requires a type annotated AST as produced by
+  *   the CCAstTypeAnnotationVistor.
+  * 
+  * NOTE: This is very simplistic in it's interpretation of
+  *   what is considered a stack pointer. However, something
+  *   more refined will require more elaborate data flow
+  *   analysis.
+  */
 class CCAstIsStackPointerVisitor extends AbstractVisitor[Boolean, Unit] {
   /* Init_declarator */
   override def visit(dec: InitDecl, arg: Unit) = { dec.initializer_.accept(this, ()) }
@@ -67,9 +67,9 @@ class CCAstIsStackPointerVisitor extends AbstractVisitor[Boolean, Unit] {
   override def visitDefault(op: Unary_operator, arg: Unit) = { false }
 }
 
-/*
-  Vistor to replace given pointers with global variables.
-*/
+/** 
+  * Vistor to replace given pointers with global variables.
+  */
 class CCAstPointerToGlobalVisitor extends CCAstCopyWithLocation[Map[String, CCAstDeclaration]] {
   private val getName = new CCAstGetNameVistor
   /* Stm */
@@ -114,12 +114,12 @@ class CCAstPointerToGlobalVisitor extends CCAstCopyWithLocation[Map[String, CCAs
   }
 }
 
-/*
-  CallSiteTransform represents all the transforms that needs to be
-  done of a specific function and at a specific call site in order
-  to replace arguments pointing towards the stack (stack pointer
-  arguments), with global variables.
-*/
+/**
+  * CallSiteTransform represents all the transforms that needs to be
+  * done of a specific function and at a specific call site in order
+  * to replace arguments pointing towards the stack (stack pointer
+  * arguments), with global variables.
+  */
 object CallSiteTransform {
   type CallSiteTransforms = MutableList[CallSiteTransform]
   private val copyAst = new CCAstCopyVisitor
@@ -401,11 +401,11 @@ class CallSiteTransform(
   }
 }
 
-/*
-  AstAddition contains all the additions that needs to be added
-  to the AST in order for it to contain all functions and variables
-  used by the program after stack pointers have been replaced.
-*/
+/**
+  * AstAddition contains all the additions that needs to be added
+  * to the AST in order for it to contain all functions and variables
+  * used by the program after stack pointers have been replaced.
+  */
 object AstAddition {
   private val getName = new CCAstGetNameVistor
   def apply(
@@ -517,12 +517,25 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
 
     if (callSiteTransforms.nonEmpty) {
       val additions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
-
+      
+      val getMaxLineNumber = new CCAstMaxLineNumber
+      val updateLineNumbers = new CCAstUpdtLineNum[Unit](
+        declarations.asScala
+          .map(d => d.accept(getMaxLineNumber, ()))
+          .reduce(math.max)+1)
       val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
-      declarations.addAll(mainDefIndex, additions.wrapperDefinitions.map(i => i._2).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions.map(i => i._2).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.wrapperDeclarations.map(i => i._2).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables.map(i => i._2).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.wrapperDefinitions
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.wrapperDeclarations
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
 
       new Progr(declarations);
     } else {
@@ -547,12 +560,12 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
         val tform = CallSiteTransform(this, funcDef, callSite.listexp_)
-//        if (tform.shouldInferContract()) {
+        if (tform.shouldInferContract()) {
           transforms += tform
           tform.wrapperInvocation()
-//        } else {
-//          exp
-//        }
+        } else {
+          exp
+        }
       case (Some(_), None) =>
         // We are missing the function definition for the function
         // at the callsite. This could be either because it is a
