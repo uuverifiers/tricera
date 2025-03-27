@@ -10,7 +10,13 @@ TESTS="contract1.hcc \
        assert.hcc \
        fib.hcc \
        stackptr.hcc \
-       struct-name-bug.hcc"
+       struct-name-bug.hcc \
+       stack-pointer-custom-entry.c \
+       stack-pointer-multi-arg.c \
+       stack-pointer-nested.c \
+       stack-pointer-recursion.c \
+       stack-pointer-retvalue.c \
+       stack-pointer.c"
 
 for name in $TESTS; do
     echo
