@@ -6,7 +6,8 @@ void f(int *x)
 
 void main()
 {
-  int x = 0;
+  int init = _;
+  int x = init;
   f(&x);
-  assert(x == 1);
+  assert(x == init+1);
 }

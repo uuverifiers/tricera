@@ -1,0 +1,17 @@
+typedef struct {
+    int val;
+} S;
+
+/*@contract@*/ 
+void incr(S* t) {
+    t->val++;
+}
+
+void entryPoint(void) {
+    int init = _;
+    S s = {init};
+ 
+    incr(&s);
+
+    assert(s.val == init+1);
+}

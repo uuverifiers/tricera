@@ -11,12 +11,11 @@ TESTS="contract1.hcc \
        fib.hcc \
        stackptr.hcc \
        struct-name-bug.hcc \
-       stack-pointer-custom-entry.c \
-       stack-pointer-multi-arg.c \
-       stack-pointer-nested.c \
-       stack-pointer-recursion.c \
-       stack-pointer-retvalue.c \
-       stack-pointer.c"
+       stackptr-multi-arg.c \
+       stackptr-nested.c \
+       stackptr-recursion.c \
+       stackptr-retvalue.c \
+       stackptr.c"
 
 for name in $TESTS; do
     echo
@@ -24,3 +23,10 @@ for name in $TESTS; do
     $LAZABS -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
 
+TESTS="stackptr-custom-entry.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -acsl -m:entryPoint "$@" $name 2>&1 | grep -v 'at '
+done
