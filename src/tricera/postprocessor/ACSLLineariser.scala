@@ -232,7 +232,8 @@ object ACSLLineariser {
 
   private def atomicTerm(t : ITerm,
                          ctxt : PrintContext,
-                         cast2Int : Boolean = false) : String = t match {
+                         cast2Int : Boolean = false) : String = {
+    t match {
     case IConstant(c) ::: SortNeedingIntCast(_) if cast2Int =>
       c.name + ".\\as[int]"
     case IConstant(c) =>
@@ -252,10 +253,11 @@ object ACSLLineariser {
         vs.head
     }
     case IFunApp(f, Seq()) ::: SortNeedingIntCast(_) if cast2Int =>
-      f.name + ".\\as[int]"
+      fun2Identifier(f) + ".\\as[int]"
     case IFunApp(f, Seq()) =>
-      f.name
+      fun2Identifier(f)
   }
+}
 
   private object SortNeedingIntCast {
     def unapply(sort : Sort) : Option[Sort] = sort match {
@@ -413,14 +415,14 @@ object ACSLLineariser {
           print("\\old(*")
           SubArgs(List(ctxt setParentOp ")"))
 
-         case IFunApp(ACSLExpression.arrow, Seq(_: IConstant, _: IConstant)) =>
+         case IFunApp(ACSLExpression.arrow, Seq(_: IConstant, _: IFunApp)) =>
           allButLast(ctxt setPrecLevel 0, "->", "", 2)
         
-        case IFunApp(ACSLExpression.arrowOldPointer, Seq(_: IConstant, _: IConstant)) =>
+        case IFunApp(ACSLExpression.arrowOldPointer, Seq(_: IConstant, _: IFunApp)) =>
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, ")->", "", 2)
 
-        case IFunApp(ACSLExpression.oldArrow, Seq(_: IConstant, _: IConstant)) =>
+        case IFunApp(ACSLExpression.oldArrow, Seq(_: IConstant, _: IFunApp)) =>
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, "->", ")", 2)
            

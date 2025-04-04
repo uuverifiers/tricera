@@ -553,6 +553,7 @@ class Main (args: Array[String]) {
           result
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
             .through(ADTExploder.apply)
+            .through(RewrapPointers.apply)
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(PostconditionSimplifier.apply)
