@@ -528,18 +528,9 @@ class Main (args: Array[String]) {
     import tricera.postprocessor.ResultPrinters.{printSolutionProlog, printSolutionSMT}
     import tricera.postprocessor.ResultConverter.hornSolverSolutionToResult
 
-//    for ((c, ctx) <- reader.getFunctionContexts) {
-//      printlnDebug(f"| ${ctx.prePred} : ${ctx.postPred} ${ctx.a}")
-//    }
-
     val result = verificationLoop.result
       .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
-//      .tap({ case Left(Some(solution)) =>
-//        for ((p, f) <- solution) {
-//          printlnDebug(f"|| ${p.toString()} :: ${f.toString()}")
-//        }
-//      })
       .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
       .through(MergeTransformedFunctionsContracts(callSiteTransforms))
 
