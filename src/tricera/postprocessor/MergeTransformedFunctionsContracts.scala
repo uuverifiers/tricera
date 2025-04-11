@@ -34,9 +34,12 @@ trait PointerExpressionChecks {
   * This is the correct thing to do if p is a pointer argument corresponding to an
   * introduced global variable, and the old value of that global variable is what is
   * referenced before it is converted back to a pointer argument.
-  * 
-  * TODO: Handle pointers to nested structures. Assume that q is a pointer
-  * \old(*p).q->r should then be \old(p->q->r)
+  *
+  * TODO: Handle pointers to nested structures.
+  */
+ /* Current implementation does not work with nested structures. Currently there is
+  * no way to represent something like oldArrow(p, oldArrow(q, r)). Also, representing
+  * pointer dereference together with selectors are unclear.
   */
 object RewrapPointers
   extends CollectingVisitor[Unit, IExpression]

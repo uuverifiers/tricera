@@ -1,22 +1,29 @@
-typedef struct {
-    unsigned int val;
-} S;
-
+/* 
+  NOTE: 2025-03-27: Stackpointers does currently not work
+    together with recurions. In a situation as the following
+    the parameter gets replaced by a global variable, and the
+    function is replaced by two other functions, a wrapper,
+    and a transformed function that manipulates the global
+    variable in a similar way to what the original function
+    would do to the value pointed to by the variable. Any
+    recursive call in the transformed function will call the
+    wrapper but use the adress of the global variable as the
+    argument. All in all, this will mess up the value of the
+    global variable.
+*/
 
 /*@contract@*/ 
-void incr(S* t) {
-    t->val++;
-    if (t->val < 5) {
+void incr(int* t) {
+    if (*t < 5) {
+      *t += 1;
       incr(t);
     }
 }
 
 int main() {
-    S s = {0};
- 
+    int s = 0;
     incr(&s);
-
-    assert(s.val == 4);
+    assert(s == 5);
 
     return 0;
 }

@@ -544,7 +544,7 @@ class Main (args: Array[String]) {
           result
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
             .through(ADTExploder.apply)
-            .through(RewrapPointers.apply)
+//            .through(RewrapPointers.apply)
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(PostconditionSimplifier.apply)
@@ -554,6 +554,7 @@ class Main (args: Array[String]) {
                  .through(TheoryOfHeapProcessor.apply)
                  .through(ADTSimplifier.apply) // Rewrite constructors/selectors after heap processing
                  .through(ToVariableForm.apply)
+                 .through(RewrapPointers.apply)
                  .through(ACSLExpressionProcessor.apply)
                  .through(ClauseRemover.apply)
               } else {

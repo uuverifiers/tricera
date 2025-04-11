@@ -55,6 +55,8 @@ object ACSLExpression {
   val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer, oldArrow)
   val predicates = Set(valid, separated)
 
+  def fun2Identifier(fun : IFunction) = fun.name.split("::").last
+
   def derefFunApp(
       derefFunction: IFunction,
       pointer: ProgVarProxy
@@ -71,8 +73,9 @@ object ACSLExpression {
       arrowFunction,
       Seq(
         IConstant(pointer),
-        IFunApp(selector, Seq()))
+        IConstant(new ConstantTerm(fun2Identifier(selector)))
       )
+    )
   }
 
   def separatedPointers(pointers: Set[ProgVarProxy]): IFormula = {

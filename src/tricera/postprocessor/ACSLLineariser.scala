@@ -106,8 +106,6 @@ object ACSLLineariser {
   def asString(e : IExpression) : String =
     ap.DialogUtil.asString { printExpression(e) }
 
-  private def fun2Identifier(fun : IFunction) = fun.name.split("::").last
-
   //////////////////////////////////////////////////////////////////////////////
 
   private val NonEqPredicate   = new Predicate ("!=", 2)
@@ -253,9 +251,9 @@ object ACSLLineariser {
         vs.head
     }
     case IFunApp(f, Seq()) ::: SortNeedingIntCast(_) if cast2Int =>
-      fun2Identifier(f) + ".\\as[int]"
+      ACSLExpression.fun2Identifier(f) + ".\\as[int]"
     case IFunApp(f, Seq()) =>
-      fun2Identifier(f)
+      ACSLExpression.fun2Identifier(f)
   }
 }
 
@@ -415,26 +413,26 @@ object ACSLLineariser {
           print("\\old(*")
           SubArgs(List(ctxt setParentOp ")"))
 
-         case IFunApp(ACSLExpression.arrow, Seq(_: IConstant, _: IFunApp)) =>
+         case IFunApp(ACSLExpression.arrow, Seq(_: IConstant, _: IConstant)) =>
           allButLast(ctxt setPrecLevel 0, "->", "", 2)
         
-        case IFunApp(ACSLExpression.arrowOldPointer, Seq(_: IConstant, _: IFunApp)) =>
+        case IFunApp(ACSLExpression.arrowOldPointer, Seq(_: IConstant, _: IConstant)) =>
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, ")->", "", 2)
 
-        case IFunApp(ACSLExpression.oldArrow, Seq(_: IConstant, _: IFunApp)) =>
+        case IFunApp(ACSLExpression.oldArrow, Seq(_: IConstant, _: IConstant)) =>
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, "->", ")", 2)
            
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {
-            allButLast(ctxt setPrecLevel 0, ".", "." + fun2Identifier(fun), 1)
+            allButLast(ctxt setPrecLevel 0, ".", "." + ACSLExpression.fun2Identifier(fun), 1)
           } else if (fun.arity > 0) { // todo: should not be possible in ACSL
-            print(fun2Identifier(fun))
+            print(ACSLExpression.fun2Identifier(fun))
             print("(")
             allButLast(ctxt setPrecLevel 0, ", ", ")", fun.arity)
           } else {
-            print(fun2Identifier(fun))
+            print(ACSLExpression.fun2Identifier(fun))
             KeepArg
           }
         }
