@@ -22,7 +22,7 @@ for name in $TESTS; do
     $LAZABS -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
 
-TESTS="stackptr-custom-entry.hcc"
+TESTS="stackptr-custom-entry.c"
 
 for name in $TESTS; do
     echo

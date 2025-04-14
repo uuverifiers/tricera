@@ -1,5 +1,5 @@
 typedef struct {
-    unsigned int val;
+    int val;
 } S;
 
 extern int non_det_int();
@@ -16,10 +16,10 @@ void incdec(S* p) {
 }
 
 int main() {
-    unsigned int init = non_det_int();
+    int init = non_det_int();
     S s = {init};
  
-    assume(init < 4294967295);
+    assume(-2147483648 <= init && init < 2147483647);
 
     incdec(&s);
 
