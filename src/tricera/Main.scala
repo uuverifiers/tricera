@@ -50,7 +50,8 @@ import lazabs.horn.preprocessor.HornPreprocessor
 import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
-import _root_.tricera.postprocessor.MergeTransformedFunctionsContracts
+import tricera.postprocessor.MergeTransformedFunctionsContracts
+import tricera.postprocessor.AddValidPointerAtoms
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -533,6 +534,7 @@ class Main (args: Array[String]) {
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
       .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
       .through(MergeTransformedFunctionsContracts(callSiteTransforms))
+      .through(AddValidPointerAtoms.apply)
 
     val executionResult = result match {
       case solution: Solution => 
