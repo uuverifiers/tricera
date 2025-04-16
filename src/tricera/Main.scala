@@ -51,7 +51,7 @@ import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 import tricera.postprocessor.MergeTransformedFunctionsContracts
-import tricera.postprocessor.AddValidPointerAtoms
+import tricera.postprocessor.AddValidPointerPredicates
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -534,7 +534,6 @@ class Main (args: Array[String]) {
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
       .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
       .through(MergeTransformedFunctionsContracts(callSiteTransforms))
-      .through(AddValidPointerAtoms.apply)
 
     val executionResult = result match {
       case solution: Solution => 
@@ -546,7 +545,6 @@ class Main (args: Array[String]) {
           result
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
             .through(ADTExploder.apply)
-//            .through(RewrapPointers.apply)
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(PostconditionSimplifier.apply)
@@ -556,7 +554,6 @@ class Main (args: Array[String]) {
                  .through(TheoryOfHeapProcessor.apply)
                  .through(ADTSimplifier.apply) // Rewrite constructors/selectors after heap processing
                  .through(ToVariableForm.apply)
-                 .through(RewrapPointers.apply)
                  .through(ACSLExpressionProcessor.apply)
                  .through(ClauseRemover.apply)
               } else {
@@ -564,6 +561,8 @@ class Main (args: Array[String]) {
               }
             )
             .tap(r => r
+              .through(RewrapPointers.apply)
+              .through(AddValidPointerPredicates.apply)
               .through(ACSLLineariser.apply)
               .through(ResultPrinters.printACSL) 
             ).ignore

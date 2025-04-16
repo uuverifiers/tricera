@@ -123,8 +123,8 @@ Inferred ACSL annotations
 ================================================================================
 /* contracts for f */
 /*@
-  requires 0 == x;
-  ensures 1 == x;
+  requires \true;
+  ensures *x - 1 == \old(*x) && \valid(x);
 */
 ================================================================================
 
@@ -138,6 +138,94 @@ Inferred ACSL annotations
 /*@
   requires s.f == 21;
   ensures \old(s).f == 21 && 2*21 == \result;
+*/
+================================================================================
+
+SAFE
+
+stackptr-multi-arg.c
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for mod */
+/*@
+  requires \exists int v0; \exists S v1; (v0 >= -2147483647 && 2147483646 >= v0 && t1->val == v0) && \valid(t2) && \valid(t1);
+  ensures t1->val == 1 + \old(t1->val) && \exists int v0; \exists S v1; \old(t1->val) == v0 && \valid(t2) && t2->val == \old(t2->val) - 1 && \valid(t1);
+*/
+================================================================================
+
+SAFE
+
+stackptr-nested-calls.c
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for incdec */
+/*@
+  requires \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && p->val == v0) && q->val == 0 && \valid(p) && \valid(q);
+  ensures \exists int v0, v1; (p->val == 1 + v1 - 1 && 1 + v1 == 1 + v0 && v0 >= -2147483648 && 2147483646 >= v0 && \old(p->val) == v1) && \old(q->val) == 0 && q->val == 0 && \valid(p) && \valid(q);
+*/
+/* contracts for decr */
+/*@
+  requires \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && q->val == 1 + v0 && p->val == 1 + v0) && \valid(q) && \valid(p);
+  ensures q->val == \old(q->val) - 1 && \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && \old(q->val) == 1 + v0 && p->val == 1 + v0) && *p == \old(*p) && \valid(q) && \valid(p);
+*/
+================================================================================
+
+SAFE
+
+stackptr-recursion.c
+
+---------------------------------
+Init:
+    main25_5(emptyHeap, 0, 0)    
+---------------------------------
+                |                
+                |                
+                V                
+ main31_0(emptyHeap, 0, 0, 2, 0) 
+---------------------------------
+                |                
+                |                
+                V                
+      main(emptyHeap, 0, 1)      
+---------------------------------
+Final:
+      main(emptyHeap, 0, 1)      
+---------------------------------
+Failed assertion:
+false :- main(@h, globalincr_0t:38, s:24), s:24 != 5. (line:26 col:5) (property: user-assertion)
+
+UNSAFE
+
+stackptr-retvalue.c
+UNKNOWN (Unsupported C fragment. 8:12 Stack pointers in combination with heap pointers)
+
+stackptr-struct.c
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for incr */
+/*@
+  requires \exists int v0; (v0 >= -2147483647 && 2147483646 >= v0 && t->val == v0) && \valid(t);
+  ensures t->val == 1 + \old(t->val) && \exists int v0; (v0 >= -2147483647 && 2147483646 >= v0 && \old(t->val) == v0) && \valid(t);
+*/
+================================================================================
+
+SAFE
+
+stackptr-custom-entry.c
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contracts for incr */
+/*@
+  requires \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && t->val == v0) && \valid(t);
+  ensures t->val == 1 + \old(t->val) && \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && \old(t->val) == v0) && \valid(t);
 */
 ================================================================================
 

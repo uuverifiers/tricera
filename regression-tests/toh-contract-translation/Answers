@@ -7,8 +7,8 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for get */
 /*@
-  requires p == n && n_init >= 1;
-  ensures ((\result == 0 && 0 >= \old(*p)) || \result >= 0) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n;
+  requires p == n && n_init >= 1 && \valid(p) && \valid(n);
+  ensures ((\result == 0 && 0 >= \old(*p)) || \result >= 0) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n && \valid(p) && \valid(n);
 */
 ================================================================================
 
@@ -27,8 +27,8 @@ Inferred ACSL annotations
 */
 /* contract for increment */
 /*@
-  requires val == a && \separated(val, b) && \valid(val) && \valid(b);
-  ensures \old(val) == a && a_init == \old(a_init) && b_init == \old(b_init) && \old(val) == \old(a) && b == \old(b) && \separated(val, b) && \valid(val) && \valid(b) && *val == 1 + \old(*val);
+  requires val == a && \separated(val, b) && \valid(val) && \valid(b) && \valid(a);
+  ensures \old(val) == a && a_init == \old(a_init) && b_init == \old(b_init) && \old(val) == \old(a) && b == \old(b) && \separated(val, b) && \valid(val) && \valid(b) && *val == 1 + \old(*val) && \valid(a);
 */
 ================================================================================
 
@@ -47,8 +47,8 @@ Inferred ACSL annotations
 */
 /* contract for increment */
 /*@
-  requires val == a && \valid(val);
-  ensures \old(val) == a && a_init == \old(a_init) && \valid(val) && *val == 1 + \old(*val);
+  requires val == a && \valid(val) && \valid(a);
+  ensures \old(val) == a && a_init == \old(a_init) && \valid(val) && *val == 1 + \old(*val) && \valid(a);
 */
 ================================================================================
 
@@ -62,8 +62,8 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for findMax */
 /*@
-  requires x == a && y == b && \separated(x, y) && \valid(x) && \valid(y);
-  ensures ((a_init == \result && \result >= b_init) || (b_init - a_init >= 1 && b_init == \result)) && r == \old(r) && a_init == \old(a_init) && b_init == \old(b_init) && \old(a) == a && \old(b) == b;
+  requires x == a && y == b && \separated(x, y) && \valid(x) && \valid(y) && \valid(a) && \valid(b);
+  ensures ((a_init == \result && \result >= b_init) || (b_init - a_init >= 1 && b_init == \result)) && r == \old(r) && a_init == \old(a_init) && b_init == \old(b_init) && \old(a) == a && \old(b) == b && \valid(a) && \valid(b);
 */
 ================================================================================
 
@@ -77,8 +77,8 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for findMax */
 /*@
-  requires max == r && x == a && y == b && \separated(x, y) && \separated(x, max) && \separated(y, max) && \valid(x) && \valid(y) && \valid(max);
-  ensures (\old(b_init) - \old(a_init) >= 1 || \old(a_init) >= \old(b_init)) && a == \old(x) && b == \old(y) && r == \old(max) && \old(a_init) == a_init && \old(b_init) == b_init;
+  requires max == r && x == a && y == b && \separated(x, y) && \separated(x, max) && \separated(y, max) && \valid(x) && \valid(y) && \valid(max) && \valid(r) && \valid(a) && \valid(b);
+  ensures (\old(b_init) - \old(a_init) >= 1 || \old(a_init) >= \old(b_init)) && a == \old(x) && b == \old(y) && r == \old(max) && \old(a_init) == a_init && \old(b_init) == b_init && \valid(b) && \valid(r) && \valid(x) && \valid(max) && \valid(a) && \valid(y);
 */
 ================================================================================
 
@@ -115,8 +115,8 @@ Inferred ACSL annotations
 */
 /* contract for multiplyByTwo */
 /*@
-  requires num == a && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result);
-  ensures \old(num) == a && \old(num) == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init) && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result) && *num == 2*\old(*num);
+  requires num == a && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result) && \valid(a);
+  ensures \old(num) == a && \old(num) == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init) && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result) && *num == 2*\old(*num) && \valid(a);
 */
 ================================================================================
 
@@ -146,8 +146,8 @@ Inferred ACSL annotations
 ================================================================================
 /* contracts for swap */
 /*@
-  requires \separated(x, y) && \valid(x) && \valid(y);
-  ensures x == \old(y) && \old(x) == y && \separated(x, x) && \valid(x) && \valid(x) && *x == 2;
+  requires \true;
+  ensures *x == \old(*y) && \old(*x) == *y && \valid(y) && \valid(x);
 */
 ================================================================================
 

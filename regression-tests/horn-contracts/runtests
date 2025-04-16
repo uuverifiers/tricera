@@ -14,7 +14,8 @@ TESTS="contract1.hcc \
        stackptr-multi-arg.c \
        stackptr-nested-calls.c \
        stackptr-recursion.c \
-       stackptr-retvalue.c"
+       stackptr-retvalue.c \
+       stackptr-struct.c"
 
 for name in $TESTS; do
     echo

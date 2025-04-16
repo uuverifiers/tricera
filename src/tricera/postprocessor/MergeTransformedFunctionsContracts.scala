@@ -21,6 +21,8 @@ import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, Invariant, InvariantContext,
   LoopInvariant, PostCondition, PreCondition, ProgVarProxy,
   Result, Solution}
+import ap.parser.IAtom
+import tricera.Util.printlnDebug
 
 trait PointerExpressionChecks {
   def isSelector(func: IFunction) = {
@@ -107,21 +109,19 @@ object RewrapPointers
 
 
 private object MapPreCondProgVarProxies 
-  extends CollectingVisitor[(MHashMap[String, String], MSet[ProgVarProxy]), IExpression]
+  extends CollectingVisitor[MHashMap[String, String], IExpression]
   with PointerExpressionChecks{
 
-  def apply(form: IExpression, nameMap: MHashMap[String, String], foundPointers: MSet[ProgVarProxy]) = {
-    visit(form, (nameMap, foundPointers)).asInstanceOf[IFormula]
+  def apply(form: IExpression, nameMap: MHashMap[String, String]) = {
+    visit(form, nameMap).asInstanceOf[IFormula]
   }
 
   override def postVisit(
     t: IExpression,
-    nameMapAndPtrs: (MHashMap[String,String], MSet[ProgVarProxy]),
+    transformedToOriginalId: MHashMap[String, String],
     subres: Seq[IExpression])
   : IExpression = (t, subres) match {
-      case (ConstantAsProgVarProxy(proxy), _) if nameMapAndPtrs._1.get(proxy.name).isDefined =>
-        val (transformedToOriginalId, foundPointers) = nameMapAndPtrs
-        foundPointers += proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true)
+      case (ConstantAsProgVarProxy(proxy), _) if transformedToOriginalId.get(proxy.name).isDefined =>
         ACSLExpression.derefFunApp(
           ACSLExpression.deref,
           proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true))
@@ -132,25 +132,23 @@ private object MapPreCondProgVarProxies
 
 
 private object MapPostCondProgVarProxies
-  extends CollectingVisitor[(MHashMap[String, String], MSet[ProgVarProxy]), IExpression] {
-  def apply(form: IExpression, nameMap: MHashMap[String, String], validPointers: MSet[ProgVarProxy]) = {
-    visit(form, (nameMap, validPointers)).asInstanceOf[IFormula]  
+  extends CollectingVisitor[MHashMap[String, String], IExpression] {
+  def apply(form: IExpression, nameMap: MHashMap[String, String]) = {
+    visit(form, nameMap).asInstanceOf[IFormula]  
   }
 
   override def postVisit(
     t: IExpression,
-    nameMapAndPtrs: (MHashMap[String,String], MSet[ProgVarProxy]),
+    transformedToOriginalId: MHashMap[String, String],
     subres: Seq[IExpression])
   : IExpression = t match {
-      case ConstantAsProgVarProxy(proxy) if nameMapAndPtrs._1.get(proxy.name).isDefined =>
-        val (transformedToOriginalId, foundPointers) = nameMapAndPtrs
-        foundPointers += proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true)
+      case ConstantAsProgVarProxy(proxy) if transformedToOriginalId.get(proxy.name).isDefined =>
         val derefFun = 
-        if (proxy.isPreExec) {
-          ACSLExpression.oldDeref
-        } else {
-          ACSLExpression.deref
-        }
+          if (proxy.isPreExec) {
+            ACSLExpression.oldDeref
+          } else {
+            ACSLExpression.deref
+          }
         ACSLExpression.derefFunApp(
           derefFun, 
           proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true))
@@ -176,7 +174,7 @@ private object MapPostCondProgVarProxies
   * q`PostExec => deref(p`PostExec),
   */
 private object MapProgVarProxies {
-  def apply(funcInvs: FunctionInvariants, nameMap: MHashMap[String, String], foundPointers: MSet[ProgVarProxy])
+  def apply(funcInvs: FunctionInvariants, nameMap: MHashMap[String, String])
   : FunctionInvariants = funcInvs match {
     case FunctionInvariants(
       id,
@@ -187,27 +185,27 @@ private object MapProgVarProxies {
       FunctionInvariants(
         id,
         isSrcAnnotated,
-        PreCondition(applyToPre(preInv, nameMap, foundPointers)),
-        PostCondition(applyToPost(postInv, nameMap, foundPointers)),
-        loopInvariants.map(i => applyTo(i, nameMap, foundPointers)))
+        PreCondition(applyToPre(preInv, nameMap)),
+        PostCondition(applyToPost(postInv, nameMap)),
+        loopInvariants.map(i => applyTo(i, nameMap)))
   }
 
-  private def applyToPre(inv: Invariant, nameMap: MHashMap[String, String], foundPointers: MSet[ProgVarProxy])
+  private def applyToPre(inv: Invariant, nameMap: MHashMap[String, String])
   : Invariant = inv match {
     case Invariant(form, heapInfo, srcInfo) => 
-      Invariant(MapPreCondProgVarProxies(form, nameMap, foundPointers).asInstanceOf[IFormula], heapInfo, srcInfo)
+      Invariant(MapPreCondProgVarProxies(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
   }
 
-  private def applyToPost(inv: Invariant, nameMap: MHashMap[String, String], foundPointers: MSet[ProgVarProxy])
+  private def applyToPost(inv: Invariant, nameMap: MHashMap[String, String])
   : Invariant = inv match {
     case Invariant(form, heapInfo, srcInfo) => 
-      Invariant(MapPostCondProgVarProxies(form, nameMap, foundPointers).asInstanceOf[IFormula], heapInfo, srcInfo)
+      Invariant(MapPostCondProgVarProxies(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
   }
 
-  private def applyTo(inv: LoopInvariant, nameMap: MHashMap[String, String], foundPointers: MSet[ProgVarProxy])
+  private def applyTo(inv: LoopInvariant, nameMap: MHashMap[String, String])
   : LoopInvariant = inv match {
     case LoopInvariant(form, heapInfo, srcInfo) => 
-      LoopInvariant(MapPreCondProgVarProxies(form, nameMap, foundPointers).asInstanceOf[IFormula], heapInfo, srcInfo)
+      LoopInvariant(MapPreCondProgVarProxies(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
   }
 }
 
@@ -231,30 +229,6 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
       solution
   }
 
-  private def addValidPointerAtoms(inv: Invariant, pointers: MSet[ProgVarProxy])
-  : Invariant = inv match {
-    case Invariant(form, heapInfo, srcInfo) =>
-      Invariant(
-        form &&& ACSLExpression.validPointers(pointers.toSet).asInstanceOf[IFormula],
-        heapInfo,
-        srcInfo)
-  }
-
-  private def addValidPointerAtoms(invs: FunctionInvariants, pointers: MSet[ProgVarProxy])
-  : FunctionInvariants = invs match {
-      case FunctionInvariants(
-        id, isSrcAnnotated,
-        PreCondition(preInv),
-        PostCondition(postInv),
-        loopInvariants) =>
-          FunctionInvariants(
-            id,
-            isSrcAnnotated,
-            PreCondition(addValidPointerAtoms(preInv, pointers)),
-            PostCondition(addValidPointerAtoms(postInv, pointers)),
-            loopInvariants)
-    }
-
   private def mergeInvariantsOfTransformedFunctions(funcInvs: Seq[FunctionInvariants])
   : Seq[FunctionInvariants] = {
     val astAdditions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
@@ -270,27 +244,19 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
       .filter({ case (id, set) => !set.isEmpty})
 
     transformedFuncInvsByOriginalId.map({case (originalId, transformedFuncInvs) => {
-      val foundPointers = MSet[ProgVarProxy]()
-      val invs = transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
+      transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
         (original, transformed) => 
-          original.meet(MapProgVarProxies(transformed, astAdditions.globalVariableIdToParameterId, foundPointers)))
-//      val (prePointers, postPointers) = foundPointers.partition(p => p.isPreExec)
-//      postPointers.foreach(p => prePointers.find(i => i.name == p.name) match {
-//        case None => prePointers += p
-//        case _ => ()
-//      })
-//      addValidPointerAtoms(invs, prePointers)
-      invs
+          original.meet(MapProgVarProxies(transformed, astAdditions.globalVariableIdToParameterId)))
     }}).toSeq
   }
 }
 
 /**
   * Scans the invariants for ProgVarProxy instances and adds a valid pointer atom
-  * for each one.
+  * for each one that is a pointer.
   */
-object AddValidPointerAtoms 
-  extends CollectingVisitor[Unit, MSet[ProgVarProxy]]
+object AddValidPointerPredicates 
+  extends CollectingVisitor[Unit, (MSet[ProgVarProxy], MSet[ProgVarProxy])]
   with ResultProcessor {
   override def applyTo(solution: tricera.Solution): Solution = solution match {
     case Solution(functionInvariants) =>
@@ -309,17 +275,26 @@ object AddValidPointerAtoms
       FunctionInvariants(
         id,
         isSrcAnnotated,
-        PreCondition(applyTo(preInv)),
-        PostCondition(applyTo(postInv)),
+        PreCondition(
+          applyTo(preInv)
+        ),
+        PostCondition(
+          applyTo(postInv)
+        ),
         loopInvariants)
   }
 
   private def applyTo(inv: Invariant)
   : Invariant = inv match {
     case Invariant(form, heapInfo, srcInfo) =>
-      val (keep, extra) = visit(form, ()).partition(p => p.isPreExec)
+      val (found, existing) = visit(form, ())
+      val (keep, extra) = found.partition(p => p.isPreExec)
       extra.foreach(e => keep.find(k => k.name == e.name) match {
         case None => keep += e
+        case _ => ()
+      })
+      existing.foreach(e => keep.find(k => k.name == e.name) match {
+        case Some(i) => keep -= i
         case _ => ()
       })
 
@@ -332,10 +307,14 @@ object AddValidPointerAtoms
   override def postVisit(
     t: IExpression,
     dummy: Unit,
-    subres: Seq[MSet[ProgVarProxy]])
-  : MSet[ProgVarProxy] = t match {
-    case ConstantAsProgVarProxy(proxy) if proxy.isPointer => MSet(proxy)
-    case _ if subres.nonEmpty => subres.reduce((a,b) => a ++ b)
-    case _ => MSet()
+    subres: Seq[(MSet[ProgVarProxy], MSet[ProgVarProxy])])
+  : (MSet[ProgVarProxy], MSet[ProgVarProxy]) = t match {
+    case IAtom(pred, Seq(ConstantAsProgVarProxy(proxy))) if (pred == ACSLExpression.valid) =>
+      (MSet(), MSet(proxy))
+    case ConstantAsProgVarProxy(proxy) if proxy.isPointer =>
+      (MSet(proxy), MSet())
+    case _ if subres.nonEmpty => 
+      subres.reduce((a,b) => (a._1 ++ b._1, a._2 ++ b._2))
+    case _ => (MSet(), MSet())
   }
 }
