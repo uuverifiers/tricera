@@ -8,7 +8,7 @@ Inferred ACSL annotations
 /* contract for get */
 /*@
   requires p == n && n_init >= 1 && \valid(p) && \valid(n);
-  ensures ((\result == 0 && 0 >= \old(*p)) || \result >= 0) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n && \valid(p) && \valid(n);
+  ensures ((\result == 0 && 0 >= \old(*n)) || \result >= 0) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n && \valid(n);
 */
 ================================================================================
 
@@ -78,7 +78,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires max == r && x == a && y == b && \separated(x, y) && \separated(x, max) && \separated(y, max) && \valid(x) && \valid(y) && \valid(max) && \valid(r) && \valid(a) && \valid(b);
-  ensures (\old(b_init) - \old(a_init) >= 1 || \old(a_init) >= \old(b_init)) && a == \old(x) && b == \old(y) && r == \old(max) && \old(a_init) == a_init && \old(b_init) == b_init && \valid(b) && \valid(r) && \valid(x) && \valid(max) && \valid(a) && \valid(y);
+  ensures (\old(b_init) - \old(a_init) >= 1 || \old(a_init) >= \old(b_init)) && a == \old(x) && b == \old(y) && r == \old(max) && \old(a_init) == a_init && \old(b_init) == b_init && \valid(b) && \valid(x) && \valid(a) && \valid(r) && \valid(y) && \valid(max);
 */
 ================================================================================
 
@@ -144,7 +144,7 @@ heapptr-to-stackptr.c
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for swap */
+/* contract for swap */
 /*@
   requires \true;
   ensures *x == \old(*y) && \old(*x) == *y && \valid(y) && \valid(x);

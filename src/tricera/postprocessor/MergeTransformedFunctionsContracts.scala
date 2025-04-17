@@ -49,8 +49,8 @@ object RewrapPointers
 
   override def applyTo(solution: tricera.Solution)
   : Solution = solution match {
-    case Solution(functionInvariants) => 
-      Solution(functionInvariants.map(apply))
+    case Solution(functionInvariants, disassociatedLoopInvariants) => 
+      Solution(functionInvariants.map(apply), disassociatedLoopInvariants.map(apply))
     case _ =>
       solution
   }
@@ -223,8 +223,10 @@ object MergeTransformedFunctionsContracts {
 private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTransforms)
   extends ResultProcessor {
   override def applyTo(solution: tricera.Solution): Solution = solution match {
-    case Solution(functionInvariants) if !callSiteTransforms.isEmpty => 
-      Solution(mergeInvariantsOfTransformedFunctions(functionInvariants))
+    case Solution(functionInvariants, disassociatedLoopInvariants) if !callSiteTransforms.isEmpty => 
+      Solution(
+        mergeInvariantsOfTransformedFunctions(functionInvariants),
+        disassociatedLoopInvariants)
     case _ =>
       solution
   }
@@ -259,8 +261,8 @@ object AddValidPointerPredicates
   extends CollectingVisitor[Unit, (MSet[ProgVarProxy], MSet[ProgVarProxy])]
   with ResultProcessor {
   override def applyTo(solution: tricera.Solution): Solution = solution match {
-    case Solution(functionInvariants) =>
-        Solution(functionInvariants.map(applyTo))
+    case Solution(functionInvariants, disassociatedLoopInvariants) =>
+        Solution(functionInvariants.map(applyTo), disassociatedLoopInvariants)
       case _ => solution
   }
 

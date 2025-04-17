@@ -121,7 +121,7 @@ stackptr.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for f */
+/* contract for f */
 /*@
   requires \true;
   ensures *x - 1 == \old(*x) && \valid(x);
@@ -148,7 +148,7 @@ Warning: no definition of function "non_det_int" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for mod */
+/* contract for mod */
 /*@
   requires \exists int v0; \exists S v1; (v0 >= -2147483647 && 2147483646 >= v0 && t1->val == v0) && \valid(t2) && \valid(t1);
   ensures t1->val == 1 + \old(t1->val) && \exists int v0; \exists S v1; \old(t1->val) == v0 && \valid(t2) && t2->val == \old(t2->val) - 1 && \valid(t1);
@@ -162,12 +162,12 @@ Warning: no definition of function "non_det_int" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for incdec */
+/* contract for incdec */
 /*@
   requires \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && p->val == v0) && q->val == 0 && \valid(p) && \valid(q);
   ensures \exists int v0, v1; (p->val == 1 + v1 - 1 && 1 + v1 == 1 + v0 && v0 >= -2147483648 && 2147483646 >= v0 && \old(p->val) == v1) && \old(q->val) == 0 && q->val == 0 && \valid(p) && \valid(q);
 */
-/* contracts for decr */
+/* contract for decr */
 /*@
   requires \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && q->val == 1 + v0 && p->val == 1 + v0) && \valid(q) && \valid(p);
   ensures q->val == \old(q->val) - 1 && \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && \old(q->val) == 1 + v0 && p->val == 1 + v0) && *p == \old(*p) && \valid(q) && \valid(p);
@@ -208,7 +208,7 @@ Warning: no definition of function "non_det_int" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for incr */
+/* contract for incr */
 /*@
   requires \exists int v0; (v0 >= -2147483647 && 2147483646 >= v0 && t->val == v0) && \valid(t);
   ensures t->val == 1 + \old(t->val) && \exists int v0; (v0 >= -2147483647 && 2147483646 >= v0 && \old(t->val) == v0) && \valid(t);
@@ -222,7 +222,7 @@ Warning: no definition of function "non_det_int" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for incr */
+/* contract for incr */
 /*@
   requires \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && t->val == v0) && \valid(t);
   ensures t->val == 1 + \old(t->val) && \exists int v0; (v0 >= -2147483648 && 2147483646 >= v0 && \old(t->val) == v0) && \valid(t);
