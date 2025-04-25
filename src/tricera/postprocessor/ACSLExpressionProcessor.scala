@@ -247,7 +247,17 @@ object ACSLExpressionProcessor extends ResultProcessor {
             case _ => t update subres
           }
         }
-
+        case ConstantAsProgVarProxy(c) if c.isPointer =>
+          context match {
+            case _: PreCondition =>
+              ACSLExpression.derefFunApp(ACSLExpression.deref, c)
+            case _: PostCondition if c.isPreExec =>
+              ACSLExpression.derefFunApp(ACSLExpression.oldDeref, c)
+            case _: PostCondition if c.isPostExec =>
+              ACSLExpression.derefFunApp(ACSLExpression.deref, c)
+            // SSSOWO TODO: What about loop invariants?
+            case _ => t update subres
+          }
         case _ => t update subres
       }
     }

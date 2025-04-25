@@ -9,8 +9,10 @@ import ap.parser.IConstant
 import ap.parser.IFunApp
 import ap.parser.IFunction
 
-import ap.theories.ADT
+//import ap.theories.ADT
 import ap.types.MonoSortedIFunction
+import ap.theories._
+//import ap.SimpleAPI
 
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 import tricera.concurrency.CallSiteTransform
@@ -23,6 +25,9 @@ import tricera.{
   Result, Solution}
 import ap.parser.IAtom
 import tricera.Util.printlnDebug
+import ap.api.SimpleAPI
+import ap.parser.SymbolCollector
+import ap.terfor.conjunctions.Quantifier
 
 trait PointerExpressionChecks {
   def isSelector(func: IFunction) = {
@@ -109,8 +114,7 @@ object RewrapPointers
 
 
 private object MapPreCondProgVarProxies 
-  extends CollectingVisitor[MHashMap[String, String], IExpression]
-  with PointerExpressionChecks{
+  extends CollectingVisitor[MHashMap[String, String], IExpression]  {
 
   def apply(form: IExpression, nameMap: MHashMap[String, String]) = {
     visit(form, nameMap).asInstanceOf[IFormula]
@@ -124,7 +128,10 @@ private object MapPreCondProgVarProxies
       case (ConstantAsProgVarProxy(proxy), _) if transformedToOriginalId.get(proxy.name).isDefined =>
         ACSLExpression.derefFunApp(
           ACSLExpression.deref,
-          proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true))
+          proxy.copy(
+            _name = transformedToOriginalId(proxy.name),
+            _isPointer = true,
+            scope = ProgVarProxy.Scope.Parameter))
       case _ => 
         RewrapPointers.postVisit(t, (), subres)
     }
@@ -151,7 +158,10 @@ private object MapPostCondProgVarProxies
           }
         ACSLExpression.derefFunApp(
           derefFun, 
-          proxy.copy(_name = transformedToOriginalId(proxy.name), _isPointer = true))
+          proxy.copy(
+            _name = transformedToOriginalId(proxy.name),
+            _isPointer = true,
+            scope = ProgVarProxy.Scope.Parameter))
       case _: IExpression => 
         RewrapPointers.postVisit(t, (), subres)
     }
@@ -163,18 +173,11 @@ private object MapPostCondProgVarProxies
   * original pointer variables.
   * 
   * A global variable q introduced for a stackpointer argument p will
-  * be translated in different ways depending on if they occur in
-  * a pre-condition or a post-condition.
-  * 
-  * Pre-condition mapping:
-  * q`PreExec => deref(p`PreExec)
-  * 
-  * Post-condition mapping:
-  * q`PreExec => oldDeref(p`PreExec)
-  * q`PostExec => deref(p`PostExec),
+  * be translated  q`PreExec`Global => p`PreExec`Parameter`Pointer
   */
-private object MapProgVarProxies {
-  def apply(funcInvs: FunctionInvariants, nameMap: MHashMap[String, String])
+private object MapProgVarProxies 
+  extends CollectingVisitor[MHashMap[String, String], IExpression]{
+  def apply(funcInvs: FunctionInvariants, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String])
   : FunctionInvariants = funcInvs match {
     case FunctionInvariants(
       id,
@@ -185,28 +188,69 @@ private object MapProgVarProxies {
       FunctionInvariants(
         id,
         isSrcAnnotated,
-        PreCondition(applyToPre(preInv, nameMap)),
-        PostCondition(applyToPost(postInv, nameMap)),
-        loopInvariants.map(i => applyTo(i, nameMap)))
+        PreCondition(applyTo(preInv, globalIdToParamId, funcParamIds)),
+        PostCondition(applyTo(postInv, globalIdToParamId, funcParamIds)),
+        loopInvariants.map(i => applyTo(i, globalIdToParamId, funcParamIds)))
   }
 
-  private def applyToPre(inv: Invariant, nameMap: MHashMap[String, String])
+  private def applyTo(inv: Invariant, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String])
   : Invariant = inv match {
     case Invariant(form, heapInfo, srcInfo) => 
-      Invariant(MapPreCondProgVarProxies(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
+      Invariant(applyTo(form, globalIdToParamId, funcParamIds), heapInfo, srcInfo)
   }
 
-  private def applyToPost(inv: Invariant, nameMap: MHashMap[String, String])
-  : Invariant = inv match {
-    case Invariant(form, heapInfo, srcInfo) => 
-      Invariant(MapPostCondProgVarProxies(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
-  }
-
-  private def applyTo(inv: LoopInvariant, nameMap: MHashMap[String, String])
+  private def applyTo(inv: LoopInvariant, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String])
   : LoopInvariant = inv match {
     case LoopInvariant(form, heapInfo, srcInfo) => 
-      LoopInvariant(MapPreCondProgVarProxies(form, nameMap).asInstanceOf[IFormula], heapInfo, srcInfo)
+      LoopInvariant(applyTo(form, globalIdToParamId, funcParamIds), heapInfo, srcInfo)
   }
+
+  private def applyTo(form: IFormula, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String]) : IFormula = {
+    exQuantifyFalseParameters(visit(form, globalIdToParamId).asInstanceOf[IFormula], funcParamIds)
+  }
+
+  private def exQuantifyFalseParameters(form: IFormula, funcParamIds: List[String]) : IFormula = {
+    // Some of the introduced global variables for paramters to other functions
+    // may be used in conditions on the parameters of the current function.
+    // Since these variables are not true global variables, they cannot affect
+    // the conditions for the current function. We account for that by existentially
+    // quantifying over the introduced variables that are not parameters to the current
+    // function.
+    SimpleAPI.withProver{ p =>
+      val constants = SymbolCollector.constants(form)
+      p.addConstantsRaw(constants)
+//      p.addRelations(ACSLExpression.predicates)
+//      ACSLExpression.functions.foreach(f => p.addFunction(f))
+      collectAndAddTheories(p, form)
+      val toQuantify = constants
+        .filter({case c: ProgVarProxy => c.isParameter && !funcParamIds.contains(c.name)})
+      val projected = IExpression.quanConsts(Quantifier.EX, toQuantify, form)
+      val simplified = p.simplify(projected)
+      simplified
+    }
+  }
+
+  def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
+    val theories: Seq[Theory] = {
+      val coll = new TheoryCollector
+      coll(formula)
+      coll.theories
+    }
+    p.addTheories(theories)
+  }
+  override def postVisit(
+    t: IExpression,
+    globalIdToParamId: MHashMap[String, String],
+    subres: Seq[IExpression])
+  : IExpression = t match {
+    case ConstantAsProgVarProxy(proxy) if globalIdToParamId.get(proxy.name).isDefined =>
+        proxy.copy(
+          _name = globalIdToParamId(proxy.name),
+          _isPointer = true,
+          scope = ProgVarProxy.Scope.Parameter)
+    case _ => t.update(subres)
+  }
+  
 }
 
 /**
@@ -246,11 +290,67 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
       .filter({ case (id, set) => !set.isEmpty})
 
     transformedFuncInvsByOriginalId.map({case (originalId, transformedFuncInvs) => {
-      transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
+      (originalId,
+       transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
         (original, transformed) => 
-          original.meet(MapProgVarProxies(transformed, astAdditions.globalVariableIdToParameterId)))
-    }}).toSeq
+          original.meet(
+            MapProgVarProxies(
+              transformed,
+              astAdditions.globalVariableIdToParameterId,
+              astAdditions.originalFunctionIdToParamterIds(originalId)))))
+    }})
+//    .map({ case (id, funcInv) => exQuantifyIntroducedGlobals(astAdditions.originalFunctionIdToParamterIds(id), funcInv)})
+    .map({ case (id, funcInv) => funcInv })
+    .toSeq
   }
+
+  private def exQuantifyIntroducedGlobals(
+    paramIds: List[String],
+    funcInv: FunctionInvariants)
+  : FunctionInvariants = funcInv match {
+    case FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      PreCondition(preInv),
+      PostCondition(postInv),
+      loopInvariants) =>
+      FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(exQuantifyIntroducedGlobals(paramIds, preInv)),
+        PostCondition(exQuantifyIntroducedGlobals(paramIds, postInv)),
+        loopInvariants)
+  }
+
+  def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
+    val theories: Seq[Theory] = {
+      val coll = new TheoryCollector
+      coll(formula)
+      coll.theories
+    }
+    p.addTheories(theories)
+  }
+
+  private def exQuantifyIntroducedGlobals(
+    paramIds: List[String],
+    inv: Invariant)
+  : Invariant = inv match {
+    case Invariant(form, heapInfo, srcInfo) =>
+      val p = SimpleAPI.spawn
+      p.addConstantsRaw(SymbolCollector.constants(form))
+      p.addRelations(ACSLExpression.predicates)
+      ACSLExpression.functions.foreach(f => p.addFunction(f))
+      collectAndAddTheories(p, form)
+      val toKeep = SymbolCollector
+        .constants(form)
+        .filter(c => paramIds.contains(c.name) || heapInfo.map(i => i.heapTermName == c.name).getOrElse(false))
+        .map(IConstant)
+      val projected = p.projectEx(form, toKeep)
+      val simplified = p.simplify(projected)
+      Invariant(simplified, heapInfo, srcInfo)
+  }
+
+
 }
 
 /**

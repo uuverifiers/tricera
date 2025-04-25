@@ -103,13 +103,19 @@ object PostconditionSimplifier extends ResultProcessor {
       CleanupVisitor(currentPostCond).asInstanceOf[IFormula]
     }
     
-    attemptReplacingIFormulasBy(
-      IBoolLit(false),
-      precondition,
-      attemptReplacingIFormulasBy(
-        IBoolLit(true),
-        precondition,
-        postcondition))
+    SimpleAPI.withProver { p =>
+      val simplified = 
+        attemptReplacingIFormulasBy(
+          IBoolLit(false),
+          precondition,
+          attemptReplacingIFormulasBy(
+            IBoolLit(true),
+            precondition,
+            postcondition))
+      p.addConstantsRaw(SymbolCollector.constants(simplified))
+      collectAndAddTheories(p, simplified)
+      p.simplify(simplified)
+    }
   }
 
   def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
@@ -132,8 +138,8 @@ object PostconditionSimplifier extends ResultProcessor {
           .==>(postcondition.<=>(simplifiedPostcondition))
           .asInstanceOf[IFormula]
       p.addConstants(CollectConstants(formula))
-      p.addRelations(ACSLExpression.predicates)
-      ACSLExpression.functions.foreach(f => p.addFunction(f))
+//      p.addRelations(ACSLExpression.predicates)
+//      ACSLExpression.functions.foreach(f => p.addFunction(f))
       collectAndAddTheories(p, formula)
 
       p.??(formula)

@@ -28,7 +28,7 @@ case class ProgVarProxy(
   def isPointer: Boolean = _isPointer
 
   override def clone: ProgVarProxy = ProgVarProxy(name, state, scope, _isPointer)
-  override def toString: String = f"${super.toString()}`${state.toString()}`${scope.toString()}"
+  override def toString: String = f"${super.toString()}`${state.toString()}`${scope.toString()}${if (isPointer) {"`Pointer"} else {""}}"
 }
 
 object ProgVarProxy {

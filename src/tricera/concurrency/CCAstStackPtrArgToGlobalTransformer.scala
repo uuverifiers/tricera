@@ -235,7 +235,9 @@ class CallSiteTransform(
           body),
         globalVariableDeclarations(),
         globalVariableIdsToParameterIds(),
-        MHashMap((transDec.getId() -> originalFuncName)))
+        MHashMap((transDec.getId() -> originalFuncName)),
+        MHashMap((originalFuncName -> params.asScala.map(p => p.accept(getName,())).toList))
+      )
 
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))
     }
@@ -415,7 +417,8 @@ object AstAddition {
     transformedDefinition: External_declaration,
     introducedGlobalVariables: ListExternal_declaration,
     globalVariableIdToParameterId: MHashMap[String, String],
-    transformedFunctionIdToOriginalId: MHashMap[String, String]): AstAddition = {
+    transformedFunctionIdToOriginalId: MHashMap[String, String],
+    originalFunctionIdToParamterIds: MHashMap[String, List[String]]): AstAddition = {
     val addition = new AstAddition
     addition.transformedFunctionDefinitions.put(transformedDefinition.accept(getName, ()), transformedDefinition)
     addition.transformedFunctionDeclarations.put(transformedDeclaration.accept(getName, ()), transformedDeclaration)
@@ -424,6 +427,7 @@ object AstAddition {
     introducedGlobalVariables.asScala.foreach(g => addition.introducedGlobalVariables.put(g.accept(getName, ()), g))
     addition.globalVariableIdToParameterId ++= globalVariableIdToParameterId
     addition.transformedFunctionIdToOriginalId ++= transformedFunctionIdToOriginalId
+    addition.originalFunctionIdToParamterIds ++= originalFunctionIdToParamterIds
     addition
   }
 }
@@ -435,7 +439,8 @@ class AstAddition(
   val transformedFunctionDefinitions: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
   val introducedGlobalVariables: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
   val globalVariableIdToParameterId: MHashMap[String, String] = MHashMap[String, String](),
-  val transformedFunctionIdToOriginalId: MHashMap[String, String] = MHashMap[String, String]()) {
+  val transformedFunctionIdToOriginalId: MHashMap[String, String] = MHashMap[String, String](),
+  val originalFunctionIdToParamterIds: MHashMap[String, List[String]] = MHashMap[String, List[String]]()) {
 
   def +(that: AstAddition) = {
     new AstAddition(
@@ -445,7 +450,8 @@ class AstAddition(
       this.transformedFunctionDefinitions ++ that.transformedFunctionDefinitions,
       this.introducedGlobalVariables ++ that.introducedGlobalVariables,
       this.globalVariableIdToParameterId ++ that.globalVariableIdToParameterId,
-      this.transformedFunctionIdToOriginalId ++ that.transformedFunctionIdToOriginalId)
+      this.transformedFunctionIdToOriginalId ++ that.transformedFunctionIdToOriginalId,
+      this.originalFunctionIdToParamterIds ++ that.originalFunctionIdToParamterIds)
   }
 
   def +=(that: AstAddition) = {
@@ -456,6 +462,7 @@ class AstAddition(
     this.introducedGlobalVariables ++= that.introducedGlobalVariables
     this.globalVariableIdToParameterId ++= that.globalVariableIdToParameterId
     this.transformedFunctionIdToOriginalId ++= that.transformedFunctionIdToOriginalId
+    this.originalFunctionIdToParamterIds ++= that.originalFunctionIdToParamterIds
     this
   }
 }
