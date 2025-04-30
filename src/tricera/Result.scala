@@ -4,6 +4,8 @@ import ap.parser.{IFormula, IConstant}
 import tricera.Util.SourceInfo
 import ap.terfor.ConstantTerm
 import ap.theories.{Heap}
+import ap.parser.SymbolCollector
+import ap.parser.ConstantSubstVisitor
 
 /**
  * Special constant class to keep track of constants corresponding
@@ -106,10 +108,50 @@ case class FunctionInvariants(
     * @return 
     */
   def meet(other: FunctionInvariants): FunctionInvariants = {
-    val PreCondition(Invariant(pre1, preHeapInfo, preSourceInfo)) = preCondition
-    val PostCondition(Invariant(post1, postHeapInfo, postSrcInfo)) = postCondition
-    val PreCondition(Invariant(pre2, _, _)) = other.preCondition
-    val PostCondition(Invariant(post2, _, _)) = other.postCondition
+    def buildCommonConstantMap(constantSets: scala.collection.Set[ConstantTerm]*): Map[ConstantTerm, IConstant] = {
+      constantSets
+        .flatten
+        // Using toString is a bit ugly. But since we are dealing
+        // with different types of ConstantTerms, this will make
+        // instances with same name but different other properties,
+        // be different keys in the map.
+        .groupBy(c => c.toString)
+        .flatMap({ case (key, constants) =>
+          val term = new IConstant(constants.head)
+          constants.map(c => (c, term))
+        })
+
+//      val pre1Const = SymbolCollector.constants(pre1org)
+//      val pre2Const = SymbolCollector.constants(pre2org)
+//      val post1Const = SymbolCollector.constants(post1org)
+//      val post2Const = SymbolCollector.constants(post2org)
+//      
+//      (pre1Const ++ pre2Const ++ post1Const ++ post2Const)
+//        .groupBy(c => c.name)
+//        .flatMap({ case (name, constants) =>
+//          val term = new IConstant(constants.head)
+//          constants.map(c => (c, term))
+//        })
+    }
+    
+    val PreCondition(Invariant(pre1org, preHeapInfo, preSourceInfo)) = preCondition
+    val PostCondition(Invariant(post1org, postHeapInfo, postSrcInfo)) = postCondition
+    val PreCondition(Invariant(pre2org, _, _)) = other.preCondition
+    val PostCondition(Invariant(post2org, _, _)) = other.postCondition
+ 
+    
+    val const2Common = buildCommonConstantMap(
+      SymbolCollector.constants(pre1org),
+      SymbolCollector.constants(pre2org),
+      SymbolCollector.constants(post1org),
+      SymbolCollector.constants(post2org))
+    
+    val pre1 = ConstantSubstVisitor.apply(pre1org, const2Common)
+    val pre2 = ConstantSubstVisitor.apply(pre2org, const2Common)
+    val post1 = ConstantSubstVisitor.apply(post1org, const2Common)
+    val post2 = ConstantSubstVisitor.apply(post2org, const2Common)
+
+    // TODO: Decide if we should run expressions through the SimpleAPI.simplify()
     FunctionInvariants(
       id,
       isSrcAnnotated,

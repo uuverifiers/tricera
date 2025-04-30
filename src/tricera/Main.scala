@@ -554,15 +554,15 @@ class Main (args: Array[String]) {
                  .through(TheoryOfHeapProcessor.apply)
                  .through(ADTSimplifier.apply) // Rewrite constructors/selectors after heap processing
                  .through(ToVariableForm.apply)
-                 .through(ACSLExpressionProcessor.apply)
-                 .through(ClauseRemover.apply)
               } else {
                 r
               }
             )
             .tap(r => r
+              .through(ACSLExpressionProcessor.apply)
+              .through(ClauseRemover.apply)
               .through(RewrapPointers.apply)
-              .through(AddValidPointerPredicates.apply)
+//              .through(AddValidPointerPredicates.apply)
               .through(ACSLLineariser.apply)
               .through(ResultPrinters.printACSL) 
             ).ignore

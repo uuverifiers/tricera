@@ -112,6 +112,32 @@ object ACSLExpressionProcessor extends ResultProcessor {
 
     private def isOldHeap(p: ProgVarProxy): Boolean = heapInfo.isHeap(p) && p.isPreExec
 
+    override def preVisit(
+        t: IExpression,
+        dummy: Unit
+    ): PreVisitResult = {
+      t match {
+        case IEquation(
+          ConstantAsProgVarProxy(v1),
+          ConstantAsProgVarProxy(v2))
+            if v1.isPointer && v2.isPointer =>
+          ShortCutResult(t)
+        case IEquation(
+          ACSLFunction(_),
+          ConstantAsProgVarProxy(v)) if v.isPointer =>
+          ShortCutResult(t)
+        case IEquation(
+          ConstantAsProgVarProxy(v),
+          ACSLFunction(_)) if v.isPointer =>
+          ShortCutResult(t)
+        case ACSLFunction(_) =>
+          ShortCutResult(t)
+        case ACSLPredicate(_) =>
+          ShortCutResult(t)
+        case _ => KeepArg
+      }
+    }
+
     override def postVisit(
         t: IExpression,
         dummy: Unit,
@@ -247,7 +273,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
             case _ => t update subres
           }
         }
-        case ConstantAsProgVarProxy(c) if c.isPointer =>
+        case ConstantAsProgVarProxy(c) if c.isPointer && c.isParameter =>
           context match {
             case _: PreCondition =>
               ACSLExpression.derefFunApp(ACSLExpression.deref, c)
