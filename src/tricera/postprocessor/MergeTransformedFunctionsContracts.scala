@@ -216,6 +216,7 @@ private object MapProgVarProxies
     // the conditions for the current function. We account for that by existentially
     // quantifying over the introduced variables that are not parameters to the current
     // function.
+    printlnDebug(s"before EX quantify: ${form}")
     SimpleAPI.withProver{ p =>
       val constants = SymbolCollector.constants(form)
       p.addConstantsRaw(constants)
@@ -226,6 +227,7 @@ private object MapProgVarProxies
         .filter({case c: ProgVarProxy => c.isParameter && !funcParamIds.contains(c.name)})
       val projected = IExpression.quanConsts(Quantifier.EX, toQuantify, form)
       val simplified = p.simplify(projected)
+      printlnDebug(s"after EX quantify: ${simplified}")
       simplified
     }
   }
