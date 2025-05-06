@@ -110,138 +110,8 @@ object TheoryOfHeapRemoverVisitor {
         dummy: Unit,
         subres: Seq[IExpression]
     ): IExpression = t match {
-      case IBinFormula(IBinJunctor.Or, IBoolLit(true), IBoolLit(true))
-         | IBinFormula(IBinJunctor.Or, IBoolLit(true), _)
-         | IBinFormula(IBinJunctor.Or, _, IBoolLit(true)) =>
-        // Either or both sides were already true before traversal
-        printlnDebug(s"### Some already true")
-        IBoolLit(true)
-//      case IBinFormula(IBinJunctor.Or, IBoolLit(true), _) =>
-//        val rhs = subres(1)
-//        if (ContainsTOHVisitor(rhs, heapInfo)) {
-//          IBoolLit(true)
-//        } else {
-//          rhs
-//        }
-//      case IBinFormula(IBinJunctor.Or, _, IBoolLit(true)) =>
-//        val lhs = subres(0)
-//        if (ContainsTOHVisitor(lhs, heapInfo)) {
-//          IBoolLit(true)
-//        } else {
-//          lhs
-//        }
-      case IBinFormula(IBinJunctor.Or, _, _) =>
-        // Neither side was true before traversal
-        val lhs = subres(0)
-        val rhs = subres(1)
-        (lhs, rhs) match {
-          case (IBoolLit(true), IBoolLit(true)) =>
-            // Both sides were removed during traversal
-            printlnDebug(s"### Both removed")
-            IBoolLit(true)
-          case (IBoolLit(true), _) =>
-            printlnDebug(s"### LHS removed")
-            // LHS has been removed
-            if (ContainsTOHVisitor(rhs, heapInfo)) {
-              printlnDebug(s"### removing RHS: ${rhs}")
-              IBoolLit(true)
-            } else {
-              rhs
-            }
-          case (_, IBoolLit(true)) =>
-            printlnDebug(s"### RHS removed")
-            // RHS has been removed
-            if (ContainsTOHVisitor(lhs, heapInfo)) {
-              printlnDebug(s"### removing LHS: ${lhs}")
-              IBoolLit(true)
-            } else {
-              lhs
-            }
-          case _ => 
-            // Neither side was removed during traversal
-            (ContainsTOHVisitor(lhs, heapInfo), ContainsTOHVisitor(rhs, heapInfo)) match {
-              case (false, false) =>
-                printlnDebug(s"### Not removing anything")
-                t update subres
-              case (true, false) =>
-                printlnDebug(s"### Removing LHS: ${lhs}")
-                rhs
-              case (false, true) =>
-                printlnDebug(s"### Removing RHS: ${rhs}")
-                lhs
-              case (true, true) =>
-                printlnDebug(s"### Removing ${lhs} and ${rhs}")
-                IBoolLit(true)
-            }
-        }
-      case IBinFormula(IBinJunctor.And, IBoolLit(true), IBoolLit(true)) =>
-        // Both sides were already true before traversal
-        printlnDebug(s"## Both already true")
-        IBoolLit(true)
-      case IBinFormula(IBinJunctor.And, IBoolLit(true), _) =>
-        printlnDebug(s"## LHS already true")
-        val rhs = subres(1)
-        // LHS was true before traversal
-        if (ContainsTOHVisitor(rhs, heapInfo)) {
-          printlnDebug(s"## removing RHS: ${rhs}")
-          IBoolLit(true)
-        } else {
-          rhs
-        }
-      case IBinFormula(IBinJunctor.And, _, IBoolLit(true)) =>
-        printlnDebug(s"## RHS alredy true")
-        val lhs = subres(0)
-        // RHS was true before traversal
-        if (ContainsTOHVisitor(lhs, heapInfo)) {
-          printlnDebug(s"## removing LHS: ${lhs}")
-          IBoolLit(true)
-        } else {
-          lhs
-        }
-      case IBinFormula(IBinJunctor.And, _, _) =>
-        // Neither side was true before traversal
-        val lhs = subres(0)
-        val rhs = subres(1)
-        (lhs, rhs) match {
-          case (IBoolLit(true), IBoolLit(true)) =>
-            // Both sides were removed during traversal
-            printlnDebug(s"## Both removed")
-            IBoolLit(true)
-          case (IBoolLit(true), _) =>
-            printlnDebug(s"## LHS removed")
-            // LHS was removed during traversal
-            if (ContainsTOHVisitor(rhs, heapInfo)) {
-              printlnDebug(s"## removing RHS: ${rhs}")
-              IBoolLit(true)
-            } else {
-              rhs
-            }
-          case (_, IBoolLit(true)) =>
-            printlnDebug(s"## RHS removed")
-            // RHS was removed during traversal
-            if (ContainsTOHVisitor(lhs, heapInfo)) {
-              printlnDebug(s"## removing LHS: ${lhs}")
-              IBoolLit(true)
-            } else {
-              lhs
-            }
-          case _ =>
-            // Neither side was removed during traversal
-            (ContainsTOHVisitor(lhs, heapInfo), ContainsTOHVisitor(rhs, heapInfo)) match {
-              case (false, false) =>
-                printlnDebug(s"## Not removing anything")
-                t update subres
-              case (true, false) =>
-                printlnDebug(s"## Removing LHS: ${lhs}")
-                rhs
-              case (false, true) =>
-                printlnDebug(s"## Removing RHS: ${rhs}")
-                lhs
-              case (true, true) =>
-                printlnDebug(s"## Removing ${lhs} and ${rhs}")
-                IBoolLit(true)
-            }
-        }
+      case form @ IBinFormula(_, _, _) =>
+        postVisitFormula(form, subres, heapInfo)
       case q @ ISortedQuantified(_, _, formula) =>
         val sub = subres(0)
         sub match {
@@ -250,7 +120,87 @@ object TheoryOfHeapRemoverVisitor {
           case _ => 
             q update subres
         }
-      case default => t update subres
+      case default if (ContainsTOHVisitor(t, heapInfo)) =>
+        IBoolLit(true)
+      case default =>
+        t update subres
+    }
+
+//    private def postVisitQuantified():IExpression = {
+//
+//    }
+
+    private def postVisitFormula(form: IFormula, subres: Seq[IExpression], heapInfo: HeapInfo)
+    : IExpression = form match {
+      case IBinFormula(IBinJunctor.Or, IBoolLit(true), IBoolLit(true))
+         | IBinFormula(IBinJunctor.Or, IBoolLit(true), _)
+         | IBinFormula(IBinJunctor.Or, _, IBoolLit(true)) =>
+        // Either or both sides were already true before traversal
+        printlnDebug(s"### Some already true")
+        IBoolLit(true)
+      case IBinFormula(IBinJunctor.Or, preLhs, preRhs) =>
+        // Neither side was true before traversal
+        val lhs = subres(0)
+        val rhs = subres(1)
+        (lhs, rhs) match {
+          case (IBoolLit(true), IBoolLit(true)) =>
+            // Both sides were removed during traversal
+            printlnDebug(s"### Both removed: ${preLhs} and ${preRhs}")
+            IBoolLit(true)
+          case (IBoolLit(true), _) =>
+            // LHS has been removed
+            printlnDebug(s"### LHS removed: ${preLhs}")
+            printlnDebug(s"### RHS kept: ${rhs}")
+            rhs
+          case (_, IBoolLit(true)) =>
+            // RHS has been removed
+            printlnDebug(s"### RHS removed: ${preRhs}")
+            printlnDebug(s"### LHS kept: ${lhs}")
+            lhs
+          case _ => 
+            // Neither side was removed during traversal
+            printlnDebug(s"### Both kept: ${lhs} and ${rhs}")
+            form update subres
+        }
+      case IBinFormula(IBinJunctor.And, IBoolLit(true), IBoolLit(true)) =>
+        // Both sides were already true before traversal
+        printlnDebug(s"## Both already true")
+        IBoolLit(true)
+      case IBinFormula(IBinJunctor.And, IBoolLit(true), _) =>
+        // LHS was true before traversal
+        printlnDebug(s"## LHS already true")
+        val rhs = subres(1)
+        rhs
+      case IBinFormula(IBinJunctor.And, _, IBoolLit(true)) =>
+        // RHS was true before traversal
+        printlnDebug(s"## RHS already true")
+        val lhs = subres(0)
+        lhs
+      case IBinFormula(IBinJunctor.And, preLhs, preRhs) =>
+        // Neither side was true before traversal
+        val lhs = subres(0)
+        val rhs = subres(1)
+        (lhs, rhs) match {
+          case (IBoolLit(true), IBoolLit(true)) =>
+            // Both sides were removed during traversal
+            printlnDebug(s"## Both removed: ${preLhs} and ${preRhs}")
+            IBoolLit(true)
+          case (IBoolLit(true), _) =>
+            // LHS was removed during traversal
+            printlnDebug(s"### LHS removed: ${preLhs}")
+            printlnDebug(s"### RHS kept: ${rhs}")
+            rhs
+          case (_, IBoolLit(true)) =>
+            // RHS was removed during traversal
+            printlnDebug(s"### RHS removed: ${preRhs}")
+            printlnDebug(s"### LHS kept: ${lhs}")
+            lhs
+          case _ =>
+            // Neither side was removed during traversal
+            form update subres
+        }
+      case _ =>
+        form update subres
     }
   }
 }

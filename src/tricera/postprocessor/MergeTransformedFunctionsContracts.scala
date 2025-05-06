@@ -28,6 +28,9 @@ import tricera.Util.printlnDebug
 import ap.api.SimpleAPI
 import ap.parser.SymbolCollector
 import ap.terfor.conjunctions.Quantifier
+import ap.parser.ConstantSubstVisitor
+import ap.terfor.ConstantTerm
+import ap.parser.ITerm
 
 trait PointerExpressionChecks {
   def isSelector(func: IFunction) = {
@@ -302,8 +305,44 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
               astAdditions.originalFunctionIdToParamterIds(originalId)))))
     }})
 //    .map({ case (id, funcInv) => exQuantifyIntroducedGlobals(astAdditions.originalFunctionIdToParamterIds(id), funcInv)})
-    .map({ case (id, funcInv) => funcInv })
+    .map({ case (id, funcInv) => derefParameters(funcInv, astAdditions.originalFunctionIdToParamterIds(id)) })
     .toSeq
+  }
+
+  private def derefParameters(funcInv: FunctionInvariants, funcParamsIds: List[String]): FunctionInvariants = funcInv match {
+    case FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      PreCondition(preCondition),
+      PostCondition(postCondition),
+      loopInvariants) => 
+        val preDerefMap = 
+          SymbolCollector.constants(preCondition.expression)
+            .filter(c => funcParamsIds.exists(p => p == c.name))
+            .filter({ case c: ProgVarProxy if c.isPreExec => true})
+            .map(c => (c, ACSLExpression.derefFunApp(ACSLExpression.deref, c.asInstanceOf[ProgVarProxy])))
+            .toMap
+        val postDerefMap =
+          SymbolCollector.constants(postCondition.expression)
+            .withFilter(c => funcParamsIds.exists(p => p == c.name))
+            .withFilter({ case c: ProgVarProxy => true})
+            .map({ 
+              case c: ProgVarProxy if c.isPreExec => 
+                (c.asInstanceOf[ConstantTerm], ACSLExpression.derefFunApp(ACSLExpression.oldDeref, c))
+              case c: ProgVarProxy => 
+                (c.asInstanceOf[ConstantTerm], ACSLExpression.derefFunApp(ACSLExpression.deref, c))})
+            .toMap
+      FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(derefParameters(preCondition, preDerefMap)),
+        PostCondition(derefParameters(postCondition, postDerefMap)),
+        loopInvariants)
+  }
+
+  private def derefParameters(invariant: Invariant, derefMap: Map[ConstantTerm, ITerm]): Invariant = invariant match {
+    case Invariant(form, heapInfo, sourceInfo) => 
+      Invariant(ConstantSubstVisitor(form, derefMap), heapInfo, sourceInfo)
   }
 
   private def exQuantifyIntroducedGlobals(
@@ -351,9 +390,74 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
       val simplified = p.simplify(projected)
       Invariant(simplified, heapInfo, srcInfo)
   }
-
-
 }
+
+
+private class DerefParameters()
+  extends CollectingVisitor[Unit, IExpression]
+  with ResultProcessor
+  with PointerExpressionChecks {
+
+  override def applyTo(solution: tricera.Solution)
+  : Solution = solution match {
+    case Solution(functionInvariants, disassociatedLoopInvariants) => 
+      Solution(functionInvariants.map(apply), disassociatedLoopInvariants.map(apply))
+    case _ =>
+      solution
+  }
+
+  def apply(funcInvs: FunctionInvariants)
+  : FunctionInvariants = funcInvs match {
+    case FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      PreCondition(preInv),
+      PostCondition(postInv),
+      loopInvariants) =>
+      FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(apply(preInv)),
+        PostCondition(apply(postInv)),
+        loopInvariants.map(apply))
+  }
+  
+  def apply(invariant: Invariant): Invariant = invariant match {
+    case Invariant(expression, heapInfo, sourceInfo) => 
+      Invariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)    
+  }
+
+  def apply(invariant: LoopInvariant): LoopInvariant = invariant match {
+    case LoopInvariant(expression, heapInfo, sourceInfo) => 
+      LoopInvariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)    
+  }
+
+  override def postVisit(
+    t: IExpression,
+    dummy: Unit,
+    subres: Seq[IExpression])
+  : IExpression = t match {
+      case IFunApp(func, Seq(IFunApp(ACSLExpression.arrow, args))) if isSelector(func) =>
+        IFunApp(ACSLExpression.arrow, Seq(IFunApp(func, args)))
+      case IFunApp(func, Seq(IFunApp(ACSLExpression.oldArrow, args))) if isSelector(func) =>
+        IFunApp(ACSLExpression.oldArrow, Seq(IFunApp(func, args)))
+      case IFunApp(
+        func,
+        Seq(IFunApp(
+          ACSLExpression.deref,
+          Seq(ConstantAsProgVarProxy(proxy))))) if isSelector(func) =>
+        ACSLExpression.arrowFunApp(ACSLExpression.arrow, proxy, func.asInstanceOf[MonoSortedIFunction])
+      case IFunApp(
+        func,
+        Seq(IFunApp(
+          ACSLExpression.oldDeref,
+          Seq(ConstantAsProgVarProxy(proxy))))) if isSelector(func) =>
+        ACSLExpression.arrowFunApp(ACSLExpression.oldArrow, proxy, func.asInstanceOf[MonoSortedIFunction])
+      case _: IExpression => 
+        t.update(subres)
+    }  
+}
+
 
 /**
   * Scans the invariants for ProgVarProxy instances and adds a valid pointer atom

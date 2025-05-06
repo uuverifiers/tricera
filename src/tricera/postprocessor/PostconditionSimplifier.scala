@@ -112,9 +112,10 @@ object PostconditionSimplifier extends ResultProcessor {
             IBoolLit(true),
             precondition,
             postcondition))
-      p.addConstantsRaw(SymbolCollector.constants(simplified))
-      collectAndAddTheories(p, simplified)
-      p.simplify(simplified)
+//      p.addConstantsRaw(SymbolCollector.constants(simplified))
+//      collectAndAddTheories(p, simplified)
+//      p.simplify(simplified)
+      simplified
     }
   }
 
@@ -138,8 +139,8 @@ object PostconditionSimplifier extends ResultProcessor {
           .==>(postcondition.<=>(simplifiedPostcondition))
           .asInstanceOf[IFormula]
       p.addConstants(CollectConstants(formula))
-//      p.addRelations(ACSLExpression.predicates)
-//      ACSLExpression.functions.foreach(f => p.addFunction(f))
+      p.addRelations(ACSLExpression.predicates)
+      ACSLExpression.functions.foreach(f => p.addFunction(f))
       collectAndAddTheories(p, formula)
 
       p.??(formula)
