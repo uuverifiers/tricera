@@ -115,62 +115,6 @@ object RewrapPointers
     }  
 }
 
-
-private object MapPreCondProgVarProxies 
-  extends CollectingVisitor[MHashMap[String, String], IExpression]  {
-
-  def apply(form: IExpression, nameMap: MHashMap[String, String]) = {
-    visit(form, nameMap).asInstanceOf[IFormula]
-  }
-
-  override def postVisit(
-    t: IExpression,
-    transformedToOriginalId: MHashMap[String, String],
-    subres: Seq[IExpression])
-  : IExpression = (t, subres) match {
-      case (ConstantAsProgVarProxy(proxy), _) if transformedToOriginalId.get(proxy.name).isDefined =>
-        ACSLExpression.derefFunApp(
-          ACSLExpression.deref,
-          proxy.copy(
-            _name = transformedToOriginalId(proxy.name),
-            _isPointer = true,
-            scope = ProgVarProxy.Scope.Parameter))
-      case _ => 
-        RewrapPointers.postVisit(t, (), subres)
-    }
-}
-
-
-private object MapPostCondProgVarProxies
-  extends CollectingVisitor[MHashMap[String, String], IExpression] {
-  def apply(form: IExpression, nameMap: MHashMap[String, String]) = {
-    visit(form, nameMap).asInstanceOf[IFormula]  
-  }
-
-  override def postVisit(
-    t: IExpression,
-    transformedToOriginalId: MHashMap[String, String],
-    subres: Seq[IExpression])
-  : IExpression = t match {
-      case ConstantAsProgVarProxy(proxy) if transformedToOriginalId.get(proxy.name).isDefined =>
-        val derefFun = 
-          if (proxy.isPreExec) {
-            ACSLExpression.oldDeref
-          } else {
-            ACSLExpression.deref
-          }
-        ACSLExpression.derefFunApp(
-          derefFun, 
-          proxy.copy(
-            _name = transformedToOriginalId(proxy.name),
-            _isPointer = true,
-            scope = ProgVarProxy.Scope.Parameter))
-      case _: IExpression => 
-        RewrapPointers.postVisit(t, (), subres)
-    }
-}
-
-
 /**
   * Maps ProgVarProxies representing introduced global variables to
   * original pointer variables.
@@ -304,7 +248,6 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
               astAdditions.globalVariableIdToParameterId,
               astAdditions.originalFunctionIdToParamterIds(originalId)))))
     }})
-//    .map({ case (id, funcInv) => exQuantifyIntroducedGlobals(astAdditions.originalFunctionIdToParamterIds(id), funcInv)})
     .map({ case (id, funcInv) => derefParameters(funcInv, astAdditions.originalFunctionIdToParamterIds(id)) })
     .toSeq
   }
@@ -344,118 +287,6 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
     case Invariant(form, heapInfo, sourceInfo) => 
       Invariant(ConstantSubstVisitor(form, derefMap), heapInfo, sourceInfo)
   }
-
-  private def exQuantifyIntroducedGlobals(
-    paramIds: List[String],
-    funcInv: FunctionInvariants)
-  : FunctionInvariants = funcInv match {
-    case FunctionInvariants(
-      id,
-      isSrcAnnotated,
-      PreCondition(preInv),
-      PostCondition(postInv),
-      loopInvariants) =>
-      FunctionInvariants(
-        id,
-        isSrcAnnotated,
-        PreCondition(exQuantifyIntroducedGlobals(paramIds, preInv)),
-        PostCondition(exQuantifyIntroducedGlobals(paramIds, postInv)),
-        loopInvariants)
-  }
-
-  def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
-    val theories: Seq[Theory] = {
-      val coll = new TheoryCollector
-      coll(formula)
-      coll.theories
-    }
-    p.addTheories(theories)
-  }
-
-  private def exQuantifyIntroducedGlobals(
-    paramIds: List[String],
-    inv: Invariant)
-  : Invariant = inv match {
-    case Invariant(form, heapInfo, srcInfo) =>
-      val p = SimpleAPI.spawn
-      p.addConstantsRaw(SymbolCollector.constants(form))
-      p.addRelations(ACSLExpression.predicates)
-      ACSLExpression.functions.foreach(f => p.addFunction(f))
-      collectAndAddTheories(p, form)
-      val toKeep = SymbolCollector
-        .constants(form)
-        .filter(c => paramIds.contains(c.name) || heapInfo.map(i => i.heapTermName == c.name).getOrElse(false))
-        .map(IConstant)
-      val projected = p.projectEx(form, toKeep)
-      val simplified = p.simplify(projected)
-      Invariant(simplified, heapInfo, srcInfo)
-  }
-}
-
-
-private class DerefParameters()
-  extends CollectingVisitor[Unit, IExpression]
-  with ResultProcessor
-  with PointerExpressionChecks {
-
-  override def applyTo(solution: tricera.Solution)
-  : Solution = solution match {
-    case Solution(functionInvariants, disassociatedLoopInvariants) => 
-      Solution(functionInvariants.map(apply), disassociatedLoopInvariants.map(apply))
-    case _ =>
-      solution
-  }
-
-  def apply(funcInvs: FunctionInvariants)
-  : FunctionInvariants = funcInvs match {
-    case FunctionInvariants(
-      id,
-      isSrcAnnotated,
-      PreCondition(preInv),
-      PostCondition(postInv),
-      loopInvariants) =>
-      FunctionInvariants(
-        id,
-        isSrcAnnotated,
-        PreCondition(apply(preInv)),
-        PostCondition(apply(postInv)),
-        loopInvariants.map(apply))
-  }
-  
-  def apply(invariant: Invariant): Invariant = invariant match {
-    case Invariant(expression, heapInfo, sourceInfo) => 
-      Invariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)    
-  }
-
-  def apply(invariant: LoopInvariant): LoopInvariant = invariant match {
-    case LoopInvariant(expression, heapInfo, sourceInfo) => 
-      LoopInvariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)    
-  }
-
-  override def postVisit(
-    t: IExpression,
-    dummy: Unit,
-    subres: Seq[IExpression])
-  : IExpression = t match {
-      case IFunApp(func, Seq(IFunApp(ACSLExpression.arrow, args))) if isSelector(func) =>
-        IFunApp(ACSLExpression.arrow, Seq(IFunApp(func, args)))
-      case IFunApp(func, Seq(IFunApp(ACSLExpression.oldArrow, args))) if isSelector(func) =>
-        IFunApp(ACSLExpression.oldArrow, Seq(IFunApp(func, args)))
-      case IFunApp(
-        func,
-        Seq(IFunApp(
-          ACSLExpression.deref,
-          Seq(ConstantAsProgVarProxy(proxy))))) if isSelector(func) =>
-        ACSLExpression.arrowFunApp(ACSLExpression.arrow, proxy, func.asInstanceOf[MonoSortedIFunction])
-      case IFunApp(
-        func,
-        Seq(IFunApp(
-          ACSLExpression.oldDeref,
-          Seq(ConstantAsProgVarProxy(proxy))))) if isSelector(func) =>
-        ACSLExpression.arrowFunApp(ACSLExpression.oldArrow, proxy, func.asInstanceOf[MonoSortedIFunction])
-      case _: IExpression => 
-        t.update(subres)
-    }  
 }
 
 

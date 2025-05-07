@@ -120,18 +120,6 @@ case class FunctionInvariants(
           val term = new IConstant(constants.head)
           constants.map(c => (c, term))
         })
-
-//      val pre1Const = SymbolCollector.constants(pre1org)
-//      val pre2Const = SymbolCollector.constants(pre2org)
-//      val post1Const = SymbolCollector.constants(post1org)
-//      val post2Const = SymbolCollector.constants(post2org)
-//      
-//      (pre1Const ++ pre2Const ++ post1Const ++ post2Const)
-//        .groupBy(c => c.name)
-//        .flatMap({ case (name, constants) =>
-//          val term = new IConstant(constants.head)
-//          constants.map(c => (c, term))
-//        })
     }
     
     val PreCondition(Invariant(pre1org, preHeapInfo, preSourceInfo)) = preCondition
@@ -139,7 +127,6 @@ case class FunctionInvariants(
     val PreCondition(Invariant(pre2org, _, _)) = other.preCondition
     val PostCondition(Invariant(post2org, _, _)) = other.postCondition
  
-    
     val const2Common = buildCommonConstantMap(
       SymbolCollector.constants(pre1org),
       SymbolCollector.constants(pre2org),

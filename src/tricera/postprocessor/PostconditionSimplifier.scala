@@ -112,9 +112,6 @@ object PostconditionSimplifier extends ResultProcessor {
             IBoolLit(true),
             precondition,
             postcondition))
-//      p.addConstantsRaw(SymbolCollector.constants(simplified))
-//      collectAndAddTheories(p, simplified)
-//      p.simplify(simplified)
       simplified
     }
   }

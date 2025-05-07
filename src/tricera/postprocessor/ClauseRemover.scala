@@ -89,6 +89,7 @@ object ClauseRemover extends ResultProcessor {
   }
 }
 
+
 object TheoryOfHeapRemoverVisitor {
   def apply(expr: IExpression, heapInfo: HeapInfo): IExpression = {
     (new TheoryOfHeapRemoverVisitor(heapInfo)).visit(expr, ())
@@ -97,14 +98,6 @@ object TheoryOfHeapRemoverVisitor {
   class TheoryOfHeapRemoverVisitor(heapInfo: HeapInfo)
     extends CollectingVisitor[Unit, IExpression] {
 
-//   override def preVisit(t : IExpression, dummy: Unit): PreVisitResult = {
-//    t match {
-//      case IBinFormula(IBinJunctor.And, _, _)
-//         | IBinFormula(IBinJunctor.Or, _, _) =>
-//        ShortCutResult(true)
-//    }
-//   }
-
     override def postVisit(
         t: IExpression,
         dummy: Unit,
@@ -112,13 +105,10 @@ object TheoryOfHeapRemoverVisitor {
     ): IExpression = t match {
       case form @ IBinFormula(_, _, _) =>
         postVisitFormula(form, subres, heapInfo)
-      case q @ ISortedQuantified(_, _, formula) =>
-        val sub = subres(0)
-        sub match {
-          case IBoolLit(true) => 
-            IBoolLit(true)
-          case _ => 
-            q update subres
+      case q @ ISortedQuantified(_, _, _) =>
+        subres(0) match {
+          case IBoolLit(true) => IBoolLit(true)
+          case _ => q update subres
         }
       case default if (ContainsTOHVisitor(t, heapInfo)) =>
         IBoolLit(true)
@@ -126,18 +116,27 @@ object TheoryOfHeapRemoverVisitor {
         t update subres
     }
 
-//    private def postVisitQuantified():IExpression = {
-//
-//    }
-
     private def postVisitFormula(form: IFormula, subres: Seq[IExpression], heapInfo: HeapInfo)
     : IExpression = form match {
-      case IBinFormula(IBinJunctor.Or, IBoolLit(true), IBoolLit(true))
+      case IBinFormula(IBinJunctor.And, IBoolLit(true), IBoolLit(true))
          | IBinFormula(IBinJunctor.Or, IBoolLit(true), _)
-         | IBinFormula(IBinJunctor.Or, _, IBoolLit(true)) =>
+         | IBinFormula(IBinJunctor.Or, _, IBoolLit(true))
+         | IBinFormula(IBinJunctor.Eqv, IBoolLit(true), _)
+         | IBinFormula(IBinJunctor.Eqv, _, IBoolLit(true)) =>
         // Either or both sides were already true before traversal
         printlnDebug(s"### Some already true")
         IBoolLit(true)
+      case IBinFormula(IBinJunctor.Eqv, preLhs, preRhs) =>
+        // Neither side was true before traversal
+        (subres(0), subres(1)) match {
+          case (IBoolLit(true), _)
+             | (_, IBoolLit(true)) =>
+            // Either or both sides where removed during traversal
+            IBoolLit(true)
+          case _ =>
+            // Neither side was removed during traversal
+            form update subres
+        }
       case IBinFormula(IBinJunctor.Or, preLhs, preRhs) =>
         // Neither side was true before traversal
         val lhs = subres(0)
@@ -162,10 +161,6 @@ object TheoryOfHeapRemoverVisitor {
             printlnDebug(s"### Both kept: ${lhs} and ${rhs}")
             form update subres
         }
-      case IBinFormula(IBinJunctor.And, IBoolLit(true), IBoolLit(true)) =>
-        // Both sides were already true before traversal
-        printlnDebug(s"## Both already true")
-        IBoolLit(true)
       case IBinFormula(IBinJunctor.And, IBoolLit(true), _) =>
         // LHS was true before traversal
         printlnDebug(s"## LHS already true")
