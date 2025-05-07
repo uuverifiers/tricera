@@ -1,6 +1,6 @@
 /* 
   NOTE: 2025-03-27: Stackpointers does currently not work
-    together with recurions. In a situation as the following
+    together with recursion. In a situation as the following
     the parameter gets replaced by a global variable, and the
     function is replaced by two other functions, a wrapper,
     and a transformed function that manipulates the global

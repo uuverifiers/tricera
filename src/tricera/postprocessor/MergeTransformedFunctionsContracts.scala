@@ -519,7 +519,7 @@ object AddValidPointerPredicates
   : (MSet[ProgVarProxy], MSet[ProgVarProxy]) = t match {
     case IAtom(pred, Seq(ConstantAsProgVarProxy(proxy))) if (pred == ACSLExpression.valid) =>
       (MSet(), MSet(proxy))
-    case ConstantAsProgVarProxy(proxy) if proxy.isPointer =>
+    case ConstantAsProgVarProxy(proxy) if proxy.isPointer && proxy.isParameter =>
       (MSet(proxy), MSet())
     case _ if subres.nonEmpty => 
       subres.reduce((a,b) => (a._1 ++ b._1, a._2 ++ b._2))
