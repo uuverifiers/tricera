@@ -38,6 +38,11 @@ import lazabs.horn.bottomup.HornClauses.Clause
 import hornconcurrency.VerificationLoop
 import tricera.Literals
 import tricera.LoopInvariant
+import tricera.Result
+import tricera.Solution
+import tricera.Empty
+import tricera.CounterExample
+import tricera.FunctionInvariants
 
 object ResultPrinters {
 
@@ -128,6 +133,27 @@ object ResultPrinters {
         result.disassociatedLoopInvariants.foreach(print)
       }
       println("=" * 80 + "\n")
+    }
+  }
+
+
+  def printResult(result: Result) = {
+    def printInvariants(invs: FunctionInvariants) = invs match {
+      case FunctionInvariants(id, isSrcAnnotated, preCondition, postCondition, loopInvariants) => 
+        println(f"${id} precondition: ${preCondition.invariant.expression}")
+        println(f"${id} postcondition: ${postCondition.invariant.expression}")
+    }
+
+    def printLoopInvariant(inv: LoopInvariant) = {
+      println(f"for loop on line: ${inv.sourceInfo.line}: ${inv.expression}")
+    }
+
+    result match {
+      case Solution(functionInvariants, disassociatedLoopInvariants) => 
+        functionInvariants.map(printInvariants)
+        disassociatedLoopInvariants.map(printLoopInvariant)
+      case CounterExample(counterExample) => // TODO
+      case Empty() => // print nothing
     }
   }
 }
