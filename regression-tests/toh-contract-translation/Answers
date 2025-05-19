@@ -157,3 +157,16 @@ qualified-heapptr-to-stackptr.c
 tricera.concurrency.ccreader.CCExceptions$TranslationException: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
 (error "Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9")
 Other Error: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
+
+multi-arg.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for mod */
+/*@
+  requires \separated(t1, t2) && \valid(t1) && \valid(t2);
+  ensures \separated(t1, t2) && \valid(t1) && \valid(t2) && *t1 == 1 + \old(*t1);
+*/
+================================================================================
+
+SAFE
