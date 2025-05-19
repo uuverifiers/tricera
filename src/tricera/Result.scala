@@ -138,7 +138,12 @@ case class FunctionInvariants(
     val post1 = ConstantSubstVisitor.apply(post1org, const2Common)
     val post2 = ConstantSubstVisitor.apply(post2org, const2Common)
 
-    // TODO: Decide if we should run expressions through the SimpleAPI.simplify()
+    // TODO: 2025-05-19 Decide if we should run expressions through the
+    //   SimpleAPI.simplify(). Doing so seems to mess up later stages, mainly
+    //   because they treat conjunctions and disjunctions differently. That is,
+    //   some parts of the code gives special treatment to e.g. disjunctions,
+    //   but no such special treatment would be done for the corresponding
+    //   conjunction (obtained by De'Morgans law).
     FunctionInvariants(
       id,
       isSrcAnnotated,

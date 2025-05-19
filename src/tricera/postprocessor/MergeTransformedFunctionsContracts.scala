@@ -8,11 +8,8 @@ import ap.parser.IExpression
 import ap.parser.IConstant
 import ap.parser.IFunApp
 import ap.parser.IFunction
-
-//import ap.theories.ADT
 import ap.types.MonoSortedIFunction
 import ap.theories._
-//import ap.SimpleAPI
 
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 import tricera.concurrency.CallSiteTransform
@@ -24,7 +21,6 @@ import tricera.{
   LoopInvariant, PostCondition, PreCondition, ProgVarProxy,
   Result, Solution}
 import ap.parser.IAtom
-import tricera.Util.printlnDebug
 import ap.api.SimpleAPI
 import ap.parser.SymbolCollector
 import ap.terfor.conjunctions.Quantifier
@@ -78,15 +74,15 @@ object RewrapPointers
         PostCondition(apply(postInv)),
         loopInvariants.map(apply))
   }
-  
+
   def apply(invariant: Invariant): Invariant = invariant match {
-    case Invariant(expression, heapInfo, sourceInfo) => 
-      Invariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)    
+    case Invariant(expression, heapInfo, sourceInfo) =>
+      Invariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)
   }
 
   def apply(invariant: LoopInvariant): LoopInvariant = invariant match {
-    case LoopInvariant(expression, heapInfo, sourceInfo) => 
-      LoopInvariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)    
+    case LoopInvariant(expression, heapInfo, sourceInfo) =>
+      LoopInvariant(visit(expression, ()).asInstanceOf[IFormula], heapInfo, sourceInfo)
   }
 
   override def postVisit(
@@ -163,18 +159,14 @@ private object MapProgVarProxies
     // the conditions for the current function. We account for that by existentially
     // quantifying over the introduced variables that are not parameters to the current
     // function.
-    printlnDebug(s"before EX quantify: ${form}")
     SimpleAPI.withProver{ p =>
       val constants = SymbolCollector.constants(form)
       p.addConstantsRaw(constants)
-//      p.addRelations(ACSLExpression.predicates)
-//      ACSLExpression.functions.foreach(f => p.addFunction(f))
       collectAndAddTheories(p, form)
       val toQuantify = constants
         .filter({case c: ProgVarProxy => c.isParameter && !funcParamIds.contains(c.name)})
       val projected = IExpression.quanConsts(Quantifier.EX, toQuantify, form)
       val simplified = p.simplify(projected)
-      printlnDebug(s"after EX quantify: ${simplified}")
       simplified
     }
   }

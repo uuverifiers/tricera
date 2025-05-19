@@ -68,25 +68,13 @@ object CCReader {
   : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
-//    println(printer print prog)
-
-
-// SSSOWO: start
     val typeAnnotProg = CCAstTypeAnnotator(prog)
     val (transformedCallsProg, callSiteTransforms) = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
-
-    val pp = new PrettyPrinterNonStatic()
-    val prgStr = pp.print(prog)
-    val prgCpStr = pp.print(transformedCallsProg)
-// SSSOWO: end
-
-    printlnDebug(f"Original program: \n${prgStr}\n\nRewritten:\n${prgCpStr}")
 
     var reader : CCReader = null
     while (reader == null)
       try {
         reader = new CCReader(transformedCallsProg, entryFunction, propertiesToCheck)
-        //reader = new CCReader(prog, entryFunction, propertiesToCheck)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -178,32 +166,6 @@ object CCReader {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-trait ProgramBackTranslator
-object DummyBackTranslator extends ProgramBackTranslator
-
-trait CCASTPreprocessor {
-  def translate(prog : Program) : (Program, ProgramBackTranslator)
-}
-
-// 0) Compile visitors in ccparser, currently only the ones in Absyn are compiled.
-//    Look up Princess SMT-LIB parser, which had the same problem which is now fixed.
-//    -- Do the same for the ACSL parser as well.
-// 1) Do type-inference in first pass (could be separate visitors or the same)
-//    Extend EVar class and create a new AST after the pass.
-//    We could also extend the grammar, e.g.,
-//      EvarWithType. Exp17 ::= "$$" CIdent ":" [Declaration_specifier] "##";
-//      This has the advantage of making all generated visitors know about this.
-//    Challenge:
-//       -- ComposVisitor will revert back to the old AST -- won't know about
-//          the augmented classes.
-//       -- Solution: Extend ComposVisitor so that it knows about the new types.
-// 2) Detect pointer types, rewrite call sites.
-//    -- At each call, i) if it is a stack pointer rewrite using a new function
-//       name and global variables.
-// 3) Create copies of functions for stack & heap pointers.
-// 4) Add back-translators.
-// 5) Stretch goal: output contracts in ACSL AST, and implement preprocessors &
-//    back-translators using this.
 
 class CCReader private (prog              : Program,
                         entryFunction     : String,
@@ -2261,7 +2223,7 @@ private def collectVarDecls(dec                    : Dec,
         getType(listDeclSpecs)
       case None => CCInt
     }
-    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // SSSOWO don't think this is relevant anymore: // todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 

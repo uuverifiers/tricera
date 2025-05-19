@@ -351,7 +351,7 @@ class CallSiteTransform(
 
       // TODO: If the original function returns some pointer it
       //   got as an argument, and that pointer is a stack pointer,
-      //   this return value breaks. In such a case the orginial
+      //   this return value breaks. In such a case the original
       //   function would return the pointer to the stack, but this
       //   one will return the address of the global variable
       //   replacing the stack pointer.

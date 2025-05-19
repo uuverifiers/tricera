@@ -39,9 +39,8 @@ class CCAstTypeAnnotator {
       CCAstDeclaration(createDeclSpecifiers(tps), new OnlyDecl(new BeginPointer(new Point, new Name(name))))
     }
 
-    //def createFunctionDeclaration(name: String, tps: List[Type_specifier], params: )
-
-    // SSSOWO TODO: What about function arguments? Why don't we add them?
+    // These sybols are given special treatment by TriCera and are therefore recognized
+    // without any header files present or previous declarations.
     val symTab = new CCAstTypeAnnotationData
     symTab.put("assume", createDeclaration("assume", List(new Tint)))
     symTab.put("assert", createDeclaration("assert", List(new Tvoid)))

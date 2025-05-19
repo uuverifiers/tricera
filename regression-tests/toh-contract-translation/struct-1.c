@@ -25,7 +25,6 @@ void main()
   driver->distance_driven = 0;
 
   tick(driver);
-//  tick(driver);
 
   driver_distance = driver->distance_driven;
 

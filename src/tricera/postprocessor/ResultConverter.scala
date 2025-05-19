@@ -138,9 +138,6 @@ object ResultConverter {
       annotatedFuncs: HashSet[String])
       = {
       val paramNames = ctx.acslContext.getParams.map(v => v.name)
-
-//      printlnDebug(f"Looking for: ${funcId}")
-
       FunctionInvariants(
         funcId,
         annotatedFuncs(funcId),

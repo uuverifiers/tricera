@@ -45,7 +45,6 @@ import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant,
   PostCondition, PreCondition, ProgVarProxy, Solution}
 import tricera.Util.FSharpisms
-import tricera.Util.printlnDebug
 
 object ClauseRemover extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
@@ -73,11 +72,10 @@ object ClauseRemover extends ResultProcessor {
   private def applyTo(invariant: Invariant, isCurrentHeap: ProgVarProxy => Boolean)
     : Invariant = invariant match {
     case Invariant(expression, Some(heapInfo), sourceInfo) =>
-      printlnDebug("======================================================")
       Invariant(
         expression
           .through(e => CleanupVisitor(TheoryOfHeapRemoverVisitor(e, heapInfo)))
-//          .through(e => CleanupVisitor(ExplicitPointerRemover(e)))
+          .through(e => CleanupVisitor(ExplicitPointerRemover(e)))
           .through(e => CleanupVisitor(TrivialEqualityRemover(e)))
           .through(e => CleanupVisitor(HeapEqualityRemover(e, isCurrentHeap))
           .asInstanceOf[IFormula]),
@@ -124,7 +122,6 @@ object TheoryOfHeapRemoverVisitor {
          | IBinFormula(IBinJunctor.Eqv, IBoolLit(true), _)
          | IBinFormula(IBinJunctor.Eqv, _, IBoolLit(true)) =>
         // Either or both sides were already true before traversal
-        printlnDebug(s"### Some already true")
         IBoolLit(true)
       case IBinFormula(IBinJunctor.Eqv, preLhs, preRhs) =>
         // Neither side was true before traversal
@@ -144,31 +141,23 @@ object TheoryOfHeapRemoverVisitor {
         (lhs, rhs) match {
           case (IBoolLit(true), IBoolLit(true)) =>
             // Both sides were removed during traversal
-            printlnDebug(s"### Both removed: ${preLhs} and ${preRhs}")
             IBoolLit(true)
           case (IBoolLit(true), _) =>
             // LHS has been removed
-            printlnDebug(s"### LHS removed: ${preLhs}")
-            printlnDebug(s"### RHS kept: ${rhs}")
             rhs
           case (_, IBoolLit(true)) =>
             // RHS has been removed
-            printlnDebug(s"### RHS removed: ${preRhs}")
-            printlnDebug(s"### LHS kept: ${lhs}")
             lhs
           case _ => 
             // Neither side was removed during traversal
-            printlnDebug(s"### Both kept: ${lhs} and ${rhs}")
             form update subres
         }
       case IBinFormula(IBinJunctor.And, IBoolLit(true), _) =>
         // LHS was true before traversal
-        printlnDebug(s"## LHS already true")
         val rhs = subres(1)
         rhs
       case IBinFormula(IBinJunctor.And, _, IBoolLit(true)) =>
         // RHS was true before traversal
-        printlnDebug(s"## RHS already true")
         val lhs = subres(0)
         lhs
       case IBinFormula(IBinJunctor.And, preLhs, preRhs) =>
@@ -178,17 +167,12 @@ object TheoryOfHeapRemoverVisitor {
         (lhs, rhs) match {
           case (IBoolLit(true), IBoolLit(true)) =>
             // Both sides were removed during traversal
-            printlnDebug(s"## Both removed: ${preLhs} and ${preRhs}")
             IBoolLit(true)
           case (IBoolLit(true), _) =>
             // LHS was removed during traversal
-            printlnDebug(s"### LHS removed: ${preLhs}")
-            printlnDebug(s"### RHS kept: ${rhs}")
             rhs
           case (_, IBoolLit(true)) =>
             // RHS was removed during traversal
-            printlnDebug(s"### RHS removed: ${preRhs}")
-            printlnDebug(s"### LHS kept: ${lhs}")
             lhs
           case _ =>
             // Neither side was removed during traversal
