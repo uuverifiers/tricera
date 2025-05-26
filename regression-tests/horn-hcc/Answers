@@ -71,6 +71,9 @@ false :- main(g:3, h:4), g:3 != 0. (line:8 col:3) (property: user-assertion)
 
 UNSAFE
 
+shadowing-global.hcc
+SAFE
+
 shadowing.hcc
 SAFE
 

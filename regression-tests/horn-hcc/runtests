@@ -7,7 +7,7 @@ TESTS="test1.hcc test2.hcc test3.hcc test4.hcc \
        jumps.hcc jumps2.hcc jumps3.hcc \
        functions.hcc functions2.hcc extended-decl.hcc \
        inits.hcc inits2.hcc inits3.hcc \
-       shadowing.hcc disconnected-assertions.hcc \
+       shadowing-global.hcc shadowing.hcc disconnected-assertions.hcc \
        atomic1.hcc atomic2.hcc atomic3.hcc atomic3b.hcc atomic3c.hcc \
        atomic3d.hcc \
        diamond_true-unreach-call1.c unsigned1.hcc \
