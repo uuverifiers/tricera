@@ -8,7 +8,7 @@ Inferred ACSL annotations
 /* contract for get */
 /*@
   requires p == n && n_init >= 1 && \valid(p);
-  ensures ((\result == 0 && 0 >= \old(*p)) || (\result >= 0 && n_init == \result)) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n && \valid(p);
+  ensures ((\result == 0 && 0 >= \old(*n)) || (\result >= 0 && n_init == \result)) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n;
 */
 ================================================================================
 
