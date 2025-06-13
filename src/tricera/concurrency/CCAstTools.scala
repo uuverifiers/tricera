@@ -90,22 +90,21 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
   def toAfunc(body: Compound_stm):Afunc = toAfunc("", body)
 
   def toAfunc(annotation: String, body: Compound_stm): Afunc = {
-    annotation.isEmpty || annotation.isBlank match {
-      case true =>
-        new Afunc(
-          new NewFunc(
-            copyAst(declarationSpecifiers),
-            initDeclarator.accept(getDeclarator, ()),
-            body))
-      case false => 
-        val annotations = new ListAnnotation
-        annotations.add(new Annot1(annotation))
-        new Afunc(
-          new AnnotatedFunc(
-            annotations,
-            copyAst(declarationSpecifiers),
-            initDeclarator.accept(getDeclarator, ()),
-            body)) 
+    if (annotation.trim.isEmpty) {
+      new Afunc(
+        new NewFunc(
+          copyAst(declarationSpecifiers),
+          initDeclarator.accept(getDeclarator, ()),
+          body))
+    } else {
+      val annotations = new ListAnnotation
+      annotations.add(new Annot1(annotation))
+      new Afunc(
+        new AnnotatedFunc(
+          annotations,
+          copyAst(declarationSpecifiers),
+          initDeclarator.accept(getDeclarator, ()),
+          body))
     }
   }
 
