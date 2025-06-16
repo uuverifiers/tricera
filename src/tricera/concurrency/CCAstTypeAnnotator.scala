@@ -177,6 +177,31 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
     super.visit(chan, symTab)
   }
 
+  /**
+    Begin new symbol table scope for each thread.
+    Parse the thread body in thread name scope.
+  */
+  override def visit(thread: SingleThread, symTab: CCAstTypeAnnotationData): Thread_def = {
+    val threadName = thread.accept(getName, ())
+
+    withScope(threadName) {
+      super.visit(thread, symTab)
+    }
+  }
+
+  override def visit(thread: ParaThread, symTab: CCAstTypeAnnotationData): Thread_def = {
+    val threadName = thread.accept(getName, ())
+
+    withScope(threadName) {
+      val threadId = getScopedName(thread.cident_1)
+      val decl = new OnlyDecl(new NoPointer(new Name(thread.cident_1)))
+      val spec = new ListDeclaration_specifier
+      spec.add(new Type(new Tint))
+      symTab.put(threadId, CCAstDeclaration(spec, decl))
+      super.visit(thread, symTab)
+    }
+  }
+
 /**
   This is mainly for keeping track of the current declaration to enable
   correct types for enum members.
