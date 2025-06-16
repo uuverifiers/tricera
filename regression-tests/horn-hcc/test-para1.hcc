@@ -1,5 +1,4 @@
 int gid = _;
-int id = _;
 
 thread[id] Proc {
   gid = id;
