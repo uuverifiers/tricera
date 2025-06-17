@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Ola Wingbrant. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,7 +38,11 @@ import lazabs.horn.bottomup.HornClauses.Clause
 import hornconcurrency.VerificationLoop
 import tricera.Literals
 import tricera.LoopInvariant
-//import lazabs.horn.concurrency.VerificationLoop
+import tricera.Result
+import tricera.Solution
+import tricera.Empty
+import tricera.CounterExample
+import tricera.FunctionInvariants
 
 object ResultPrinters {
 
@@ -129,6 +133,27 @@ object ResultPrinters {
         result.disassociatedLoopInvariants.foreach(print)
       }
       println("=" * 80 + "\n")
+    }
+  }
+
+
+  def printResult(result: Result) = {
+    def printInvariants(invs: FunctionInvariants) = invs match {
+      case FunctionInvariants(id, isSrcAnnotated, preCondition, postCondition, loopInvariants) => 
+        println(f"${id} precondition: ${preCondition.invariant.expression}")
+        println(f"${id} postcondition: ${postCondition.invariant.expression}")
+    }
+
+    def printLoopInvariant(inv: LoopInvariant) = {
+      println(f"for loop on line: ${inv.sourceInfo.line}: ${inv.expression}")
+    }
+
+    result match {
+      case Solution(functionInvariants, disassociatedLoopInvariants) => 
+        functionInvariants.map(printInvariants)
+        disassociatedLoopInvariants.map(printLoopInvariant)
+      case CounterExample(counterExample) => // TODO
+      case Empty() => // print nothing
     }
   }
 }

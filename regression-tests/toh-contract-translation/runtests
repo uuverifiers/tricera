@@ -8,7 +8,10 @@ TESTS="get-1.c  \
        max-1.c  \
        max-2.c  \
        multadd-1.c  \
-       truck-2.c"
+       truck-2.c  \
+       heapptr-to-stackptr.c \
+       qualified-heapptr-to-stackptr.c \
+       multi-arg.c"
 
 for name in $TESTS; do
     echo

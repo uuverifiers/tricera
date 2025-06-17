@@ -247,7 +247,6 @@ object ACSLExpressionProcessor extends ResultProcessor {
             case _ => t update subres
           }
         }
-
         case _ => t update subres
       }
     }

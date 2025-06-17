@@ -49,11 +49,13 @@ object ACSLExpression {
   val arrow = new IFunction("arrow", 2, false, false) // p->a
   val arrowOldPointer =
     new IFunction("arrowOldPointer", 2, false, false) // \old(p)->a
-  val oldArrow = new IFunction("oldArrow", 2, false, false) // \old(p)->a
+  val oldArrow = new IFunction("oldArrow", 2, false, false) // \old(p->a)
   val separated = new Predicate("\\separated", 2) // \separated(p1, p2)
 
   val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer, oldArrow)
   val predicates = Set(valid, separated)
+
+  def fun2Identifier(fun : IFunction) = fun.name.split("::").last
 
   def derefFunApp(
       derefFunction: IFunction,
@@ -71,7 +73,7 @@ object ACSLExpression {
       arrowFunction,
       Seq(
         IConstant(pointer),
-        IConstant(new ConstantTerm(selector.name))
+        IConstant(new ConstantTerm(fun2Identifier(selector)))
       )
     )
   }

@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg. All rights reserved.
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2025 Scania CV AB. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -44,6 +45,7 @@ import IExpression.Predicate
 import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant,
   PostCondition, PreCondition, ProgVarProxy, Solution}
+import tricera.Util.FSharpisms
 
 object ClauseRemover extends ResultProcessor {
   override def applyTo(solution: Solution): Solution = solution match {
@@ -71,17 +73,21 @@ object ClauseRemover extends ResultProcessor {
   private def applyTo(invariant: Invariant, isCurrentHeap: ProgVarProxy => Boolean)
     : Invariant = invariant match {
     case Invariant(expression, Some(heapInfo), sourceInfo) =>
-      val noTOHExpr = CleanupVisitor(TheoryOfHeapRemoverVisitor(expression, heapInfo))
-      val noTOHOrExplPtrExpr = CleanupVisitor(ExplicitPointerRemover(noTOHExpr))
-      val noTrivialEqExpr = CleanupVisitor(TrivialEqualityRemover(noTOHOrExplPtrExpr))
-      val newForm = CleanupVisitor(
-        HeapEqualityRemover(noTrivialEqExpr, isCurrentHeap)).asInstanceOf[IFormula]
-      Invariant(newForm, Some(heapInfo), sourceInfo)
+      Invariant(
+        expression
+          .through(e => CleanupVisitor(TheoryOfHeapRemoverVisitor(e, heapInfo)))
+          .through(e => CleanupVisitor(ExplicitPointerRemover(e)))
+          .through(e => CleanupVisitor(TrivialEqualityRemover(e)))
+          .through(e => CleanupVisitor(HeapEqualityRemover(e, isCurrentHeap))
+          .asInstanceOf[IFormula]),
+        Some(heapInfo),
+        sourceInfo)
     case Invariant(expression, None, sourceInfo) => 
       val newForm = CleanupVisitor(TrivialEqualityRemover(expression)).asInstanceOf[IFormula]
       Invariant(newForm, None, sourceInfo)
   }
 }
+
 
 object TheoryOfHeapRemoverVisitor {
   def apply(expr: IExpression, heapInfo: HeapInfo): IExpression = {
@@ -96,22 +102,85 @@ object TheoryOfHeapRemoverVisitor {
         dummy: Unit,
         subres: Seq[IExpression]
     ): IExpression = t match {
-      case IBinFormula(IBinJunctor.And, _, _) =>
-        val f1 = subres(0)
-        val f2 = subres(1)
-        (ContainsTOHVisitor(f1, heapInfo), ContainsTOHVisitor(f2, heapInfo)) match {
-          case (false, false) =>
-            t update subres
-          case (true, false) =>
-            f2
-          case (false, true) =>
-            f1
-          case (true, true) =>
-            IBoolLit(true)
+      case form @ IBinFormula(_, _, _) =>
+        postVisitFormula(form, subres, heapInfo)
+      case q @ ISortedQuantified(_, _, _) =>
+        subres(0) match {
+          case IBoolLit(true) => IBoolLit(true)
+          case _ => q update subres
         }
-      case q @ ISortedQuantified(_, _, formula) =>
-        q update subres
-      case default => t update subres
+      case default if (ContainsTOHVisitor(t, heapInfo)) =>
+        IBoolLit(true)
+      case default =>
+        t update subres
+    }
+
+    private def postVisitFormula(form: IFormula, subres: Seq[IExpression], heapInfo: HeapInfo)
+    : IExpression = form match {
+      case IBinFormula(IBinJunctor.And, IBoolLit(true), IBoolLit(true))
+         | IBinFormula(IBinJunctor.Or, IBoolLit(true), _)
+         | IBinFormula(IBinJunctor.Or, _, IBoolLit(true))
+         | IBinFormula(IBinJunctor.Eqv, IBoolLit(true), _)
+         | IBinFormula(IBinJunctor.Eqv, _, IBoolLit(true)) =>
+        // Either or both sides were already true before traversal
+        IBoolLit(true)
+      case IBinFormula(IBinJunctor.Eqv, preLhs, preRhs) =>
+        // Neither side was true before traversal
+        (subres(0), subres(1)) match {
+          case (IBoolLit(true), _)
+             | (_, IBoolLit(true)) =>
+            // Either or both sides where removed during traversal
+            IBoolLit(true)
+          case _ =>
+            // Neither side was removed during traversal
+            form update subres
+        }
+      case IBinFormula(IBinJunctor.Or, preLhs, preRhs) =>
+        // Neither side was true before traversal
+        val lhs = subres(0)
+        val rhs = subres(1)
+        (lhs, rhs) match {
+          case (IBoolLit(true), IBoolLit(true)) =>
+            // Both sides were removed during traversal
+            IBoolLit(true)
+          case (IBoolLit(true), _) =>
+            // LHS has been removed
+            rhs
+          case (_, IBoolLit(true)) =>
+            // RHS has been removed
+            lhs
+          case _ => 
+            // Neither side was removed during traversal
+            form update subres
+        }
+      case IBinFormula(IBinJunctor.And, IBoolLit(true), _) =>
+        // LHS was true before traversal
+        val rhs = subres(1)
+        rhs
+      case IBinFormula(IBinJunctor.And, _, IBoolLit(true)) =>
+        // RHS was true before traversal
+        val lhs = subres(0)
+        lhs
+      case IBinFormula(IBinJunctor.And, preLhs, preRhs) =>
+        // Neither side was true before traversal
+        val lhs = subres(0)
+        val rhs = subres(1)
+        (lhs, rhs) match {
+          case (IBoolLit(true), IBoolLit(true)) =>
+            // Both sides were removed during traversal
+            IBoolLit(true)
+          case (IBoolLit(true), _) =>
+            // LHS was removed during traversal
+            rhs
+          case (_, IBoolLit(true)) =>
+            // RHS was removed during traversal
+            lhs
+          case _ =>
+            // Neither side was removed during traversal
+            form update subres
+        }
+      case _ =>
+        form update subres
     }
   }
 }
@@ -182,13 +251,6 @@ object ContainsExplicitPointerVisitor {
       extends CollectingVisitor[Unit, Boolean] {
     def apply(expr: IExpression): Boolean = {
       visit(expr, ())
-    }
-  
-    private def isACSLFunction(fun: IFunction): Boolean = {
-      ACSLExpression.functions.contains(fun)
-    }
-    private def isACSLPredicate(pred: Predicate): Boolean = {
-      ACSLExpression.predicates.contains(pred)
     }
   
     override def preVisit(

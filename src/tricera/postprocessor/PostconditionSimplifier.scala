@@ -103,13 +103,17 @@ object PostconditionSimplifier extends ResultProcessor {
       CleanupVisitor(currentPostCond).asInstanceOf[IFormula]
     }
     
-    attemptReplacingIFormulasBy(
-      IBoolLit(false),
-      precondition,
-      attemptReplacingIFormulasBy(
-        IBoolLit(true),
-        precondition,
-        postcondition))
+    SimpleAPI.withProver { p =>
+      val simplified = 
+        attemptReplacingIFormulasBy(
+          IBoolLit(false),
+          precondition,
+          attemptReplacingIFormulasBy(
+            IBoolLit(true),
+            precondition,
+            postcondition))
+      simplified
+    }
   }
 
   def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {

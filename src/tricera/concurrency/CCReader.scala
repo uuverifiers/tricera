@@ -52,6 +52,7 @@ import tricera.parsers.AnnotationParser._
 import CCExceptions._
 import tricera.{Util, properties, HeapInfo}
 import tricera.Literals
+import lazabs.horn.concurrency.concurrentC.PrettyPrinter
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -64,15 +65,16 @@ object CCReader {
   def apply(input : java.io.Reader, entryFunction : String,
             propertiesToCheck : Set[properties.Property] = Set(
               properties.Reachability))
-  : (CCReader, Boolean) = { // second ret. arg is true if modelled heap
+  : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
-//    println(printer print prog)
+    val typeAnnotProg = CCAstTypeAnnotator(prog)
+    val (transformedCallsProg, callSiteTransforms) = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
 
     var reader : CCReader = null
     while (reader == null)
       try {
-        reader = new CCReader(prog, entryFunction, propertiesToCheck)
+        reader = new CCReader(transformedCallsProg, entryFunction, propertiesToCheck)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -82,7 +84,7 @@ object CCReader {
           modelHeap = true
         }
       }
-    (reader, modelHeap)
+    (reader, modelHeap, callSiteTransforms)
   }
 
   /**
@@ -2221,7 +2223,7 @@ private def collectVarDecls(dec                    : Dec,
         getType(listDeclSpecs)
       case None => CCInt
     }
-    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 
@@ -2756,6 +2758,7 @@ private def collectVarDecls(dec                    : Dec,
     def asAtom(pred : CCPredicate) = atom(pred, getValuesAsTerms.take(pred.arity))
 
     def asLValue(exp : Exp) : String = exp match {
+      case exp : EvarWithType => exp.cident_
       case exp : Evar    => exp.cident_
       case exp : Eselect => asLValue(exp.exp_)
       case exp : Epoint  => asLValue(exp.exp_)
@@ -2772,6 +2775,8 @@ private def collectVarDecls(dec                    : Dec,
     : Boolean = exp match {
       case exp : Evar => getValue(exp.cident_,
                                   enclosingFunction).typ == CCClock
+      case exp : EvarWithType => getValue(exp.cident_,
+                                  enclosingFunction).typ == CCClock
       case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
       case exp =>
         throw new TranslationException(getLineString(exp) +
@@ -2782,6 +2787,8 @@ private def collectVarDecls(dec                    : Dec,
     private def isDurationVariable(exp : Exp, enclosingFunction : String)
     : Boolean = exp match {
       case exp : Evar => getValue(exp.cident_,
+                                  enclosingFunction).typ == CCDuration
+      case exp : EvarWithType => getValue(exp.cident_,
                                   enclosingFunction).typ == CCDuration
       case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
       case exp =>
@@ -3404,7 +3411,7 @@ private def collectVarDecls(dec                    : Dec,
       case exp : Efunk =>
         val srcInfo = Some(getSourceInfo(exp))
         // inline the called function
-        printer print exp.exp_ match {
+        GetId.orString(exp) match {
           case "reach_error" =>
             /**
              * A special SV-COMP function used in the unreach-call category.
@@ -3420,24 +3427,24 @@ private def collectVarDecls(dec                    : Dec,
 
       case exp : Efunkpar =>
         val srcInfo = Some(getSourceInfo(exp))
-        (printer print exp.exp_) match {
+        GetId.orString(exp) match {
           case "assert" | "static_assert" if exp.listexp_.size == 1 =>
             val property = exp.listexp_.head match {
               case a : Efunkpar
-                if uninterpPredDecls contains(printer print a.exp_) =>
+                if uninterpPredDecls contains(GetId.orString(a)) =>
                 val args = a.listexp_.map(exp => atomicEval(exp, evalCtx))
                 if(args.exists(a => a.typ.isInstanceOf[CCStackPointer])) {
                   throw new TranslationException(
                     getLineStringShort(srcInfo) + " Unsupported operation: " +
                     "stack pointer argument to uninterpreted predicate.")
                 }
-                val pred = uninterpPredDecls(printer print a.exp_)
+                val pred = uninterpPredDecls(GetId.orString(a))
                 atom(pred, args.map(_.toTerm))
               case interpPred : Efunkpar
-                if interpPredDefs contains(printer print interpPred.exp_) =>
+                if interpPredDefs contains(GetId.orString(interpPred)) =>
                 val args    = interpPred.listexp_.map(
                   exp => atomicEval(exp, evalCtx)).map(_.toTerm)
-                val formula = interpPredDefs(printer print interpPred.exp_)
+                val formula = interpPredDefs(GetId.orString(interpPred))
                 // the formula refers to pred arguments as IVariable(index)
                 // we need to subsitute those for the actual arguments
                 VariableSubstVisitor(formula.f, (args.toList, 0))
@@ -3449,16 +3456,16 @@ private def collectVarDecls(dec                    : Dec,
         case "assume" if (exp.listexp_.size == 1) =>
           val property = exp.listexp_.head match {
             case a : Efunkpar
-              if uninterpPredDecls contains(printer print a.exp_) =>
+              if uninterpPredDecls contains(GetId.orString(a)) =>
               val args = a.listexp_.map(exp => atomicEval(exp, evalCtx))
                                    .map(_.toTerm)
-              val pred = uninterpPredDecls(printer print a.exp_)
+              val pred = uninterpPredDecls(GetId.orString(a))
               atom(pred, args)
             case interpPred : Efunkpar
-              if interpPredDefs contains (printer print interpPred.exp_) =>
+              if interpPredDefs contains (GetId.orString(interpPred)) =>
               val args = interpPred.listexp_.map(
                 exp => atomicEval(exp, evalCtx)).map(_.toTerm)
-              val formula = interpPredDefs(printer print interpPred.exp_)
+              val formula = interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.f, (args.toList, 0))
@@ -3468,7 +3475,7 @@ private def collectVarDecls(dec                    : Dec,
           addGuard(property)
           pushVal(CCFormula(true, CCInt, srcInfo))
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) =>
-          val name = printer print exp.listexp_.head
+          val name = GetId.orString(exp.listexp_.head)
           (channels get name) match {
             case Some(chan) => {
               val sync = cmd match {
@@ -3772,6 +3779,21 @@ private def collectVarDecls(dec                    : Dec,
         }
 
       case exp : Evar =>
+        // todo: Unify with EvarWithType, they should always be treated the same.
+        val name = exp.cident_
+        pushVal(lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+          case -1 =>
+            (enumeratorDefs get name) match {
+              case Some(e) => e
+              case None => throw new TranslationException(
+                getLineString(exp) + "Symbol " + name + " is not declared")
+            }
+          case ind =>
+            getValue(ind, false)
+        })
+
+      case exp : EvarWithType =>
+        // todo: Unify with Evar, they should always be treated the same.
         val name = exp.cident_
         pushVal(lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
           case -1 =>

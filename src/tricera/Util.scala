@@ -37,12 +37,50 @@ import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.bottomup.HornClauses.Clause
 import tricera.concurrency.ccreader.CCExceptions._
+import tricera.concurrency.concurrent_c.PrettyPrinterNonStatic
 import tricera.concurrency.concurrent_c.Absyn._
 import tricera.params.TriCeraParameters
 
 import scala.collection.mutable.{ArrayBuffer => MArray, HashMap => MHashMap, Stack => MStack}
 
 object Util {
+
+  object GetId {
+    private val printer = new PrettyPrinterNonStatic()
+
+    def unapply(efunkpar: Efunkpar): Option[String] = from(efunkpar.exp_)
+    def unapply(efunk: Efunk): Option[String] = from(efunk.exp_)
+    def unapply(exp: Exp): Option[String] = from(exp)
+
+    def from(efunkpar: Efunkpar): Option[String] = from(efunkpar.exp_)
+    def from(efunk: Efunk): Option[String] = from(efunk.exp_)
+    def from(exp: Exp): Option[String] = exp match {
+      case v : Evar => Some(v.cident_)
+      case v : EvarWithType => Some(v.cident_)
+      case _ => None
+    }
+
+    def orString(efunkpar: Efunkpar) =
+      orDefault(printer.print(efunkpar.exp_), efunkpar)
+
+    def orString(efunk: Efunk) =
+      orDefault(printer.print(efunk.exp_), efunk)
+
+    def orString(exp: Exp) =
+      orDefault(printer.print(exp), exp)
+
+    def orDefault(default: String, efunkpar: Efunkpar): String = 
+      orDefault(default, efunkpar.exp_)
+
+    def orDefault(default: String, efunk: Efunk): String = 
+      orDefault(default, efunk.exp_)
+
+    def orDefault(default: String, exp: Exp)
+    : String = from(exp) match {
+      case Some(id) => id
+      case None => default
+    }
+  }
 
   implicit class FSharpisms[+A](val a : A) extends AnyVal {
     def ignore = ()

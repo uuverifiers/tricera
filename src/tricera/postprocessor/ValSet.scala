@@ -52,11 +52,11 @@ object Val {
   }
 }
 case class Val(variants: Set[ITerm]) {
-  def getExplicitForm: Option[ITerm] = variants find {
+  def getExplicitForm: Option[ITerm] = variants find { q => { q match {
     case a: Address         => false
     case ConstantAsProgVarProxy(_) => false
     case _                  => true
-  }
+  }}}
 
   def getAddrForm: Option[ITerm] = variants find {
     case a: Address => true

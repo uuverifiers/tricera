@@ -49,6 +49,9 @@ import tricera.concurrency.ccreader.{CCVar, CCHeapPointer, CCHeapArrayPointer, C
 import lazabs.horn.preprocessor.HornPreprocessor
 import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
+import tricera.concurrency.CallSiteTransform.CallSiteTransforms
+import tricera.postprocessor.MergeTransformedFunctionsContracts
+import tricera.postprocessor.AddValidPointerPredicates
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -368,7 +371,7 @@ class Main (args: Array[String]) {
     // todo: add a switch for this, also benchmark/profile
     val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
       new java.io.FileReader(new java.io.File(ppFileName))))
-    val (reader, modelledHeapRes) =
+    val (reader, modelledHeapRes, callSiteTransforms) =
       try {
         CCReader(bufferedReader, funcName, propertiesToCheck)
       } catch {
@@ -529,7 +532,8 @@ class Main (args: Array[String]) {
     val result = verificationLoop.result
       .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
-      .through(hornSolverSolutionToResult(reader))
+      .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
+      .through(MergeTransformedFunctionsContracts(callSiteTransforms))
 
     val executionResult = result match {
       case solution: Solution => 
@@ -539,23 +543,26 @@ class Main (args: Array[String]) {
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
           result
-            .through(ADTExploder.apply)
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
+            .through(ADTExploder.apply)
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(PostconditionSimplifier.apply)
                  .through(addPointerPredicatesFrom(r))
                  .through(addPointerAssignmentsFrom(r))
+                 .through(ADTExploder.apply)
                  .through(TheoryOfHeapProcessor.apply)
-                 .through(ADTSimplifier.apply)
+                 .through(ADTSimplifier.apply) // Rewrite constructors/selectors after heap processing
                  .through(ToVariableForm.apply)
-                 .through(ACSLExpressionProcessor.apply)
-                 .through(ClauseRemover.apply)
               } else {
                 r
               }
             )
             .tap(r => r
+              .through(ACSLExpressionProcessor.apply)
+              .through(ClauseRemover.apply)
+              .through(RewrapPointers.apply)
+              .through(AddValidPointerPredicates.apply)
               .through(ACSLLineariser.apply)
               .through(ResultPrinters.printACSL) 
             ).ignore

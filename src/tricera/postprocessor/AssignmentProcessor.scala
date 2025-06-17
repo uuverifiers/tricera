@@ -146,14 +146,14 @@ private class AssignmentProcessorVisitor(
       funApp: IExpression,
       heapVar: ProgVarProxy
   ): Option[IFormula] = {
-    def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) = {
-      if (separatedSet.isEmpty) {
-        Seq(assignments.head)
-      } else {
-        assignments.takeWhile { case (pointer, value) =>
-          separatedSet.exists(valueSet.areEqual(pointer, _))
-        }
-      }
+    def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) =
+      (assignments.isEmpty, separatedSet.isEmpty) match {
+        case (true, _) => Seq()
+        case (false, true) => Seq(assignments.head)
+        case _ =>
+          assignments.takeWhile { case (pointer, value) =>
+            separatedSet.exists(valueSet.areEqual(pointer, _))
+          }
     }
 
     def takeFirstAddressWrites(assignments: Seq[(ITerm, ITerm)]) = {

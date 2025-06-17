@@ -44,14 +44,16 @@ object ADTExploder extends ResultProcessor {
       Solution(functionInvariants.map(rewrite), loopInvariants.map(rewrite))
   }
 
-  def rewrite(funcInv: FunctionInvariants): FunctionInvariants = funcInv match {
+  def rewrite(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {
     case FunctionInvariants(id, isSrcAnnotated, PreCondition(preInv), PostCondition(postInv), loopInvs) =>
-      FunctionInvariants(
+      val newInvs = FunctionInvariants(
         id,
         isSrcAnnotated,
         PreCondition(rewrite(preInv)),
         PostCondition(rewrite(postInv)),
         loopInvs.map(rewrite))
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
   }
 
   def rewrite(inv: Invariant): Invariant = inv match {

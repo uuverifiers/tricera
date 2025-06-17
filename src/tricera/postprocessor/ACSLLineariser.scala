@@ -106,8 +106,6 @@ object ACSLLineariser {
   def asString(e : IExpression) : String =
     ap.DialogUtil.asString { printExpression(e) }
 
-  private def fun2Identifier(fun : IFunction) = fun.name.split("::").last
-
   //////////////////////////////////////////////////////////////////////////////
 
   private val NonEqPredicate   = new Predicate ("!=", 2)
@@ -232,7 +230,8 @@ object ACSLLineariser {
 
   private def atomicTerm(t : ITerm,
                          ctxt : PrintContext,
-                         cast2Int : Boolean = false) : String = t match {
+                         cast2Int : Boolean = false) : String = {
+    t match {
     case IConstant(c) ::: SortNeedingIntCast(_) if cast2Int =>
       c.name + ".\\as[int]"
     case IConstant(c) =>
@@ -252,10 +251,11 @@ object ACSLLineariser {
         vs.head
     }
     case IFunApp(f, Seq()) ::: SortNeedingIntCast(_) if cast2Int =>
-      f.name + ".\\as[int]"
+      ACSLExpression.fun2Identifier(f) + ".\\as[int]"
     case IFunApp(f, Seq()) =>
-      f.name
+      ACSLExpression.fun2Identifier(f)
   }
+}
 
   private object SortNeedingIntCast {
     def unapply(sort : Sort) : Option[Sort] = sort match {
@@ -426,13 +426,13 @@ object ACSLLineariser {
            
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {
-            allButLast(ctxt setPrecLevel 0, ".", "." + fun2Identifier(fun), 1)
+            allButLast(ctxt setPrecLevel 0, ".", "." + ACSLExpression.fun2Identifier(fun), 1)
           } else if (fun.arity > 0) { // todo: should not be possible in ACSL
-            print(fun2Identifier(fun))
+            print(ACSLExpression.fun2Identifier(fun))
             print("(")
             allButLast(ctxt setPrecLevel 0, ", ", ")", fun.arity)
           } else {
-            print(fun2Identifier(fun))
+            print(ACSLExpression.fun2Identifier(fun))
             KeepArg
           }
         }
