@@ -1,0 +1,16 @@
+int x = 0;
+
+/* 
+   This test makes sure that no predicates with the same name are created
+   when there is an argument and a global variable with the same name.
+ */
+
+/*@contract@*/
+void f(int x) {
+  ++x;
+}
+
+void main(void) {
+  f(x);
+  assert(x == 0);
+}

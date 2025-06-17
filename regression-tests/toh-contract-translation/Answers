@@ -87,24 +87,6 @@ SAFE
 multadd-1.c
 Warning: no definition of function "non_det_int_ptr" available
 Warning: no definition of function "non_det_int" available
-Warning: The following clause has different terms with the same name (term: b:12)
-main_12(@h_post, a_post, b_post, result_post, a_init_post, b_init_post) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13), addTwoNumbers_post(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13, @h_post, a_post, b_post, result_post, a_init_post, b_init_post).
-
-Warning: The following clause has different terms with the same name (term: result:13)
-main_12(@h_post, a_post, b_post, result_post, a_init_post, b_init_post) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13), addTwoNumbers_post(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13, @h_post, a_post, b_post, result_post, a_init_post, b_init_post).
-
-Warning: The following clause has different terms with the same name (term: a:11)
-main_12(@h_post, a_post, b_post, result_post, a_init_post, b_init_post) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13), addTwoNumbers_post(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13, @h_post, a_post, b_post, result_post, a_init_post, b_init_post).
-
-Warning: The following clause has different terms with the same name (term: b:12)
-addTwoNumbers_pre(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13).
-
-Warning: The following clause has different terms with the same name (term: result:13)
-addTwoNumbers_pre(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13).
-
-Warning: The following clause has different terms with the same name (term: a:11)
-addTwoNumbers_pre(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13).
-
 
 Inferred ACSL annotations
 ================================================================================

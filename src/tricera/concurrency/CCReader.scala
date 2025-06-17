@@ -1064,7 +1064,6 @@ class CCReader private (prog              : Program,
       val exitPred = newPred(resVar, Some(getLastSourceInfo(funDef.body)))
 
       output(addRichClause(
-        // SSSOWO : Why are the arguments added twice?
         entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
         Some(funDef.sourceInfo)))// todo: correct source info?
 
@@ -3686,9 +3685,7 @@ private def collectVarDecls(dec                    : Dec,
               evalVars
             } else {
               for ((oldVar, argName) <- evalVars zip argNames) yield {
-                val uniqueArgName =
-                  if (LocalVars.vars.exists(v => v.name == argName)) name + "_" + argName
-                  else argName
+                val uniqueArgName = name + "`" + argName
                 new CCVar(uniqueArgName, oldVar.srcInfo, oldVar.typ,
                           oldVar.storage)
               }
