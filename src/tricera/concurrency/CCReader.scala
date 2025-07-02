@@ -792,7 +792,7 @@ class CCReader private (prog              : Program,
     import tricera.Literals
 
     atomicMode = true
-    val globalVarSymex = Symex(null)
+    val values = Symex(null)
 
     /**
      * Collect global variables and their initializers.
@@ -800,7 +800,7 @@ class CCReader private (prog              : Program,
     for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
       decl match {
         case decl : Global =>
-          collectVarDecls(decl.dec_, true, globalVarSymex, "", false)
+          collectVarDecls(decl.dec_, true, values, "", false)
 
         case decl : Chan =>
           for (name <- decl.chan_def_.asInstanceOf[AChan].listcident_) {
@@ -851,7 +851,7 @@ class CCReader private (prog              : Program,
                             .map(_.asInstanceOf[DecS])
           }
           assert(name nonEmpty, "Empty function name before collecting its static variables.")
-          decs.foreach(dec => collectVarDecls(dec.dec_, false, globalVarSymex, name, true))
+          decs.foreach(dec => collectVarDecls(dec.dec_, false, values, name, true))
         case None => // nothing needed
       }
     }
@@ -862,7 +862,7 @@ class CCReader private (prog              : Program,
     // prevent time variables, heap variable, and global ghost variables
     // from being initialised twice
     // TODO: This is very brittle and unintuitive - come up with a better solution.
-    GlobalVars.inits ++= (globalVarSymex.getValues drop
+    GlobalVars.inits ++= (values.getValues drop
       (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0) +
       (if ((propertiesToCheck contains properties.MemValidCleanup) ||
            propertiesToCheck.contains(properties.MemValidTrack) &&
@@ -871,7 +871,7 @@ class CCReader private (prog              : Program,
     // needs to be reinitialised as well. Happens with global array allocations.
     if (modelHeap) {
       val heapInd = GlobalVars.lastIndexWhere(heapVar)
-      val initialisedHeapValue = globalVarSymex.getValues(heapInd)
+      val initialisedHeapValue = values.getValues(heapInd)
       val initialHeapValue = IConstant(GlobalVars.vars(heapInd).term)
       if (modelHeap && initialisedHeapValue.toTerm != initialHeapValue) {
         GlobalVars.inits(heapInd) = initialisedHeapValue
@@ -879,7 +879,7 @@ class CCReader private (prog              : Program,
     }
 
 
-    globalPreconditions = globalPreconditions &&& globalVarSymex.getGuard
+    globalPreconditions = globalPreconditions &&& values.getGuard
 
     // todo: what about functions without definitions? replace Afunc type
     val functionAnnotations : Map[Afunc, Seq[(AnnotationInfo, SourceInfo)]] =
@@ -981,19 +981,19 @@ class CCReader private (prog              : Program,
 
         def sortGetter(s: Sort): Option[MonoSortedIFunction] =
           sortGetterMap.get(s)
-        
+
         def wrapperSort(wrapper: IFunction): Option[Sort] = wrapper match {
-          case w: MonoSortedIFunction => 
+          case w: MonoSortedIFunction =>
             wrapperSortMap.get(w)
           case _ => None
         }
 
         def getterSort(getter: IFunction): Option[Sort] = getter match {
-          case g: MonoSortedIFunction => 
+          case g: MonoSortedIFunction =>
             getterSortMap.get(g)
           case _ => None
         }
-      
+
         def getTypOfPointer(t: CCType): CCType = t match {
           case p: CCHeapPointer => p.typ
           case t => t
@@ -1001,7 +1001,7 @@ class CCReader private (prog              : Program,
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        override val getStructMap: Map[IFunction, CCStruct] = 
+        override val getStructMap: Map[IFunction, CCStruct] =
           structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
         override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
@@ -1506,14 +1506,14 @@ class CCReader private (prog              : Program,
    * @param values            This [[Symex]] will be used to fill in the
    *                          extracted values.
    * @param enclosingFuncName Current function (if not global)
-   * @param colelctOnlyLocalStatic If set, signals this is collecting static
+   * @param collectOnlyLocalStatic If set, signals this is collecting static
    *                               local variables.
    *                          **/
-private def collectVarDecls(dec                    : Dec,
-                            isGlobal               : Boolean,
-                            values                 : Symex,
-                            enclosingFuncName      : String = "",
-                            collectOnlyLocalStatic : Boolean) : Unit = {
+  private def collectVarDecls(dec                    : Dec,
+                              isGlobal               : Boolean,
+                              values                 : Symex,
+                              enclosingFuncName      : String = "",
+                              collectOnlyLocalStatic : Boolean) : Unit = {
     if(collectOnlyLocalStatic)
       assert(enclosingFuncName nonEmpty)
     val decls = collectVarDecls(dec, isGlobal || collectOnlyLocalStatic)
@@ -1608,15 +1608,9 @@ private def collectVarDecls(dec                    : Dec,
                       }
                       import IExpression._
                       val heapInd = GlobalVars.lastIndexWhere(heapVar)
-                      val initHeapTerm =
-                        if (values.getValues(heapInd).toTerm == IConstant(heapTerm)) {
-                          CCTerm(GlobalVars.inits(heapInd).toTerm, CCHeap(heap), srcInfo)
-                        } else
-                          CCTerm(values.getValues(heapInd).toTerm, CCHeap(heap), srcInfo)
                       val objTerm = CCTerm(arrayPtr.elementType.getZeroInit,
                         arrayPtr.elementType, srcInfo)
-                      val arrayTerm =
-                        values.heapBatchAlloc(objTerm, arraySizeTerm.toTerm, initHeapTerm)
+                      val arrayTerm = values.heapBatchAlloc(objTerm, arraySizeTerm.toTerm)
                       def getInitializedObj = {
                         if (initStack.nonEmpty) {
                           arrayPtr.elementType match {
@@ -1653,17 +1647,12 @@ private def collectVarDecls(dec                    : Dec,
                   else typ.elementType.getNonDet
                   val objTerm = CCTerm(objValue, typ.elementType, srcInfo)
                   val heapInd = GlobalVars.lastIndexWhere(heapVar)
-                  val initHeapTerm =
-                    if (values.getValues(heapInd).toTerm == IConstant(heapTerm)) {
-                      CCTerm(GlobalVars.inits(heapInd).toTerm, CCHeap(heap), srcInfo)
-                    } else
-                      CCTerm(values.getValues(heapInd).toTerm, CCHeap(heap), srcInfo)
                   val addressRangeValue = varDec.initArrayExpr match {
                     case Some(expr) =>
                       val arraySize =
                         values.eval(expr.asInstanceOf[Especial].exp_)(
                           values.EvalSettings(), values.EvalContext())
-                      values.heapBatchAlloc(objTerm, arraySize.toTerm, initHeapTerm)
+                      values.heapBatchAlloc(objTerm, arraySize.toTerm)
                     case None =>
                       heap.addressRangeCtor(heap.nullAddr(), IIntLit(0))
                   }
@@ -2333,17 +2322,12 @@ private def collectVarDecls(dec                    : Dec,
       CCTerm(heap.newAddr(newAlloc), CCHeapPointer(heap, value.typ), value.srcInfo)
     }
     // batch allocates "size" "objectTerm"s, returns the address range
-    // if "initHeapTerm" is passed, that is used as the initial heap term
-    def heapBatchAlloc(value : CCTerm, size : ITerm,
-                       initHeapTerm : CCExpr = getValue(heapTermName, "")) : ITerm = {
+    def heapBatchAlloc(value : CCTerm, size : ITerm) : ITerm = {
       val newBatchAlloc =
-        heap.batchAlloc(initHeapTerm.toTerm,
+        heap.batchAlloc(getValue(heapTermName, "").toTerm,
                         sortWrapperMap(value.typ.toSort)(value.toTerm), size)
-      //val newAllocHeap = heap.batchAllocHeap(initHeapTerm.toTerm, objectTerm, size)
-      //setValue(heapTerm.name, CCTerm(newAllocHeap, CCHeap(heap)))
       val newHeap = heap.newBatchHeap(newBatchAlloc)
       setValue(heapTerm.name, CCTerm(newHeap, CCHeap(heap), value.srcInfo), "")
-      //heap.batchAllocAddrRange(initHeapTerm.toTerm, objectTerm, size)
       heap.newAddrRange(newBatchAlloc)
     }
     def heapArrayRead(arrExpr  : CCExpr,
@@ -4599,19 +4583,19 @@ private def collectVarDecls(dec                    : Dec,
 
     private def isSEFDeclaration(stm : Stm) : Boolean = stm match {
       case stm: DecS => {
-        stm.dec_ match {
-          case _ : NoDeclarator => true
-          case dec : Declarators =>
-            dec.listinit_declarator_ forall {
-              case _ : OnlyDecl => true
-              case _ : HintDecl => true
-              case decl : InitDecl => isSEFInitializer(decl.initializer_)
-              case decl : HintInitDecl =>
-                decl.initializer_.asInstanceOf[InitExpr].exp_ match {
+        collectVarDecls(stm.dec_, isGlobal = false).forall {
+          case v : CCVarDeclaration if v.needsHeap => false
+          case v : CCVarDeclaration =>
+            v.maybeInitializer match {
+              case Some(initializer) if v.hints.nonEmpty =>
+                initializer.asInstanceOf[InitExpr].exp_ match {
                   case _ : Econst => true
                   case _ => false
                 }
+              case Some(initializer) => isSEFInitializer(initializer)
+              case None => true
             }
+          case _ => true
         }
       }
       case _ => false
