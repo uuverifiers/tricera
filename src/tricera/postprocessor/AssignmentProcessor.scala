@@ -171,7 +171,10 @@ private class AssignmentProcessorVisitor(
 
     val assignments = getReverseAssignments(funApp)
     val separatedAssignments = takeWhileSeparated(assignments)
-    val currentAssignments = takeFirstAddressWrites(separatedAssignments)
+    val simplifiedAssignments = for ((v, f) <- separatedAssignments) yield {
+      v -> HeapSimplifier.visit(f, ()).asInstanceOf[ITerm]
+    }
+    val currentAssignments = takeFirstAddressWrites(simplifiedAssignments)
       .map { case (pointer, value) =>
         assignmentToEquality(pointer, value, heapVar).get
       }
@@ -235,6 +238,31 @@ private class AssignmentProcessorVisitor(
         )
 
       case _ => subres.collectFirst { case Some(h) => h }
+    }
+  }
+
+  private object HeapSimplifier extends CollectingVisitor[Unit, IExpression] {
+    override def postVisit(t: IExpression,
+                           arg: Unit,
+                           subres: Seq[IExpression]): IExpression = {
+      import ap.theories.Heap.HeapFunExtractor
+      import IExpression._
+      t match {
+        case IFunApp(f1@HeapFunExtractor(heap), Seq(IFunApp(f2, _), _))
+          if f1 == heap.read && f2 == heap.write =>
+          val a1 = subres(1).asInstanceOf[ITerm] // read(writeApp,a1))
+          val writeApp = subres(0).asInstanceOf[IFunApp]
+          val a2 = writeApp.args(1) // write(h,a2,_)
+          (a1, a2) match {
+            case (ConstantAsProgVarProxy(a1c), ConstantAsProgVarProxy(a2c))
+              if separatedSet.contains(a1c) && separatedSet.contains(a2c) =>
+              // read(write(h, a2, o), a1) = read(h, a1)
+              val h = writeApp.args(0)
+              heap.read(h, a1)
+            case _ => t update subres
+          }
+        case _ => t update subres
+      }
     }
   }
 }
