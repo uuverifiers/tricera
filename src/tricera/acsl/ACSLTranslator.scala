@@ -1,6 +1,7 @@
 /**
  * Copyright (c) 2021-2022 Pontus Ernstedt
- *               2022-2023 Zafer Esen. All rights reserved.
+ *               2022-2025 Zafer Esen
+ *               2025 Martin Nilsson. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -33,6 +34,7 @@ package tricera.acsl
 import tricera.acsl.{Absyn => AST}
 
 import collection.JavaConverters._
+import scala.collection.mutable.{HashMap => MHashMap}
 import ap.parser._
 import ap.theories.nia.GroebnerMultiplication._
 import ap.types.{Sort, SortedConstantTerm}
@@ -87,11 +89,12 @@ object ACSLTranslator {
   @throws[ACSLException]("if not called with the right context")
   @throws[ACSLParseException]("if parsing or translation fails")
   def translateACSL(annot : String,
-                    ctx   : AnnotationContext) : ParsedAnnotation = {
+                    ctx   : AnnotationContext,
+                    preds : MHashMap[String, tricera.concurrency.CCReader.CCPredicate]) : ParsedAnnotation = {
     val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
     val p : parser = new parser(l, l.getSymbolFactory())
     val ast : AST.Annotation = p.pAnnotation()
-    val translator = new ACSLTranslator(ctx)
+    val translator = new ACSLTranslator(ctx, preds)
 
     ast match {
       case ac : AST.AnnotContract =>
@@ -134,7 +137,8 @@ object ACSLTranslator {
  * @param ctx Context providing information about the parsed program where
  *            the ACSL annotation appears in.
  */
-class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
+class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext,
+                     preds : MHashMap[String, tricera.concurrency.CCReader.CCPredicate]) {
   import scala.collection.mutable.{HashMap => MHashMap}
   import ACSLTranslator._
 
@@ -407,7 +411,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EStructPtrFieldAccess => ???
     case e : AST.EArrayFunMod => ???
     case e : AST.EFieldFunMod => ???
-    case e : AST.EApplication => ???
+    case e : AST.EApplication => new CCFormula(IAtom(preds(e.id_).pred, e.listexpr_.asScala.map(a => translate(a).toTerm)), CCBool, None)
     case e : AST.EOld         => translateOldExpr(e)
     case e : AST.EValid       => translateValidExpr(e)
     case e : AST.ELit         => translateLitExpr(e.lit_)

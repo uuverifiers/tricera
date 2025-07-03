@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2025 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -376,7 +376,6 @@ class CCReader private (prog              : Program,
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCExpr]
 
-  private val uninterpPredDecls     = new MHashMap[String, CCPredicate]
   private val interpPredDefs        = new MHashMap[String, CCFormula]
   private val loopInvariants        =
     new MHashMap[String, (CCPredicate, SourceInfo)]
@@ -393,6 +392,7 @@ class CCReader private (prog              : Program,
   val prePredsToReplace : MHashSet[Predicate] = new MHashSet()
   val postPredsToReplace : MHashSet[Predicate] = new MHashSet()
   val clauseToRichClause : MHashMap[Clause, CCClause] = new MHashMap()
+  val uninterpPredDecls : MHashMap[String, CCPredicate] = new MHashMap()
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -1027,7 +1027,7 @@ class CCReader private (prog              : Program,
         val possibleACSLAnnotation = annot.asInstanceOf[MaybeACSLAnnotation]
         // todo: try / catch and print msg?
         val contract = ACSLTranslator.translateACSL(
-          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
+          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext, uninterpPredDecls)
 
         prePredsToReplace.add(funContext.prePred.pred)
         postPredsToReplace.add(funContext.postPred.pred)
@@ -4421,7 +4421,7 @@ class CCReader private (prog              : Program,
             override val annotationNumLines : Int = 1
           }
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
+            "/*@" + annot + "*/", new LocalContext(), uninterpPredDecls) match {
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
@@ -4503,7 +4503,7 @@ class CCReader private (prog              : Program,
             override val annotationNumLines : Int = 1
           }
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
+            "/*@" + annot + "*/", new LocalContext(), uninterpPredDecls) match {
             case res : tricera.acsl.LoopAnnotation =>
                 ???
             case _ =>
