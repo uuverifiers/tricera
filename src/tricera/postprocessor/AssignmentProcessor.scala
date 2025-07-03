@@ -40,57 +40,83 @@
 
 package tricera.postprocessor
 
-import tricera.postprocessor.ContractConditionType._
 import ap.parser._
+import ap.terfor.ConstantTerm
 
-object AssignmentProcessor extends ContractProcessor with ClauseCreator {
-  def apply(
-      expr: IExpression,
-      valueSet: ValSet,
-      separatedSet: Set[ISortedVariable],
-      cci: ContractConditionInfo
-  ): Option[IFormula] = {
-    (new AssignmentProcessor(valueSet, separatedSet, cci)).visit(expr, 0)
+import tricera.{
+  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
+  Invariant, InvariantContext, LoopInvariant, PostCondition, PreCondition,
+  ProgVarProxy, Result, Solution}
+
+import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+
+
+class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
+  import tricera.postprocessor.PointerTools._
+
+  override def applyTo(solution: Solution) = solution match {
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(applyTo), loopInvariants)
   }
 
-  def processContractCondition(cci: ContractConditionInfo) = {
-    getClauses(cci.contractCondition, cci) match {
-      case Some(clauses) =>
-        cci.contractCondition
-          .&(clauses)
-      case _ =>
-        cci.contractCondition
-    }
+  private def applyTo(funcInv: FunctionInvariants)
+  : FunctionInvariants = funcInv match {
+    case FunctionInvariants(id, isSrcAnnotated, preCondition, postCondition @ PostCondition(postInv), loopInvariants) =>
+      val newInv = srcs.find(p => p.id == id) match {
+        case Some(srcInv) => 
+          FunctionInvariants(
+            id,
+            isSrcAnnotated,
+            preCondition, // Note: This processor is only applicable to the post condition
+            PostCondition(addAssignmentAtoms(postInv, srcInv.postCondition, postCondition.isCurrentHeap)),
+            loopInvariants)
+        case None =>
+          funcInv
+      }
+      DebugPrinter.oldAndNew(this, funcInv, newInv)
+      newInv
   }
 
-  def getClauses(
-      expr: IExpression,
-      cci: ContractConditionInfo
-  ): Option[IFormula] = {
-    cci.contractConditionType match {
-      case Precondition =>
-        None
-      case Postcondition =>
-        val valueSet = ValSetReader.deBrujin(cci.contractCondition)
-        val separatedSet =
-          PointerPropProcessor.getSafePointers(cci.contractCondition, cci)
-        AssignmentProcessor(expr, valueSet, separatedSet, cci)
-    }
+  private def addAssignmentAtoms(
+    invariant: Invariant,
+    srcInv: InvariantContext,
+    isCurrentHeap: ProgVarProxy => Boolean)
+    = invariant match {
+    case Invariant(form, Some(heapInfo), srcInfo) =>
+      val srcExp = srcInv match {
+        case PreCondition(inv) => inv.expression
+        case PostCondition(inv) => inv.expression
+        case LoopInvariant(exp, _, _) => exp
+      }
+      val visitor = new AssignmentProcessorVisitor(
+        ValSetReader.deBrujin(srcExp),
+        inferSafeHeapPointers(srcInv),
+        isCurrentHeap,
+        heapInfo)
+      val newForm = visitor.visit(form, 0) match {
+        case None => form
+        case Some(assignments) => form.&(assignments)
+      }
+      Invariant(newForm, Some(heapInfo), srcInfo)
+    case _ =>
+      throw NeedsHeapModelException
   }
 }
 
-class AssignmentProcessor(
-    valueSet: ValSet,
-    separatedSet: Set[ISortedVariable],
-    cci: ContractConditionInfo
-) extends CollectingVisitor[Int, Option[IFormula]] {
+
+private class AssignmentProcessorVisitor(
+  valueSet: ValSet,
+  separatedSet: Set[ProgVarProxy],
+  isCurrentHeap: ProgVarProxy => Boolean,
+  heapInfo: HeapInfo) 
+  extends CollectingVisitor[Int, Option[IFormula]] {
 
   private def getReverseAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
     t match {
       case IFunApp(
             writeFun,
             Seq(heap, pointer, value)
-          ) if (cci.isWriteFun(writeFun)) =>
+          ) if (heapInfo.isWriteFun(writeFun)) =>
         val assignment =
           (pointer.asInstanceOf[ITerm], value.asInstanceOf[ITerm])
         assignment +: getReverseAssignments(heap)
@@ -101,35 +127,33 @@ class AssignmentProcessor(
   def assignmentToEquality(
       pointer: ITerm,
       value: ITerm,
-      heapVar: ISortedVariable
+      heapVar: ProgVarProxy
   ): Option[IFormula] = {
-    cci.getGetter(value) match {
-      case Some(selector) =>
-        Some(
-          IEquation(
+    value match {
+      case IFunApp(objCtor, _) =>
+        heapInfo.objectCtorToSelector(objCtor)
+          .map(selector => IEquation(
             IFunApp(
               selector,
-              Seq(IFunApp(cci.heapTheory.read, Seq(heapVar, pointer)))
+              Seq(IFunApp(heapInfo.getReadFun, Seq(IConstant(heapVar), pointer)))
             ),
-            IFunApp(selector, Seq(value))
-          ).asInstanceOf[IFormula]
-        )
+            IFunApp(selector, Seq(value))).asInstanceOf[IFormula])
       case _ => None
     }
   }
 
   def extractEqualitiesFromWriteChain(
       funApp: IExpression,
-      heapVar: ISortedVariable
+      heapVar: ProgVarProxy
   ): Option[IFormula] = {
-    def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) = {
-      if (separatedSet.isEmpty) {
-        Seq(assignments.head)
-      } else {
-        assignments.takeWhile { case (pointer, value) =>
-          separatedSet.exists(valueSet.areEqual(pointer, _))
-        }
-      }
+    def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) =
+      (assignments.isEmpty, separatedSet.isEmpty) match {
+        case (true, _) => Seq()
+        case (false, true) => Seq(assignments.head)
+        case _ =>
+          assignments.takeWhile { case (pointer, value) =>
+            separatedSet.exists(valueSet.areEqual(pointer, _))
+          }
     }
 
     def takeFirstAddressWrites(assignments: Seq[(ITerm, ITerm)]) = {
@@ -177,7 +201,7 @@ class AssignmentProcessor(
 
   override def preVisit(
       t: IExpression,
-      quantifierDepth: Int
+      quantifierDepth: Int 
   ): PreVisitResult = t match {
     case v: IVariableBinder => UniSubArgs(quantifierDepth + 1)
     case _                  => KeepArg
@@ -193,8 +217,8 @@ class AssignmentProcessor(
       // addresses must be separated and pointers valid
       case IEquation(
             heapFunApp @ IFunApp(function, _),
-            Var(h)
-          ) if cci.isCurrentHeap(h, quantifierDepth) =>
+            ConstantAsProgVarProxy(h)
+          ) if isCurrentHeap(h) =>
         shiftFormula(
           extractEqualitiesFromWriteChain(heapFunApp, h),
           quantifierDepth
@@ -202,9 +226,9 @@ class AssignmentProcessor(
 
       // other order..
       case IEquation(
-            Var(h),
+            ConstantAsProgVarProxy(h),
             heapFunApp @ IFunApp(function, _)
-          ) if cci.isCurrentHeap(h, quantifierDepth) =>
+          ) if isCurrentHeap(h) =>
         shiftFormula(
           extractEqualitiesFromWriteChain(heapFunApp, h),
           quantifierDepth

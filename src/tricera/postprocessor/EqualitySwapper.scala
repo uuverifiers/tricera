@@ -40,47 +40,79 @@ package tricera.postprocessor
 
 import ap.parser._
 import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import tricera.postprocessor.ContractConditionType._
 
-object ToVariableForm extends ContractProcessor {
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    val valueSet = cci.contractConditionType match {
-      case Precondition =>
-        ValSetReader.deBrujin(cci.precondition)
-      case Postcondition =>
-        ValSet.merge(
-          ValSetReader.deBrujin(cci.precondition),
-          ValSetReader.deBrujin(cci.postcondition)
-        )
-    }
-    EqualitySwapper.deBrujin(cci.contractCondition, valueSet.toVariableFormMap, cci).asInstanceOf[IFormula]
+import tricera.{
+  ConstantAsProgVarProxy, HeapInfo, FunctionInvariants,
+  PostCondition, PreCondition, ProgVarProxy, Invariant, Solution}
+import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+
+object ToVariableForm extends ResultProcessor {
+
+  override def applyTo(solution: Solution) = solution match {
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(applyTo), loopInvariants)
+  }
+
+  private def applyTo(funcInvs: FunctionInvariants)
+  : FunctionInvariants = funcInvs match {
+    case FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      preCondition @ PreCondition(preInv),
+      postCondition @ PostCondition(postInv),
+      loopInvariants) =>
+      val preCondValSet = ValSetReader.deBrujin(preInv.expression)
+      val postCondValSet = ValSet.merge(
+          ValSetReader.deBrujin(preInv.expression),
+          ValSetReader.deBrujin(postInv.expression))
+      val newInvs = FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(toVariableForm(preInv, preCondValSet, preCondition.isCurrentHeap)),
+        PostCondition(toVariableForm(postInv, postCondValSet, postCondition.isCurrentHeap)),
+        loopInvariants)
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
+  }
+
+  def toVariableForm(
+    invariant: Invariant,
+    valueSet: ValSet,
+    isCurrentHeap: ProgVarProxy => Boolean)
+    : Invariant = invariant match {
+      case Invariant(form, maybeHeapInfo, maybeSourceInfo) => 
+        Invariant(
+          EqualitySwapper.deBrujin(
+            form,
+            valueSet.toVariableFormMap,
+            isCurrentHeap).asInstanceOf[IFormula],
+          maybeHeapInfo,
+          maybeSourceInfo)
   }
 }
 
+
 object ToExplicitForm {
-  def deBrujin(expr: IExpression, valueSet: ValSet, cci: ContractConditionInfo) = {
-    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap, cci)
+  def deBrujin(expr: IExpression, valueSet: ValSet, isCurrentHeap: ProgVarProxy => Boolean) = {
+    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap, isCurrentHeap)
   } 
 
-  def invariant(expr: IExpression, valueSet: ValSet, cci: ContractConditionInfo) = {
-    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap, cci)
+  def invariant(expr: IExpression, valueSet: ValSet, isCurrentHeap: ProgVarProxy => Boolean) = {
+    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap, isCurrentHeap)
   } 
 }
 
 object EqualitySwapper {
-  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo) = {
-    (new EqualitySwapper(swapMap, cci))(expr)
+  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean) = {
+    (new EqualitySwapper(swapMap, isCurrentHeap))(expr)
   }
 
-  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo) = {
-    (new InvariantEqualitySwapper(swapMap, cci))(expr)
+  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean) = {
+    (new InvariantEqualitySwapper(swapMap, isCurrentHeap))(expr)
   }
 }
 
-class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo)
+class EqualitySwapper(swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean)
     extends CollectingVisitor[Int, IExpression] 
     with ExpressionUtils {
 
@@ -96,9 +128,9 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionIn
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: ISortedVariable, term) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(ConstantAsProgVarProxy(v), term) if !isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: ISortedVariable) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(term, ConstantAsProgVarProxy(v)) if !isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)
@@ -113,33 +145,27 @@ class EqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionIn
       quantifierDepth: Int,
       subres: Seq[IExpression]
   ): IExpression = t match {
-    case h: ISortedVariable if cci.isCurrentHeap(h, quantifierDepth) =>
+    case ConstantAsProgVarProxy(h) if isCurrentHeap(h) =>
       t update subres 
     case term: ITerm =>
-      val res = t update subres
-      val shiftedTerm =
-        VariableShiftVisitor(term, quantifierDepth, -quantifierDepth)
-      swapMap.get(shiftedTerm) match {
-        case Some(variable) =>
-          val newVariable =
-            VariableShiftVisitor(variable, 0, quantifierDepth)
-          newVariable
-        case None =>
-          res
+      swapMap.get(term) match {
+        case Some(variable) => variable
+        case None => t update subres
       }
     case default => t update subres
   }
 }
 
-class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], cci: ContractConditionInfo) extends EqualitySwapper(swapMap, cci) {
+class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean) 
+  extends EqualitySwapper(swapMap, isCurrentHeap) {
 
   override def preVisit(
       t: IExpression,
       quantifierDepth: Int
   ): PreVisitResult = t match {
-    case IEquation(v: ISortedVariable, term) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(ConstantAsProgVarProxy(v), term) if !isCurrentHeap(v) =>
       ShortCutResult(t)
-    case IEquation(term, v: ISortedVariable) if !cci.isCurrentHeap(v, quantifierDepth) =>
+    case IEquation(term, ConstantAsProgVarProxy(v)) if !isCurrentHeap(v) =>
       ShortCutResult(t)
     case IIntFormula(IIntRelation.EqZero, term) =>
       ShortCutResult(t)

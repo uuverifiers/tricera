@@ -5,10 +5,10 @@ Warning: no definition of function "non_det_int_ptr" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for get */
+/* contract for get */
 /*@
-  requires p == n && n_init >= 1;
-  ensures ((\result == 0 && 0 >= \old(*n)) || \result >= 0) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n;
+  requires p == n && n_init >= 1 && \valid(p);
+  ensures ((\result == 0 && 0 >= \old(*n)) || (\result >= 0 && n_init == \result)) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n;
 */
 ================================================================================
 
@@ -20,12 +20,12 @@ Warning: no definition of function "non_det_int_ptr" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for decrement */
+/* contract for decrement */
 /*@
   requires \separated(a, b) && \valid(a) && \valid(b);
   ensures a_init == \old(a_init) && b_init == \old(b_init) && a == \old(a) && b == \old(b) && \separated(a, b) && \valid(a) && \valid(b);
 */
-/* contracts for increment */
+/* contract for increment */
 /*@
   requires val == a && \separated(val, b) && \valid(val) && \valid(b);
   ensures \old(val) == a && a_init == \old(a_init) && b_init == \old(b_init) && \old(val) == \old(a) && b == \old(b) && \separated(val, b) && \valid(val) && \valid(b) && *val == 1 + \old(*val);
@@ -40,12 +40,12 @@ Warning: no definition of function "non_det_int_ptr" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for decrement */
+/* contract for decrement */
 /*@
   requires \valid(a);
   ensures a_init == \old(a_init) && a == \old(a) && \valid(a);
 */
-/* contracts for increment */
+/* contract for increment */
 /*@
   requires val == a && \valid(val);
   ensures \old(val) == a && a_init == \old(a_init) && \valid(val) && *val == 1 + \old(*val);
@@ -60,7 +60,7 @@ Warning: no definition of function "non_det_int_ptr" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for findMax */
+/* contract for findMax */
 /*@
   requires x == a && y == b && \separated(x, y) && \valid(x) && \valid(y);
   ensures ((a_init == \result && \result >= b_init) || (b_init - a_init >= 1 && b_init == \result)) && r == \old(r) && a_init == \old(a_init) && b_init == \old(b_init) && \old(a) == a && \old(b) == b;
@@ -75,10 +75,10 @@ Warning: no definition of function "non_det_int" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for findMax */
+/* contract for findMax */
 /*@
   requires max == r && x == a && y == b && \separated(x, y) && \separated(x, max) && \separated(y, max) && \valid(x) && \valid(y) && \valid(max);
-  ensures (\old(b_init) - \old(a_init) >= 1 || \old(a_init) >= \old(b_init)) && a == \old(x) && b == \old(y) && r == \old(max) && \old(a_init) == a_init && \old(b_init) == b_init;
+  ensures (\old(b_init) - \old(a_init) >= 1 || \old(a_init) >= \old(b_init)) && a == \old(x) && b == \old(y) && r == \old(max) && \old(a_init) == a_init && \old(b_init) == b_init && \valid(x) && \valid(y) && \valid(max);
 */
 ================================================================================
 
@@ -87,33 +87,15 @@ SAFE
 multadd-1.c
 Warning: no definition of function "non_det_int_ptr" available
 Warning: no definition of function "non_det_int" available
-Warning: The following clause has different terms with the same name (term: b:12)
-main_12(@h_post, a_post, b_post, result_post, a_init_post, b_init_post) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13), addTwoNumbers_post(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13, @h_post, a_post, b_post, result_post, a_init_post, b_init_post).
-
-Warning: The following clause has different terms with the same name (term: result:13)
-main_12(@h_post, a_post, b_post, result_post, a_init_post, b_init_post) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13), addTwoNumbers_post(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13, @h_post, a_post, b_post, result_post, a_init_post, b_init_post).
-
-Warning: The following clause has different terms with the same name (term: a:11)
-main_12(@h_post, a_post, b_post, result_post, a_init_post, b_init_post) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13), addTwoNumbers_post(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13, @h_post, a_post, b_post, result_post, a_init_post, b_init_post).
-
-Warning: The following clause has different terms with the same name (term: b:12)
-addTwoNumbers_pre(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13).
-
-Warning: The following clause has different terms with the same name (term: result:13)
-addTwoNumbers_pre(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13).
-
-Warning: The following clause has different terms with the same name (term: a:11)
-addTwoNumbers_pre(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13) :- main39_3(@h, a:11, b:12, result:13, a_init:14, b_init:15, a:11, b:12, result:13).
-
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for addTwoNumbers */
+/* contract for addTwoNumbers */
 /*@
   requires \separated(a, b) && \separated(a, result) && \separated(b, result) && \valid(a) && \valid(b) && \valid(result);
   ensures a == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init) && \separated(a, b) && \separated(a, result) && \separated(b, result) && \valid(a) && \valid(b) && \valid(result);
 */
-/* contracts for multiplyByTwo */
+/* contract for multiplyByTwo */
 /*@
   requires num == a && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result);
   ensures \old(num) == a && \old(num) == \old(a) && b == \old(b) && result == \old(result) && a_init == \old(a_init) && b_init == \old(b_init) && \separated(num, b) && \separated(num, result) && \separated(b, result) && \valid(num) && \valid(b) && \valid(result) && *num == 2*\old(*num);
@@ -139,3 +121,34 @@ Final:
 Failed assertion:
 
 UNSAFE
+
+heapptr-to-stackptr.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for swap */
+/*@
+  requires \true;
+  ensures *x == \old(*y) && *y == \old(*x) && \valid(y) && \valid(x);
+*/
+================================================================================
+
+SAFE
+
+qualified-heapptr-to-stackptr.c
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
+(error "Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9")
+Other Error: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
+
+multi-arg.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for mod */
+/*@
+  requires \separated(t1, t2) && \valid(t1) && \valid(t2);
+  ensures \separated(t1, t2) && \valid(t1) && \valid(t2) && *t1 == 1 + \old(*t1);
+*/
+================================================================================
+
+SAFE

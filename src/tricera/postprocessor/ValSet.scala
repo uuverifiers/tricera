@@ -40,6 +40,7 @@ import ap.parser._
 import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import ap.theories.ADT
+import tricera.{ConstantAsProgVarProxy, ProgVarProxy}
 
 object Val {
   def apply(term1: ITerm, term2: ITerm): Val = {
@@ -51,11 +52,11 @@ object Val {
   }
 }
 case class Val(variants: Set[ITerm]) {
-  def getExplicitForm: Option[ITerm] = variants find {
+  def getExplicitForm: Option[ITerm] = variants find { q => { q match {
     case a: Address         => false
-    case v: ISortedVariable => false
+    case ConstantAsProgVarProxy(_) => false
     case _                  => true
-  }
+  }}}
 
   def getAddrForm: Option[ITerm] = variants find {
     case a: Address => true
@@ -63,8 +64,8 @@ case class Val(variants: Set[ITerm]) {
   }
 
   def getVariableForm: Option[ITerm] = variants find {
-    case v: ISortedVariable => true
-    case _                  => false
+    case ConstantAsProgVarProxy(_) => true
+    case _             => false
   }
 
   def +(term: ITerm): Val = {
@@ -173,11 +174,11 @@ case class ValSet(vals: Set[Val]) {
     }
   }
 
-  def toVariableFormMap: Map[IExpression, ISortedVariable] = {
+  def toVariableFormMap: Map[IExpression, IConstant] = {
     vals
       .collect {
         case value if value.getVariableForm.isDefined =>
-          val variable = value.getVariableForm.get.asInstanceOf[ISortedVariable]
+          val variable = value.getVariableForm.get.asInstanceOf[IConstant]
           value.variants
             .filterNot(_ == variable)
             .map(_ -> variable)
@@ -224,6 +225,9 @@ object ValSetReader {
   object InvariantReader
       extends CollectingVisitor[Unit, ValSet]
       with ExpressionUtils {
+
+    // SSSOWO: The de Bruijn version disregards disjunctions,
+    //   should this do the same? If not, why not?
 
     override def postVisit(
         t: IExpression,

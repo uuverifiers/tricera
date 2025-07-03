@@ -33,18 +33,43 @@ import ap.parser._
 import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
+import tricera.{
+  FunctionInvariants, Invariant, LoopInvariant,
+  PostCondition, PreCondition, Solution}
 
-object ADTExploder extends SolutionProcessor 
-                      with ContractProcessor {
-  def apply(expr : IFormula) : IFormula =
-    Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
+object ADTExploder extends ResultProcessor {
 
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    apply(cci.contractCondition)
+  override def applyTo(solution: Solution): Solution = solution match {
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(functionInvariants.map(rewrite), loopInvariants.map(rewrite))
   }
 
+  def rewrite(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {
+    case FunctionInvariants(id, isSrcAnnotated, PreCondition(preInv), PostCondition(postInv), loopInvs) =>
+      val newInvs = FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(rewrite(preInv)),
+        PostCondition(rewrite(postInv)),
+        loopInvs.map(rewrite))
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
+  }
+
+  def rewrite(inv: Invariant): Invariant = inv match {
+    case Invariant(expression, heapInfo, sourceInfo) =>
+      Invariant(rewrite(expression), heapInfo, sourceInfo)
+  }
+
+  def rewrite(inv: LoopInvariant): LoopInvariant = inv match {
+    case LoopInvariant(expression, heapInfo, sourceInfo) =>
+      LoopInvariant(rewrite(expression), heapInfo, sourceInfo)
+  }
+
+  def rewrite(expr : IFormula): IFormula = {
+    Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
+  }
+  
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
   object adtTermExploder extends CollectingVisitor[Object, IExpression] {
     def getADTTerm(t : IExpression) : Option[ADTTerm] = {

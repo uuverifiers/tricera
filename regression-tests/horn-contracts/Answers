@@ -3,7 +3,7 @@ contract1.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for f */
+/* contract for f */
 /*@
   requires 10 >= x && x >= 0;
   ensures \result == \old(x) && 10 >= \old(x) && \old(x) >= 0;
@@ -16,7 +16,7 @@ contract2.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for f */
+/* contract for f */
 /*@
   requires g >= 0 && x >= 0;
   ensures \result >= \old(x) && g >= 1 && \old(x) >= 0 && \old(g) >= 0;
@@ -58,7 +58,7 @@ contract3.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for f */
+/* contract for f */
 /*@
   requires g == 0 || (g - x >= 1 && g >= 1);
   ensures g >= 0 && \old(g) >= 0 && (g != \old(g) || ((\old(x) >= 2*\old(g) || \old(g) - \old(x) >= 1) && (2*\old(g) - \old(x) >= 1 || 0 >= \old(g)))) && (\old(g) != 0 || ((g != 0 || 0 >= \old(x)) && (g >= \old(x) || 0 >= g))) && (g == \old(g) || g - \old(x) >= 1 || 0 >= \old(g)) && (g >= \old(g) || \old(x) >= g || 0 >= \old(g));
@@ -71,7 +71,7 @@ takeuchi.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for tak */
+/* contract for tak */
 /*@
   requires \true;
   ensures (\result != \old(z) || \old(y) >= \old(z) || \old(x) - \old(y) >= 1) && (\result != \old(y) || \old(y) >= \old(z) || \old(y) >= \old(x)) && (\result == \old(z) || \result == \old(y) || \old(y) - \old(z) >= 1) && (\result == \old(y) || \old(z) >= \old(y) || \old(x) - \old(y) >= 1);
@@ -84,7 +84,7 @@ assert.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for mult */
+/* contract for mult */
 /*@
   requires x == N && N >= 0 && y >= 0;
   ensures N2 == \old(N2) && N == \old(N) && \old(x) == \old(N) && \old(y) >= 0 && \old(N) >= 0 && (\result >= \old(y) || \result >= \old(N));
@@ -118,16 +118,114 @@ false :- main12_3_1(x:12), x:12 != 0. (line:14 col:3) (property: user-assertion)
 UNSAFE
 
 stackptr.hcc
-UNKNOWN (Unsupported C fragment. Function contracts are currently not supported together with stack pointers (10:5))
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f */
+/*@
+  requires \true;
+  ensures *x - \old(*x) == 1 && \valid(x);
+*/
+================================================================================
+
+SAFE
 
 struct-name-bug.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for foo */
+/* contract for foo */
 /*@
   requires s.f == 21;
   ensures \old(s).f == 21 && 2*21 == \result;
+*/
+================================================================================
+
+SAFE
+
+stackptr-multi-arg.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for mod */
+/*@
+  requires \exists int v0; (t1->val == v0 && \exists int v1; (2147483647 >= v1 && v1 >= -2147483647 && 2147483646 >= v0 && v0 >= -2147483648 && t2->val == v1)) && \valid(t2) && \valid(t1);
+  ensures (!\exists int v0; (\old(t1->val) == v0 && \exists int v1; (2147483647 >= v1 && v1 >= -2147483647 && 2147483646 >= v0 && v0 >= -2147483648 && \old(t2->val) == v1)) || (t1->val == 1 + \old(t1->val) && t2->val == \old(t2->val) - 1)) && \valid(t2) && \valid(t1);
+*/
+================================================================================
+
+SAFE
+
+stackptr-nested-calls.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for incdec */
+/*@
+  requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && p->val == v0) && \valid(p);
+  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && \old(p->val) == v0) || \exists int v0, v1; (\old(p->val) == v1 && p->val == v1)) && \valid(p);
+*/
+/* contract for decr */
+/*@
+  requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && q->val == 1 + v0) && \valid(q);
+  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && \old(q->val) == 1 + v0) || q->val == \old(q->val) - 1) && \valid(q);
+*/
+================================================================================
+
+SAFE
+
+stackptr-recursion.hcc
+
+---------------------------------
+Init:
+    main25_5(emptyHeap, 0, 0)    
+---------------------------------
+                |                
+                |                
+                V                
+ main31_0(emptyHeap, 0, 0, 2, 0) 
+---------------------------------
+                |                
+                |                
+                V                
+      main(emptyHeap, 0, 1)      
+---------------------------------
+Final:
+      main(emptyHeap, 0, 1)      
+---------------------------------
+Failed assertion:
+false :- main(@h, globalincr_0t:38, s:24), s:24 != 5. (line:26 col:5) (property: user-assertion)
+
+UNSAFE
+
+stackptr-retvalue.hcc
+UNKNOWN (Unsupported C fragment. 8:12 Stack pointers in combination with heap pointers)
+
+stackptr-struct.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for incr */
+/*@
+  requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483647 && t->val == v0) && \valid(t);
+  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483647 && \old(t->val) == v0) || t->val == 1 + \old(t->val)) && \valid(t);
+*/
+================================================================================
+
+SAFE
+
+stackptr-custom-entry.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for incr */
+/*@
+  requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && t->val == v0) && \valid(t);
+  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && \old(t->val) == v0) || t->val == 1 + \old(t->val)) && \valid(t);
 */
 ================================================================================
 

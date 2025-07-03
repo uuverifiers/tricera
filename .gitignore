@@ -14,9 +14,13 @@ acsl-parser/target
 acsl-parser/tricera
 project/project
 project/target
+project/.bloop
 Makefile
 cmake_install.cmake
 preprocessor/build
 tri-pp
 *.swp
 *.swo
+.metals/**
+.bloop/**
+.vscode

@@ -40,45 +40,81 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import ap.theories.Heap.HeapFunExtractor
 import ap.theories.ADT
-import ap.theories.Heap
-import ap.theories.Theory
-import ContractConditionType._
 import ap.types.MonoSortedIFunction
-import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
+import tricera.{
+  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
+  Invariant, InvariantContext, LoopInvariant, PostCondition,
+  PreCondition, ProgVarProxy, Solution}
+import tricera.postprocessor.ToExplicitForm.invariant
 
-object ACSLExpressionProcessor
-    extends ContractProcessor {
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    val visitor =
-      new ACSLExpressionVisitor(cci)
-    visitor(cci.contractCondition)
+
+object ACSLExpressionProcessor extends ResultProcessor {
+
+  override def applyTo(solution: Solution): Solution = solution match {
+    case Solution(functionInvariants, loopInvariants) =>
+      Solution(
+        functionInvariants.map(applyTo(_)),
+        loopInvariants.map(i => ACSLExpressionVisitor(i,i)))
+  }
+
+  private def applyTo(funcInvs: FunctionInvariants)
+  : FunctionInvariants = funcInvs match {
+    case FunctionInvariants(
+      id,
+      isSrcAnnotated,
+      preCondition @ PreCondition(preInv),
+      postCondition @ PostCondition(postInv),
+      loopInvariants) =>
+      val newInvs = FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(ACSLExpressionVisitor(preInv, preCondition)),
+        PostCondition(ACSLExpressionVisitor(postInv, postCondition)),
+        loopInvariants.map(i => ACSLExpressionVisitor(i,i)))
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
+  }
+
+  object ACSLExpressionVisitor {
+    def apply(invariant: Invariant, context: InvariantContext): Invariant =
+      invariant match {
+        case Invariant(form, Some(heapInfo), maybeSourceInfo) =>
+          val visitor = new ACSLExpressionVisitor(heapInfo, context)
+          Invariant(visitor(form), Some(heapInfo), maybeSourceInfo)
+        case _ =>
+          invariant
+    }
+
+    def apply(invariant: LoopInvariant, context: InvariantContext): LoopInvariant =
+      invariant match {
+        case LoopInvariant(form, Some(heapInfo), srcInfo) =>
+          val visitor = new ACSLExpressionVisitor(heapInfo, context)
+          LoopInvariant(visitor(form), Some(heapInfo), srcInfo)
+        case _ =>
+          invariant
+    }
   }
 
   class ACSLExpressionVisitor(
-      cci: ContractConditionInfo
-  ) extends CollectingVisitor[Int, IExpression] {
+    heapInfo: HeapInfo,
+    context: InvariantContext
+  ) extends CollectingVisitor[Unit, IExpression] {
 
-    def apply(contractCondition: IFormula): IFormula = {
-      visit(contractCondition, 0).asInstanceOf[IFormula]
+    def apply(form: IFormula): IFormula = {
+      visit(form, ()).asInstanceOf[IFormula]
     }
 
-    override def preVisit(
-        t: IExpression,
-        quantifierDepth: Int
-    ): PreVisitResult = t match {
-      case v: IVariableBinder => UniSubArgs(quantifierDepth + 1)
-      case _                  => KeepArg
+    private def isSelector(func: MonoSortedIFunction): Boolean = func match {
+      case ADT.Selector(_) if !heapInfo.isObjSelector(func) => true
+      case _ => false
     }
+
+    private def isOldHeap(p: ProgVarProxy): Boolean = heapInfo.isHeap(p) && p.isPreExec
 
     override def postVisit(
         t: IExpression,
-        quantifierDepth: Int,
+        dummy: Unit,
         subres: Seq[IExpression]
     ): IExpression = {
 
@@ -91,79 +127,68 @@ object ACSLExpressionProcessor
                   Seq(
                     TheoryOfHeapFunApp(
                       readFun,
-                      Seq(Var(h), Var(p))
+                      Seq(ConstantAsProgVarProxy(h), ConstantAsProgVarProxy(p))
                     )
                   )
                 )
               )
             )
-            if (cci.isGetter(getFun) &&
-              cci.isReadFun(readFun) &&
-              cci.isSelector(selector) &&
-              (cci.isCurrentHeap(h, quantifierDepth) ||
-                cci.isOldHeap(h, quantifierDepth))) =>
-          cci.contractConditionType match {
-            case Precondition =>
+            if (heapInfo.isObjSelector(getFun) &&
+              heapInfo.isReadFun(readFun) &&
+              isSelector(selector) &&
+              heapInfo.isHeap(h)) =>
+          context match {
+            case _: PreCondition =>
               ACSLExpression.arrowFunApp(
                 ACSLExpression.arrow,
                 p,
-                selector,
-                quantifierDepth,
-                cci
+                selector
               )
-            case Postcondition =>
+            case _: PostCondition =>
               (
-                cci.isOldHeap(h, quantifierDepth),
-                cci.isOldVar(p, quantifierDepth),
-                cci.isParam(p, quantifierDepth)
+                isOldHeap(h),
+                p.isPreExec,
+                p.isParameter
               ) match {
                 case (false, false, false) =>
                   // read(@h, p), p not param => p->a
                   ACSLExpression.arrowFunApp(
                     ACSLExpression.arrow,
                     p,
-                    selector,
-                    quantifierDepth,
-                    cci
+                    selector
                   )
                 case (false, true, true) =>
                   // read(@h, p_0), p is param => p->a
                   ACSLExpression.arrowFunApp(
                     ACSLExpression.arrow,
                     p,
-                    selector,
-                    quantifierDepth,
-                    cci
+                    selector
                   )
                 case (false, true, false) =>
                   // read(@h, p_0), p not param => \old(p)->a
                   ACSLExpression.arrowFunApp(
                     ACSLExpression.arrowOldPointer,
                     p,
-                    selector,
-                    quantifierDepth,
-                    cci
+                    selector
                   )
                 case (true, true, true) =>
                   // read(@h_0, p_0), p is param => \old(p->a)
                   ACSLExpression.arrowFunApp(
                     ACSLExpression.oldArrow,
                     p,
-                    selector,
-                    quantifierDepth,
-                    cci
+                    selector
                   )
                 case (true, true, false) =>
                   // read(@h_0, p_0), p not param => \old(p->a)
                   ACSLExpression.arrowFunApp(
                     ACSLExpression.oldArrow,
                     p,
-                    selector,
-                    quantifierDepth,
-                    cci
+                    selector
                   )
                 case _ => t update subres
               }
+            // SSSOWO TODO: What about loop invariants?
+            case _ => t update subres
           }
 
         // read(h,p).get_<sort> ~> *p
@@ -172,68 +197,56 @@ object ACSLExpressionProcessor
               Seq(
                 TheoryOfHeapFunApp(
                   readFun,
-                  Seq(Var(h), Var(p))
+                  Seq(ConstantAsProgVarProxy(h), ConstantAsProgVarProxy(p))
                 )
               )
             )
-            if (cci.isGetter(getFun) &&
-              cci.isReadFun(readFun) &&
-              (cci.isCurrentHeap(h, quantifierDepth) ||
-                cci.isOldHeap(h, quantifierDepth))) => {
-          cci.contractConditionType match {
-            case Precondition =>
+            if (heapInfo.isObjSelector(getFun) &&
+              heapInfo.isReadFun(readFun) &&
+              heapInfo.isHeap(h)) => {
+          context match {
+            case _: PreCondition =>
               ACSLExpression.derefFunApp(
                 ACSLExpression.deref,
-                p,
-                quantifierDepth,
-                cci
+                p
               )
-            case Postcondition =>
+            case _: PostCondition =>
               (
-                cci.isOldHeap(h, quantifierDepth),
-                cci.isOldVar(p, quantifierDepth),
-                cci.isParam(p, quantifierDepth)
+                isOldHeap(h),
+                p.isPreExec,
+                p.isParameter
               ) match {
                 case (false, false, false) => // read(@h, p), p not param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.deref,
-                    p,
-                    quantifierDepth,
-                    cci
+                    p
                   )
                 case (false, true, true) => // read(@h, p_0), p is param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.deref,
-                    p,
-                    quantifierDepth,
-                    cci
+                    p
                   )
                 case (false, true, false) => // read(@h, p_0), p not param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.derefOldPointer,
-                    p,
-                    quantifierDepth,
-                    cci
+                    p
                   )
                 case (true, true, true) => // read(@h_0, p_0), p is param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.oldDeref,
-                    p,
-                    quantifierDepth,
-                    cci
+                    p
                   )
                 case (true, true, false) => // read(@h_0, p_0), p not param
                   ACSLExpression.derefFunApp(
                     ACSLExpression.oldDeref,
-                    p,
-                    quantifierDepth,
-                    cci
+                    p
                   )
                 case _ => t update subres
               }
+            // SSSOWO TODO: What about loop invariants?
+            case _ => t update subres
           }
         }
-
         case _ => t update subres
       }
     }

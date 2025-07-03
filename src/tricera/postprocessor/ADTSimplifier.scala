@@ -39,82 +39,87 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import tricera.concurrency.ccreader.CCStruct
-import ap.theories.ADT.ADTProxySort
-import ap.theories.{ADT, TheoryRegistry}
+
+import ap.theories.{ADT, Theory, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
-import tricera.acsl.ACSLTranslator.{FunctionContext => ACSLFunctionContext}
 
-object ADTSimplifier extends ContractProcessor {
-  def processContractCondition(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    apply(cci)
+import tricera.{
+  FunctionInvariants, Invariant, LoopInvariant,
+  PostCondition, PreCondition, Solution}
+
+
+object ADTSimplifier extends ResultProcessor {
+  override def applyTo(solution: Solution): Solution = solution match {
+    case Solution(functionInvariants, loopInvariants) => 
+      Solution(functionInvariants.map(applyTo), loopInvariants.map(simplify))
   }
 
-  def apply(
-      cci: ContractConditionInfo
-  ): IFormula = {
-    val adtTermSimplifier = new ADTTermSimplifier(cci)
-    adtTermSimplifier.visit(cci.contractCondition, null).asInstanceOf[IFormula]
+  private def applyTo(funcInvs: FunctionInvariants): FunctionInvariants = funcInvs match {
+    case FunctionInvariants(id, isSrcAnnotated, PreCondition(preInv), PostCondition(postInv), loopInvariants) => 
+      val newInvs = FunctionInvariants(
+        id,
+        isSrcAnnotated,
+        PreCondition(simplify(preInv)),
+        PostCondition(simplify(postInv)),
+        loopInvariants.map(simplify))
+      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+      newInvs
   }
 
-  class ADTTermSimplifier(cci: ContractConditionInfo)
-      extends CollectingVisitor[Object, IExpression] {
+  private def simplify(invariant: Invariant): Invariant = invariant match {
+    case Invariant(form, heapInfo, srcInfo) =>
+      val simplifier = new ADTTermSimplifier()
+      Invariant(simplifier(form).asInstanceOf[IFormula], heapInfo, srcInfo)
+  }
 
-    override def postVisit(
-        t: IExpression,
-        none: Object,
-        subres: Seq[IExpression]
-    ): IExpression = {
+  private def simplify(invariant: LoopInvariant): LoopInvariant = invariant match {
+    case LoopInvariant(form, heapInfo, srcInfo) =>
+      val simplifier = new ADTTermSimplifier()
+      LoopInvariant(simplifier(form).asInstanceOf[IFormula], heapInfo, srcInfo)
+  }
+}
 
-      import IExpression._
+private class ADTTermSimplifier extends CollectingVisitor[Unit, IExpression] {
+  def apply(exp: IExpression): IExpression = {
+    visit(exp, ())
+  }
 
-      def getField(
-          selector: MonoSortedIFunction,
-          constructor: MonoSortedIFunction,
-          fields: Seq[ITerm]
-      ): Option[ITerm] = {
-        cci.acslContext.getStructMap.get(constructor) match {
-          case Some(struct) =>
-            val index = struct.sels.map(_._1).indexOf(selector)
-            fields.lift(index)
-          case _ => None
-        }
+  override def postVisit(
+      t: IExpression,
+      none: Unit,
+      subres: Seq[IExpression]
+  ): IExpression = {
+    object SelectorWrappingConstructor {
+      /**
+        * Extract constructor argument term corresponding to the
+        * applied selector.
+        *
+        * @param funcApp 
+        * @return The constructor argument term
+        */
+      def unapply(funcApp: IFunApp): Option[ITerm] = funcApp match {
+        case IFunApp(
+            outer: MonoSortedIFunction,
+            Seq(IFunApp(inner: MonoSortedIFunction, args))) =>
+          outer match {
+            case ADT.Selector(adt, ctorIndex, argIndex) =>
+              // 'outer' is a selector
+              inner match {
+                case ADT.Constructor(adt, innerCtorIndex) if (innerCtorIndex == ctorIndex) =>
+                  // 'inner' is a constructor matching the outer selector
+                  Some(args(argIndex))
+                case _ => None
+              }
+            case _ => None
+          }
+        case _ => None
       }
+    }
 
-      def structHasField(
-          constructor: MonoSortedIFunction,
-          selector: MonoSortedIFunction,
-          acslContext: ACSLFunctionContext
-      ) = {
-        acslContext.getStructMap.get(constructor) match {
-          case Some(struct) =>
-            struct.sels.map(_._1).contains(selector)
-          case _ => false
-        }
-      }
-
-      t match {
-        // S(x,y).a -> x
-        case f @ IFunApp(
-              selFun: MonoSortedIFunction,
-              Seq(
-                structCtorFunApp @ IFunApp(
-                  structCtor: MonoSortedIFunction,
-                  fields
-                )
-              )
-            )
-            if cci.isStructCtor(structCtor)
-              && structHasField(structCtor, selFun, cci.acslContext) =>
-          getField(selFun, structCtor, fields).get
-
-        case _ =>
-          t update subres
-      }
+    t match {
+      // S(x,y).a -> x
+      case SelectorWrappingConstructor(value) => value
+      case _ =>t update subres
     }
   }
 }

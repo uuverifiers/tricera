@@ -6,7 +6,7 @@ import scala.util.Try
 lazy val commonSettings = Seq(
     name                 := "TriCera",
     organization         := "uuverifiers",
-    version              := "0.3.1",
+    version              := "0.3.2",
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
