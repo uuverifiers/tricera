@@ -1,6 +1,7 @@
 /**
  * Copyright (c) 2021-2022 Pontus Ernstedt
- *               2022-2023 Zafer Esen. All rights reserved.
+ *               2022-2025 Zafer Esen
+ *               2025 Martin Nilsson. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:

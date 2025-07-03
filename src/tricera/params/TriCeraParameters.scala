@@ -128,7 +128,8 @@ class TriCeraParameters extends GlobalParameters {
   private val greeting =
     s"""TriCera v$version.
         |(C) Copyright 2012-2025 Zafer Esen and Philipp Ruemmer
-        |Contributors: Pontus Ernstedt, Hossein Hojjat, Oskar Soederberg, Scania CV AB""".stripMargin
+        |Contributors: Pontus Ernstedt, Hossein Hojjat, Martin Nilsson,
+        |              Oskar Soederberg, Scania CV AB""".stripMargin
 
 
   private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
