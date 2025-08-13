@@ -233,14 +233,7 @@ class CCReader private (prog              : Program,
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private implicit def toRichExpr(expr : CCExpr) :
-    Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
-    def mapTerm(m : ITerm => ITerm) : CCExpr =
-    // TODO: type promotion when needed
-    CCTerm(expr.typ cast m(expr.toTerm), expr.typ, expr.srcInfo)
-  }
-
-  private val executionContext : ExecutionContext = new ExecutionContext {
+  private val executionContext : SymexContext = new SymexContext {
     // --- Configuration & Global State ---
     override def propertiesToCheck : Set[properties.Property] =
       CCReader.this.propertiesToCheck
@@ -406,9 +399,6 @@ class CCReader private (prog              : Program,
       CCReader.this.getType(exp)
     override def getFunctionArgNames(f : Function_def) : Seq[String] =
       CCReader.this.getFunctionArgNames(f)
-    override def mapTerm(expr : CCExpr,
-                         m : ITerm => ITerm) : CCExpr =
-      CCReader.this.toRichExpr(expr).mapTerm(m)
     override def translateClockValue(expr : CCExpr) : CCExpr =
       CCReader.this.translateClockValue(expr)
     override def translateDurationValue(expr : CCExpr): CCExpr =

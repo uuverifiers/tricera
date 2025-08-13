@@ -45,7 +45,7 @@ import tricera.properties
 
 import scala.collection.mutable.{HashMap => MHashMap, HashSet => MHashSet}
 
-trait ExecutionContext {
+trait SymexContext {
   // --- Configuration & Global State ---
   def propertiesToCheck      : Set[properties.Property]
   def heap                   : Heap
@@ -144,7 +144,6 @@ trait ExecutionContext {
   def getType(tn  : Type_name)      : CCType
   def getType(exp : Ebytestype)     : CCType
   def getFunctionArgNames(f : Function_def) : Seq[String]
-  def mapTerm(expr : CCExpr, m : ITerm => ITerm) : CCExpr
 
   def translateClockValue   (expr : CCExpr) : CCExpr
   def translateDurationValue(expr : CCExpr) : CCExpr

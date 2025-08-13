@@ -53,7 +53,7 @@ import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator}
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack}
 
 object Symex {
-  def apply(context: ExecutionContext,
+  def apply(context: SymexContext,
             initPred: CCPredicate) : Symex = {
     val initialValues =
       context.allFormalVars.map(v => CCTerm(v.term, v.typ, v.srcInfo))
@@ -61,7 +61,7 @@ object Symex {
   }
 }
 
-class Symex private (context: ExecutionContext,
+class Symex private (context: SymexContext,
                      oriInitPred: CCPredicate,
                      initialValues: Seq[CCExpr]) {
   private val values : scala.collection.mutable.Buffer[CCExpr] =
@@ -69,6 +69,13 @@ class Symex private (context: ExecutionContext,
   private var guard : IFormula = true
   private var touchedGlobalState : Boolean = false
   private var assignedToStruct : Boolean = false
+
+  private implicit def toRichExpr(expr : CCExpr) :
+  Object{def mapTerm(m:ITerm => ITerm) : CCExpr} = new Object {
+    def mapTerm(m : ITerm => ITerm) : CCExpr =
+      // TODO: type promotion when needed
+      CCTerm(expr.typ cast m(expr.toTerm), expr.typ, expr.srcInfo)
+  }
 
   def addGuard(f : IFormula) : Unit = {
     guard = guard &&& f
@@ -1068,7 +1075,7 @@ class Symex private (context: ExecutionContext,
       evalHelp(preExp)
       val lhsVal = topVal // todo : check if necessary, maybe just use topVal?
       maybeOutputClause(Some(getSourceInfo(exp)))
-      pushVal(context.mapTerm(popVal, _ + op))
+      pushVal(popVal mapTerm (_ + op))
       if(isHeapPointer(preExp, evalCtx.enclosingFunctionName)) {
         heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, true, true)
       } else {
@@ -1166,7 +1173,7 @@ class Symex private (context: ExecutionContext,
           }
         case _ : Plus       => // nothing
         case _ : Negative   =>
-          val t = context.mapTerm(popVal, (-(_)))
+          val t = popVal mapTerm (-(_))
           pushVal(CCTerm(t.toTerm, t.typ, srcInfo))
 //          case _ : Complement.  Unary_operator ::= "~" ;
         case _ : Logicalneg =>
@@ -1534,12 +1541,12 @@ class Symex private (context: ExecutionContext,
       val evalExp = topVal
       maybeOutputClause(Some(getSourceInfo(exp)))
       if(isHeapPointer(postExp, evalCtx.enclosingFunctionName)) {
-        heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], context.mapTerm(topVal, (_ + op)),
+        heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], topVal mapTerm (_ + op),
                   assertMemSafety = true,
                   assumeMemSafety = true)
       } else {
         setValue(context.lookupVar(asLValue(postExp), evalCtx.enclosingFunctionName),
-                 getActualAssignedTerm(evalExp, context.mapTerm(topVal, (_ + op))),
+                 getActualAssignedTerm(evalExp, topVal mapTerm (_ + op)),
                  isIndirection(postExp)) // todo get rid of indirection?
       }
 
