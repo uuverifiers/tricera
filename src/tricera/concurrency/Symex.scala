@@ -53,17 +53,19 @@ import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator}
 import scala.collection.mutable.{ArrayBuffer, Buffer, Stack}
 
 object Symex {
-  def apply(context: SymexContext,
-            initPred: CCPredicate) : Symex = {
+  def apply(context  : SymexContext,
+            scope    : CCScope,
+            initPred : CCPredicate) : Symex = {
     val initialValues =
-      context.allFormalVars.map(v => CCTerm(v.term, v.typ, v.srcInfo))
-    new Symex(context, initPred, initialValues)
+      scope.allFormalVars.map(v => CCTerm(v.term, v.typ, v.srcInfo))
+    new Symex(context, scope, initPred, initialValues)
   }
 }
 
-class Symex private (context: SymexContext,
-                     oriInitPred: CCPredicate,
-                     initialValues: Seq[CCExpr]) {
+class Symex private (context       : SymexContext,
+                     scope         : CCScope,
+                     oriInitPred   : CCPredicate,
+                     initialValues : Seq[CCExpr]) {
   private val values : scala.collection.mutable.Buffer[CCExpr] =
     initialValues.toBuffer
   private var guard : IFormula = true
@@ -80,7 +82,7 @@ class Symex private (context: SymexContext,
   def addGuard(f : IFormula) : Unit = {
     guard = guard &&& f
     touchedGlobalState =
-      touchedGlobalState || !context.freeFromGlobal(f)
+      touchedGlobalState || !scope.freeFromGlobal(f)
   }
 
   def getGuard = guard
@@ -94,7 +96,7 @@ class Symex private (context: SymexContext,
       case _ => throw new TranslationException(
         "Can only read from heap pointers! (" + ptrExpr + ")")
     }
-    val readObj = context.heap.read(getValue(heapTermName, "").toTerm, ptrExpr.toTerm)
+    val readObj = context.heap.read(getValue(Literals.heapTermName, "").toTerm, ptrExpr.toTerm)
     if (assertMemSafety &&
         context.propertiesToCheck.contains(properties.MemValidDeref)) {
       assertProperty(
@@ -109,18 +111,18 @@ class Symex private (context: SymexContext,
   }
   def heapAlloc(value : CCTerm) : CCTerm = {
     val objTerm = context.sortWrapperMap(value.typ.toSort)(value.toTerm)
-    val newAlloc = context.heap.alloc(getValue(heapTermName, "").toTerm, objTerm)
-    setValue(heapTermName, CCTerm(
+    val newAlloc = context.heap.alloc(getValue(Literals.heapTermName, "").toTerm, objTerm)
+    setValue(Literals.heapTermName, CCTerm(
       context.heap.newHeap(newAlloc), CCHeap(context.heap), value.srcInfo), "")
     CCTerm(context.heap.newAddr(newAlloc), CCHeapPointer(context.heap, value.typ), value.srcInfo)
   }
   // batch allocates "size" "objectTerm"s, returns the address range
   def heapBatchAlloc(value : CCTerm, size : ITerm) : ITerm = {
     val newBatchAlloc =
-      context.heap.batchAlloc(getValue(heapTermName, "").toTerm,
+      context.heap.batchAlloc(getValue(Literals.heapTermName, "").toTerm,
                       context.sortWrapperMap(value.typ.toSort)(value.toTerm), size)
     val newHeap = context.heap.newBatchHeap(newBatchAlloc)
-    setValue(heapTermName, CCTerm(newHeap, CCHeap(context.heap), value.srcInfo), "")
+    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), value.srcInfo), "")
     context.heap.newAddrRange(newBatchAlloc)
   }
   def heapArrayRead(arrExpr  : CCExpr,
@@ -151,7 +153,7 @@ class Symex private (context: SymexContext,
                 assertMemSafety : Boolean = false,
                 assumeMemSafety : Boolean = false) = {
     val newHeap = context.heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
-    setValue(heapTermName, CCTerm(newHeap, CCHeap(context.heap), rhs.srcInfo), "")
+    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), rhs.srcInfo), "")
     if (assertMemSafety &&
         context.propertiesToCheck.contains(properties.MemValidDeref)) {
       def getObjAndSort(f : IFunApp) : (IFunApp, Sort) = {
@@ -181,14 +183,14 @@ class Symex private (context: SymexContext,
    */
   // todo: add mem-/type-safety assertions?
   def heapWrite(addr : ITerm, obj : ITerm, objSort : Sort) = {
-    val heapVal = getValue(heapTermName, "")
+    val heapVal = getValue(Literals.heapTermName, "")
     val newHeap = context.heap.write(heapVal.toTerm, addr, context.sortWrapperMap(objSort)(obj))
-    setValue(heapTermName, CCTerm(newHeap, CCHeap(context.heap), None), "") // todo: src info?
+    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), None), "") // todo: src info?
   }
 
   def heapBatchWrite(h : ITerm, r : ITerm, o : ITerm) = {
     val newHeap = context.heap.batchWrite(h, r, o)
-    setValue(heapTermName, CCTerm(newHeap, CCHeap(context.heap), None), "") // todo: src info?
+    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), None), "") // todo: src info?
   }
 
   /**
@@ -214,7 +216,7 @@ class Symex private (context: SymexContext,
            * p is nullAddr.
            */
           val readObj = context.heap.read(
-            getValue(heapTermName, "").toTerm, t.toTerm)
+            getValue(Literals.heapTermName, "").toTerm, t.toTerm)
           assertProperty(t.toTerm === context.heap.nullAddr() |||
                          readObj =/= context.heap._defObj,
                          srcInfo, properties.MemValidFree)
@@ -226,7 +228,7 @@ class Symex private (context: SymexContext,
            * Set [[context.memCleanupProphecyVar]] back to NULL, if the freed address
            * is the same as the one stored.
            */
-          val prophInd = context.findGlobalVar(_ == context.memCleanupProphecyVar)
+          val prophInd = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
           val prophOldVal = getValues(prophInd).toTerm
           setValue(prophInd, CCTerm(
             IExpression.ite(prophOldVal === t.toTerm,
@@ -259,9 +261,9 @@ class Symex private (context: SymexContext,
                * forall ind. t[ind] =/= defObj
                * (or equivalently forall ind. read(h, nth(t, ind)) =/= defObj)
                */
-              val ind      = context.getFreshEvalVar(CCInt, t.srcInfo)
+              val ind      = scope.getFreshEvalVar(CCInt, t.srcInfo)
               val readAddr = context.heap.nth(t.toTerm, ind.term)
-              val readObj  = context.heap.read(getValue(heapTermName, "").toTerm,
+              val readObj  = context.heap.read(getValue(Literals.heapTermName, "").toTerm,
                                        readAddr)
               assertProperty(t.toTerm === context.heap.nullAddr() |||
                              (context.heap.within(t.toTerm, readAddr) ==>
@@ -282,7 +284,7 @@ class Symex private (context: SymexContext,
            * Set [[memCleanupProphecyVar]] back to NULL, if the beginning of
            * the freed address block is the same as the one stored.
            */
-          val prophInd    = context.findGlobalVar(_ == context.memCleanupProphecyVar)
+          val prophInd    = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
           val prophOldVal = getValues(prophInd).toTerm
           setValue(prophInd, CCTerm(
             IExpression.ite(prophOldVal === context.heap.nth(t.toTerm, 0),
@@ -290,7 +292,7 @@ class Symex private (context: SymexContext,
                             prophOldVal), context.memCleanupProphecyVar.typ, None),
                    false)
         }
-        heapBatchWrite(getValue(heapTermName, "").toTerm, t.toTerm, context.defObj())
+        heapBatchWrite(getValue(Literals.heapTermName, "").toTerm, t.toTerm, context.defObj())
       case _ =>
         /**
          * Freeing a non-heap pointer.
@@ -305,7 +307,7 @@ class Symex private (context: SymexContext,
     if (oriInitPred == null)
       null
     else
-      context.atom(oriInitPred, context.allFormalVarTerms take oriInitPred.arity)
+      context.atom(oriInitPred, scope.allFormalVarTerms take oriInitPred.arity)
   private def initPred = context.predCCPredMap(initAtom.pred)
 
   def initAtomArgs = if(initAtom != null) Some(initAtom.args) else None
@@ -318,7 +320,7 @@ class Symex private (context: SymexContext,
     initAtom = oldAtom
     values.clear
     oldValues copyToBuffer values
-    context.popLocalVars(context.numLocalVars - values.size + context.numGlobalVars)
+    scope.LocalVars.pop(scope.LocalVars.size - values.size + scope.GlobalVars.size)
     guard = oldGuard
     touchedGlobalState = oldTouched
   }
@@ -336,10 +338,10 @@ class Symex private (context: SymexContext,
       outputClause(srcInfo)
 
   private def pushVal(v : CCExpr, varName : String = "") = {
-    val freshVar = context.getFreshEvalVar(v.typ, v.srcInfo, varName)
+    val freshVar = scope.getFreshEvalVar(v.typ, v.srcInfo, varName)
     addValue(v)
     // reserve a local variable, in case we need one later
-    context.addLocalVar(freshVar)
+    scope.LocalVars.addVar(freshVar)
 
     if (context.usingInitialPredicates) {
       // if the pushed value refers to other variables,
@@ -350,26 +352,27 @@ class Symex private (context: SymexContext,
 
       val varMapping =
         (for (d <- v.occurringConstants.iterator;
-              index = context.lookupVarNoException(d.name, "")) // TODO: can probably specify enclosing function?
+              index = scope.lookupVarNoException(d.name, "")) // TODO: can probably specify enclosing function?
         yield (d -> index)).toMap
 
       if (varMapping forall { case (_, ind) => ind >= 0 }) {
         val defTerm =
           ConstantSubstVisitor(v.toTerm,
                                varMapping mapValues (IExpression.v(_)))
-        val rhs = IExpression.v(context.numVariableHints - 1)
+        val rhs = IExpression.v(scope.variableHints.size - 1)
 
         if (defTerm != rhs) {
           val defEq = defTerm === rhs
-          context.updateLastVariableHints(List(VerifHintInitPred(defEq)))
+          scope.variableHints(scope.variableHints.size - 1) =
+            List(VerifHintInitPred(defEq))
         }
       }
     }
   }
 
   private def pushFormalVal(typ : CCType, srcInfo : Option[SourceInfo]) = {
-    val freshVar = context.getFreshEvalVar(typ, srcInfo)
-    context.addLocalVar(freshVar)
+    val freshVar = scope.getFreshEvalVar(typ, srcInfo)
+    scope.LocalVars.addVar(freshVar)
     addValue(CCTerm(freshVar.term, typ, srcInfo))
     addGuard(freshVar rangePred)
   }
@@ -377,13 +380,13 @@ class Symex private (context: SymexContext,
   private def popVal = {
     val res = values.last
     values trimEnd 1
-    context.popLocalVars(1)
+    scope.LocalVars.pop(1)
     res
   }
   private def topVal = values.last
   private def removeVal(ind : Int) {
     values.remove(ind)
-    context.removeLocalVar(ind - context.numGlobalVars)
+    scope.LocalVars.remove(ind - scope.GlobalVars.size)
   }
 
   private def outputClause(srcInfo : Option[SourceInfo]) : Unit =
@@ -417,11 +420,11 @@ class Symex private (context: SymexContext,
   }
 
   def resetFields(pred : CCPredicate) : Unit = {
-    initAtom = context.atom(pred, context.allFormalVarTerms take pred.arity)
+    initAtom = context.atom(pred, scope.allFormalVarTerms take pred.arity)
     guard = true
     touchedGlobalState = false
     assignedToStruct = false
-    for ((e, i) <- context.allFormalExprs.iterator.zipWithIndex)
+    for ((e, i) <- scope.allFormalExprs.iterator.zipWithIndex)
       values(i) = e
   }
 
@@ -448,13 +451,13 @@ class Symex private (context: SymexContext,
 
   def addValue(t : CCExpr) = {
     values += t
-    touchedGlobalState = touchedGlobalState || !context.freeFromGlobal(t)
+    touchedGlobalState = touchedGlobalState || !scope.freeFromGlobal(t)
   }
 
   private def getValue(name : String,
                        enclosingFunction : String,
                        isIndirection : Boolean = false) : CCExpr =
-    getValue(context.lookupVar(name, enclosingFunction), isIndirection)
+    getValue(scope.lookupVar(name, enclosingFunction), isIndirection)
   private def getValue(ind : Int,
                        isIndirection : Boolean) : CCExpr =
     if (isIndirection)
@@ -476,7 +479,7 @@ class Symex private (context: SymexContext,
 
   private def setValue(name : String, t : CCExpr, enclosingFunction : String,
                        isIndirection : Boolean = false) : Unit =
-    setValue(context.lookupVar(name, enclosingFunction), t, isIndirection)
+    setValue(scope.lookupVar(name, enclosingFunction), t, isIndirection)
   private def setValue(ind: Int, t : CCExpr,
                        isIndirection : Boolean) : Unit = {
     val actualInd = getValue(ind, false).typ match {
@@ -509,15 +512,15 @@ class Symex private (context: SymexContext,
       ind
     }*/
     touchedGlobalState =
-      touchedGlobalState || actualInd < context.numGlobalVars || !context.freeFromGlobal(t)
+      touchedGlobalState || actualInd < scope.GlobalVars.size || !scope.freeFromGlobal(t)
   }
 
   private def getVar(ind: Int): CCVar = {
-    if (ind < context.numGlobalVars) context.getGlobalVar(ind)
-    else context.getLocalVar(ind - context.numGlobalVars)
+    if (ind < scope.GlobalVars.size) scope.GlobalVars.vars(ind)
+    else scope.LocalVars.vars(ind - scope.GlobalVars.size)
   }
   private def getVar (name : String, enclosingFunction : String) : CCVar = {
-    val ind = context.lookupVar(name, enclosingFunction)
+    val ind = scope.lookupVar(name, enclosingFunction)
     getVar(ind)
   }
 
@@ -843,7 +846,7 @@ class Symex private (context: SymexContext,
                   if (arrayPtr1 != arrayPtr2) {
                     if (arrayPtr1.arrayLocation == ArrayLocation.Stack &&
                         arrayPtr2.arrayLocation == ArrayLocation.Heap) // -> alloca
-                      context.updateVarType(lhsName, arrayPtr1,
+                      scope.updateVarType(lhsName, arrayPtr1,
                                     evalCtx.enclosingFunctionName) // todo: replace with a static analysis? we should detect arrays on stack beforehand maybe?
                     else throw new UnsupportedCFragmentException(getLineString(exp) +
                                                                  "Pointer " + lhsName +
@@ -922,7 +925,7 @@ class Symex private (context: SymexContext,
          updatingPointedValue) {
         heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, true, true)
       } else {
-        setValue(context.lookupVar(asLValue(exp.exp_1), evalCtx.enclosingFunctionName),
+        setValue(scope.lookupVar(asLValue(exp.exp_1), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, newVal),
                  isIndirection(exp.exp_1)) // todo get rid of indirections?
       }
@@ -956,8 +959,8 @@ class Symex private (context: SymexContext,
         restoreState
         addGuard(~cond)
         evalHelp(exp.exp_3)
-        val lastLocalVar = context.lastLocalVar
-        context.updateLocalVar(context.numLocalVars - 1,
+        val lastLocalVar = scope.LocalVars.last
+        scope.LocalVars.update(scope.LocalVars.size - 1,
                          new CCVar(s"ite_${srcInfo.get.line}_${srcInfo.get.col}",
                                    lastLocalVar.srcInfo, lastLocalVar.typ,
                                    lastLocalVar.storage))
@@ -1079,7 +1082,7 @@ class Symex private (context: SymexContext,
       if(isHeapPointer(preExp, evalCtx.enclosingFunctionName)) {
         heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, true, true)
       } else {
-        setValue(context.lookupVar(asLValue(preExp), evalCtx.enclosingFunctionName),
+        setValue(scope.lookupVar(asLValue(preExp), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, topVal),
                  isIndirection(preExp)) // todo get rid of indirection?
       }
@@ -1095,7 +1098,7 @@ class Symex private (context: SymexContext,
               val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
               rootTerm match {
                 case Left(c) =>
-                  val rootInd: Int = context.lookupVar(c.name, evalCtx.enclosingFunctionName)
+                  val rootInd: Int = scope.lookupVar(c.name, evalCtx.enclosingFunctionName)
                   val structType = getValue(rootInd, false).typ.asInstanceOf[CCStruct]
                   assert(rootInd > -1 && rootInd < values.size - 1) // todo
                   val ptr = CCStackPointer(rootInd, popVal.typ, structType.getFieldAddress(fieldNames))
@@ -1321,9 +1324,9 @@ class Symex private (context: SymexContext,
                  * variable [[context.memCleanupProphecyVar]].
                  * I.e., nondet ==> prophTerm = allocatedAddr
                  */
-                val prophVarInd = context.findGlobalVar(_ == context.memCleanupProphecyVar)
+                val prophVarInd = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
                 val nondetTerm = IConstant(
-                  context.getFreshEvalVar(CCBool, None, name = "nondet").term)
+                  scope.getFreshEvalVar(CCBool, None, name = "nondet").term)
                 setValue(prophVarInd,
                          CCTerm(
                            IExpression.ite(
@@ -1353,9 +1356,9 @@ class Symex private (context: SymexContext,
                  * prophecy variable.
                  * I.e., (nondet & sizeExp > 0) ==> prophTerm = allocatedAddr
                  */
-                val prophVarInd = context.findGlobalVar(_ == context.memCleanupProphecyVar)
+                val prophVarInd = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
                 val nondetTerm  = IConstant(
-                  context.getFreshEvalVar(CCBool, None, name = "nondet").term)
+                  scope.getFreshEvalVar(CCBool, None, name = "nondet").term)
                 setValue(prophVarInd,
                          CCTerm(
                            IExpression.ite(
@@ -1452,8 +1455,8 @@ class Symex private (context: SymexContext,
               }
           }
           if(argNames.nonEmpty) {
-            val evalVars = context.getLocalVarsInTopFrame.takeRight(argCount)
-            context.popLocalVars(argCount) // remove those vars
+            val evalVars = scope.LocalVars.getVarsInTopFrame.takeRight(argCount)
+            scope.LocalVars.pop(argCount) // remove those vars
             assert(argNames.length == argCount && evalVars.length == argCount)
             val newVars = if (evalVars.exists(v => context.isTermUsedInClauses(v.term))) {
               // todo: replace terms by substituting them if they were added to clauses too!
@@ -1465,7 +1468,7 @@ class Symex private (context: SymexContext,
                           oldVar.storage)
               }
             }
-            newVars.foreach(v => context.addLocalVar(v))
+            newVars.foreach(v => scope.LocalVars.addVar(v))
           }
           //////////////////////////////////////////////////////////////////////
 
@@ -1545,7 +1548,7 @@ class Symex private (context: SymexContext,
                   assertMemSafety = true,
                   assumeMemSafety = true)
       } else {
-        setValue(context.lookupVar(asLValue(postExp), evalCtx.enclosingFunctionName),
+        setValue(scope.lookupVar(asLValue(postExp), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(evalExp, topVal mapTerm (_ + op)),
                  isIndirection(postExp)) // todo get rid of indirection?
       }
@@ -1553,7 +1556,7 @@ class Symex private (context: SymexContext,
     case exp : Evar =>
       // todo: Unify with EvarWithType, they should always be treated the same.
       val name = exp.cident_
-      pushVal(context.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+      pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
                 case -1 =>
                   (context.enumeratorDefs get name) match {
                     case Some(e) => e
@@ -1567,7 +1570,7 @@ class Symex private (context: SymexContext,
     case exp : EvarWithType =>
       // todo: Unify with Evar, they should always be treated the same.
       val name = exp.cident_
-      pushVal(context.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+      pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
                 case -1 =>
                   (context.enumeratorDefs get name) match {
                     case Some(e) => e
@@ -1633,7 +1636,7 @@ class Symex private (context: SymexContext,
           argTerms = popVal.toTerm :: argTerms
 
         val postGlobalVars : Seq[ITerm] = // todo : use ctx postglobal?
-          for (v <- context.globalVars) yield {
+          for (v <- scope.GlobalVars.vars) yield {
             if (v.isStatic) {
               throw new TranslationException(
                 "Static variables with contracts are not supported yet.")
@@ -1646,12 +1649,12 @@ class Symex private (context: SymexContext,
           }
 
         val globals : Seq[ITerm] =
-          for (n <- 0 until context.numGlobalVars)
+          for (n <- 0 until scope.GlobalVars.size)
             yield getValue(n, false).toTerm
 
         val prePredArgs : Seq[ITerm] = globals ++ argTerms
 
-        val resVar : Seq[CCVar] = context.getResVar(context.getType(funDef))
+        val resVar : Seq[CCVar] = scope.getResVar(context.getType(funDef))
         val postPredArgs : Seq[ITerm] =
           prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
         //postGlobalVars ++ argTerms ++ globals ++ resVar.map(c => IConstant(c.term))
@@ -1665,7 +1668,7 @@ class Symex private (context: SymexContext,
         addGuard(postAtom)
 
         for (((c, t), n) <- (postGlobalVars.iterator zip
-                             context.globalVarTypes.iterator).zipWithIndex)
+                             scope.GlobalVars.formalTypes.iterator).zipWithIndex)
           setValue(n, CCTerm(c, t, None), false) // todo: srcInfo?
 
         resVar match {

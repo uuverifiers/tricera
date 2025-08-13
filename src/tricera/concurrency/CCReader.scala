@@ -117,8 +117,6 @@ object CCReader {
 
   //////////////////////////////////////////////////////////////////////////////
 
-  val heapTermName = "@h"
-
   object ArithmeticMode extends Enumeration {
     val Mathematical, ILP32, LP64, LLP64 = Value
   }
@@ -231,9 +229,11 @@ class CCReader private (prog              : Program,
 
   private val printer = new PrettyPrinterNonStatic
 
+  private val scope = new CCScope()
+
   //////////////////////////////////////////////////////////////////////////////
 
-  private val executionContext : SymexContext = new SymexContext {
+  private val symexContext : SymexContext = new SymexContext {
     // --- Configuration & Global State ---
     override def propertiesToCheck : Set[properties.Property] =
       CCReader.this.propertiesToCheck
@@ -283,64 +283,6 @@ class CCReader private (prog              : Program,
       CCReader.this.objectGetters
     override def defObj : IFunction =
       CCReader.this.defObj
-
-    // --- Variables ---
-    override def lookupVar(name : String, f : String) : Int =
-      CCReader.this.lookupVar(name, f)
-    override def lookupVarNoException(name : String, f : String) : Int =
-      CCReader.this.lookupVarNoException(name, f)
-    override def getGlobalVar(i : Int) : CCVar =
-      CCReader.this.GlobalVars.vars(i)
-    override def getLocalVar(i : Int) : CCVar =
-      CCReader.this.LocalVars.vars(i)
-    override def globalVars : Seq[CCVar] =
-      CCReader.this.GlobalVars.vars
-      override def globalVarTypes : Seq[CCType] =
-        CCReader.this.GlobalVars.formalTypes
-    override def findGlobalVar(p : CCVar => Boolean) : Int =
-      CCReader.this.GlobalVars.vars.lastIndexWhere(p)
-    override def updateVarType(name : String,
-                               newType : CCType,
-                               f : String) : Unit =
-      CCReader.this.updateVarType(name, newType, f)
-    override def freeFromGlobal(t : IExpression) : Boolean =
-      CCReader.this.freeFromGlobal(t)
-    override def freeFromGlobal(t : CCExpr) : Boolean =
-      CCReader.this.freeFromGlobal(t)
-    override def allFormalVars : Seq[CCVar] =
-      CCReader.this.allFormalVars
-    override def allFormalVarTerms : Seq[ITerm] =
-      CCReader.this.allFormalVarTerms
-    override def allFormalExprs : Seq[CCExpr] =
-      CCReader.this.allFormalExprs
-    override def getFreshEvalVar(typ : CCType,
-                                 srcInfo : Option[SourceInfo],
-                                 name : String = "",
-                                 storage : VariableStorage = AutoStorage) : CCVar =
-      CCReader.this.getFreshEvalVar(typ, srcInfo, name, storage)
-    override def getResVar(typ : CCType) : List[CCVar] =
-      CCReader.this.getResVar(typ)
-
-    override def addLocalVar(v : CCVar) : Int =
-      CCReader.this.LocalVars.addVar(v)
-    override def popLocalVars(n : Int) : Unit =
-      CCReader.this.LocalVars.pop(n)
-    override def updateLocalVar(idx : Int, elem : CCVar) : Unit =
-      CCReader.this.LocalVars.update(idx, elem)
-    override def removeLocalVar(n : Int) : CCVar =
-      CCReader.this.LocalVars.remove(n)
-    override def getLocalVarsInTopFrame : List[CCVar] =
-      CCReader.this.LocalVars.getVarsInTopFrame
-    override def lastLocalVar : CCVar =
-      CCReader.this.LocalVars.last
-    override def numGlobalVars : Int =
-      CCReader.this.GlobalVars.size
-    override def numLocalVars : Int =
-      CCReader.this.LocalVars.size
-    override def numVariableHints : Int =
-      CCReader.this.variableHints.size
-    override def updateLastVariableHints(hints : Seq[VerifHintElement]) : Unit =
-      CCReader.this.variableHints(CCReader.this.variableHints.size - 1) = hints
 
     // --- Clause & Predicate Generation ---
     override def output(c : CCClause,
@@ -410,173 +352,9 @@ class CCReader private (prog              : Program,
 
   private val predCCPredMap = new MHashMap[Predicate, CCPredicate]
 
-  private sealed class CCVars {
-    val vars = new ArrayBuffer[CCVar]
-    def addVar (v : CCVar) : Int = {
-      vars += v
-      size - 1
-    }
-    def size : Int = vars.size
-    def lastIndexWhere(name : String, enclosingFunction : String) =
-      vars lastIndexWhere(v => v.name == name &&
-        (!v.isStatic || v.enclosingFunctionName.get == enclosingFunction))
-    def lastIndexWhere(v : CCVar) = vars lastIndexWhere(_ == v)
-    def contains (c : ConstantTerm) = vars exists (_.term == c)
-    def iterator = vars.iterator
-    def formalVars = vars.toList
-    def formalVarTerms = vars.map(_.term).toList
-    def formalTypes = vars.map(_.typ).toList
-  }
-
-  private object GlobalVars extends CCVars {
-    val inits = new ArrayBuffer[CCExpr]
-  }
-  private object LocalVars extends CCVars {
-    val frameStack = new Stack[Int]
-
-    override def addVar (v : CCVar) : Int = {
-      variableHints += List()
-      super.addVar(v)
-    }
-    def update(idx : Int, elem : CCVar) {
-      vars.update(idx, elem)
-    }
-    def pop(n : Int) = {
-      LocalVars trimEnd n
-      variableHints trimEnd n
-      assert(variableHints.size == size + GlobalVars.size)
-    }
-
-    def lastOption : Option[CCVar] = vars.lastOption
-    def last : CCVar = vars.last
-    def remove(n : Int): CCVar = {
-      assume(n >= 0 && n < size)
-      variableHints.remove(n + GlobalVars.size)
-      vars.remove(n)
-    }
-    def trimEnd(n: Int) = vars trimEnd n
-    def pushFrame = frameStack push size
-    def popFrame = {
-      val newSize = frameStack.pop
-      vars reduceToSize newSize
-      variableHints reduceToSize (GlobalVars.size + newSize)
-    }
-    def getVarsInTopFrame : List[CCVar] =
-      (vars takeRight (vars.size - frameStack.last)).toList
-  }
-
-  private def updateVarType(name : String, newType : CCType,
-                            enclosingFunction : String) = {
-    val ind = lookupVar(name, enclosingFunction)
-    if (ind < GlobalVars.size) {
-      val oldVar = GlobalVars.vars(ind)
-      GlobalVars.vars(ind) =
-        new CCVar(name, oldVar.srcInfo, newType, oldVar.storage)
-    } else {
-      val oldVar = LocalVars.vars(ind - GlobalVars.size)
-      LocalVars.vars(ind - GlobalVars.size) =
-        new CCVar(name, oldVar.srcInfo, newType, oldVar.storage)
-    }
-  }
-
   private var globalPreconditions : IFormula = true
 
-  private def lookupVarNoException(name : String, enclosingFunction : String)
-  : Int = {
-    /**
-     * @note Usage of `lastIndexWhere` is important for shadowing semantics.
-     *       For the same reason, it is important to add static variables,
-     *       which are stored as globals, after the globals.
-     *       Note that static variables should only be accessible from
-     *       enclosing functions where they were declared in.
-     */
-    LocalVars.lastIndexWhere(name, enclosingFunction) match {
-      case -1 => GlobalVars.lastIndexWhere(name, enclosingFunction)
-      case i  => i + GlobalVars.size
-    }
-  }
-
-  private def lookupVar(name : String, enclosingFunction : String) : Int = {
-    val actualName =
-      if (TriCeraParameters.get.showVarLineNumbersInTerms) {
-        name.lastIndexOf(CCVar.lineNumberPrefix) match {
-            case -1 => name
-            case i => name.take(i)
-          }
-      } else name
-    lookupVarNoException(actualName, enclosingFunction) match {
-      case -1 =>
-        actualName match {
-          case `heapTermName` if !modelHeap => throw NeedsHeapModelException
-          case _ => throw new TranslationException(
-            "Symbol " + actualName + " is not declared")
-        }
-      case i => i
-    }
-  }
-
-  private def allFormalVars : Seq[CCVar] =
-    GlobalVars.formalVars ++ LocalVars.formalVars
-  private def allFormalVarTerms : Seq[ITerm] =
-    GlobalVars.formalVarTerms ++ LocalVars.formalVarTerms
-  private def allFormalVarTypes : Seq[CCType] =
-    GlobalVars.formalTypes ++ LocalVars.formalTypes
-
-  private def allFormalExprs : Seq[CCExpr] =
-    ((for (v <- GlobalVars.iterator)
-      yield CCTerm(v.term, v.typ, v.srcInfo)) ++
-     (for (v <- LocalVars.iterator)
-      yield CCTerm(v.term, v.typ, v.srcInfo))).toList
-  private def allVarInits : Seq[ITerm] =
-    (GlobalVars.inits.toList map (_.toTerm)) ++
-      (LocalVars.formalVarTerms map (IExpression.i(_)))
-
-  private def freeFromGlobal(t : IExpression) : Boolean =
-    !ContainsSymbol(t, (s:IExpression) => s match {
-                      case IConstant(c) => GlobalVars contains c // todo: true only with concurrency?
-                      case _ => false
-                    })
-
-  private def freeFromGlobal(t : CCExpr) : Boolean = t match {
-    case CCTerm(s, _, _) =>    freeFromGlobal(s)
-    case CCFormula(f, _, _) => freeFromGlobal(f)
-  }
-
-  private val variableHints =
-    new ArrayBuffer[Seq[VerifHintElement]]
   private var usingInitialPredicates = false
-
-  //////////////////////////////////////////////////////////////////////////////
-
-  private var tempVarCounter = 0
-  private val evalVars = new MHashSet[String]
-
-  private def getFreshEvalVar (typ     : CCType,
-                               srcInfo : Option[SourceInfo],
-                               name    : String = "",
-                               storage : VariableStorage = AutoStorage) : CCVar = {
-    val varName = {
-      if (name.nonEmpty) {
-        name
-      } else {
-        val prelName = "__eval" + (srcInfo match {
-          case Some(info) => info.line.toString
-          case None => ""
-        })
-        if (evalVars contains prelName) {
-          tempVarCounter += 1
-          prelName + "_" + tempVarCounter
-        } else {
-          evalVars += prelName
-          prelName
-        }
-      }
-    }
-
-    val res = new CCVar(varName, srcInfo, typ, storage)
-    res
-  }
-
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -761,9 +539,9 @@ class CCReader private (prog              : Program,
         locationCounter = locationCounter + 1
         s
       } else prefix + predNameSuffix
-    val res = newPred(predName, allFormalVars ++ extraArgs, srcInfo)
+    val res = newPred(predName, scope.allFormalVars ++ extraArgs, srcInfo)
 
-    val hints = for (s <- variableHints; p <- s) yield p
+    val hints = for (s <- scope.variableHints; p <- s) yield p
     val allHints =
       if (hints exists (_.isInstanceOf[VerifHintTplElement])) {
         // make sure that all individual variables exist as templates
@@ -787,12 +565,12 @@ class CCReader private (prog              : Program,
   //////////////////////////////////////////////////////////////////////////////
 
   if (useTime) {
-    GlobalVars addVar GT
-    GlobalVars.inits += CCTerm(GT.term, CCClock, None)
-    GlobalVars addVar GTU
-    GlobalVars.inits += CCTerm(GTU.term, CCInt, None)
-    variableHints += List()
-    variableHints += List()
+    scope.GlobalVars addVar GT
+    scope.GlobalVars.inits += CCTerm(GT.term, CCClock, None)
+    scope.GlobalVars addVar GTU
+    scope.GlobalVars.inits += CCTerm(GTU.term, CCInt, None)
+    scope.variableHints += List()
+    scope.variableHints += List()
   }
 
   private def collectStructDefsFromComp (comp : Compound_stm): Unit = {
@@ -881,17 +659,17 @@ class CCReader private (prog              : Program,
       List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
     defObjCtor)
 
-  private val heapVar = new CCVar(heapTermName, None, CCHeap(heap), GlobalStorage)
+  private val heapVar = new CCVar(Literals.heapTermName, None, CCHeap(heap), GlobalStorage)
   val heapTerm = heapVar.term
 
   if (modelHeap) {
-    GlobalVars addVar heapVar
-    GlobalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None)
-    variableHints += List()
+    scope.GlobalVars addVar heapVar
+    scope.GlobalVars.inits += CCTerm(heap.emptyHeap(), CCHeap(heap), None)
+    scope.variableHints += List()
   }
 
   def getHeapInfo = {
-    if (modelHeap) { Some(new HeapInfo(heap, heapTermName))} else { None }
+    if (modelHeap) { Some(new HeapInfo(heap, Literals.heapTermName))} else { None }
   }
 
   /**
@@ -902,9 +680,9 @@ class CCReader private (prog              : Program,
   if ((propertiesToCheck contains properties.MemValidCleanup) ||
       propertiesToCheck.contains(properties.MemValidTrack) &&
        TriCeraParameters.get.useMemCleanupForMemTrack) {
-    GlobalVars addVar memCleanupProphecyVar
-    GlobalVars.inits += CCTerm(heap.nullAddr(), memCleanupProphecyVar.typ, None)
-    variableHints += List()
+    scope.GlobalVars addVar memCleanupProphecyVar
+    scope.GlobalVars.inits += CCTerm(heap.nullAddr(), memCleanupProphecyVar.typ, None)
+    scope.variableHints += List()
   }
 
   /**
@@ -913,7 +691,7 @@ class CCReader private (prog              : Program,
    * exit, and it cannot be done if the prophecy variable does not exist at
    * that point. This is reachable, for instance, with the `abort` statement.
    */
-  private val globalExitPred = newPred("exit", allFormalVars, None)
+  private val globalExitPred = newPred("exit", scope.allFormalVars, None)
 
   private val structCtorsOffset = predefSignatures.size
   val defObj = heap.userADTCtors.last
@@ -961,14 +739,6 @@ class CCReader private (prog              : Program,
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
 
-  private var funRetCounter = 0
-  private def getResVar (typ : CCType) : List[CCVar] = typ match {
-    case CCVoid     => Nil
-    case t          =>
-      funRetCounter += 1
-      List(new CCVar(Literals.resultExecSuffix + funRetCounter, None, typ, AutoStorage)) // todo: line no?
-  }
-
   //////////////////////////////////////////////////////////////////////////////
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
@@ -978,7 +748,7 @@ class CCReader private (prog              : Program,
     import tricera.Literals
 
     atomicMode = true
-    val values = Symex(executionContext, null)
+    val values = Symex(symexContext, scope, null)
 
     /**
      * Collect global variables and their initializers.
@@ -1008,7 +778,7 @@ class CCReader private (prog              : Program,
         case _ => // nothing
       }
 
-    val globalsSize = GlobalVars.size
+    val globalsSize = scope.GlobalVars.size
     /**
      * Collect static variables and their initializers.
      * Static variables can appear only at the outermost scope of function
@@ -1042,13 +812,13 @@ class CCReader private (prog              : Program,
       }
     }
 
-    assert(GlobalVars.vars.drop(globalsSize).forall(v => v.isStatic),
+    assert(scope.GlobalVars.vars.drop(globalsSize).forall(v => v.isStatic),
            "Non-static variables added while looking for static variables!")
 
     // prevent time variables, heap variable, and global ghost variables
     // from being initialised twice
     // TODO: This is very brittle and unintuitive - come up with a better solution.
-    GlobalVars.inits ++= (values.getValues drop
+    scope.GlobalVars.inits ++= (values.getValues drop
       (if (modelHeap) 1 else 0) + (if (useTime) 2 else 0) +
       (if ((propertiesToCheck contains properties.MemValidCleanup) ||
            propertiesToCheck.contains(properties.MemValidTrack) &&
@@ -1056,11 +826,11 @@ class CCReader private (prog              : Program,
     // if while adding glboal variables we have changed the heap, the heap term
     // needs to be reinitialised as well. Happens with global array allocations.
     if (modelHeap) {
-      val heapInd = GlobalVars.lastIndexWhere(heapVar)
+      val heapInd = scope.GlobalVars.lastIndexWhere(heapVar)
       val initialisedHeapValue = values.getValues(heapInd)
-      val initialHeapValue = IConstant(GlobalVars.vars(heapInd).term)
+      val initialHeapValue = IConstant(scope.GlobalVars.vars(heapInd).term)
       if (modelHeap && initialisedHeapValue.toTerm != initialHeapValue) {
-        GlobalVars.inits(heapInd) = initialisedHeapValue
+        scope.GlobalVars.inits(heapInd) = initialisedHeapValue
       }
     }
 
@@ -1097,11 +867,11 @@ class CCReader private (prog              : Program,
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
       val funDef = FuncDef(fun.function_def_)
-      LocalVars.pushFrame
+      scope.LocalVars.pushFrame
       pushArguments(fun.function_def_)
-      val functionParams = LocalVars getVarsInTopFrame
+      val functionParams = scope.LocalVars getVarsInTopFrame
 
-      val oldVars = allFormalVars map (v =>
+      val oldVars = scope.allFormalVars map (v =>
         new CCVar(v.name + Literals.preExecSuffix, v.srcInfo, v.typ, v.storage))
       // the pre-condition: f_pre(preOldVars)
       val prePred = newPred(funDef.name + Literals.predPreSuffix, oldVars,
@@ -1110,7 +880,7 @@ class CCReader private (prog              : Program,
       // the post-condition: f_post(oldVars, postGlobalVars, postResVar)
       // we first pass all current vars in context as old vars (oldVars)
       // then we pass all effected output vars (which are globals + resVar)
-      val postGlobalVars = GlobalVars.vars map (v =>
+      val postGlobalVars = scope.GlobalVars.vars map (v =>
         new CCVar(v.name + Literals.postExecSuffix, v.srcInfo, v.typ, v.storage))
       val postResVar = getType(fun.function_def_) match {
         case CCVoid => None
@@ -1120,21 +890,21 @@ class CCReader private (prog              : Program,
       val postVars = oldVars ++ postGlobalVars ++ postResVar
       functionPostOldArgs.put(funDef.name, oldVars)
 
-      val prePredArgACSLNames = allFormalVars map (_.name)
+      val prePredArgACSLNames = scope.allFormalVars map (_.name)
       val postPredACSLArgNames =
-        allFormalVars.map(v => "\\old(" + v.name + ")") ++
-        GlobalVars.vars.map(v => v.name) ++
+        scope.allFormalVars.map(v => "\\old(" + v.name + ")") ++
+        scope.GlobalVars.vars.map(v => v.name) ++
         (if(postResVar nonEmpty) Seq("\\result") else Nil)
 
       val postOldVarsMap: Map[String, CCVar] =
-      (allFormalVars.map(_ name) zip oldVars).toMap
+      (scope.allFormalVars.map(_ name) zip oldVars).toMap
       val postGlobalVarsMap: Map[String, CCVar] =
-        (GlobalVars.vars.map(_ name) zip postGlobalVars).toMap
+        (scope.GlobalVars.vars.map(_ name) zip postGlobalVars).toMap
 
       val postPred = newPred(funDef.name + Literals.predPostSuffix, postVars,
         Some(getSourceInfo(fun))) // todo: end line of fun?
 
-      LocalVars.popFrame
+      scope.LocalVars.popFrame
 
       class ReaderFunctionContext extends ACSLTranslator.FunctionContext {
         def getOldVar(ident: String): Option[CCVar] =
@@ -1145,7 +915,7 @@ class CCReader private (prog              : Program,
 
         def getParams: Seq[CCVar] = functionParams
 
-        def getGlobals: Seq[CCVar] = GlobalVars.vars - heapVar
+        def getGlobals: Seq[CCVar] = scope.GlobalVars.vars - heapVar
 
         def getResultVar: Option[CCVar] = postResVar
 
@@ -1155,11 +925,11 @@ class CCReader private (prog              : Program,
           if (modelHeap) heap else throw NeedsHeapModelException
 
         def getHeapTerm: ITerm =
-          if (modelHeap) getPostGlobalVar(heapTermName).get.term
+          if (modelHeap) getPostGlobalVar(Literals.heapTermName).get.term
           else throw NeedsHeapModelException
 
         def getOldHeapTerm: ITerm =
-          if (modelHeap) getOldVar(heapTermName).get.term
+          if (modelHeap) getOldVar(Literals.heapTermName).get.term
           else throw NeedsHeapModelException
 
         def sortWrapper(s: Sort): Option[MonoSortedIFunction] =
@@ -1237,16 +1007,16 @@ class CCReader private (prog              : Program,
       val (prePred, postPred) = (funContext.prePred, funContext.postPred)
       setPrefix(name)
 
-      LocalVars.pushFrame
+      scope.LocalVars.pushFrame
       val stm = pushArguments(f.function_def_)
 
-      val prePredArgs = allFormalVarTerms.toList
+      val prePredArgs = scope.allFormalVarTerms.toList
 
-      for (v <- functionPostOldArgs(name)) LocalVars addVar v
+      for (v <- functionPostOldArgs(name)) scope.LocalVars addVar v
 
       val entryPred = newPred(Nil, Some(getSourceInfo(f)))
 
-      val resVar = getResVar(typ)
+      val resVar = scope.getResVar(typ)
       val exitPred = newPred(resVar, Some(getLastSourceInfo(funDef.body)))
 
       output(addRichClause(
@@ -1262,13 +1032,13 @@ class CCReader private (prog              : Program,
           translator.translateWithReturn(stm, entryPred)
       }
 
-      val globalVarTerms : Seq[ITerm] = GlobalVars.formalVarTerms
-      val postArgs : Seq[ITerm] = (allFormalVarTerms drop prePredArgs.size) ++
+      val globalVarTerms : Seq[ITerm] = scope.GlobalVars.formalVarTerms
+      val postArgs : Seq[ITerm] = (scope.allFormalVarTerms drop prePredArgs.size) ++
         globalVarTerms ++ resVar.map(v => IConstant(v.term))
 
       output(addRichClause(
         postPred(postArgs) :-
-          exitPred(allFormalVarTerms ++ resVar.map(v => IConstant(v.term))),
+          exitPred(scope.allFormalVarTerms ++ resVar.map(v => IConstant(v.term))),
         Some(funDef.sourceInfo) // todo: get last line number of function
       ))
 
@@ -1286,7 +1056,7 @@ class CCReader private (prog              : Program,
       clauses.clear
       assertionClauses.clear
 
-      LocalVars popFrame
+      scope.LocalVars popFrame
     }
 
     // then translate the threads
@@ -1305,15 +1075,15 @@ class CCReader private (prog              : Program,
             }
             case thread : ParaThread => {
               setPrefix(thread.cident_2)
-              LocalVars pushFrame
+              scope.LocalVars pushFrame
               val threadVar = new CCVar(thread.cident_1,
                 Some(getSourceInfo(thread)), CCInt, AutoStorage)
-              LocalVars addVar threadVar
+              scope.LocalVars addVar threadVar
               val translator = FunctionTranslator.apply(thread.cident_2)
               val finalPred = translator translateNoReturn(thread.compound_stm_)
               processes += ((clauses.toList, ParametricEncoder.Infinite))
               clauses.clear
-              LocalVars popFrame
+              scope.LocalVars popFrame
             }
           }
 
@@ -1336,7 +1106,7 @@ class CCReader private (prog              : Program,
         case Some(funDef) => {
           setPrefix(entryFunction)
 
-          LocalVars pushFrame
+          scope.LocalVars pushFrame
 
           val f = FuncDef(funDef)
 
@@ -1347,7 +1117,7 @@ class CCReader private (prog              : Program,
             }
           }
 
-          val exitVar = getResVar(returnType)
+          val exitVar = scope.getResVar(returnType)
           val exitPred = newPred(exitVar, Some(getLastSourceInfo(f.body)))
 
           val stm = pushArguments(funDef)
@@ -1375,8 +1145,8 @@ class CCReader private (prog              : Program,
               ((propertiesToCheck contains properties.MemValidCleanup) ||
                propertiesToCheck.contains(properties.MemValidTrack) &&
                TriCeraParameters.get.useMemCleanupForMemTrack)) {
-            val heapInd = GlobalVars.lastIndexWhere(heapVar)
-            val cleanupVarInd = GlobalVars.lastIndexWhere(memCleanupProphecyVar)
+            val heapInd = scope.GlobalVars.lastIndexWhere(heapVar)
+            val cleanupVarInd = scope.GlobalVars.lastIndexWhere(memCleanupProphecyVar)
 
             if (heapInd == -1 || cleanupVarInd == -1) {
               assert(false, "Could not find the heap term or the mem-cleanup" +
@@ -1390,12 +1160,12 @@ class CCReader private (prog              : Program,
                 if args(heapInd).sort == heap.HeapSort &&
                    args(cleanupVarInd).sort == heap.AddressSort =>
 
-                val resVar = getResVar(args.last.typ)
+                val resVar = scope.getResVar(args.last.typ)
                 assertionClauses +=
                 mkRichAssertionClause(
                     (args(cleanupVarInd).term === heap.nullAddr()) :-
                      atom(finalPred,
-                          allFormalVarTerms.toList ++
+                          scope.allFormalVarTerms.toList ++
                           resVar.map(v => IConstant(v.term)) take finalPred.arity),
                     None, properties.MemValidCleanup)
               case _ =>
@@ -1407,7 +1177,7 @@ class CCReader private (prog              : Program,
           processes += ((clauses.toList, ParametricEncoder.Singleton))
           clauses.clear
 
-          LocalVars popFrame
+          scope.LocalVars popFrame
         }
         case None =>
           warn("entry function \"" + entryFunction + "\" not found")
@@ -1684,8 +1454,8 @@ class CCReader private (prog              : Program,
   }
 
   /**
-   * Collects variable declarations and stores them in [[GlobalVars]] and
-   * [[LocalVars]] (depending on the value of `isGlobal`. It also stores
+   * Collects variable declarations and stores them in [[scope.GlobalVars]] and
+   * [[scope.LocalVars]] (depending on the value of `isGlobal`. It also stores
    * their initial values in the passed `values` [[Symex]].
    * @param dec               The declaration to collect from.
    * @param isGlobal          If this is a global declaration
@@ -1793,7 +1563,7 @@ class CCReader private (prog              : Program,
                             "size specified in an intialized array expression!")
                       }
                       import IExpression._
-                      val heapInd = GlobalVars.lastIndexWhere(heapVar)
+                      val heapInd = scope.GlobalVars.lastIndexWhere(heapVar)
                       val objTerm = CCTerm(arrayPtr.elementType.getZeroInit,
                         arrayPtr.elementType, srcInfo)
                       val arrayTerm = values.heapBatchAlloc(objTerm, arraySizeTerm.toTerm)
@@ -1832,7 +1602,7 @@ class CCReader private (prog              : Program,
                                    typ.elementType.getZeroInit
                   else typ.elementType.getNonDet
                   val objTerm = CCTerm(objValue, typ.elementType, srcInfo)
-                  val heapInd = GlobalVars.lastIndexWhere(heapVar)
+                  val heapInd = scope.GlobalVars.lastIndexWhere(heapVar)
                   val addressRangeValue = varDec.initArrayExpr match {
                     case Some(expr) =>
                       val arraySize =
@@ -1856,10 +1626,10 @@ class CCReader private (prog              : Program,
         // do not use actualType below, take from lhsVar
 
         if (isGlobal || collectOnlyLocalStatic) {
-          GlobalVars addVar actualLhsVar
-          variableHints += List()
+          scope.GlobalVars addVar actualLhsVar
+          scope.variableHints += List()
         } else {
-          LocalVars addVar actualLhsVar
+          scope.LocalVars addVar actualLhsVar
         }
 
         actualLhsVar.typ match {
@@ -1909,7 +1679,7 @@ class CCReader private (prog              : Program,
                 new CCVar(name, Some(getSourceInfo(predExp)), typ, AutoStorage)
             }
             values.saveState
-            ccVars.foreach(LocalVars addVar)
+            ccVars.foreach(scope.LocalVars addVar)
             for ((ccVar, ind) <- ccVars.zipWithIndex) {
               values.addValue(CCTerm(IExpression.v(ind), ccVar.typ, ccVar.srcInfo))
             }
@@ -1934,12 +1704,12 @@ class CCReader private (prog              : Program,
     }).flatten.filter(_.isInstanceOf[AbsHintClause]).
       map(_.asInstanceOf[AbsHintClause])
     if (hints.nonEmpty) {
-      val hintSymex = Symex(executionContext, null)
+      val hintSymex = Symex(symexContext, scope, null)
       hintSymex.saveState
 
             val subst =
               (for ((v, n) <-
-                      (GlobalVars.iterator ++ LocalVars.iterator).zipWithIndex)
+                      (scope.GlobalVars.iterator ++ scope.LocalVars.iterator).zipWithIndex)
                yield (v.term.asInstanceOf[ConstantTerm] -> IExpression.v(n))).toMap
 
       import AnnotationParser._
@@ -1971,7 +1741,7 @@ class CCReader private (prog              : Program,
                 "Hints are not side effect-free: " +
                 hints.mkString(""))
 
-            variableHints(variableHints.size - 1) = hintEls
+            scope.variableHints(scope.variableHints.size - 1) = hintEls
           }
     }
 
@@ -2052,7 +1822,7 @@ class CCReader private (prog              : Program,
               CCArray(typ, None, None,
                 ExtArray(Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap) // todo: only int indexed arrays
             case initArray: InitArray =>
-              val arraySizeSymex = Symex(executionContext, null)
+              val arraySizeSymex = Symex(symexContext, scope, null)
               val evalSettings = arraySizeSymex.EvalSettings()
               val evalContext = arraySizeSymex.EvalContext()
               val arraySizeExp = arraySizeSymex.eval(
@@ -2255,16 +2025,16 @@ class CCReader private (prog              : Program,
       // map the enumerators to integers directly
       var nextInd = IdealInt.ZERO
       var enumerators = new MHashMap[String, IdealInt]
-      val symex = Symex(executionContext, null) // a temporary Symex to collect enum declarations
+      val symex = Symex(symexContext, scope, null) // a temporary Symex to collect enum declarations
       // to deal with fields referring to same-enum fields, e.g. enum{a, b = a+1}
-      LocalVars pushFrame // we also need to add them as vars
+      scope.LocalVars pushFrame // we also need to add them as vars
 
       for (s <- specs) s match {
         case s : Plain => {
           val ind = nextInd
           nextInd = nextInd + 1
           val v = new CCVar(s.cident_, Some(getSourceInfo(s)), CCInt, AutoStorage)
-          LocalVars addVar v
+          scope.LocalVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
         }
@@ -2280,13 +2050,13 @@ class CCReader private (prog              : Program,
           nextInd = ind + 1
           val v = new CCVar(s.cident_,
             Some(getSourceInfo(s)), CCInt, AutoStorage)
-          LocalVars addVar v
+          scope.LocalVars addVar v
           symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
         }
       }
 
-      LocalVars popFrame
+      scope.LocalVars popFrame
 
       val newEnum = CCIntEnum(enumName, enumerators.toSeq)
       enumDefs.put(enumName, newEnum)
@@ -2302,7 +2072,7 @@ class CCReader private (prog              : Program,
       throw new TranslationException(
         "size of " + arrayTyp + " is already defined")
 
-    val symex = Symex(executionContext, null) // a temporary Symex to collect the array size
+    val symex = Symex(symexContext, scope, null) // a temporary Symex to collect the array size
 
     /*val arraySize = decl match {
       case initArray : InitArray => // todo: maybe this can be calculated beforehand, so we actually have an integer constant here?
@@ -2414,7 +2184,7 @@ class CCReader private (prog              : Program,
   //////////////////////////////////////////////////////////////////////////////
 
   private def translateConstantExpr(expr : Constant_expression,
-                                    symex : Symex = Symex(executionContext, null)) : CCExpr = {
+                                    symex : Symex = Symex(symexContext, scope, null)) : CCExpr = {
     symex.saveState
     val res = symex.eval(expr.asInstanceOf[Especial].exp_)(
       symex.EvalSettings(), symex.EvalContext())
@@ -2445,13 +2215,13 @@ class CCReader private (prog              : Program,
                              args : List[CCType],
                              isNoReturn : Boolean,
                              functionName : String) : Unit = {
-    LocalVars pushFrame
+    scope.LocalVars pushFrame
     val stm = pushArguments(functionDef, args)
 
     // this might be an inlined function in an expression where we need to
     // carry along other terms that were generated in the expression, so this
     // assertion is not necessarily true:
-    // assert(entry.arity == allFormalVars.size)
+    // assert(entry.arity == scope.allFormalVars.size)
 
     val translator = FunctionTranslator(exit, functionName)
     val finalPred =
@@ -2460,7 +2230,7 @@ class CCReader private (prog              : Program,
         exit
       } else
         translator.translateWithReturn(stm, entry)
-    LocalVars popFrame
+    scope.LocalVars popFrame
   }
 
   private def createHeapPointer(decl : BeginPointer, typ : CCType) :
@@ -2544,7 +2314,7 @@ class CCReader private (prog              : Program,
               }
               val declaredVar =
                 new CCVar(name, Some(getSourceInfo(argDec)), actualType, AutoStorage)
-              LocalVars addVar declaredVar
+              scope.LocalVars addVar declaredVar
 
             case argDec : TypeHintAndParam =>
               val typ = getType(argDec.listdeclaration_specifier_)
@@ -2556,13 +2326,13 @@ class CCReader private (prog              : Program,
               val declaredVar = new CCVar(getName(argDec.declarator_),
                                           Some(getSourceInfo(argDec)),
                                           actualType, AutoStorage)
-              LocalVars addVar declaredVar
+              scope.LocalVars addVar declaredVar
               processHints(argDec.listannotation_)
 //            case argDec : Abstract =>
           }
 //      case dec : OldFuncDef =>
 //        for (ident <- dec.listcident_)
-//          LocalVars += new ConstantTerm(ident)
+//          scope.LocalVars += new ConstantTerm(ident)
       case dec : OldFuncDec =>
         // arguments are not specified ...
     }
@@ -2583,7 +2353,7 @@ class CCReader private (prog              : Program,
 
     private def symexFor(initPred : CCPredicate,
                          stm : Expression_stm) : (Symex, Option[CCExpr]) = {
-      val exprSymex = Symex(executionContext, initPred)
+      val exprSymex = Symex(symexContext, scope, initPred)
       val res = stm match {
         case _ : SexprOne => None
         case stm : SexprTwo =>
@@ -2611,8 +2381,8 @@ class CCReader private (prog              : Program,
       translate(compound, entry, finalPred)
       // add a default return edge
       val rp = returnPred.get
-      output(addRichClause(Clause(atom(rp, allFormalVarTerms take rp.arity),
-                    List(atom(finalPred, allFormalVarTerms  take finalPred.arity)),
+      output(addRichClause(Clause(atom(rp, scope.allFormalVarTerms take rp.arity),
+                    List(atom(finalPred, scope.allFormalVarTerms  take finalPred.arity)),
                     true), exitSrcInfo))
       postProcessClauses
     }
@@ -2629,9 +2399,9 @@ class CCReader private (prog              : Program,
       translateWithEntryClause(compound, finalPred)
       // add a default return edge
       //val rp = returnPred.get
-      //output(Clause(atom(rp, (allFormalVars take (rp.arity - 1)) ++
+      //output(Clause(atom(rp, (scope.allFormalVars take (rp.arity - 1)) ++
       //                       List(IConstant(new ConstantTerm("__result")))),
-      //              List(atom(finalPred, allFormalVars)),
+      //              List(atom(finalPred, scope.allFormalVars)),
       //              true))
       postProcessClauses
       finalPred
@@ -2646,9 +2416,9 @@ class CCReader private (prog              : Program,
       translate(compound, entry, finalPred)
       // add a default return edge
       //val rp = returnPred.get
-      //output(Clause(atom(rp, (allFormalVars take (rp.arity - 1)) ++
+      //output(Clause(atom(rp, (scope.allFormalVars take (rp.arity - 1)) ++
       //                       List(IConstant(new ConstantTerm("__result")))),
-      //              List(atom(finalPred, allFormalVars)),
+      //              List(atom(finalPred, scope.allFormalVars)),
       //              true))
       postProcessClauses
       finalPred
@@ -2767,7 +2537,7 @@ class CCReader private (prog              : Program,
       val annotationInfo = AnnotationParser(annotationStringExtractor(stm))
       annotationInfo match {
         case Seq(MaybeACSLAnnotation(annot, _)) =>
-          val stmSymex = Symex(executionContext, entry)
+          val stmSymex = Symex(symexContext, scope, entry)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
             /**
              * Returns the term from the init atom - this should work as
@@ -2787,7 +2557,7 @@ class CCReader private (prog              : Program,
               }
             }
 
-            override def getGlobals: Seq[CCVar] = GlobalVars.vars
+            override def getGlobals: Seq[CCVar] = scope.GlobalVars.vars
             override def sortWrapper(s: Sort): Option[IFunction] =
               sortWrapperMap get s
             override def sortGetter(s: Sort): Option[IFunction] =
@@ -2817,7 +2587,7 @@ class CCReader private (prog              : Program,
               else throw new TranslationException("getHeap called with no heap!")
             override def getHeapTerm: ITerm =
               if (modelHeap)
-                stmSymex.getValues(GlobalVars.lastIndexWhere(heapVar)).toTerm
+                stmSymex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
               else throw new TranslationException("getHeapTerm called with no heap!")
             override def getOldHeapTerm: ITerm = {
               if (modelHeap) getHeapTerm
@@ -2853,7 +2623,7 @@ class CCReader private (prog              : Program,
       val annotationInfo = AnnotationParser(annotationStringExtractor(loop_annot))
       annotationInfo match {
         case Seq(MaybeACSLAnnotation(annot, _)) =>
-          val stmSymex = Symex(executionContext, entry)
+          val stmSymex = Symex(symexContext, scope, entry)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
             /**
              * Returns the term from the init atom - this should work as
@@ -2873,7 +2643,7 @@ class CCReader private (prog              : Program,
               }
             }
 
-            override def getGlobals : Seq[CCVar] = GlobalVars.vars
+            override def getGlobals : Seq[CCVar] = scope.GlobalVars.vars
             override def sortWrapper(s : Sort) : Option[IFunction] =
               sortWrapperMap get s
             override def sortGetter(s : Sort) : Option[IFunction] =
@@ -2901,7 +2671,7 @@ class CCReader private (prog              : Program,
               if (modelHeap) heap else throw NeedsHeapModelException
             override def getHeapTerm : ITerm =
               if (modelHeap)
-                stmSymex.getValues(GlobalVars.lastIndexWhere(heapVar)).toTerm
+                stmSymex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
               else throw NeedsHeapModelException
             override def getOldHeapTerm : ITerm =
               getHeapTerm // todo: heap term for exit predicate?
@@ -2930,7 +2700,7 @@ class CCReader private (prog              : Program,
 
 
     private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {
-      val decSymex = Symex(executionContext, entry)
+      val decSymex = Symex(symexContext, scope, entry)
       collectVarDecls(dec, false, decSymex, "", false)
       val exit = newPred(Nil, Some(getSourceInfo(dec)))
       decSymex outputClause(exit, exit.srcInfo)
@@ -2943,7 +2713,7 @@ class CCReader private (prog              : Program,
       case stm : SlabelOne => { // Labeled_stm ::= CIdent ":" Stm ;
         if (labelledLocs contains stm.cident_)
           throw new TranslationException("multiple labels " + stm.cident_)
-        labelledLocs.put(stm.cident_, (entry, allFormalVarTerms))
+        labelledLocs.put(stm.cident_, (entry, scope.allFormalVarTerms))
         translate(stm.stm_, entry, exit)
       }
       case stm : SlabelTwo => { // Labeled_stm ::= "case" Constant_expression ":" Stm ;
@@ -2961,12 +2731,12 @@ class CCReader private (prog              : Program,
                           compound : Compound_stm,
                           exit : CCPredicate) : Unit = compound match {
       case compound : ScompOne =>
-        output(addRichClause(Clause(atom(exit, allVarInits take exit.arity),
+        output(addRichClause(Clause(atom(exit, scope.allVarInits take exit.arity),
                                     List(), globalPreconditions),
           Some(getSourceInfo(compound)))
         )
       case compound : ScompTwo => {
-        LocalVars pushFrame
+        scope.LocalVars pushFrame
 
         val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
 
@@ -2975,10 +2745,10 @@ class CCReader private (prog              : Program,
         var entryPred = newPred(Nil,
           if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
         var entryClause =
-          Clause(atom(entryPred, allVarInits take entryPred.arity), List(), globalPreconditions)
+          Clause(atom(entryPred, scope.allVarInits take entryPred.arity), List(), globalPreconditions)
 
         while (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
-          val decSymex = Symex(executionContext, entryPred)
+          val decSymex = Symex(symexContext, scope, entryPred)
           collectVarDecls(stmsIt.next.asInstanceOf[DecS].dec_,
                           false, decSymex, "", false)
           val srcInfo = entryPred.srcInfo // todo: correct srcInfo?
@@ -2989,7 +2759,7 @@ class CCReader private (prog              : Program,
         output(addRichClause(entryClause, entryPred.srcInfo))
 
         translateStmSeq(stmsIt, entryPred, exit)
-        LocalVars popFrame
+        scope.LocalVars popFrame
       }
     }
 
@@ -3037,17 +2807,17 @@ class CCReader private (prog              : Program,
                           entry : CCPredicate,
                           exit : CCPredicate) : Unit = compound match {
       case compound : ScompOne => {
-        val vars = allFormalVarTerms
+        val vars = scope.allFormalVarTerms
         output(addRichClause(Clause(atom(exit, vars take exit.arity),
                                     List(atom(entry, vars take entry.arity)), true),
           Some(getSourceInfo(compound))))
       }
       case compound : ScompTwo => {
-        LocalVars pushFrame
+        scope.LocalVars pushFrame
 
         val stmsIt = compound.liststm_.iterator
         translateStmSeq(stmsIt, entry, exit)
-        LocalVars popFrame
+        scope.LocalVars popFrame
       }
     }
 
@@ -3062,8 +2832,8 @@ class CCReader private (prog              : Program,
             prevPred = translate(stm.dec_, prevPred)
             if (!stmsIt.hasNext) {
               output(addRichClause(Clause(
-                atom(exit, allFormalVarTerms take exit.arity),
-                List(atom(prevPred, allFormalVarTerms take prevPred.arity)),
+                atom(exit, scope.allFormalVarTerms take exit.arity),
+                List(atom(prevPred, scope.allFormalVarTerms take prevPred.arity)),
                 true), srcInfo))
             }
           }
@@ -3124,7 +2894,7 @@ class CCReader private (prog              : Program,
 
         if (TriCeraParameters.get.inferLoopInvariants)
           addLoopInvariant(entry, getSourceInfo(stm))
-        val condSymex = Symex(executionContext, entry)
+        val condSymex = Symex(symexContext, scope, entry)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
@@ -3148,7 +2918,7 @@ class CCReader private (prog              : Program,
           translate(stm.stm_, entry, first)
         }
 
-        val condSymex = Symex(executionContext, first)
+        val condSymex = Symex(symexContext, scope, first)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext  = condSymex.EvalContext()
                                              .withFunctionName(functionName)
@@ -3190,9 +2960,9 @@ class CCReader private (prog              : Program,
         stm match {
           case stm : SiterThree =>
             output(addRichClause(
-              first(allFormalVars) :- third(allFormalVarTerms), srcInfo))
+              first(scope.allFormalVars) :- third(scope.allFormalVarTerms), srcInfo))
           case stm : SiterFour  => {
-            val incSymex = Symex(executionContext, third)
+            val incSymex = Symex(symexContext, scope, third)
             val evalContext = incSymex.EvalContext()
                                                .withFunctionName(functionName)
             incSymex.eval(stm.exp_)(incSymex.EvalSettings(), evalContext)
@@ -3206,7 +2976,7 @@ class CCReader private (prog              : Program,
                           entry : CCPredicate,
                           exit : CCPredicate) : Unit = stm match {
       case _ : SselOne | _ : SselTwo => { // if
-        val condSymex = Symex(executionContext, entry)
+        val condSymex = Symex(symexContext, scope, entry)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
@@ -3220,7 +2990,7 @@ class CCReader private (prog              : Program,
         }
         val first = newPred(Nil, srcInfo1)
         val second = newPred(Nil, srcInfo2)
-        val vars = allFormalVarTerms
+        val vars = scope.allFormalVarTerms
 
         condSymex.outputITEClauses(cond, first, second, srcInfo2) // todo: correct line no?
         stm match {
@@ -3240,7 +3010,7 @@ class CCReader private (prog              : Program,
 
       case stm : SselThree => {  // switch
         import IExpression._
-        val selectorSymex = Symex(executionContext, entry)
+        val selectorSymex = Symex(symexContext, scope, entry)
         implicit val evalSettings = selectorSymex.EvalSettings()
         implicit val evalContext  = selectorSymex.EvalContext()
                                                  .withFunctionName(functionName)
@@ -3289,7 +3059,7 @@ class CCReader private (prog              : Program,
       val srcInfo = Some(getSourceInfo(jump)) // todo: correct line no?
       jump match {
       case jump : SjumpOne => { // goto
-        jumpLocs += ((jump.cident_, entry, allFormalVarTerms, clauses.size,
+        jumpLocs += ((jump.cident_, entry, scope.allFormalVarTerms, clauses.size,
           getSourceInfo(jump)))
         // reserve space for the later jump clause
         output(new CCClause(null, null))
@@ -3298,21 +3068,21 @@ class CCReader private (prog              : Program,
         if (innermostLoopCont == null)
           throw new TranslationException(
             "\"continue\" can only be used within loops")
-        Symex(executionContext, entry) outputClause(innermostLoopCont, srcInfo)
+        Symex(symexContext, scope, entry) outputClause(innermostLoopCont, srcInfo)
       }
       case jump : SjumpThree => { // break
         if (innermostLoopExit == null)
           throw new TranslationException(
             "\"break\" can only be used within loops")
-        Symex(executionContext, entry) outputClause(innermostLoopExit, srcInfo)
+        Symex(symexContext, scope, entry) outputClause(innermostLoopExit, srcInfo)
       }
       case jump : SjumpFour => // return
         returnPred match {
           case Some(rp) => {
             var nextPred = entry
-            val args = allFormalVarTerms take rp.arity
+            val args = scope.allFormalVarTerms take rp.arity
             output(addRichClause(Clause(atom(rp, args),
-                          List(atom(nextPred, allFormalVarTerms take nextPred.arity)),
+                          List(atom(nextPred, scope.allFormalVarTerms take nextPred.arity)),
                           true), srcInfo))
           }
           case None =>
@@ -3320,7 +3090,7 @@ class CCReader private (prog              : Program,
               "\"return\" can only be used within functions")
         }
       case jump : SjumpFive => { // return exp
-        val symex = Symex(executionContext, entry)
+        val symex = Symex(symexContext, scope, entry)
         implicit val evalSettings = symex.EvalSettings()
         implicit val evalContext  = symex.EvalContext()
                                          .withFunctionName(functionName)
@@ -3337,8 +3107,8 @@ class CCReader private (prog              : Program,
       }
       case _ : SjumpAbort | _ : SjumpExit => // abort() or exit(int status)
         output(addRichClause(
-          Clause(atom(globalExitPred, allFormalVarTerms take globalExitPred.arity),
-                 List(atom(entry, allFormalVarTerms take entry.arity)),
+          Clause(atom(globalExitPred, scope.allFormalVarTerms take globalExitPred.arity),
+                 List(atom(entry, scope.allFormalVarTerms take entry.arity)),
                  true), srcInfo))
       }
     }
@@ -3356,7 +3126,7 @@ class CCReader private (prog              : Program,
             // distinguish between loops within the block, and a loop
             // around the block
             val first = newPred(Nil, srcInfo)
-            val entrySymex = Symex(executionContext, entry)
+            val entrySymex = Symex(symexContext, scope, entry)
             entrySymex outputClause(first, srcInfo)
             translate(stm.stm_, first, exit)
           }
@@ -3366,7 +3136,7 @@ class CCReader private (prog              : Program,
           val currentClauseNum = clauses.size
           inAtomicMode {
             val first = newPred(Nil, srcInfo)
-            val condSymex = Symex(executionContext, entry)
+            val condSymex = Symex(symexContext, scope, entry)
             implicit val evalSettings = condSymex.EvalSettings()
             implicit val evalContext  = condSymex.EvalContext()
                                                  .withFunctionName(functionName)
@@ -3377,7 +3147,7 @@ class CCReader private (prog              : Program,
                 "expressions with side-effects are not supported in \"within\"")
             import HornClauses._
             timeInvariants +=
-              (cond :- atom(entry, allFormalVarTerms take entry.arity))
+              (cond :- atom(entry, scope.allFormalVarTerms take entry.arity))
             condSymex outputClause(first, srcInfo)
             translate(stm.stm_, first, exit)
           }
@@ -3425,7 +3195,7 @@ class CCReader private (prog              : Program,
                              if (singleThreaded) {
                                if (useTime) 2 else 0 // todo : anything for heap here? why only 2 if useTime?
                              } else {
-                               GlobalVars.size
+                               scope.GlobalVars.size
                              },
                              None,
                              if (useTime)

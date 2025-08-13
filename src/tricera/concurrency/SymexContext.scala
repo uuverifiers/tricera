@@ -73,42 +73,6 @@ trait SymexContext {
   def objectGetters     : Seq[MonoSortedIFunction]
   def defObj            : IFunction
 
-  // --- Variables ---
-  def lookupVar(name              : String,
-                enclosingFunction : String) : Int
-  def lookupVarNoException(name              : String,
-                           enclosingFunction : String) : Int
-  def getGlobalVar(i : Int) : CCVar
-  def getLocalVar (i : Int) : CCVar
-  def globalVars : Seq[CCVar]
-  def globalVarTypes: Seq[CCType]
-  def findGlobalVar(p : CCVar => Boolean) : Int
-  def updateVarType(name              : String,
-                    newType           : CCType,
-                    enclosingFunction : String) : Unit
-  def freeFromGlobal(t : IExpression) : Boolean
-  def freeFromGlobal(t : CCExpr) : Boolean
-  def allFormalVars     : Seq[CCVar]
-  def allFormalVarTerms : Seq[ITerm]
-  def allFormalExprs    : Seq[CCExpr]
-  def getFreshEvalVar(typ     : CCType,
-                      srcInfo : Option[SourceInfo],
-                      name    : String = "",
-                      storage : VariableStorage = AutoStorage) : CCVar
-  def getResVar(typ : CCType) : List[CCVar]
-
-  def addLocalVar(v : CCVar) : Int
-  def popLocalVars(n : Int)  : Unit
-  def updateLocalVar(idx  : Int,
-                     elem : CCVar) : Unit
-  def removeLocalVar(n : Int) : CCVar
-  def getLocalVarsInTopFrame  : List[CCVar]
-  def lastLocalVar     : CCVar
-  def numGlobalVars    : Int
-  def numLocalVars     : Int
-  def numVariableHints : Int
-  def updateLastVariableHints(hints : Seq[VerifHintElement]) : Unit
-
   // --- Clause & Predicate Generation ---
   def output(c    : CCClause,
              sync : ParametricEncoder.Synchronisation = ParametricEncoder.NoSync) : Unit

@@ -19,4 +19,7 @@ object Literals {
 
   // Used for indicating that an annotation is ACSL related
   val annotationMarker = "■■" // ascii 254 times 2
+
+  // Name of the global heap term in the generated clauses
+  val heapTermName = "@h"
 }
