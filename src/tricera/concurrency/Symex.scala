@@ -30,9 +30,8 @@
 package tricera.concurrency
 
 import ap.basetypes.IdealInt
-import ap.parser.IExpression.Sort
 import ap.parser._
-import ap.theories.{ADT, ExtArray, Heap, ModuloArithmetic}
+import ap.theories.{ExtArray, ModuloArithmetic}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints.VerifHintInitPred
@@ -45,29 +44,29 @@ import tricera.concurrency.concurrent_c.Absyn._
 import tricera.Literals
 import tricera.params.TriCeraParameters
 import tricera.properties
-import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier, toPredApplier}
+import IExpression.toFunApplier
 import tricera.concurrency.ccreader.CCBinaryExpressions.BinaryOperators
+import tricera.concurrency.heap.HeapModel
 
 import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator}
-
-import scala.collection.mutable.{ArrayBuffer, Buffer, Stack}
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, Stack}
 
 object Symex {
-  def apply(context  : SymexContext,
-            scope    : CCScope,
-            initPred : CCPredicate) : Symex = {
-    val initialValues =
-      scope.allFormalVars.map(v => CCTerm(v.term, v.typ, v.srcInfo))
-    new Symex(context, scope, initPred, initialValues)
+  def apply(context       : SymexContext,
+            scope         : CCScope,
+            initPred      : CCPredicate,
+            heap          : Option[HeapModel]) : Symex = {
+    new Symex(context, scope, initPred, heap)
   }
 }
 
 class Symex private (context       : SymexContext,
                      scope         : CCScope,
                      oriInitPred   : CCPredicate,
-                     initialValues : Seq[CCExpr]) {
-  private val values : scala.collection.mutable.Buffer[CCExpr] =
-    initialValues.toBuffer
+                     heap          : Option[HeapModel]) {
+  private var values : Seq[CCExpr] =
+    scope.allFormalVars.map(v => CCTerm(v.term, v.typ, v.srcInfo))
   private var guard : IFormula = true
   private var touchedGlobalState : Boolean = false
   private var assignedToStruct : Boolean = false
@@ -87,222 +86,6 @@ class Symex private (context       : SymexContext,
 
   def getGuard = guard
 
-  //todo:Heap get rid of this or change name
-  def heapRead(ptrExpr : CCExpr, assertMemSafety : Boolean = true,
-               assumeMemSafety : Boolean = true)
-  : CCTerm = {
-    val (objectGetter, typ : CCType) = ptrExpr.typ match {
-      case typ : CCHeapPointer => (context.sortGetterMap(typ.typ.toSort), typ.typ)
-      case _ => throw new TranslationException(
-        "Can only read from heap pointers! (" + ptrExpr + ")")
-    }
-    val readObj = context.heap.read(getValue(Literals.heapTermName, "").toTerm, ptrExpr.toTerm)
-    if (assertMemSafety &&
-        context.propertiesToCheck.contains(properties.MemValidDeref)) {
-      assertProperty(
-        context.heap.heapADTs.hasCtor(readObj, context.sortCtorIdMap(typ.toSort)),
-        ptrExpr.srcInfo, properties.MemValidDeref)
-      // todo: add tester methods for user ADT sorts?
-      // also add memory safety assumptions to the clause
-      if (assumeMemSafety)
-        addGuard(context.heap.heapADTs.hasCtor(readObj, context.sortCtorIdMap(typ.toSort)))
-    }
-    CCTerm(objectGetter(readObj), typ, ptrExpr.srcInfo)
-  }
-  def heapAlloc(value : CCTerm) : CCTerm = {
-    val objTerm = context.sortWrapperMap(value.typ.toSort)(value.toTerm)
-    val newAlloc = context.heap.alloc(getValue(Literals.heapTermName, "").toTerm, objTerm)
-    setValue(Literals.heapTermName, CCTerm(
-      context.heap.newHeap(newAlloc), CCHeap(context.heap), value.srcInfo), "")
-    CCTerm(context.heap.newAddr(newAlloc), CCHeapPointer(context.heap, value.typ), value.srcInfo)
-  }
-  // batch allocates "size" "objectTerm"s, returns the address range
-  def heapBatchAlloc(value : CCTerm, size : ITerm) : ITerm = {
-    val newBatchAlloc =
-      context.heap.batchAlloc(getValue(Literals.heapTermName, "").toTerm,
-                      context.sortWrapperMap(value.typ.toSort)(value.toTerm), size)
-    val newHeap = context.heap.newBatchHeap(newBatchAlloc)
-    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), value.srcInfo), "")
-    context.heap.newAddrRange(newBatchAlloc)
-  }
-  def heapArrayRead(arrExpr  : CCExpr,
-                    index    : CCExpr,
-                    arrType  : CCHeapArrayPointer,
-                    assertMemSafety : Boolean = true,
-                    assumeMemSafety : Boolean = true,
-                    assertIndexWithinBounds : Boolean = true) : CCTerm = {
-    val readAddress = CCTerm(context.heap.nth(arrExpr.toTerm, index.toTerm),
-                             CCHeapPointer(context.heap, arrType.elementType), arrExpr.srcInfo)
-    val readValue = heapRead(readAddress, assertMemSafety, assumeMemSafety)
-    if (assertIndexWithinBounds &&
-        context.propertiesToCheck.contains(properties.MemValidDeref))
-      assertProperty(context.heap.within(arrExpr.toTerm, readAddress.toTerm),
-                     arrExpr.srcInfo, properties.MemValidDeref)
-    readValue
-  }
-
-  /**
-   * updates an Object on the heap, which can also be an ADT
-   * @param lhs this must be a read from the location to be updated.
-   *            e.g. getInt(read(h,a)) or an ADT selector x(getS(read(h,a)))
-   * @param rhs the term to be written to the location pointed by lhs
-   * @param assertMemSafety add memory safety assertion
-   * @param assumeMemSafety assume memory safety after write
-   */
-  def heapWrite(lhs : IFunApp, rhs : CCExpr,
-                assertMemSafety : Boolean = false,
-                assumeMemSafety : Boolean = false) = {
-    val newHeap = context.heap.writeADT(lhs, rhs.toTerm).asInstanceOf[IFunApp]
-    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), rhs.srcInfo), "")
-    if (assertMemSafety &&
-        context.propertiesToCheck.contains(properties.MemValidDeref)) {
-      def getObjAndSort(f : IFunApp) : (IFunApp, Sort) = {
-        if (context.objectGetters contains f.fun) {
-          val sort = f.fun.asInstanceOf[MonoSortedIFunction].resSort
-          val obj = f.args.head.asInstanceOf[IFunApp]
-          (obj, sort)
-        } else if (f.args.size == 1 && f.args.head.isInstanceOf[IFunApp]) {
-          getObjAndSort(f.args.head.asInstanceOf[IFunApp])
-        } else
-            throw new TranslationException("Cannot determine read" +
-                                           "object from passed term")
-      }
-      val (writtenObj, sort) = getObjAndSort(lhs)
-
-      assertProperty(context.heap.heapADTs.hasCtor(writtenObj, context.sortCtorIdMap(sort)),
-                     rhs.srcInfo, properties.MemValidDeref)
-      // todo: add tester methods for user ADT sorts?
-      // also add memory safety assumptions to the clause
-      if (assumeMemSafety)
-        addGuard(context.heap.heapADTs.hasCtor(writtenObj, context.sortCtorIdMap(sort)))
-    }
-  }
-
-  /**
-   * Write the passed object to the passed location on the heap
-   */
-  // todo: add mem-/type-safety assertions?
-  def heapWrite(addr : ITerm, obj : ITerm, objSort : Sort) = {
-    val heapVal = getValue(Literals.heapTermName, "")
-    val newHeap = context.heap.write(heapVal.toTerm, addr, context.sortWrapperMap(objSort)(obj))
-    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), None), "") // todo: src info?
-  }
-
-  def heapBatchWrite(h : ITerm, r : ITerm, o : ITerm) = {
-    val newHeap = context.heap.batchWrite(h, r, o)
-    setValue(Literals.heapTermName, CCTerm(newHeap, CCHeap(context.heap), None), "") // todo: src info?
-  }
-
-  /**
-   * `free` is encoded by writing [[defObj]] to the pointed location.
-   */
-  def heapFree(t : CCExpr, srcInfo : Option[SourceInfo]) = {
-    t.typ match {
-      case p : CCHeapPointer =>
-        val termToFree : IFunApp =
-          heapRead(t, assertMemSafety = false).toTerm match {
-            case IFunApp(f, Seq(arg))  if (context.objectGetters contains f) &
-                                          arg.isInstanceOf[IFunApp] =>
-              arg.asInstanceOf[IFunApp]
-            case _ => throw new TranslationException("Could not resolve" +
-                                                     " the term to free: " + t)
-          }
-        if(context.propertiesToCheck contains properties.MemValidFree){
-          /**
-           * Add an assertion that `ptrExpr` is safe to free.
-           * Checking [[context.heap.isAlloc]] is not sufficient: freed locations are
-           * marked by writing the default object to them, so we need to check
-           * that read(h, p) =/= defObj. A free is also valid when
-           * p is nullAddr.
-           */
-          val readObj = context.heap.read(
-            getValue(Literals.heapTermName, "").toTerm, t.toTerm)
-          assertProperty(t.toTerm === context.heap.nullAddr() |||
-                         readObj =/= context.heap._defObj,
-                         srcInfo, properties.MemValidFree)
-        }
-        if ((context.propertiesToCheck contains properties.MemValidCleanup) ||
-            context.propertiesToCheck.contains(properties.MemValidTrack) &&
-            TriCeraParameters.get.useMemCleanupForMemTrack) {
-          /**
-           * Set [[context.memCleanupProphecyVar]] back to NULL, if the freed address
-           * is the same as the one stored.
-           */
-          val prophInd = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
-          val prophOldVal = getValues(prophInd).toTerm
-          setValue(prophInd, CCTerm(
-            IExpression.ite(prophOldVal === t.toTerm,
-                            context.heap.nullAddr(),
-                            prophOldVal), context.memCleanupProphecyVar.typ, None),
-                   false)
-        }
-        heapWrite(termToFree, CCTerm(p.heap._defObj, p, srcInfo))
-      case p : CCHeapArrayPointer =>
-        //val n = getFreshEvalVar(CCUInt)
-        //addGuard(n.term >= 0 & n.term < context.heap.addrRangeSize(t.toTerm))
-        //val a = getFreshEvalVar(CCHeapPointer(heap, p.elementType))
-        //addGuard(context.heap.within(t.toTerm, a.term))
-        /*val termToFree : IFunApp =
-          heapRead(CCTerm(a.term, a.typ),
-                   assertMemSafety = false).toTerm match {
-            case IFunApp(f, Seq(arg)) if (context.objectGetters contains f) &
-                                          arg.isInstanceOf[IFunApp] =>
-              arg.asInstanceOf[IFunApp]
-            case _ => throw new TranslationException("Could not resolve" +
-              " the term to free: " + t)
-          }
-        heapWrite(termToFree, CCTerm(p.context.heap._defObj, p))*/
-        // todo: what about ADTs?
-        if (context.propertiesToCheck contains properties.MemValidFree) {
-          p.arrayLocation match {
-            case ArrayLocation.Heap =>
-              /**
-               * Assert that either `t` is `null`, or
-               * forall ind. t[ind] =/= defObj
-               * (or equivalently forall ind. read(h, nth(t, ind)) =/= defObj)
-               */
-              val ind      = scope.getFreshEvalVar(CCInt, t.srcInfo)
-              val readAddr = context.heap.nth(t.toTerm, ind.term)
-              val readObj  = context.heap.read(getValue(Literals.heapTermName, "").toTerm,
-                                       readAddr)
-              assertProperty(t.toTerm === context.heap.nullAddr() |||
-                             (context.heap.within(t.toTerm, readAddr) ==>
-                              (readObj =/= context.heap._defObj)),
-                             srcInfo, properties.MemValidFree)
-            case _ =>
-              /**
-               * Freeing non-heap memory is undefined behaviour.
-               */
-              assertProperty(IExpression.i(false),
-                             srcInfo, properties.MemValidFree)
-          }
-        }
-        if ((context.propertiesToCheck contains properties.MemValidCleanup) ||
-            context.propertiesToCheck.contains(properties.MemValidTrack) &&
-            TriCeraParameters.get.useMemCleanupForMemTrack) {
-          /**
-           * Set [[memCleanupProphecyVar]] back to NULL, if the beginning of
-           * the freed address block is the same as the one stored.
-           */
-          val prophInd    = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
-          val prophOldVal = getValues(prophInd).toTerm
-          setValue(prophInd, CCTerm(
-            IExpression.ite(prophOldVal === context.heap.nth(t.toTerm, 0),
-                            context.heap.nullAddr(),
-                            prophOldVal), context.memCleanupProphecyVar.typ, None),
-                   false)
-        }
-        heapBatchWrite(getValue(Literals.heapTermName, "").toTerm, t.toTerm, context.defObj())
-      case _ =>
-        /**
-         * Freeing a non-heap pointer.
-         */
-        if (context.propertiesToCheck contains properties.MemValidFree)
-          assertProperty(IExpression.i(false),
-                         srcInfo, properties.MemValidFree)
-    }
-  }
-
   private var initAtom =
     if (oriInitPred == null)
       null
@@ -318,8 +101,7 @@ class Symex private (context       : SymexContext,
   def restoreState = {
     val (oldAtom, oldValues, oldGuard, /*oldPullGuard,*/ oldTouched) = savedStates.pop
     initAtom = oldAtom
-    values.clear
-    oldValues copyToBuffer values
+    values = oldValues
     scope.LocalVars.pop(scope.LocalVars.size - values.size + scope.GlobalVars.size)
     guard = oldGuard
     touchedGlobalState = oldTouched
@@ -379,15 +161,11 @@ class Symex private (context       : SymexContext,
 
   private def popVal = {
     val res = values.last
-    values trimEnd 1
+    values = values.init
     scope.LocalVars.pop(1)
     res
   }
   private def topVal = values.last
-  private def removeVal(ind : Int) {
-    values.remove(ind)
-    scope.LocalVars.remove(ind - scope.GlobalVars.size)
-  }
 
   private def outputClause(srcInfo : Option[SourceInfo]) : Unit =
     outputClause(context.newPred(Nil, srcInfo), srcInfo)
@@ -424,8 +202,9 @@ class Symex private (context       : SymexContext,
     guard = true
     touchedGlobalState = false
     assignedToStruct = false
-    for ((e, i) <- scope.allFormalExprs.iterator.zipWithIndex)
-      values(i) = e
+    for ((e, i) <- scope.allFormalExprs.iterator.zipWithIndex) {
+      values = values.updated(i, e)
+    }
   }
 
   def outputITEClauses(cond : IFormula,
@@ -450,7 +229,7 @@ class Symex private (context       : SymexContext,
   }
 
   def addValue(t : CCExpr) = {
-    values += t
+    values = values ++ Seq(t)
     touchedGlobalState = touchedGlobalState || !scope.freeFromGlobal(t)
   }
 
@@ -486,7 +265,7 @@ class Symex private (context       : SymexContext,
       case stackPtr: CCStackPointer => stackPtr.targetInd
       case _ => ind
     }
-    values(actualInd) = t
+    values = values.updated(actualInd, t)
     /* if(isIndirection) {
       //val ptrType = getPointerType(ind)
       getValue(ind, false).typ match {
@@ -763,6 +542,50 @@ class Symex private (context       : SymexContext,
       copy(nestedCallDepth = nestedCallDepth + 1)
   }
 
+  private def processHeapResult(result : HeapModel.HeapOperationResult)
+  : Option[CCTerm] = result match {
+    case HeapModel.SimpleResult(returnValue, newValues, assumptions, assertions) =>
+      values = newValues
+      assertions.foreach { case (f, p) =>
+        assertProperty(f.toFormula, f.srcInfo, p) }
+      // It is important that assumptions are added after assertions, otherwise
+      // assertion guards will include the safety formula, which is unsound.
+      assumptions.foreach(a => addGuard(a.toFormula))
+      returnValue
+    case _ : HeapModel.FunctionCall => ??? // TODO: handle other heap models
+  }
+
+  def handleArrayInitialization(arrayPtr  : CCHeapArrayPointer,
+                                arraySize : CCExpr,
+                                initStack : mutable.Stack[ITerm]): CCTerm = {
+    val result =
+      heap.get.allocAndInitArray(arrayPtr, arraySize.toTerm, initStack, values)
+
+    val returnValue = processHeapResult(result)
+
+    returnValue.getOrElse(throw new TranslationException(
+      "Array initialization did not return a pointer."))
+  }
+
+  def handleUninitializedArrayDecl(arrayTyp         : CCHeapArrayPointer,
+                                   sizeExpr         : Option[Constant_expression],
+                                   isGlobalOrStatic : Boolean): CCTerm = {
+    val sizeTerm = sizeExpr match {
+      case Some(expr) =>
+        Some(eval(expr.asInstanceOf[Especial].exp_)
+             (EvalSettings(true), EvalContext()).toTerm)
+      case None =>
+        None
+    }
+
+    val result =
+      heap.get.declUninitializedArray(arrayTyp, sizeTerm, isGlobalOrStatic, values)
+    processHeapResult(result).getOrElse(
+      throw new TranslationException(
+        "Uninitialized array declaration did not return a pointer.")
+    )
+  }
+
   private def evalHelp(exp : Exp)
                       (implicit evalSettings : EvalSettings,
                        evalCtx      : EvalContext)
@@ -803,9 +626,10 @@ class Symex private (context       : SymexContext,
         }
       if(evalCtx.lhsIsArrayPointer || isHeapPointer(lhsVal) || updatingPointedValue ||
          lhsIsArraySelect) {
-        if (updatingPointedValue)
-          heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, true, true)
-        else if (lhsIsArraySelect) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
+        if (updatingPointedValue) {
+          processHeapResult(
+            heap.get.write(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, values))
+        } else if (lhsIsArraySelect) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
           val newTerm = CCTerm(
             writeADT(lhsVal.toTerm.asInstanceOf[IFunApp],
                      rhsVal.toTerm, context.heap.userADTCtors, context.heap.userADTSels),
@@ -923,7 +747,8 @@ class Symex private (context       : SymexContext,
 
       if(isHeapPointer(exp, evalCtx.enclosingFunctionName) &&
          updatingPointedValue) {
-        heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, true, true)
+        processHeapResult(
+          heap.get.write(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, values))
       } else {
         setValue(scope.lookupVar(asLValue(exp.exp_1), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, newVal),
@@ -1080,7 +905,8 @@ class Symex private (context       : SymexContext,
       maybeOutputClause(Some(getSourceInfo(exp)))
       pushVal(popVal mapTerm (_ + op))
       if(isHeapPointer(preExp, evalCtx.enclosingFunctionName)) {
-        heapWrite(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, true, true)
+        processHeapResult(
+          heap.get.write(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, values))
       } else {
         setValue(scope.lookupVar(asLValue(preExp), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, topVal),
@@ -1167,10 +993,12 @@ class Symex private (context       : SymexContext,
             case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
             case   _ : CCHeapPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
-              else pushVal(heapRead(v))
+              else pushVal(processHeapResult(heap.get.read(v, values)).get)
             case  arr : CCHeapArrayPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
-              else pushVal(heapArrayRead(v, CCTerm(IIntLit(0), CCInt, srcInfo), arr))
+              else pushVal(
+                processHeapResult(heap.get.arrayRead(
+                  v, CCTerm(IIntLit(0), CCInt, srcInfo), values)).get)
             case _ => throw new TranslationException("Cannot dereference " +
                                                      "non-pointer: " + v.typ + " " + v.toTerm)
           }
@@ -1314,61 +1142,16 @@ class Symex private (context       : SymexContext,
                * checking memory properties (e.g., only heap allocated memory
                * can be freed).
                */
-              val allocatedAddr = heapAlloc(objectTerm)
-
-              if ((context.propertiesToCheck contains properties.MemValidCleanup) ||
-                  context.propertiesToCheck.contains(properties.MemValidTrack) &&
-                  TriCeraParameters.get.useMemCleanupForMemTrack) {
-                /**
-                 * Nondeterministically write the address to the prophecy
-                 * variable [[context.memCleanupProphecyVar]].
-                 * I.e., nondet ==> prophTerm = allocatedAddr
-                 */
-                val prophVarInd = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
-                val nondetTerm = IConstant(
-                  scope.getFreshEvalVar(CCBool, None, name = "nondet").term)
-                setValue(prophVarInd,
-                         CCTerm(
-                           IExpression.ite(
-                             nondetTerm === ADT.BoolADT.True,
-                             allocatedAddr.toTerm,
-                             getValues(prophVarInd).toTerm
-                             ), context.memCleanupProphecyVar.typ, None),
-                         isIndirection = false)
-              }
+              val allocatedAddr =
+                processHeapResult(heap.get.alloc(objectTerm, values)).get
 
               pushVal(allocatedAddr)
             case CCTerm(sizeExp, typ, srcInfo) if typ.isInstanceOf[CCArithType] =>
-              val addressRangeValue = heapBatchAlloc(objectTerm, sizeExp)
-              val allocatedBlock =
-                CCTerm(addressRangeValue,
-                       CCHeapArrayPointer(context.heap, typ, arrayLoc), srcInfo)
+              val addressRangeValue =
+                processHeapResult(
+                  heap.get.batchAlloc(objectTerm, sizeExp, arrayLoc, values)).get
 
-              if (arrayLoc == ArrayLocation.Heap &&
-                  ((context.propertiesToCheck contains properties.MemValidCleanup) ||
-                   context.propertiesToCheck.contains(properties.MemValidTrack) &&
-                   TriCeraParameters.get.useMemCleanupForMemTrack)) {
-                /**
-                 * Nondeterministically write the address to the prophecy
-                 * variable [[memCleanupProphecyVar]]. Here a corner case to
-                 * consider is when sizeExp is not > 0, in which case no memory
-                 * is allocated, hence no need to change the value of the
-                 * prophecy variable.
-                 * I.e., (nondet & sizeExp > 0) ==> prophTerm = allocatedAddr
-                 */
-                val prophVarInd = scope.GlobalVars.lastIndexWhere(context.memCleanupProphecyVar)
-                val nondetTerm  = IConstant(
-                  scope.getFreshEvalVar(CCBool, None, name = "nondet").term)
-                setValue(prophVarInd,
-                         CCTerm(
-                           IExpression.ite(
-                             nondetTerm === ADT.BoolADT.True & sizeExp > 0,
-                             context.heap.nth(allocatedBlock.toTerm, 0),
-                             getValues(prophVarInd).toTerm
-                             ), context.memCleanupProphecyVar.typ, None),
-                         isIndirection = false)
-              }
-              pushVal(allocatedBlock)
+              pushVal(addressRangeValue)
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
             // todo: optimise constant size allocations > 1?
           }
@@ -1427,7 +1210,7 @@ class Symex private (context       : SymexContext,
           if (!modelHeap)
             throw NeedsHeapModelException
           val ptrExpr = atomicEval(exp.listexp_.head, evalCtx)
-          heapFree(ptrExpr, srcInfo)
+          processHeapResult(heap.get.free(ptrExpr, values))
           pushVal(CCTerm(0, CCVoid, srcInfo)) // free returns no value, push dummy
         case name =>
           // then we inline the called function
@@ -1511,7 +1294,7 @@ class Symex private (context       : SymexContext,
       val term = subexpr.typ match {
         case ptrType : CCStackPointer => getPointedTerm(ptrType)
         case _ : CCHeapPointer =>  //todo: error here if field is null
-          heapRead(subexpr)
+          processHeapResult(heap.get.read(subexpr, values)).get
         case _ => throw new TranslationException(
           "Trying to access field '->" + rawFieldName + "' of non pointer.")
       }
@@ -1544,9 +1327,8 @@ class Symex private (context       : SymexContext,
       val evalExp = topVal
       maybeOutputClause(Some(getSourceInfo(exp)))
       if(isHeapPointer(postExp, evalCtx.enclosingFunctionName)) {
-        heapWrite(evalExp.toTerm.asInstanceOf[IFunApp], topVal mapTerm (_ + op),
-                  assertMemSafety = true,
-                  assumeMemSafety = true)
+        processHeapResult(heap.get.write(evalExp.toTerm.asInstanceOf[IFunApp],
+                                     topVal mapTerm (_ + op), values))
       } else {
         setValue(scope.lookupVar(asLValue(postExp), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(evalExp, topVal mapTerm (_ + op)),
@@ -1595,10 +1377,11 @@ class Symex private (context       : SymexContext,
       import IExpression._
       arrayTerm.typ match {
         case array : CCHeapArrayPointer =>
-          pushVal(heapArrayRead(arrayTerm, index, array))
+          pushVal(processHeapResult(heap.get.arrayRead(arrayTerm,index, values)).get)
         case array : CCArray => // todo: move to separate method
-          val readValue = CCTerm(array.arrayTheory.
-                                      select(arrayTerm.toTerm, index.toTerm), array.elementType, srcInfo)
+          val readValue = CCTerm(
+            array.arrayTheory.select(arrayTerm.toTerm, index.toTerm),
+            array.elementType, srcInfo)
           array.sizeExpr match {
             case Some(expr)
               if context.propertiesToCheck contains properties.MemValidDeref =>

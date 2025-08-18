@@ -122,16 +122,7 @@ class CCScope {
           case i => name.take(i)
         }
       } else name
-    val heapTermName = Literals.heapTermName
-    lookupVarNoException(actualName, enclosingFunction) match {
-      case -1 =>
-        actualName match {
-          case `heapTermName` if !modelHeap => throw NeedsHeapModelException
-          case _ => throw new TranslationException(
-            "Symbol " + actualName + " is not declared")
-        }
-      case i => i
-    }
+    lookupVarNoException(actualName, enclosingFunction)
   }
 
   def allFormalVars : Seq[CCVar] =

@@ -49,11 +49,9 @@ trait SymexContext {
   // --- Configuration & Global State ---
   def propertiesToCheck      : Set[properties.Property]
   def heap                   : Heap
-  def memCleanupProphecyVar  : CCVar
   def printer                : PrettyPrinterNonStatic
   def atomicMode             : Boolean
   def usingInitialPredicates : Boolean
-  def updateUsingInitialPredicates(value : Boolean) : Unit
   def warnedFunctionNames    : MHashSet[String]
 
   // --- Data & Type Mappings ---
