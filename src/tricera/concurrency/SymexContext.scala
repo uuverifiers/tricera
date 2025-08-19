@@ -34,7 +34,6 @@ import IExpression.{ConstantTerm, Predicate, Sort}
 import ap.theories.Heap
 import ap.types.MonoSortedIFunction
 import hornconcurrency.ParametricEncoder
-import lazabs.horn.abstractions.VerificationHints.VerifHintElement
 import lazabs.horn.bottomup.HornClauses.Clause
 import tricera.Util.SourceInfo
 import tricera.concurrency.CCReader._

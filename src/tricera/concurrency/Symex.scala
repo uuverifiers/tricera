@@ -53,18 +53,18 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Stack}
 
 object Symex {
-  def apply(context       : SymexContext,
-            scope         : CCScope,
-            initPred      : CCPredicate,
-            heap          : Option[HeapModel]) : Symex = {
-    new Symex(context, scope, initPred, heap)
+  def apply(context        : SymexContext,
+            scope          : CCScope,
+            initPred       : CCPredicate,
+            maybeHeapModel : Option[HeapModel]) : Symex = {
+    new Symex(context, scope, initPred, maybeHeapModel)
   }
 }
 
-class Symex private (context       : SymexContext,
-                     scope         : CCScope,
-                     oriInitPred   : CCPredicate,
-                     heap          : Option[HeapModel]) {
+class Symex private (context        : SymexContext,
+                     scope          : CCScope,
+                     oriInitPred    : CCPredicate,
+                     maybeHeapModel : Option[HeapModel]) {
   private var values : Seq[CCExpr] =
     scope.allFormalVars.map(v => CCTerm(v.term, v.typ, v.srcInfo))
   private var guard : IFormula = true
@@ -542,6 +542,13 @@ class Symex private (context       : SymexContext,
       copy(nestedCallDepth = nestedCallDepth + 1)
   }
 
+  private def heapModel : HeapModel = {
+    maybeHeapModel match {
+      case Some(heapModel) => heapModel
+      case _ => throw NeedsHeapModelException
+    }
+  }
+
   private def processHeapResult(result : HeapModel.HeapOperationResult)
   : Option[CCTerm] = result match {
     case HeapModel.SimpleResult(returnValue, newValues, assumptions, assertions) =>
@@ -559,7 +566,7 @@ class Symex private (context       : SymexContext,
                                 arraySize : CCExpr,
                                 initStack : mutable.Stack[ITerm]): CCTerm = {
     val result =
-      heap.get.allocAndInitArray(arrayPtr, arraySize.toTerm, initStack, values)
+      heapModel.allocAndInitArray(arrayPtr, arraySize.toTerm, initStack, values)
 
     val returnValue = processHeapResult(result)
 
@@ -579,7 +586,7 @@ class Symex private (context       : SymexContext,
     }
 
     val result =
-      heap.get.declUninitializedArray(arrayTyp, sizeTerm, isGlobalOrStatic, values)
+      heapModel.declUninitializedArray(arrayTyp, sizeTerm, isGlobalOrStatic, values)
     processHeapResult(result).getOrElse(
       throw new TranslationException(
         "Uninitialized array declaration did not return a pointer.")
@@ -628,7 +635,7 @@ class Symex private (context       : SymexContext,
          lhsIsArraySelect) {
         if (updatingPointedValue) {
           processHeapResult(
-            heap.get.write(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, values))
+            heapModel.write(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, values))
         } else if (lhsIsArraySelect) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
           val newTerm = CCTerm(
             writeADT(lhsVal.toTerm.asInstanceOf[IFunApp],
@@ -748,7 +755,7 @@ class Symex private (context       : SymexContext,
       if(isHeapPointer(exp, evalCtx.enclosingFunctionName) &&
          updatingPointedValue) {
         processHeapResult(
-          heap.get.write(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, values))
+          heapModel.write(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, values))
       } else {
         setValue(scope.lookupVar(asLValue(exp.exp_1), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, newVal),
@@ -906,7 +913,7 @@ class Symex private (context       : SymexContext,
       pushVal(popVal mapTerm (_ + op))
       if(isHeapPointer(preExp, evalCtx.enclosingFunctionName)) {
         processHeapResult(
-          heap.get.write(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, values))
+          heapModel.write(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, values))
       } else {
         setValue(scope.lookupVar(asLValue(preExp), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, topVal),
@@ -993,14 +1000,13 @@ class Symex private (context       : SymexContext,
             case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
             case   _ : CCHeapPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
-              else pushVal(processHeapResult(heap.get.read(v, values)).get)
+              else pushVal(processHeapResult(heapModel.read(v, values)).get)
             case  arr : CCHeapArrayPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
-              else pushVal(
-                processHeapResult(heap.get.arrayRead(
-                  v, CCTerm(IIntLit(0), CCInt, srcInfo), values)).get)
-            case _ => throw new TranslationException("Cannot dereference " +
-                                                     "non-pointer: " + v.typ + " " + v.toTerm)
+              else pushVal(processHeapResult(heapModel.arrayRead(
+                v, CCTerm(IIntLit(0), CCInt, srcInfo), values)).get)
+            case _ => throw new TranslationException(
+              "Cannot dereference non-pointer: " + v.typ + " " + v.toTerm)
           }
         case _ : Plus       => // nothing
         case _ : Negative   =>
@@ -1097,8 +1103,6 @@ class Symex private (context       : SymexContext,
           }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
           if !TriCeraParameters.parameters.value.useArraysForHeap => // todo: proper alloca and calloc
-          if (!modelHeap)
-            throw NeedsHeapModelException
           val (typ, allocSize) = exp.listexp_(0) match {
             case exp : Ebytestype =>
               (context.getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
@@ -1143,13 +1147,13 @@ class Symex private (context       : SymexContext,
                * can be freed).
                */
               val allocatedAddr =
-                processHeapResult(heap.get.alloc(objectTerm, values)).get
+                processHeapResult(heapModel.alloc(objectTerm, values)).get
 
               pushVal(allocatedAddr)
             case CCTerm(sizeExp, typ, srcInfo) if typ.isInstanceOf[CCArithType] =>
               val addressRangeValue =
                 processHeapResult(
-                  heap.get.batchAlloc(objectTerm, sizeExp, arrayLoc, values)).get
+                  heapModel.batchAlloc(objectTerm, sizeExp, arrayLoc, values)).get
 
               pushVal(addressRangeValue)
             // case CCTerm(IIntLit(IdealInt(n)), CCInt) =>
@@ -1203,14 +1207,10 @@ class Symex private (context       : SymexContext,
 
           pushVal(arrayTerm)
         case "realloc" =>
-          if (!modelHeap)
-            throw NeedsHeapModelException
           throw new TranslationException("realloc is not supported.")
         case "free" =>
-          if (!modelHeap)
-            throw NeedsHeapModelException
           val ptrExpr = atomicEval(exp.listexp_.head, evalCtx)
-          processHeapResult(heap.get.free(ptrExpr, values))
+          processHeapResult(heapModel.free(ptrExpr, values))
           pushVal(CCTerm(0, CCVoid, srcInfo)) // free returns no value, push dummy
         case name =>
           // then we inline the called function
@@ -1294,7 +1294,7 @@ class Symex private (context       : SymexContext,
       val term = subexpr.typ match {
         case ptrType : CCStackPointer => getPointedTerm(ptrType)
         case _ : CCHeapPointer =>  //todo: error here if field is null
-          processHeapResult(heap.get.read(subexpr, values)).get
+          processHeapResult(heapModel.read(subexpr, values)).get
         case _ => throw new TranslationException(
           "Trying to access field '->" + rawFieldName + "' of non pointer.")
       }
@@ -1327,7 +1327,7 @@ class Symex private (context       : SymexContext,
       val evalExp = topVal
       maybeOutputClause(Some(getSourceInfo(exp)))
       if(isHeapPointer(postExp, evalCtx.enclosingFunctionName)) {
-        processHeapResult(heap.get.write(evalExp.toTerm.asInstanceOf[IFunApp],
+        processHeapResult(heapModel.write(evalExp.toTerm.asInstanceOf[IFunApp],
                                      topVal mapTerm (_ + op), values))
       } else {
         setValue(scope.lookupVar(asLValue(postExp), evalCtx.enclosingFunctionName),
@@ -1377,7 +1377,7 @@ class Symex private (context       : SymexContext,
       import IExpression._
       arrayTerm.typ match {
         case array : CCHeapArrayPointer =>
-          pushVal(processHeapResult(heap.get.arrayRead(arrayTerm,index, values)).get)
+          pushVal(processHeapResult(heapModel.arrayRead(arrayTerm,index, values)).get)
         case array : CCArray => // todo: move to separate method
           val readValue = CCTerm(
             array.arrayTheory.select(arrayTerm.toTerm, index.toTerm),
