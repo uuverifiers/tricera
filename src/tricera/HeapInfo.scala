@@ -28,11 +28,12 @@
  */
 package tricera
 
-import ap.theories.{Heap}
-import ap.parser.{IFunction, ITerm, IFunApp}
+import ap.theories.Heap
+import ap.parser.IFunction
+import tricera.concurrency.heap.{HeapModel, HeapTheoryModel}
 
 
-final case class HeapInfo(val heap: Heap, val heapTermName: String) {
+final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
   private def findObjectCtorsAndSels(heap: Heap): Map[IFunction, Option[IFunction]] = {
     heap.userADTCtors
       .zip(heap.userADTSels)
@@ -70,8 +71,11 @@ final case class HeapInfo(val heap: Heap, val heapTermName: String) {
   def isNewAddrFun(function: IFunction): Boolean =
     function == heap.newAddr
 
-  def isHeap(constant: ProgVarProxy): Boolean = {
-    constant.name == heapTermName
+  def isHeap(constant: ProgVarProxy): Boolean = heapModel match {
+    case m : HeapTheoryModel =>
+      constant.name == m.heapVar.name
+    case _ =>
+      false
   }
 
   def isObjCtor(func: IFunction): Boolean = {
