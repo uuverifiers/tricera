@@ -113,8 +113,8 @@ settings(
                                         case "2.12.18" => "-opt:_"
                                       }}).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.1",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.1.1",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.2",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",

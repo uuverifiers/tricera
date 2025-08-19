@@ -6,7 +6,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires 10 >= x && x >= 0;
-  ensures \result == \old(x) && 10 >= \old(x) && \old(x) >= 0;
+  ensures \result >= 0 && 10 >= \old(x) && \old(x) >= 0 && (\result != 0 || \old(x) != 10);
 */
 ================================================================================
 
@@ -19,7 +19,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires g >= 0 && x >= 0;
-  ensures \result >= \old(x) && g >= 1 && \old(x) >= 0 && \old(g) >= 0;
+  ensures \result >= 0 && g >= 1 && \old(x) >= 0 && \old(g) >= 0 && (\result >= \old(x) || \result >= 10);
 */
 ================================================================================
 
@@ -60,8 +60,8 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for f */
 /*@
-  requires g == 0 || (g - x >= 1 && g >= 1);
-  ensures g >= 0 && \old(g) >= 0 && (g != \old(g) || ((\old(x) >= 2*\old(g) || \old(g) - \old(x) >= 1) && (2*\old(g) - \old(x) >= 1 || 0 >= \old(g)))) && (\old(g) != 0 || ((g != 0 || 0 >= \old(x)) && (g >= \old(x) || 0 >= g))) && (g == \old(g) || g - \old(x) >= 1 || 0 >= \old(g)) && (g >= \old(g) || \old(x) >= g || 0 >= \old(g));
+  requires g >= 0;
+  ensures g >= 0 && \old(g) >= 0 && (g + -1*\old(x) + -1*\old(g) >= 0 || -1 >= \old(x));
 */
 ================================================================================
 
@@ -87,7 +87,7 @@ Inferred ACSL annotations
 /* contract for mult */
 /*@
   requires x == N && N >= 0 && y >= 0;
-  ensures N2 == \old(N2) && N == \old(N) && \old(x) == \old(N) && \old(y) >= 0 && \old(N) >= 0 && (\result >= \old(y) || \result >= \old(N));
+  ensures N2 == \old(N2) && N == \old(N) && \old(x) == \old(N) && \result >= 0 && \old(y) >= 0 && \old(N) >= 0 && (\result >= \old(y) || 0 >= \old(N));
 */
 ================================================================================
 
@@ -137,7 +137,7 @@ Inferred ACSL annotations
 /* contract for foo */
 /*@
   requires s.f == 21;
-  ensures \old(s).f == 21 && 2*21 == \result;
+  ensures \old(s).f == 21 && \result == 42;
 */
 ================================================================================
 

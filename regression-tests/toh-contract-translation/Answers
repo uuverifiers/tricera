@@ -8,7 +8,7 @@ Inferred ACSL annotations
 /* contract for get */
 /*@
   requires p == n && n_init >= 1 && \valid(p);
-  ensures ((\result == 0 && 0 >= \old(*n)) || (\result >= 0 && n_init == \result)) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n;
+  ensures \result >= 0 && ((\result == 0 && 0 >= \old(*n)) || n_init == \result) && r1 == \old(r1) && n_init == \old(n_init) && \old(n) == n;
 */
 ================================================================================
 
@@ -48,7 +48,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires val == a && \valid(val);
-  ensures \old(val) == a && a_init == \old(a_init) && \valid(val) && *val == 1 + \old(*val);
+  ensures \old(val) == a && a_init == \old(a_init) && \old(val) == \old(a) && \valid(val) && *val == 1 + \old(*val);
 */
 ================================================================================
 
@@ -63,7 +63,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires x == a && y == b && \separated(x, y) && \valid(x) && \valid(y);
-  ensures ((a_init == \result && \result >= b_init) || (b_init - a_init >= 1 && b_init == \result)) && r == \old(r) && a_init == \old(a_init) && b_init == \old(b_init) && \old(a) == a && \old(b) == b;
+  ensures \old(x) == \old(a) && \old(y) == \old(b) && ((a_init == \result && \result >= b_init) || (b_init - a_init >= 1 && b_init != a_init && b_init == \result)) && r == \old(r) && a_init == \old(a_init) && b_init == \old(b_init) && \old(a) == a && \old(b) == b && \valid(x) && \valid(y);
 */
 ================================================================================
 

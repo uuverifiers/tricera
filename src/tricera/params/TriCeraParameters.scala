@@ -190,6 +190,16 @@ class TriCeraParameters extends GlobalParameters {
       templateBasedInterpolationType = AbstractionType.RelationalIneqs
       parseArgs(rest)
     }
+    case "-abstract:relEqs2" :: rest => {
+      templateBasedInterpolation = true
+      templateBasedInterpolationType = AbstractionType.RelationalEqs2
+      parseArgs(rest)
+    }
+    case "-abstract:relIneqs2" :: rest => {
+      templateBasedInterpolation = true
+      templateBasedInterpolationType = AbstractionType.RelationalIneqs2
+      parseArgs(rest)
+    }
     case "-abstract:off" :: rest => {
       templateBasedInterpolation = false
       parseArgs(rest)
@@ -363,7 +373,7 @@ class TriCeraParameters extends GlobalParameters {
     |-hints:f           Read initial predicates and abstraction templates from a file
 
     |-abstract:t        Interp. abstraction: off, manual, term, oct,
-    |                     relEqs (default), relIneqs
+    |                     relEqs, relIneqs, relEqs2 (default), relIneqs2
     |-abstractTO:t      Timeout (s) for abstraction search (default: 2.0)
     |-abstractPO        Run with and w/o interpolation abstraction in parallel
     |-splitClauses:n    Aggressiveness when splitting disjunctions in clauses
