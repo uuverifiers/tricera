@@ -1,6 +1,7 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
- *               2025 Scania CV AB. All rights reserved.
+ *               2025 Scania CV AB
+ *               2025 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -41,15 +42,12 @@
 package tricera.postprocessor
 
 import ap.parser._
-import scala.collection.immutable.Stack
-import tricera.{
-  ConstantAsProgVarProxy,FunctionInvariants, HeapInfo, Invariant,
-  PostCondition, PreCondition, ProgVarProxy, Result, Solution}
+import ap.parser.IExpression.i
 
-import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+import tricera._
 
 
-class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
+class PointerPropProcessor(srcs : Seq[FunctionInvariants]) extends ResultProcessor {
   import tricera.postprocessor.PointerTools._
 
   override def applyTo(target: Solution) = target match {
@@ -57,30 +55,40 @@ class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcesso
       Solution(functionInvariants.map(applyTo), loopInvariants)
   }
 
-  private def applyTo(funcInvs: FunctionInvariants)
-  : FunctionInvariants = funcInvs match {
-    case FunctionInvariants(
-      id,
-      isSrcAnnotated,
-      preCond @ PreCondition(preInv),
-      postCond @ PostCondition(postInv),
-      loopInvariants) =>
-      val newInvs = srcs.find(p => p.id == id) match {
-        case Some(srcInv) => 
-          FunctionInvariants(
-            id,
-            isSrcAnnotated,
-            PreCondition(addPtrAtoms(preInv, inferSafeHeapPointers(srcInv.preCondition))),
-            PostCondition(addPtrAtoms(postInv, inferSafeHeapPointers(srcInv.postCondition))),
-            loopInvariants)
-        case None =>
-          funcInvs
-      }
-      DebugPrinter.oldAndNew(this, funcInvs, newInvs)
-      newInvs
+  private def applyTo(funcInvs : FunctionInvariants) : FunctionInvariants = {
+    srcs.find(_.id == funcInvs.id) match {
+      case Some(srcInv) =>
+        val preSafePointers = inferSafeHeapPointers(srcInv.preCondition)
+
+        val augmentedPre = addPtrAtoms(
+          targetInv = funcInvs.preCondition.invariant,
+          safePtrs = preSafePointers
+        )
+
+        val fullValSet = ValSet.union(
+          ValSetReader(srcInv.preCondition.invariant.expression),
+          ValSetReader(srcInv.postCondition.invariant.expression)
+        )
+
+        val augmentedPost = addPostConditionPtrAtoms(
+          post = funcInvs.postCondition,
+          preSafePointers = preSafePointers,
+          valSet = fullValSet
+        )
+
+        val newInvs = funcInvs.copy(
+          preCondition = PreCondition(augmentedPre),
+          postCondition = PostCondition(augmentedPost)
+        )
+        DebugPrinter.oldAndNew(this, funcInvs, newInvs)
+        newInvs
+
+      case None =>
+        funcInvs
+    }
   }
 
-  private def addPtrAtoms(targetInv: Invariant, safePtrs: Set[ProgVarProxy])
+  private def addPtrAtoms(targetInv : Invariant, safePtrs : Set[ProgVarProxy])
     : Invariant = targetInv match {
     case Invariant(form, heapInfo, srcInfo) =>
       val newForm = safePtrs.size match {
@@ -97,5 +105,25 @@ class PointerPropProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcesso
       Invariant(newForm, heapInfo, srcInfo)
     case _ =>
       targetInv
+  }
+
+  private def addPostConditionPtrAtoms(post            : PostCondition,
+                                       preSafePointers : Set[ProgVarProxy],
+                                       valSet          : ValSet) : Invariant = {
+    val postSafePointersFromEquiv = preSafePointers.flatMap { p_pre =>
+      val equivPostVars: Set[ProgVarProxy] = valSet.getVal(i(p_pre)) match {
+        case Some(equivClass) =>
+          Set(equivClass.variants.collect {
+            case IConstant(p_post: ProgVarProxy) if p_post.isPostExec => p_post
+          }.head) // only use one value from eq. class
+        case None =>
+          Set.empty
+      }
+      equivPostVars
+    }
+
+    val postSafePointers =
+      inferSafeHeapPointers(post).filter(p => p.isPostExec)
+    addPtrAtoms(post.invariant, postSafePointers union postSafePointersFromEquiv)
   }
 }

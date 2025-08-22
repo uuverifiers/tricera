@@ -1,20 +1,21 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg. All rights reserved.
- * 
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2025 Zafer Esen. All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice, this
  *   list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of the authors nor the names of their
  *   contributors may be used to endorse or promote products derived from
  *   this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,152 +29,138 @@
  */
 
 /* PostconditionSimplifier.scala
- *   
- * See PostconditionSimplifier in "Automated Inference of ACSL Contracts for 
+ *
+ * See PostconditionSimplifier in "Automated Inference of ACSL Contracts for
  * Programs with Heaps" by Oskar Söderberg
  *
- * In this contract processor, attempts are made to simplify the postcondition by 
- * using the information in the precondition. This is done as the simplified 
- * postcondition may contain more clauses that are directly expressible in ACSL. 
+ * In this contract processor, attempts are made to simplify the postcondition by
+ * using the information in the precondition. This is done as the simplified
+ * postcondition may contain more clauses that are directly expressible in ACSL.
  * The precondition is left unchanged.
  */
 
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
-import tricera.{FunctionInvariants, Invariant, PostCondition, Solution}
+import IExpression.{Conj, Disj, and, i}
 import ap.SimpleAPI.ProverStatus
 import ap.SimpleAPI.TimeoutException
 import ap.theories._
 import ap.SimpleAPI
 
-import scala.collection.mutable.{Set, HashSet}
-import tricera.Util.printlnDebug
+import tricera._
 
 object PostconditionSimplifier extends ResultProcessor {
 
-  override def applyTo(solution: Solution) = solution match {
+  override def applyTo(solution : Solution) = solution match {
     case Solution(functionInvariants, loopInvariants) =>
       Solution(functionInvariants.map(simplifyPostCondition), loopInvariants)
   }
 
-  private def simplifyPostCondition(funcInvs: FunctionInvariants)
+  private def simplifyPostCondition(funcInvs : FunctionInvariants)
   : FunctionInvariants = funcInvs match {
-    case FunctionInvariants(id, isSrcAnnotated, preCondition, PostCondition(postInv), loopInvariants) => 
+    case FunctionInvariants(id,
+                            isSrcAnnotated,
+                            preCondition,
+                            PostCondition(postInv),
+                            loopInvariants) =>
       val newInvs = FunctionInvariants(
-        id,
-        isSrcAnnotated,
-        preCondition,
+        id, isSrcAnnotated, preCondition,
         PostCondition(Invariant(
-          simplify(preCondition.invariant.expression, postInv.expression),
-          postInv.heapInfo,
-          postInv.sourceInfo)),
+          simplify(postInv.expression, preCondition.invariant.expression),
+          postInv.heapInfo, postInv.sourceInfo)),
         loopInvariants)
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
 
-  private def simplify(precondition: IFormula, postcondition: IFormula): IFormula = {
-    def attemptReplacingIFormulasBy(replaceByFormula: IFormula, preCond :IFormula, postCond: IFormula) = {
-      var currentPostCond = postCond
-      var i = 0
-      var cont = true
-      while (cont) {
-        ReplaceNthIFormulaVisitor(currentPostCond, i, replaceByFormula) match {
-          case (newPostcondition, Some(replacedFormula)) =>
-            isEquivalentPostcondition(
-              preCond,
-              currentPostCond,
-              newPostcondition.asInstanceOf[IFormula]
-            ) match {
-              case true =>
-                currentPostCond = newPostcondition.asInstanceOf[IFormula]
-                val removedIFormulas =
-                  IFormulaCounterVisitor(replacedFormula) - 1
-                i = i + 1 - removedIFormulas
-              case false =>
-                i = i + 1
-            }
-          case (_, None) =>
-            cont = false
-        }
-      }
-      CleanupVisitor(currentPostCond).asInstanceOf[IFormula]
-    }
-    
-    SimpleAPI.withProver { p =>
-      val simplified = 
-        attemptReplacingIFormulasBy(
-          IBoolLit(false),
-          precondition,
-          attemptReplacingIFormulasBy(
-            IBoolLit(true),
-            precondition,
-            postcondition))
-      simplified
+  private def simplify(postcondition : IFormula,
+                       precondition  : IFormula) : IFormula = {
+    val conjuncts = LineariseVisitor(Transform2NNF(postcondition), IBinJunctor.And)
+    // The reason we partition the conjuncts based on heap operations is that we
+    // would like to preserve non-heap conjuncts even if they are implied by a
+    // formula involving heap operations.
+    // Example:
+    // valid(p) & h' = write(h, p, y) & read(h', p) = x & x = y
+    // We would like to preserve the conjunct x = y, but that is implied by the
+    // read-over-write axiom of the theory of heaps. We simplify heap conjuncts
+    // using non-heap conjuncts though.
+    val (heapConjuncts, otherConjuncts) =
+      conjuncts.partition(c => HeapFunDetector(c))
+    val simpOther = simplifyHelper(and(otherConjuncts), precondition)
+    val simpHeap  = simplifyHelper(and(heapConjuncts), precondition &&& simpOther)
+    simpHeap &&& simpOther
+  }
+
+  private def simplifyHelper(f       : IFormula,
+                             context : IFormula) : IFormula = {
+    if (isImplied(context, f)) {
+      i(true)
+    } else if (isImplied(context, !f)) {
+      i(false)
+    } else f match {
+      case Conj(f1, f2) =>
+        val s1 = simplifyHelper(f1, context)
+        if (s1 == i(false)) i(false)
+        else s1 &&& simplifyHelper(f2, context &&& s1)
+      case Disj(f1, f2) =>
+        val s1 = simplifyHelper(f1, context)
+        if (s1 == i(true)) i(true)
+        else s1 ||| simplifyHelper(f2, context &&& !s1)
+      case Disj(INot(f1), f2) =>
+        val s1 = simplifyHelper(f1, context)
+        if (s1 == i(false)) i(true)
+        else s1 ===> simplifyHelper(f2, context &&& s1)
+      case INot(f) => !simplifyHelper(f, context)
+      case _ => f
     }
   }
 
-  def collectAndAddTheories(p: SimpleAPI, formula: IFormula) = {
-    val theories: Seq[Theory] = {
-      val coll = new TheoryCollector
-      coll(formula)
-      coll.theories
-    }
-    p.addTheories(theories)
-  }
-
-  def isEquivalentPostcondition(
-      precondition: IFormula,
-      postcondition: IFormula,
-      simplifiedPostcondition: IFormula
-  ): Boolean = {
+  private def isImplied(context : IFormula, formula : IFormula) : Boolean = {
     SimpleAPI.withProver { p =>
-      val formula =
-        precondition
-          .==>(postcondition.<=>(simplifiedPostcondition))
-          .asInstanceOf[IFormula]
-      p.addConstants(CollectConstants(formula))
-      p.addRelations(ACSLExpression.predicates)
-      ACSLExpression.functions.foreach(f => p.addFunction(f))
-      collectAndAddTheories(p, formula)
+      import p._
+      // check if context && !formula is UNSAT
+      val combinedFormula = context &&& !formula
+      addConstants(SymbolCollector constantsSorted combinedFormula)
+      addRelations(ACSLExpression.predicates)
+      ACSLExpression.functions.foreach(f => addFunction(f))
 
-      p.??(formula)
+      val theoryCollector = new TheoryCollector
+      theoryCollector(combinedFormula)
+      addTheories(theoryCollector.theories)
+      addAssertion(combinedFormula)
 
-      val result =
-        try
-          p.withTimeout(100) {
-            p.???
+      try {
+        withTimeout(100) {
+          ??? match {
+            case ProverStatus.Unsat => true
+            case _ => false
           }
-        catch {
-          case x: SimpleAPI.SimpleAPIException if x == TimeoutException =>
-            None
         }
-
-      result match {
-        case ProverStatus.Valid =>
-          true
-        case _ =>
+      } catch {
+        case x: SimpleAPI.SimpleAPIException if x == TimeoutException =>
           false
       }
     }
   }
-}
 
-private object CollectConstants {
-  def apply(formula: IFormula) = {
-    val constants = new HashSet[ITerm]()
-    (new CollectConstantsVisitor()).visit(formula, constants)
-    constants
-  }
-
-  private class CollectConstantsVisitor extends CollectingVisitor[Set[ITerm], Unit] {
-    override def postVisit(t: IExpression, constants: Set[ITerm], subres: Seq[Unit]): Unit = t match {
-      case c: IConstant =>
-        constants.add(c)
-      case _ =>
+  private object HeapFunDetector {
+    def apply(f : IFormula) : Boolean = {
+      val visitor = new HeapFunDetector
+      visitor.visit(f, ())
+      visitor.hasHeap
     }
+  }
+  private class HeapFunDetector extends CollectingVisitor[Unit, Unit] {
+    var hasHeap = false
+    override def preVisit(t : IExpression, arg : Unit) : PreVisitResult = t match {
+      case IFunApp(Heap.HeapFunExtractor(_), _) =>
+        hasHeap = true
+        ShortCutResult() // heap fun detected
+      case _ => KeepArg
+    }
+    override def postVisit(t      : IExpression,
+                           arg    : Unit,
+                           subres : Seq[Unit]) : Unit = {}
   }
 }

@@ -38,7 +38,7 @@ import ap.parser._
 import ap.terfor.ConstantTerm
 import IExpression._
 import ap.types.MonoSortedIFunction
-import tricera.{ProgVarProxy}
+import tricera.ProgVarProxy
 
 object ACSLExpression {
   val valid = new Predicate("\\valid", 1)

@@ -29,8 +29,7 @@
 
 package tricera.postprocessor
 
-import ap.parser.IExpression.{ConstantTerm, Predicate}
-import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
+import ap.parser.{IConstant, IFormula, VariableSubstVisitor}
 import lazabs.horn.preprocessor.HornPreprocessor
 
 

@@ -545,9 +545,9 @@ class Main (args: Array[String]) {
           result
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
             .through(ADTExploder.apply)
+            .through(PostconditionSimplifier.apply)
             .through(r =>
               if (solution.isHeapUsed) { r
-                 .through(PostconditionSimplifier.apply)
                  .through(addPointerPredicatesFrom(r))
                  .through(addPointerAssignmentsFrom(r))
                  .through(ADTExploder.apply)

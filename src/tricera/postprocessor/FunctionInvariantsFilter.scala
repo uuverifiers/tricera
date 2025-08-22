@@ -29,7 +29,7 @@
 
 package tricera.postprocessor
 
-import tricera.{Result, Solution, FunctionInvariants}
+import tricera.{Solution, FunctionInvariants}
 
 /**
   * ResultProcessor to filter out FunctionInvariants that fulfills p.

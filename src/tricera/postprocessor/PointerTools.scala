@@ -29,16 +29,9 @@
 
 package tricera.postprocessor
 
-import tricera.{
-    Result, Invariant, InvariantContext, LoopInvariant, PostCondition,
-    PreCondition, ProgVarProxy}
-import tricera.CounterExample
-import tricera.Empty
-import tricera.Solution
+import tricera._
 
 object PointerTools {
-  def inferSafeHeapPointers(result: Result) = SafePointerExtractor(result)
-  
   def inferSafeHeapPointers(invContext: InvariantContext) = invContext match {
     case preCond @ PreCondition(invariant) =>
       SafePointerExtractor.getSafePointers(invariant, preCond.isCurrentHeap)

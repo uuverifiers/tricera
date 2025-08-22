@@ -28,33 +28,18 @@
  */
 package tricera.postprocessor
 
-import scala.collection.mutable.{HashMap => MHashMap, Set => MSet, Buffer, ArrayBuffer}
+import scala.collection.mutable.{HashMap => MHashMap, Set => MSet}
 
-import ap.parser.IFormula
-import ap.parser.CollectingVisitor
-import ap.parser.IExpression
-import ap.parser.IConstant
-import ap.parser.IFunApp
-import ap.parser.IFunction
+import ap.parser._
+import ap.parser.ITerm
 import ap.types.MonoSortedIFunction
 import ap.theories._
-
-import tricera.concurrency.CallSiteTransform.CallSiteTransforms
-import tricera.concurrency.CallSiteTransform
-import tricera.concurrency.CCReader
-import tricera.concurrency.ccreader.CCVar
-
-import tricera.{
-  ConstantAsProgVarProxy, FunctionInvariants, Invariant, InvariantContext,
-  LoopInvariant, PostCondition, PreCondition, ProgVarProxy,
-  Result, Solution}
-import ap.parser.IAtom
 import ap.api.SimpleAPI
-import ap.parser.SymbolCollector
 import ap.terfor.conjunctions.Quantifier
-import ap.parser.ConstantSubstVisitor
 import ap.terfor.ConstantTerm
-import ap.parser.ITerm
+
+import tricera._
+import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 
 trait PointerExpressionChecks {
   def isSelector(func: IFunction) = {

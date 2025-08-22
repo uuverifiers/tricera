@@ -6,7 +6,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires 10 >= x && x >= 0;
-  ensures \result >= 0 && 10 >= \old(x) && \old(x) >= 0 && (\result != 0 || \old(x) != 10);
+  ensures \result >= 0 && (\result != 0 || \old(x) != 10);
 */
 ================================================================================
 
@@ -19,7 +19,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires g >= 0 && x >= 0;
-  ensures \result >= 0 && g >= 1 && \old(x) >= 0 && \old(g) >= 0 && (\result >= \old(x) || \result >= 10);
+  ensures \result >= 0 && g >= 1 && (\result >= \old(x) || \result >= 10);
 */
 ================================================================================
 
@@ -61,7 +61,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires g >= 0;
-  ensures g >= 0 && \old(g) >= 0 && (g + -1*\old(x) + -1*\old(g) >= 0 || -1 >= \old(x));
+  ensures g >= 0 && (g + -1*\old(x) + -1*\old(g) >= 0 || -1 >= \old(x));
 */
 ================================================================================
 
@@ -87,7 +87,7 @@ Inferred ACSL annotations
 /* contract for mult */
 /*@
   requires x == N && N >= 0 && y >= 0;
-  ensures N2 == \old(N2) && N == \old(N) && \old(x) == \old(N) && \result >= 0 && \old(y) >= 0 && \old(N) >= 0 && (\result >= \old(y) || 0 >= \old(N));
+  ensures N2 == \old(N2) && N == \old(N) && \result >= 0 && (\result >= \old(y) || 0 >= \old(N));
 */
 ================================================================================
 
@@ -137,7 +137,7 @@ Inferred ACSL annotations
 /* contract for foo */
 /*@
   requires s.f == 21;
-  ensures \old(s).f == 21 && \result == 42;
+  ensures \result == 42;
 */
 ================================================================================
 
@@ -151,7 +151,7 @@ Inferred ACSL annotations
 /* contract for mod */
 /*@
   requires \exists int v0; (t1->val == v0 && \exists int v1; (2147483647 >= v1 && v1 >= -2147483647 && 2147483646 >= v0 && v0 >= -2147483648 && t2->val == v1)) && \valid(t2) && \valid(t1);
-  ensures (!\exists int v0; (\old(t1->val) == v0 && \exists int v1; (2147483647 >= v1 && v1 >= -2147483647 && 2147483646 >= v0 && v0 >= -2147483648 && \old(t2->val) == v1)) || (t1->val == 1 + \old(t1->val) && t2->val == \old(t2->val) - 1)) && \valid(t2) && \valid(t1);
+  ensures (\forall int v0; (\old(t1->val) != v0 || \forall int v1; (2147483647 < v1 || v1 < -2147483647 || 2147483646 < v0 || v0 < -2147483648 || \old(t2->val) != v1)) || (t1->val == 1 + \old(t1->val) && t2->val == \old(t2->val) - 1)) && \valid(t2) && \valid(t1);
 */
 ================================================================================
 
@@ -165,12 +165,12 @@ Inferred ACSL annotations
 /* contract for incdec */
 /*@
   requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && p->val == v0) && \valid(p);
-  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && \old(p->val) == v0) || \exists int v0, v1; (\old(p->val) == v1 && p->val == v1)) && \valid(p);
+  ensures (\forall int v0; (2147483646 < v0 || v0 < -2147483648 || \old(p->val) != v0) || \exists int v0, v1; (2147483646 >= v1 && v1 >= -2147483648 && 2147483646 >= v0 && v0 >= -2147483648 && 1 + v0 == 1 + v1 && \old(p->val) == v1 && p->val == v1)) && \valid(p);
 */
 /* contract for decr */
 /*@
   requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && q->val == 1 + v0) && \valid(q);
-  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && \old(q->val) == 1 + v0) || q->val == \old(q->val) - 1) && \valid(q);
+  ensures (\forall int v0; (2147483646 < v0 || v0 < -2147483648 || \old(q->val) != 1 + v0) || q->val == \old(q->val) - 1) && \valid(q);
 */
 ================================================================================
 
@@ -211,7 +211,7 @@ Inferred ACSL annotations
 /* contract for incr */
 /*@
   requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483647 && t->val == v0) && \valid(t);
-  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483647 && \old(t->val) == v0) || t->val == 1 + \old(t->val)) && \valid(t);
+  ensures (\forall int v0; (2147483646 < v0 || v0 < -2147483647 || \old(t->val) != v0) || t->val == 1 + \old(t->val)) && \valid(t);
 */
 ================================================================================
 
@@ -225,7 +225,7 @@ Inferred ACSL annotations
 /* contract for incr */
 /*@
   requires \exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && t->val == v0) && \valid(t);
-  ensures (!\exists int v0; (2147483646 >= v0 && v0 >= -2147483648 && \old(t->val) == v0) || t->val == 1 + \old(t->val)) && \valid(t);
+  ensures (\forall int v0; (2147483646 < v0 || v0 < -2147483648 || \old(t->val) != v0) || t->val == 1 + \old(t->val)) && \valid(t);
 */
 ================================================================================
 

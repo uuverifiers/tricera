@@ -41,7 +41,6 @@
 package tricera.postprocessor
 
 import ap.parser._
-import ap.terfor.ConstantTerm
 
 import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
@@ -89,7 +88,7 @@ class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor
         case LoopInvariant(exp, _, _) => exp
       }
       val visitor = new AssignmentProcessorVisitor(
-        ValSetReader.deBrujin(srcExp),
+        ValSetReader(srcExp),
         inferSafeHeapPointers(srcInv),
         isCurrentHeap,
         heapInfo)
