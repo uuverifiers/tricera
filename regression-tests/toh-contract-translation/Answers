@@ -147,7 +147,7 @@ Inferred ACSL annotations
 /* contract for mod */
 /*@
   requires \separated(t1, t2) && \valid(t2) && \valid(t1);
-  ensures \valid(t1) && \old(*t1) - *t1 == -1;
+  ensures \valid(t1) && \valid(t2) && \old(*t1) - *t1 == -1 && \old(*t2) - *t2 == 1;
 */
 ================================================================================
 
