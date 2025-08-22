@@ -244,7 +244,7 @@ object ValSetReader {
         case Disj(_, _) =>
           ValSet.intersect(subres(0), subres(1))
 
-        case IExpression.EqLit(IFunApp(ADT.CtorId(_, _), Seq(_)), _) =>
+        case Eq(IFunApp(ADT.CtorId(_, _), Seq(_)), _) =>
           ValSet.union(subres: _*)
 
         // ContainsQuantifiedVisitor(term, depth) returns true if

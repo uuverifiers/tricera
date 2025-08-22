@@ -563,6 +563,7 @@ class Main (args: Array[String]) {
               .through(ClauseRemover.apply)
               .through(RewrapPointers.apply)
               .through(AddValidPointerPredicates.apply)
+              .through(FormulaSimplifier.apply)
               .through(ACSLLineariser.apply)
               .through(ResultPrinters.printACSL) 
             ).ignore
