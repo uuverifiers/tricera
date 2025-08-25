@@ -11,7 +11,7 @@ TESTS="get-1.c  \
        truck-2.c  \
        heapptr-to-stackptr.c \
        qualified-heapptr-to-stackptr.c \
-       multi-arg.c"
+       multi-arg-1.c multi-arg-2.c"
 
 for name in $TESTS; do
     echo

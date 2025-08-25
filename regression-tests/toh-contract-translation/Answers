@@ -140,7 +140,7 @@ tricera.concurrency.ccreader.CCExceptions$TranslationException: Type qualified p
 (error "Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9")
 Other Error: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
 
-multi-arg.c
+multi-arg-1.c
 
 Inferred ACSL annotations
 ================================================================================
@@ -148,6 +148,19 @@ Inferred ACSL annotations
 /*@
   requires \separated(t1, t2) && \valid(t2) && \valid(t1);
   ensures \valid(t1) && \valid(t2) && \old(*t1) - *t1 == -1 && \old(*t2) - *t2 == 1;
+*/
+================================================================================
+
+SAFE
+
+multi-arg-2.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for mod */
+/*@
+  requires \separated(t3, t4) && \separated(t2, t4) && \separated(t2, t3) && \separated(t1, t4) && \separated(t1, t3) && \separated(t1, t2) && \valid(t4) && \valid(t3) && \valid(t2) && \valid(t1);
+  ensures \valid(t3) && \valid(t2) && \valid(t1) && \valid(t4) && 2*\old(*t3) == *t3 && \old(*t2) - *t2 == 1 && *t1 - \old(*t1) == 2 && 2*\old(*t1) - *t4 == -4;
 */
 ================================================================================
 
