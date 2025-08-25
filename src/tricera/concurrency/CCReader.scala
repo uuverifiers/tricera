@@ -37,11 +37,12 @@ import concurrent_c._
 import concurrent_c.Absyn._
 import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints
-import lazabs.horn.abstractions.VerificationHints.{VerifHintElement, VerifHintInitPred, VerifHintTplElement, VerifHintTplEqTerm, VerifHintTplPred}
+import lazabs.horn.abstractions.VerificationHints._
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
-import scala.collection.mutable.{ArrayBuffer, Stack, HashMap => MHashMap, HashSet => MHashSet}
+import scala.collection.mutable.{ArrayBuffer, Stack, HashMap => MHashMap,
+  HashSet => MHashSet}
 import tricera.Util._
 import tricera.acsl.{ACSLTranslator, FunctionContract}
 import tricera.concurrency.ccreader._
@@ -72,8 +73,10 @@ object CCReader {
   : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(input, entry _)
-    val typeAnnotProg = CCAstTypeAnnotator(prog)
-    val (transformedCallsProg, callSiteTransforms) = CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
+    val atCallTransformedProg = CCAstAtExpressionTransformer.transform(prog)
+    val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
+    val (transformedCallsProg, callSiteTransforms) =
+      CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
 
     var reader : CCReader = null
     while (reader == null)

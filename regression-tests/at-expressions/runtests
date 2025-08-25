@@ -1,0 +1,11 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="simple-01-false.c simple-01-true.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS "$@" $name
+done
