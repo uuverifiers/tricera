@@ -124,13 +124,13 @@ class EqualitySwapper(swapMap : Map[IExpression, ITerm])
                          subres          : Seq[IExpression]) : IExpression = {
     val updated = t update subres
     (updated, swapMap.getOrElse(updated, updated)) match {
-      case (ConstantAsProgVarProxy(orig), ConstantAsProgVarProxy(upd))
-        if orig.isPostExec && upd.isPreExec  =>
+      case (ConstantAsProgVarProxy(upd), ConstantAsProgVarProxy(swp))
+        if upd.isPostExec && swp.isPreExec =>
         // Keep using the post var, this can only happen in a postconditon,
         // Reasoning is that we (probably) do not want to replace a post-var\
         // with a pre-var.
-        orig
-      case _ => updated
+        upd
+      case _                               => updated
     }
   }
 }

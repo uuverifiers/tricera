@@ -39,9 +39,9 @@
 
 package tricera.postprocessor
 
-import ap.parser.IExpression.{Conj, Disj, i}
+import ap.parser.IExpression.{Conj, Disj}
 import ap.parser._
-import tricera.{ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant, PostCondition, PreCondition, ProgVarProxy, Solution}
+import tricera._
 import tricera.Util.FSharpisms
 
 object ClauseRemover extends ResultProcessor {
@@ -101,11 +101,11 @@ object TheoryOfHeapRemoverVisitor {
         postVisitFormula(form, subres, heapInfo)
       case q @ ISortedQuantified(_, _, _) =>
         subres(0) match {
-          case IBoolLit(true) => i(true)
+          case IBoolLit(true) => IBoolLit(true)
           case _ => q update subres
         }
       case _ if ContainsTOHVisitor(t, heapInfo) =>
-        i(true)
+        IBoolLit(true)
       case _ =>
         t update subres
     }
@@ -118,14 +118,14 @@ object TheoryOfHeapRemoverVisitor {
          | IBinFormula(IBinJunctor.Eqv, IBoolLit(true), _)
          | IBinFormula(IBinJunctor.Eqv, _, IBoolLit(true)) =>
         // Either or both sides were already true before traversal
-        i(true)
+        IBoolLit(true)
       case IBinFormula(IBinJunctor.Eqv, preLhs, preRhs) =>
         // Neither side was true before traversal
         (subres(0), subres(1)) match {
           case (IBoolLit(true), _)
              | (_, IBoolLit(true)) =>
             // Either or both sides where removed during traversal
-            i(true)
+            IBoolLit(true)
           case _ =>
             // Neither side was removed during traversal
             form update subres
@@ -137,7 +137,7 @@ object TheoryOfHeapRemoverVisitor {
         (lhs, rhs) match {
           case (IBoolLit(true), IBoolLit(true)) =>
             // Both sides were removed during traversal
-            i(true)
+            IBoolLit(true)
           case (IBoolLit(true), _) =>
             // LHS has been removed
             rhs
@@ -163,7 +163,7 @@ object TheoryOfHeapRemoverVisitor {
         (lhs, rhs) match {
           case (IBoolLit(true), IBoolLit(true)) =>
             // Both sides were removed during traversal
-            i(true)
+            IBoolLit(true)
           case (IBoolLit(true), _) =>
             // LHS was removed during traversal
             rhs

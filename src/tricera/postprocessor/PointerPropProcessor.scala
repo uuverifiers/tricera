@@ -41,9 +41,7 @@
 
 package tricera.postprocessor
 
-import ap.parser._
-import ap.parser.IExpression.i
-
+import ap.parser.{IConstant, ITerm}
 import tricera._
 
 
@@ -59,25 +57,23 @@ class PointerPropProcessor(srcs : Seq[FunctionInvariants]) extends ResultProcess
     srcs.find(_.id == funcInvs.id) match {
       case Some(srcInv) =>
         val preSafePointers = inferSafeHeapPointers(srcInv.preCondition)
-
-        val augmentedPre = addPtrAtoms(
-          targetInv = funcInvs.preCondition.invariant,
-          safePtrs = preSafePointers
-        )
+        val augmentedPre =
+          addPtrAtoms(funcInvs.preCondition.invariant, preSafePointers)
 
         val fullValSet = ValSet.union(
           ValSetReader(srcInv.preCondition.invariant.expression),
           ValSetReader(srcInv.postCondition.invariant.expression)
         )
 
-        val augmentedPost = addPostConditionPtrAtoms(
-          post = funcInvs.postCondition,
-          preSafePointers = preSafePointers,
-          valSet = fullValSet
+        val augmentedPost =
+          addPostConditionPtrAtoms(
+          funcInvs.postCondition,
+          preSafePointers,
+          fullValSet
         )
 
         val newInvs = funcInvs.copy(
-          preCondition = PreCondition(augmentedPre),
+          preCondition  = PreCondition(augmentedPre),
           postCondition = PostCondition(augmentedPost)
         )
         DebugPrinter.oldAndNew(this, funcInvs, newInvs)
@@ -88,42 +84,48 @@ class PointerPropProcessor(srcs : Seq[FunctionInvariants]) extends ResultProcess
     }
   }
 
-  private def addPtrAtoms(targetInv : Invariant, safePtrs : Set[ProgVarProxy])
-    : Invariant = targetInv match {
-    case Invariant(form, heapInfo, srcInfo) =>
-      val newForm = safePtrs.size match {
-        case 0 => 
-          form
-        case 1 =>
-          form
-          .&(ACSLExpression.validPointers(safePtrs))
-        case _ =>
-          form
-          .&(ACSLExpression.separatedPointers(safePtrs))
-          .&(ACSLExpression.validPointers(safePtrs))
+  private def addPtrAtoms(targetInv : Invariant,
+                          safePtrs  : ValSet)
+  : Invariant = targetInv match {
+    case Invariant(f, heapInfo, srcInfo) =>
+      val allSafePtrs = safePtrs.vals.flatMap(_.variants).collect{
+        case ConstantAsProgVarProxy(c) => c
       }
-      Invariant(newForm, heapInfo, srcInfo)
+
+      if (allSafePtrs.isEmpty) {
+        targetInv
+      } else {
+        val fWithValid = f.&(ACSLExpression.validPointers(allSafePtrs))
+        val newF =
+          if (safePtrs.vals.size > 1)
+            fWithValid.&(ACSLExpression.separatedPointers(safePtrs))
+          else
+            fWithValid
+        Invariant(newF, heapInfo, srcInfo)
+      }
     case _ =>
       targetInv
   }
 
-  private def addPostConditionPtrAtoms(post            : PostCondition,
-                                       preSafePointers : Set[ProgVarProxy],
-                                       valSet          : ValSet) : Invariant = {
-    val postSafePointersFromEquiv = preSafePointers.flatMap { p_pre =>
-      val equivPostVars: Set[ProgVarProxy] = valSet.getVal(i(p_pre)) match {
-        case Some(equivClass) =>
-          Set(equivClass.variants.collect {
-            case IConstant(p_post: ProgVarProxy) if p_post.isPostExec => p_post
-          }.head) // only use one value from eq. class
-        case None =>
-          Set.empty
+  private def addPostConditionPtrAtoms(
+    post            : PostCondition,
+    preSafePointers : ValSet,
+    equivalences    : ValSet) : Invariant = {
+    val postValsFromPre = preSafePointers.vals.flatMap { preVal =>
+      preVal.variants.headOption.flatMap(p_pre => equivalences.getVal(p_pre)) match {
+        case Some(equiv) =>
+          val postPointers = equiv.variants.collect {
+            case t @ IConstant(p : ProgVarProxy) if p.isPostExec => t
+          }.map(_.asInstanceOf[ITerm])
+          if (postPointers.nonEmpty) Some(Val(postPointers)) else None
+        case None => None
       }
-      equivPostVars
     }
+    val postSafePointersFromPre = ValSet(postValsFromPre)
+    val postSafePointersFromPost = inferSafeHeapPointers(post)
+    val postSafePointers = ValSet.union(postSafePointersFromPre,
+                                        postSafePointersFromPost)
 
-    val postSafePointers =
-      inferSafeHeapPointers(post).filter(p => p.isPostExec)
-    addPtrAtoms(post.invariant, postSafePointers union postSafePointersFromEquiv)
+    addPtrAtoms(post.invariant, postSafePointers)
   }
 }

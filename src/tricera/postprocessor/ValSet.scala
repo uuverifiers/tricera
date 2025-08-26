@@ -43,69 +43,42 @@ import ap.theories.ADT
 import tricera.{ConstantAsProgVarProxy, ProgVarProxy}
 
 object Val {
-  def apply(term1: ITerm, term2: ITerm): Val = {
+  def apply(term1 : ITerm, term2 : ITerm) : Val =
     Val(Set(term1, term2))
-  }
 
-  def merge(vals: Set[Val]): Val = {
-    vals.reduce((val1, val2) => (val1 | val2))
-  }
+  def merge(vals : Set[Val]) : Val =
+    vals.reduce((val1, val2) => val1 | val2)
 }
-case class Val(variants: Set[ITerm]) {
-  def getExplicitForm: Option[ITerm] = variants find { q => { q match {
-    case a: Address         => false
-    case ConstantAsProgVarProxy(_) => false
-    case _                  => true
-  }}}
-
-  def getAddrForm: Option[ITerm] = variants find {
-    case a: Address => true
-    case _          => false
-  }
-
-  def getVariableForm: Option[ITerm] = variants find {
-    case ConstantAsProgVarProxy(_) => true
-    case _             => false
-  }
-
-  def +(term: ITerm): Val = {
+case class Val(variants : Set[ITerm]) {
+  def +(term : ITerm) : Val =
     Val(variants + term)
-  }
 
-  def +(v: Val): Val = {
+  def +(v : Val) : Val =
     Val.merge(Set(this, v))
-  }
 
-  def &(v: Val): Val = {
+  def &(v : Val) : Val =
     Val(variants & v.variants)
-  }
 
-  def |(v: Val): Val = {
+  def |(v : Val) : Val =
     Val(variants | v.variants)
-  }
 
-  def nonEmpty: Boolean = {
+  def nonEmpty : Boolean =
     variants.nonEmpty
-  }
 
-  def equalsTerm(term: ITerm): Boolean = {
+  def equalsTerm(term : ITerm) : Boolean =
     variants.contains(term)
-  }
 
-  def equalsOneOf(terms: Set[ITerm]): Boolean = {
+  def equalsOneOf(terms : Set[ITerm]) : Boolean =
     (variants & terms).nonEmpty
-  }
 }
 
 object ValSet {
 
-  def apply(term1: ITerm, term2: ITerm): ValSet = {
+  def apply(term1 : ITerm, term2 : ITerm) : ValSet =
     ValSet(Set(Val(term1, term2)))
-  }
 
-  def empty : ValSet = {
+  def empty : ValSet =
     ValSet(Set.empty[Val])
-  }
 
   def union(valSets : ValSet*): ValSet = {
     valSets.flatMap(_.vals).foldLeft(ValSet.empty) {(acc, v) =>
@@ -115,7 +88,7 @@ object ValSet {
     }
   }
 
-  def intersect(vs1: ValSet, vs2: ValSet): ValSet = {
+  def intersect(vs1 : ValSet, vs2 : ValSet) : ValSet = {
     if (vs1.isEmpty || vs2.isEmpty) return ValSet.empty
 
     val allTerms = vs1.vals.flatMap(_.variants) ++ vs2.vals.flatMap(_.variants)
@@ -135,17 +108,17 @@ object ValSet {
   }
 }
 
-case class ValSet(vals: Set[Val]) {
+case class ValSet(vals : Set[Val]) {
   def getOrderingKey(term : ITerm) : (Int, String) =
     (termScore(term), term.toString)
   private def termScore(term : ITerm) : Int = term match {
     case IConstant(v : ProgVarProxy) if v.isParameter => 0
     case IConstant(v : ProgVarProxy) if v.isPostExec => 1
     case IConstant(_ : ProgVarProxy) => 2
-    case _: IConstant               => 3
-    case IFunApp(_, args)           => 10 + args.map(termScore).sum + args.size
-    case ITermITE(_, t, e)          => 20 + termScore(t) + termScore(e)
-    case _                          => 100
+    case _: IConstant                => 3
+    case IFunApp(_, args)            => 10 + args.map(termScore).sum + args.size
+    case ITermITE(_, t, e)           => 20 + termScore(t) + termScore(e)
+    case _                           => 100
   }
 
   def toCanonicalFormMap : Map[IExpression, ITerm] = {
@@ -159,21 +132,6 @@ case class ValSet(vals: Set[Val]) {
                   .map(_ -> canonicalRep))
       }
     }.flatten.toMap
-  }
-
-  def addEquality(term1: ITerm, term2: ITerm): ValSet = {
-    val maybeVal1 = getVal(term1)
-    val maybeVal2 = getVal(term2)
-    (maybeVal1, maybeVal2) match {
-      case (Some(val1), Some(val2)) =>
-        ValSet(vals.-(val1).-(val2).+(val1 + val2))
-      case (Some(v), None) =>
-        ValSet(vals.-(v).+(v.+(term2)))
-      case (None, Some(v)) =>
-        ValSet(vals.-(v).+(v.+(term1)))
-      case (None, None) =>
-        ValSet(vals.+(Val(term1, term2)))
-    }
   }
 
   def isEmpty : Boolean = vals.isEmpty
@@ -192,18 +150,13 @@ case class ValSet(vals: Set[Val]) {
     }
   }
 
-  def getExplicitForm(term: ITerm): Option[ITerm] = {
-    getVal(term) match {
-      case Some(v) => v.getExplicitForm
-      case None    => None
-    }
-  }
-
-  def getVariableForm(term: ITerm): Option[ITerm] = {
-    getVal(term) match {
-      case Some(v) => v.getVariableForm
-      case None    => None
-    }
+  def getVariantVariables(term : ITerm) : Val = getVal(term) match {
+    case Some(v) =>
+      val variableVariants : Set[ProgVarProxy] = v.variants.collect {
+        case ConstantAsProgVarProxy(c) => c
+      }
+      Val(variableVariants.map(IConstant(_)))
+    case None => Val(Set())
   }
 
   override def toString = {

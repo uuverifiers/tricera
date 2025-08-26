@@ -32,13 +32,14 @@ package tricera.postprocessor
 import tricera._
 
 object PointerTools {
-  def inferSafeHeapPointers(invContext: InvariantContext) = invContext match {
-    case preCond @ PreCondition(invariant) =>
-      SafePointerExtractor.getSafePointers(invariant, preCond.isCurrentHeap)
-    case postCond @ PostCondition(invariant) =>
-      SafePointerExtractor.getSafePointers(invariant, postCond.isCurrentHeap)
-    case _ : LoopInvariant => Set[ProgVarProxy]()
-  }
+  def inferSafeHeapPointers(invContext: InvariantContext) : ValSet =
+    invContext match {
+      case preCond @ PreCondition(invariant) =>
+        SafePointerExtractor.getSafePointers(invariant, preCond.isCurrentHeap)
+      case postCond @ PostCondition(invariant) =>
+        SafePointerExtractor.getSafePointers(invariant, postCond.isCurrentHeap)
+      case _ : LoopInvariant => ValSet.empty
+    }
 
   def addPointerPredicatesFrom(sourceResult: Result): Result => Result = sourceResult match {
     case CounterExample(counterExample) => identity

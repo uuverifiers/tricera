@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg. All rights reserved.
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2025 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -78,24 +79,31 @@ object ACSLExpression {
     )
   }
 
-  def separatedPointers(pointers: Set[ProgVarProxy]): IFormula = {
-    def asSeparatedAtom(p1: ProgVarProxy, p2: ProgVarProxy): IFormula = {
+def separatedPointers(pointerEquivs : ValSet) : IFormula = {
+    def asSeparatedAtom(p1 : ProgVarProxy, p2 : ProgVarProxy) : IFormula =
       IAtom(separated, Seq(IConstant(p1), IConstant(p2)))
+
+    if (pointerEquivs.vals.size < 2)
+      return IBoolLit(true)
+
+    val allAtoms = pointerEquivs.vals.toSeq.combinations(2).flatMap {
+      case Seq(class1, class2) =>
+        for {
+          IConstant(p1: ProgVarProxy) <- class1.variants
+          IConstant(p2: ProgVarProxy) <- class2.variants
+        } yield asSeparatedAtom(p1, p2)
+      case _ =>
+        Seq()
     }
 
-    if (pointers.size >= 2) {
-      pointers
-        .toSeq
-        .combinations(2)
-        .map({ case Seq(p1, p2) => asSeparatedAtom(p1, p2) })
-        .reduceLeft(_ & _)
-    } else {
+    if (allAtoms.nonEmpty)
+      allAtoms.reduceLeft(_ & _)
+    else
       IBoolLit(true)
-    }
   }
 
-  def validPointers(pointers: Set[ProgVarProxy]): IFormula = {
-    def validAtom(p: ProgVarProxy):IFormula = IAtom(valid, Seq(IConstant(p))) 
+  def validPointers(pointers : Set[ProgVarProxy]) : IFormula = {
+    def validAtom(p: ProgVarProxy) :IFormula = IAtom(valid, Seq(IConstant(p)))
 
     pointers.size match {
       case s if s >= 2 =>

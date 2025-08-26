@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg 
+ * Copyright (c) 2023 Oskar Soederberg
  *               2025 Scania CV AB
  *               2025 Zafer Esen. All rights reserved.
  * 
@@ -42,17 +42,18 @@ import scala.collection.immutable.Stack
 import tricera._
 
 object SafePointerExtractor {
-  def getSafePointers(
-    invariant: Invariant,
-    isCurrentHeap: ProgVarProxy => Boolean)
-    : Set[ProgVarProxy] = invariant match {
-    case Invariant(form, Some(heapInfo), srcInfo) =>
-      getSafePointers(form, heapInfo, isCurrentHeap)
-    case _ =>
-      Set[ProgVarProxy]()
-  }
+  def getSafePointers(invariant     : Invariant,
+                      isCurrentHeap : ProgVarProxy => Boolean) : ValSet =
+    invariant match {
+      case Invariant(form, Some(heapInfo), _) =>
+        getSafePointers(form, heapInfo, isCurrentHeap)
+      case _ => ValSet.empty
+    }
 
-  private def getSafePointers(invForm: IFormula, heapInfo: HeapInfo, isCurrentHeap: ProgVarProxy => Boolean): Set[ProgVarProxy] = {
+  private def getSafePointers(
+    invForm       : IFormula,
+    heapInfo      : HeapInfo,
+    isCurrentHeap : ProgVarProxy => Boolean) : ValSet = {
     val valueSet = ValSetReader(invForm)
     val explForm = ToExplicitForm(invForm, valueSet)
     val redForm = HeapReducer(explForm, heapInfo)
@@ -60,23 +61,14 @@ object SafePointerExtractor {
       case Some(heap) =>
         val redValueSet = ValSetReader(redForm)
         readSafeVariables(heap, redValueSet)
-      case _ => Set.empty[ProgVarProxy]
+      case _ => ValSet.empty
     }
   }
 
-  private def readSafeVariables(
-      heap: HeapState,
-      valueSetWithAddresses: ValSet
-  ): Set[ProgVarProxy] = {
-    heap.storage.keys
-      .flatMap(
-        valueSetWithAddresses.getVariableForm(_) match {
-          case Some(ConstantAsProgVarProxy(p)) => Some(p)
-          case None => None
-        }
-      )
-      .asInstanceOf[Set[ProgVarProxy]]
-  }
+  private def readSafeVariables(heap                  : HeapState,
+                                valueSetWithAddresses : ValSet) : ValSet =
+    ValSet(heap.storage.keys.map(
+      valueSetWithAddresses.getVariantVariables).toSet)
 }
 
 private object HeapExtractor {

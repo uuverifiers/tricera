@@ -76,7 +76,9 @@ object PostconditionSimplifier extends ResultProcessor {
 
   private def simplify(postcondition : IFormula,
                        precondition  : IFormula) : IFormula = {
-    val conjuncts = LineariseVisitor(Transform2NNF(postcondition), IBinJunctor.And)
+
+    val postConjs =
+      LineariseVisitor(Transform2NNF(postcondition), IBinJunctor.And)
     // The reason we partition the conjuncts based on heap operations is that we
     // would like to preserve non-heap conjuncts even if they are implied by a
     // formula involving heap operations.
@@ -85,17 +87,16 @@ object PostconditionSimplifier extends ResultProcessor {
     // We would like to preserve the conjunct x = y, but that is implied by the
     // read-over-write axiom of the theory of heaps. We simplify heap conjuncts
     // using non-heap conjuncts though.
-    val (heapConjuncts, otherConjuncts) =
-      conjuncts.partition(c => HeapFunDetector(c))
-    val simpOther = simplifyHelper(and(otherConjuncts), precondition)
-    val simpHeap  = simplifyHelper(and(heapConjuncts), precondition &&& simpOther)
-    simpHeap &&& simpOther
+    val (postHeapConjs, otherConjs) =
+      postConjs.partition(c => HeapFunDetector(c))
+    val simpHeap  = simplifyHelper(and(postHeapConjs), precondition)
+    simpHeap &&& and(otherConjs)
   }
 
   private def simplifyHelper(f       : IFormula,
                              context : IFormula) : IFormula = {
     if (isImplied(context, f)) {
-      i(true)
+      IBoolLit(true)
     } else if (isImplied(context, !f)) {
       i(false)
     } else f match {
@@ -105,11 +106,11 @@ object PostconditionSimplifier extends ResultProcessor {
         else s1 &&& simplifyHelper(f2, context &&& s1)
       case Disj(f1, f2) =>
         val s1 = simplifyHelper(f1, context)
-        if (s1 == i(true)) i(true)
+        if (s1 == IBoolLit(true)) IBoolLit(true)
         else s1 ||| simplifyHelper(f2, context &&& !s1)
       case Disj(INot(f1), f2) =>
         val s1 = simplifyHelper(f1, context)
-        if (s1 == i(false)) i(true)
+        if (s1 == i(false)) IBoolLit(true)
         else s1 ===> simplifyHelper(f2, context &&& s1)
       case INot(f) => !simplifyHelper(f, context)
       case _ => f

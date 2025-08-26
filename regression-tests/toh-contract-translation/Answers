@@ -8,7 +8,7 @@ Inferred ACSL annotations
 /* contract for get */
 /*@
   requires n == p && n_init >= 1 && \valid(p);
-  ensures n == \old(n) && \old(n_init) == n_init && \old(r1) == r1 && n_init >= 1 && \result >= 0 && (n_init == \result || 0 >= \result);
+  ensures n == \old(p) && \old(n_init) == n_init && \old(r1) == r1 && \old(n) == \old(p) && n_init >= 1 && \result >= 0 && \valid(p) && (n_init == \result || 0 >= \result);
 */
 ================================================================================
 
@@ -22,13 +22,13 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for decrement */
 /*@
-  requires \separated(a, b) && \valid(b) && \valid(a);
-  ensures \old(b) == b && \old(a) == a && \old(b_init) == b_init && \old(a_init) == a_init && \separated(a, b) && \valid(b) && \valid(a);
+  requires \separated(a, val) && \separated(a, b) && \valid(val) && \valid(b) && \valid(a);
+  ensures \old(b) == b && \old(a) == a && \old(b_init) == b_init && \old(a_init) == a_init && \separated(a, val) && \separated(a, b) && \valid(val) && \valid(b) && \valid(a) && \old(*val) - *val == 1;
 */
 /* contract for increment */
 /*@
   requires a == val && \separated(val, b) && \valid(b) && \valid(val);
-  ensures \old(b) == b && \old(b_init) == b_init && \old(a_init) == a_init && a == \old(val) && \separated(b, val) && \valid(b) && \valid(val) && \old(*val) - *val == -1;
+  ensures \old(b) == b && \old(a) == \old(val) && \old(b_init) == b_init && \old(a_init) == a_init && a == \old(val) && \separated(val, b) && \valid(b) && \valid(val) && \old(*val) - *val == -1;
 */
 ================================================================================
 
@@ -42,13 +42,13 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for decrement */
 /*@
-  requires \valid(a);
-  ensures \old(a) == a && \old(a_init) == a_init && \valid(a);
+  requires \valid(val) && \valid(a);
+  ensures \old(a) == a && \old(a_init) == a_init && \valid(val) && \valid(a) && \old(*val) - *val == 1;
 */
 /* contract for increment */
 /*@
   requires a == val && \valid(val);
-  ensures \old(a_init) == a_init && a == \old(val) && \valid(val) && \old(*val) - *val == -1;
+  ensures \old(a) == \old(val) && \old(a_init) == a_init && a == \old(val) && \valid(val) && \old(*val) - *val == -1;
 */
 ================================================================================
 
@@ -63,7 +63,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires b == y && a == x && \separated(x, y) && \valid(y) && \valid(x);
-  ensures b == \old(b) && a == \old(a) && \old(b_init) == b_init && \old(a_init) == a_init && \old(r) == r && \separated(a, b) && \valid(b) && \valid(a) && ((b_init == \result && \result - a_init >= 1) || (\result == a_init && a_init >= b_init));
+  ensures b == \old(y) && a == \old(x) && \old(b_init) == b_init && \old(a_init) == a_init && \old(r) == r && \old(b) == \old(y) && \old(a) == \old(x) && \separated(x, y) && \valid(y) && \valid(x) && ((b_init == \result && \result - a_init >= 1) || (\result == a_init && a_init >= b_init));
 */
 ================================================================================
 
@@ -78,7 +78,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires b == y && a == x && r == max && \separated(y, max) && \separated(x, y) && \separated(x, max) && \valid(y) && \valid(x) && \valid(max);
-  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(b) == b && \old(a) == a && \old(r) == r && \separated(b, r) && \separated(a, b) && \separated(a, r) && \valid(b) && \valid(a) && \valid(r);
+  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(max) == r && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && \old(r) == r && \separated(b, r) && \separated(a, b) && \separated(a, r) && \valid(b) && \valid(a) && \valid(r);
 */
 ================================================================================
 
@@ -98,7 +98,7 @@ Inferred ACSL annotations
 /* contract for multiplyByTwo */
 /*@
   requires a == num && \separated(b, result) && \separated(num, result) && \separated(num, b) && \valid(result) && \valid(b) && \valid(num);
-  ensures \old(b_init) == b_init && \old(a_init) == a_init && \old(result) == result && \old(b) == b && a == \old(num) && \separated(result, num) && \separated(b, result) && \separated(b, num) && \valid(result) && \valid(b) && \valid(num) && 2*\old(*num) == *num;
+  ensures \old(b_init) == b_init && \old(a_init) == a_init && \old(result) == result && \old(b) == b && \old(a) == \old(num) && a == \old(num) && \separated(b, result) && \separated(num, result) && \separated(num, b) && \valid(result) && \valid(b) && \valid(num) && 2*\old(*num) == *num;
 */
 ================================================================================
 
@@ -147,7 +147,7 @@ Inferred ACSL annotations
 /* contract for mod */
 /*@
   requires \separated(t1, t2) && \valid(t2) && \valid(t1);
-  ensures \valid(t1) && \valid(t2) && \old(*t1) - *t1 == -1 && \old(*t2) - *t2 == 1;
+  ensures \separated(t1, t2) && \valid(t2) && \valid(t1) && \old(*t1) - *t1 == -1 && \old(*t2) - *t2 == 1;
 */
 ================================================================================
 
@@ -160,7 +160,7 @@ Inferred ACSL annotations
 /* contract for mod */
 /*@
   requires \separated(t3, t4) && \separated(t2, t4) && \separated(t2, t3) && \separated(t1, t4) && \separated(t1, t3) && \separated(t1, t2) && \valid(t4) && \valid(t3) && \valid(t2) && \valid(t1);
-  ensures \valid(t3) && \valid(t2) && \valid(t1) && \valid(t4) && 2*\old(*t3) == *t3 && \old(*t2) - *t2 == 1 && *t1 - \old(*t1) == 2 && 2*\old(*t1) - *t4 == -4;
+  ensures \separated(t3, t4) && \separated(t2, t4) && \separated(t2, t3) && \separated(t1, t4) && \separated(t1, t3) && \separated(t1, t2) && \valid(t4) && \valid(t3) && \valid(t2) && \valid(t1) && 2*\old(*t3) == *t3 && \old(*t2) - *t2 == 1 && *t1 - \old(*t1) == 2 && 2*\old(*t1) - *t4 == -4;
 */
 ================================================================================
 

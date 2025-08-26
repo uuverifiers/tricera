@@ -6,7 +6,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires 10 >= x && x >= 0;
-  ensures \result >= 0 && (\old(x) != 10 || \result != 0);
+  ensures 10 >= \old(x) && \old(x) >= 0 && \result >= 0 && (\old(x) != 10 || \result != 0);
 */
 ================================================================================
 
@@ -19,7 +19,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires x >= 0 && g >= 0;
-  ensures g >= 1 && \result >= 0 && (\result >= \old(x) || \result >= 10);
+  ensures \old(g) >= 0 && \old(x) >= 0 && g >= 1 && \result >= 0 && (\result >= \old(x) || \result >= 10);
 */
 ================================================================================
 
@@ -61,7 +61,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires g >= 0;
-  ensures g >= 0 && (g - \old(x) >= \old(g) || -1 >= \old(x));
+  ensures \old(g) >= 0 && g >= 0 && (g - \old(g) >= \old(x) || -1 >= \old(x));
 */
 ================================================================================
 
@@ -87,7 +87,7 @@ Inferred ACSL annotations
 /* contract for mult */
 /*@
   requires N == x && y >= 0 && x >= 0;
-  ensures \old(N) == N && \old(N2) == N2 && \result >= 0 && (\result >= \old(y) || 0 >= N);
+  ensures \old(x) == N && \old(N) == N && \old(N2) == N2 && \old(y) >= 0 && \result >= 0 && N >= 0 && (\result >= \old(y) || 0 >= N);
 */
 ================================================================================
 
@@ -137,7 +137,7 @@ Inferred ACSL annotations
 /* contract for foo */
 /*@
   requires s.f == 21;
-  ensures \result == 42;
+  ensures \result == 42 && \old(s).f == 21;
 */
 ================================================================================
 
