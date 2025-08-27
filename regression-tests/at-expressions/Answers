@@ -4,3 +4,9 @@ UNSAFE
 
 simple-01-true.c
 SAFE
+
+at-old-01-false.c
+UNSAFE
+
+at-old-01-true.c
+SAFE

@@ -78,8 +78,8 @@ object CCAstAtExpressionTransformer {
 
     val (replacements, insertions) = planTransformations(collectionResult)
 
-    val transformer = new AtTransformer(replacements, insertions)
-    program.accept(transformer, ())
+    val transformer = new AtTransformer(replacements, insertions, collectionResult)
+    program.accept(transformer, null)
   }
 
   /**
@@ -154,23 +154,23 @@ object CCAstAtExpressionTransformer {
 
     val replacements = new MHashMap[Efunkpar, Evar]
     val insertions = new MHashMap[SlabelOne, ListBuffer[Stm]]
-    collection.labeledStms.values.foreach { case (_, label) =>
-      insertions.put(label, new ListBuffer[Stm]()) }
     val labelCounters = new MHashMap[String, Int].withDefaultValue(0)
 
     for (atCall <- collection.atCalls) {
+      val labelStringForName = atCall.label.replaceAll("[^a-zA-Z0-9_]", "")
+      val counter = labelCounters(atCall.label)
+      val ghostVarName = s"${atExpressionName}_${labelStringForName}_$counter"
+      labelCounters(atCall.label) = counter + 1
+
+      val newStatement =
+        buildDeclarationStatement(ghostVarName, atCall.typeName, atCall.expr)
+      val replacementVar = new Evar(ghostVarName)
+      replacements.put(atCall.call, replacementVar)
+
       collection.labeledStms.get(atCall.label) match {
         case Some((funcDef, slabelNode)) if funcDef eq atCall.enclosingFunction =>
-          val counter = labelCounters(atCall.label)
-          val ghostVarName = s"${atExpressionName}_${atCall.label}_$counter"
-          labelCounters(atCall.label) = counter + 1
-
-          val newStatement =
-            buildDeclarationStatement(ghostVarName, atCall.typeName, atCall.expr)
-          insertions(slabelNode) += newStatement
-
-          val replacementVar = new Evar(ghostVarName)
-          replacements.put(atCall.call, replacementVar)
+          insertions.getOrElseUpdate(slabelNode,
+                                     new ListBuffer[Stm]()) += newStatement
         case _ =>
       }
     }
@@ -209,14 +209,15 @@ object CCAstAtExpressionTransformer {
    * A visitor that applies the planned transformations to the AST.
    */
   private class AtTransformer(
-    replacements: Map[Efunkpar, Evar],
-    insertions: Map[SlabelOne, Seq[Stm]]
-  ) extends CCAstCopyWithLocation[Unit] {
+    replacements : Map[Efunkpar, Evar],
+    insertions   : Map[SlabelOne, Seq[Stm]],
+    collection   : AtCallCollectionResult
+  ) extends CCAstCopyWithLocation[Function_def] {
 
     /**
      * Replaces an `at(...)` call with its corresponding ghost variable.
      */
-    override def visit(p : Efunkpar, arg : Unit) : Exp = {
+    override def visit(p : Efunkpar, arg : Function_def) : Exp = {
       replacements.get(p) match {
         case Some(replacementVar) =>
           copyLocationInformation(p, new Evar(replacementVar.cident_))
@@ -224,11 +225,30 @@ object CCAstAtExpressionTransformer {
       }
     }
 
+    override def visit(p : Afunc, arg : Function_def) : External_declaration = {
+      super.visit(p, p.function_def_)
+    }
+
     /**
      * Inserts ghost var declarations before their corresponding labels.
      */
-    override def visit(p : ScompTwo, arg : Unit) : Compound_stm = {
+    override def visit(p : ScompTwo, curFunc : Function_def) : Compound_stm = {
       val newStatements = new ListStm()
+      if (curFunc != null) {
+        for (atCall <- collection.atCalls) {
+          if (atCall.enclosingFunction eq curFunc) {
+            atCall.label match {
+              case "Pre" | "Old" =>
+                val replacementVar = replacements(atCall.call)
+                val newStatement = buildDeclarationStatement(
+                  replacementVar.cident_, atCall.typeName, atCall.expr)
+                newStatements.add(newStatement)
+              case _ =>
+            }
+          }
+        }
+      }
+
       for (originalStm <- p.liststm_.asScala) {
         originalStm match {
           case ls: LabelS => ls.labeled_stm_ match {
@@ -240,7 +260,7 @@ object CCAstAtExpressionTransformer {
           }
           case _ => // not a label
         }
-        newStatements.add(originalStm.accept(this, arg))
+        newStatements.add(originalStm.accept(this, curFunc))
       }
       val newCompStm = new ScompTwo(newStatements)
       copyLocationInformation(p, newCompStm)
