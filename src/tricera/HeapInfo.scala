@@ -78,19 +78,14 @@ final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
       false
   }
 
-  def isObjCtor(func: IFunction): Boolean = {
-    objectCtorToSel.get(func).isDefined
-  }
+  def isObjCtor(func : IFunction) : Boolean =
+    objectCtorToSel.contains(func)
 
-  def isObjSelector(func: IFunction): Boolean = {
-    objectCtorToSel.values.exists(
-      value => value.map(v => v == func).getOrElse(false)) 
-  }
-
+  def isObjSelector(func : IFunction) : Boolean =
+    objectCtorToSel.values.exists(_.contains(func))
 
   def getReadFun: IFunction = heap.read
 
-  def objectCtorToSelector(objectCtor: IFunction): Option[IFunction] = {
+  def objectCtorToSelector(objectCtor: IFunction): Option[IFunction] =
     objectCtorToSel.get(objectCtor).flatten
-  }
 }

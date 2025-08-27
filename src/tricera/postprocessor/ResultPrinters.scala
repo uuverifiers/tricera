@@ -36,13 +36,7 @@ import ap.parser._
 import ap.terfor.ConstantTerm
 import lazabs.horn.bottomup.HornClauses.Clause
 import hornconcurrency.VerificationLoop
-import tricera.Literals
-import tricera.LoopInvariant
-import tricera.Result
-import tricera.Solution
-import tricera.Empty
-import tricera.CounterExample
-import tricera.FunctionInvariants
+import tricera._
 
 object ResultPrinters {
 

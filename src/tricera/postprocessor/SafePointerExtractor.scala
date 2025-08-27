@@ -1,6 +1,7 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg 
- *               2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2025 Scania CV AB
+ *               2025 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,75 +39,36 @@ package tricera.postprocessor
 
 import ap.parser._
 import scala.collection.immutable.Stack
-import tricera.{
-  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant, InvariantContext,
-  PostCondition, PreCondition, ProgVarProxy, Result, Solution}
-import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
-import tricera.CounterExample
-import tricera.LoopInvariant
-
-
-case class SafePointers(
-  id: String,
-  preCondPointers: Set[ProgVarProxy],
-  postCondPointers: Set[ProgVarProxy])
-
+import tricera._
 
 object SafePointerExtractor {
-  def apply(result: Result): Seq[SafePointers] = result match {
-    case Solution(functionInvariants, _) => functionInvariants.map(applyTo)
-    case _ => Seq[SafePointers]()
-  }
+  def getSafePointers(invariant     : Invariant,
+                      isCurrentHeap : ProgVarProxy => Boolean) : ValSet =
+    invariant match {
+      case Invariant(form, Some(heapInfo), _) =>
+        getSafePointers(form, heapInfo, isCurrentHeap)
+      case _ => ValSet.empty
+    }
 
-  private def applyTo(funcInvs: FunctionInvariants)
-  : SafePointers = funcInvs match {
-    case FunctionInvariants(
-      id,
-      isSrcAnnotated,
-      preCond @ PreCondition(preInv),
-      postCond @ PostCondition(postInv),
-      loopInvariants) =>
-      SafePointers(
-        id,
-        getSafePointers(preInv, preCond.isCurrentHeap),
-        getSafePointers(postInv, postCond.isCurrentHeap))
-  }
-
-  def getSafePointers(
-    invariant: Invariant,
-    isCurrentHeap: ProgVarProxy => Boolean)
-    : Set[ProgVarProxy] = invariant match {
-    case Invariant(form, Some(heapInfo), srcInfo) =>
-      getSafePointers(form, heapInfo, isCurrentHeap)
-    case _ =>
-      Set[ProgVarProxy]()
-  }
-
-  private def getSafePointers(invForm: IFormula, heapInfo: HeapInfo, isCurrentHeap: ProgVarProxy => Boolean): Set[ProgVarProxy] = {
-    val valueSet = ValSetReader.invariant(invForm)
-    val explForm = ToExplicitForm.invariant(invForm, valueSet, isCurrentHeap)
+  private def getSafePointers(
+    invForm       : IFormula,
+    heapInfo      : HeapInfo,
+    isCurrentHeap : ProgVarProxy => Boolean) : ValSet = {
+    val valueSet = ValSetReader(invForm)
+    val explForm = ToExplicitForm(invForm, valueSet)
     val redForm = HeapReducer(explForm, heapInfo)
     HeapExtractor(redForm, isCurrentHeap) match {
       case Some(heap) =>
-        val redValueSet = ValSetReader.invariant(redForm)
+        val redValueSet = ValSetReader(redForm)
         readSafeVariables(heap, redValueSet)
-      case _ => Set.empty[ProgVarProxy]
+      case _ => ValSet.empty
     }
   }
 
-  private def readSafeVariables(
-      heap: HeapState,
-      valueSetWithAddresses: ValSet
-  ): Set[ProgVarProxy] = {
-    heap.storage.keys
-      .flatMap(
-        valueSetWithAddresses.getVariableForm(_) match {
-          case Some(ConstantAsProgVarProxy(p)) => Some(p)
-          case None => None
-        }
-      )
-      .asInstanceOf[Set[ProgVarProxy]]
-  }
+  private def readSafeVariables(heap                  : HeapState,
+                                valueSetWithAddresses : ValSet) : ValSet =
+    ValSet(heap.storage.keys.map(
+      valueSetWithAddresses.getVariantVariables).toSet)
 }
 
 private object HeapExtractor {

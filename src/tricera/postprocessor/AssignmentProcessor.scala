@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg. All rights reserved.
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2025 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -41,17 +42,14 @@
 package tricera.postprocessor
 
 import ap.parser._
-import ap.terfor.ConstantTerm
-
-import tricera.{
-  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
-  Invariant, InvariantContext, LoopInvariant, PostCondition, PreCondition,
-  ProgVarProxy, Result, Solution}
-
+import tricera._
 import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+
+import scala.annotation.tailrec
 
 
 class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor {
+
   import tricera.postprocessor.PointerTools._
 
   override def applyTo(solution: Solution) = solution match {
@@ -83,17 +81,12 @@ class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor
     isCurrentHeap: ProgVarProxy => Boolean)
     = invariant match {
     case Invariant(form, Some(heapInfo), srcInfo) =>
-      val srcExp = srcInv match {
-        case PreCondition(inv) => inv.expression
-        case PostCondition(inv) => inv.expression
-        case LoopInvariant(exp, _, _) => exp
-      }
-      val visitor = new AssignmentProcessorVisitor(
-        ValSetReader.deBrujin(srcExp),
-        inferSafeHeapPointers(srcInv),
-        isCurrentHeap,
-        heapInfo)
-      val newForm = visitor.visit(form, 0) match {
+      val separatedSets : ValSet =
+        inferSafeHeapPointers(srcInv)
+      val visitor =
+        new AssignmentProcessorVisitor(separatedSets, isCurrentHeap, heapInfo)
+      val processorResult = visitor.visit(form, 0)
+      val newForm = processorResult match {
         case None => form
         case Some(assignments) => form.&(assignments)
       }
@@ -105,11 +98,73 @@ class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor
 
 
 private class AssignmentProcessorVisitor(
-  valueSet: ValSet,
-  separatedSet: Set[ProgVarProxy],
-  isCurrentHeap: ProgVarProxy => Boolean,
-  heapInfo: HeapInfo) 
+  separatedSets : ValSet,
+  isCurrentHeap : ProgVarProxy => Boolean,
+  heapInfo      : HeapInfo)
   extends CollectingVisitor[Int, Option[IFormula]] {
+
+  /**
+   * Simplify heap expressions by applying the read-over-write axiom.
+   */
+  private class HeapSimplifier extends CollectingVisitor[Unit, IExpression] {
+    private def areSeparateTerms(t1 : ITerm, t2 : ITerm) : Boolean = {
+      val result = for {
+        val1 <- separatedSets.getVal(t1)
+        val2 <- separatedSets.getVal(t2)
+      } yield val1 != val2
+
+      result.getOrElse(false)
+    }
+
+    override def postVisit(t      : IExpression,
+                           arg    : Unit,
+                           subres : Seq[IExpression]) : IExpression = {
+      t.update(subres) match {
+        case newT@IFunApp(readFun, Seq(IFunApp(writeFun, Seq(heap, a1, value)), a2))
+          if heapInfo.isReadFun(readFun) && heapInfo.isWriteFun(writeFun) =>
+            if (separatedSets.areEqual(a1, a2)) {  // a1 === a2
+              value
+            } else if (areSeparateTerms(a1, a2)) { // a1 =/= a2
+              IFunApp(readFun, Seq(heap, a2))
+            } else {                               // unknown, do not simplify
+              newT
+            }
+        case other => other
+      }
+    }
+  }
+
+  def assignmentToEquality(pointer : ITerm,
+                           value   : ITerm,
+                           heapVar : ProgVarProxy) : IFormula = {
+    val simplifier = new HeapSimplifier
+    def simplifyUntilFixedPoint(value : ITerm) : ITerm = {
+      @tailrec
+      def loop(currentValue : ITerm) : ITerm = {
+        val simplifiedValue =
+          simplifier.visit(currentValue, ()).asInstanceOf[ITerm]
+        if (simplifiedValue == currentValue)
+          simplifiedValue
+        else
+          loop(simplifiedValue)
+      }
+      loop(value)
+    }
+    val simplifiedValue : ITerm = simplifyUntilFixedPoint(value)
+
+    simplifiedValue match {
+      case IFunApp(objCtor, _) if heapInfo.objectCtorToSelector(objCtor).nonEmpty =>
+        val selector = heapInfo.objectCtorToSelector(objCtor).get
+        IEquation(
+          IFunApp(selector, Seq(IFunApp(heapInfo.getReadFun,
+                                        Seq(IConstant(heapVar), pointer)))),
+          IFunApp(selector, Seq(simplifiedValue))
+          )
+      case _ =>
+        IEquation(IFunApp(heapInfo.getReadFun,
+                          Seq(IConstant(heapVar), pointer)), simplifiedValue)
+    }
+  }
 
   private def getReverseAssignments(t: IExpression): Seq[(ITerm, ITerm)] = {
     t match {
@@ -117,42 +172,22 @@ private class AssignmentProcessorVisitor(
             writeFun,
             Seq(heap, pointer, value)
           ) if (heapInfo.isWriteFun(writeFun)) =>
-        val assignment =
-          (pointer.asInstanceOf[ITerm], value.asInstanceOf[ITerm])
+        val assignment = (pointer, value)
         assignment +: getReverseAssignments(heap)
       case _ => Seq()
     }
   }
 
-  def assignmentToEquality(
-      pointer: ITerm,
-      value: ITerm,
-      heapVar: ProgVarProxy
-  ): Option[IFormula] = {
-    value match {
-      case IFunApp(objCtor, _) =>
-        heapInfo.objectCtorToSelector(objCtor)
-          .map(selector => IEquation(
-            IFunApp(
-              selector,
-              Seq(IFunApp(heapInfo.getReadFun, Seq(IConstant(heapVar), pointer)))
-            ),
-            IFunApp(selector, Seq(value))).asInstanceOf[IFormula])
-      case _ => None
-    }
-  }
-
-  def extractEqualitiesFromWriteChain(
-      funApp: IExpression,
-      heapVar: ProgVarProxy
-  ): Option[IFormula] = {
-    def takeWhileSeparated(assignments: Seq[(ITerm, ITerm)]) =
-      (assignments.isEmpty, separatedSet.isEmpty) match {
+  def extractEqualitiesFromWriteChain(funApp  : IExpression,
+                                      heapVar : ProgVarProxy)
+  : Option[IFormula] = {
+    def takeWhileSeparated(assignments : Seq[(ITerm, ITerm)]) =
+      (assignments.isEmpty, separatedSets.isEmpty) match {
         case (true, _) => Seq()
         case (false, true) => Seq(assignments.head)
         case _ =>
-          assignments.takeWhile { case (pointer, value) =>
-            separatedSet.exists(valueSet.areEqual(pointer, _))
+          assignments.takeWhile { case (pointer, _) =>
+            separatedSets.getVal(pointer).nonEmpty
           }
     }
 
@@ -173,7 +208,7 @@ private class AssignmentProcessorVisitor(
     val separatedAssignments = takeWhileSeparated(assignments)
     val currentAssignments = takeFirstAddressWrites(separatedAssignments)
       .map { case (pointer, value) =>
-        assignmentToEquality(pointer, value, heapVar).get
+        assignmentToEquality(pointer, value, heapVar)
       }
     currentAssignments.size match {
       case s if s >= 2 =>
@@ -201,7 +236,7 @@ private class AssignmentProcessorVisitor(
 
   override def preVisit(
       t: IExpression,
-      quantifierDepth: Int 
+      quantifierDepth: Int
   ): PreVisitResult = t match {
     case v: IVariableBinder => UniSubArgs(quantifierDepth + 1)
     case _                  => KeepArg

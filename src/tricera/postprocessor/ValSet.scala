@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg. All rights reserved.
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2025 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -37,114 +38,103 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
+import IExpression.{Conj, Disj, Eq}
 import ap.theories.ADT
 import tricera.{ConstantAsProgVarProxy, ProgVarProxy}
 
 object Val {
-  def apply(term1: ITerm, term2: ITerm): Val = {
+  def apply(term1 : ITerm, term2 : ITerm) : Val =
     Val(Set(term1, term2))
-  }
 
-  def merge(vals: Set[Val]): Val = {
-    vals.reduce((val1, val2) => (val1 | val2))
-  }
+  def merge(vals : Set[Val]) : Val =
+    vals.reduce((val1, val2) => val1 | val2)
 }
-case class Val(variants: Set[ITerm]) {
-  def getExplicitForm: Option[ITerm] = variants find { q => { q match {
-    case a: Address         => false
-    case ConstantAsProgVarProxy(_) => false
-    case _                  => true
-  }}}
-
-  def getAddrForm: Option[ITerm] = variants find {
-    case a: Address => true
-    case _          => false
-  }
-
-  def getVariableForm: Option[ITerm] = variants find {
-    case ConstantAsProgVarProxy(_) => true
-    case _             => false
-  }
-
-  def +(term: ITerm): Val = {
+case class Val(variants : Set[ITerm]) {
+  def +(term : ITerm) : Val =
     Val(variants + term)
-  }
 
-  def +(v: Val): Val = {
+  def +(v : Val) : Val =
     Val.merge(Set(this, v))
-  }
 
-  def &(v: Val): Val = {
+  def &(v : Val) : Val =
     Val(variants & v.variants)
-  }
 
-  def |(v: Val): Val = {
+  def |(v : Val) : Val =
     Val(variants | v.variants)
-  }
 
-  def nonEmpty: Boolean = {
+  def nonEmpty : Boolean =
     variants.nonEmpty
-  }
 
-  def equalsTerm(term: ITerm): Boolean = {
+  def equalsTerm(term : ITerm) : Boolean =
     variants.contains(term)
-  }
 
-  def equalsOneOf(terms: Set[ITerm]): Boolean = {
+  def equalsOneOf(terms : Set[ITerm]) : Boolean =
     (variants & terms).nonEmpty
-  }
 }
 
 object ValSet {
 
-  def apply(term1: ITerm, term2: ITerm): ValSet = {
+  def apply(term1 : ITerm, term2 : ITerm) : ValSet =
     ValSet(Set(Val(term1, term2)))
-  }
 
-  def empty(): ValSet = {
+  def empty : ValSet =
     ValSet(Set.empty[Val])
+
+  def union(valSets : ValSet*): ValSet = {
+    valSets.flatMap(_.vals).foldLeft(ValSet.empty) {(acc, v) =>
+      val (equalVals, rest) = acc.vals.partition(_ & v nonEmpty)
+      val newVal = if (equalVals.nonEmpty) Val.merge(equalVals + v) else v
+      ValSet(rest + newVal)
+    }
   }
 
-  def merge(vs1: ValSet, vs2: ValSet): ValSet = {
-    (vs1.isEmpty, vs2.isEmpty) match {
-      case (true, _) => vs2
-      case (_, true) => vs1
-      case _ =>
-        (vs1.vals ++ vs2.vals).foldLeft(
-          ValSet.empty
-        )((vs, v) => {
-          val (equalVals, rest) = vs.vals.partition(_ & v nonEmpty)
-          val newVal: Val = if (equalVals.nonEmpty) {
-            Val.merge(equalVals + v)
-          } else {
-            v
-          }
-          ValSet(rest + (newVal))
-        })
+  def intersect(vs1 : ValSet, vs2 : ValSet) : ValSet = {
+    if (vs1.isEmpty || vs2.isEmpty) return ValSet.empty
+
+    val allTerms = vs1.vals.flatMap(_.variants) ++ vs2.vals.flatMap(_.variants)
+    var resultVs = ValSet.empty
+
+    for (term <- allTerms) {
+      val class1 = vs1.getVal(term).map(_.variants).getOrElse(Set(term))
+      val class2 = vs2.getVal(term).map(_.variants).getOrElse(Set(term))
+      val commonClass = class1.intersect(class2)
+
+      if (commonClass.size > 1) {
+        val newV = Val(commonClass)
+        resultVs = union(resultVs, ValSet(Set(newV)))
+      }
     }
+    resultVs
   }
 }
 
-case class ValSet(vals: Set[Val]) {
-
-  def addEquality(term1: ITerm, term2: ITerm): ValSet = {
-    val maybeVal1 = getVal(term1)
-    val maybeVal2 = getVal(term2)
-    (maybeVal1, maybeVal2) match {
-      case (Some(val1), Some(val2)) =>
-        ValSet(vals.-(val1).-(val2).+(val1 + val2))
-      case (Some(v), None) =>
-        ValSet(vals.-(v).+(v.+(term2)))
-      case (None, Some(v)) =>
-        ValSet(vals.-(v).+(v.+(term1)))
-      case (None, None) =>
-        ValSet(vals.+(Val(term1, term2)))
-    }
+case class ValSet(vals : Set[Val]) {
+  def getOrderingKey(term : ITerm) : (Int, String) =
+    (termScore(term), term.toString)
+  private def termScore(term : ITerm) : Int = term match {
+    case IConstant(v : ProgVarProxy) if v.isParameter => 0
+    case IConstant(v : ProgVarProxy) if v.isPostExec => 1
+    case IConstant(_ : ProgVarProxy) => 2
+    case _: IConstant                => 3
+    case IFunApp(_, args)            => 10 + args.map(termScore).sum + args.size
+    case ITermITE(_, t, e)           => 20 + termScore(t) + termScore(e)
+    case _                           => 100
   }
 
-  def isEmpty = vals.isEmpty
+  def toCanonicalFormMap : Map[IExpression, ITerm] = {
+    vals.flatMap { value =>
+      if (value.variants.isEmpty) {
+        None
+      } else {
+        val canonicalRep = value.variants.minBy(getOrderingKey)
+        Some(value.variants
+                  .filterNot(_ == canonicalRep)
+                  .map(_ -> canonicalRep))
+      }
+    }.flatten.toMap
+  }
+
+  def isEmpty : Boolean = vals.isEmpty
 
   def areEqual(term1: ITerm, term2: ITerm): Boolean = {
     getVal(term1) match {
@@ -160,48 +150,13 @@ case class ValSet(vals: Set[Val]) {
     }
   }
 
-  def getExplicitForm(term: ITerm): Option[ITerm] = {
-    getVal(term) match {
-      case Some(v) => v.getExplicitForm
-      case None    => None
-    }
-  }
-
-  def getVariableForm(term: ITerm): Option[ITerm] = {
-    getVal(term) match {
-      case Some(v) => v.getVariableForm
-      case None    => None
-    }
-  }
-
-  def toVariableFormMap: Map[IExpression, IConstant] = {
-    vals
-      .collect {
-        case value if value.getVariableForm.isDefined =>
-          val variable = value.getVariableForm.get.asInstanceOf[IConstant]
-          value.variants
-            .filterNot(_ == variable)
-            .map(_ -> variable)
+  def getVariantVariables(term : ITerm) : Val = getVal(term) match {
+    case Some(v) =>
+      val variableVariants : Set[ProgVarProxy] = v.variants.collect {
+        case ConstantAsProgVarProxy(c) => c
       }
-      .flatten
-      .toMap
-  }
-
-  def toExplicitFormMap: Map[IExpression, ITerm] = {
-    vals
-      .collect {
-        case value if value.getExplicitForm.isDefined =>
-          val variable = value.getExplicitForm.get
-          value.variants
-            .filterNot(_ == variable)
-            .map(_ -> variable)
-      }
-      .flatten
-      .toMap
-  }
-
-  def merge(eqs: ValSet): ValSet = {
-    ValSet.merge(this, eqs)
+      Val(variableVariants.map(IConstant(_)))
+    case None => Val(Set())
   }
 
   override def toString = {
@@ -213,109 +168,63 @@ case class ValSet(vals: Set[Val]) {
 }
 
 object ValSetReader {
-  // NOTE: expressions must be invariant and unique (not de Bruijn indexed)
-  def invariant(contractCondition: IExpression): ValSet = {
-    InvariantReader.visit(contractCondition, ())
-  }
+  def apply(contractCondition : IExpression) : ValSet =
+    Reader.visit(contractCondition, 0)
 
-  def deBrujin(contractCondition: IExpression): ValSet = {
-    DeBrujinReader.visit(contractCondition, 0)
-  }
+  private object Reader extends CollectingVisitor[Int, ValSet]
+    with ExpressionUtils {
 
-  object InvariantReader
-      extends CollectingVisitor[Unit, ValSet]
-      with ExpressionUtils {
+    override def preVisit(t               : IExpression,
+                          quantifierDepth : Int) : PreVisitResult = t match {
+      case _ : IVariableBinder => UniSubArgs(quantifierDepth + 1)
+      case _                   => KeepArg
+    }
 
-    // SSSOWO: The de Bruijn version disregards disjunctions,
-    //   should this do the same? If not, why not?
-
-    override def postVisit(
-        t: IExpression,
-        arg: Unit,
-        subres: Seq[ValSet]
-    ): ValSet = {
-      def returnDefault = subres.size match {
-        case 0 => ValSet.empty
-        case _ => subres.reduce(ValSet.merge(_, _))
-      }
+    override def postVisit(t               : IExpression,
+                           quantifierDepth : Int,
+                           subres          : Seq[ValSet]) : ValSet = {
+      // Replace all v(index) within term where index >= depth with
+      // v(index - depth).
+      def shiftTerm(term : ITerm) : ITerm =
+        VariableShiftVisitor(term,
+                             offset = quantifierDepth,
+                             shift  = -quantifierDepth)
 
       t match {
-        // skip is_O_<sort>
-        case IExpression.EqLit(IFunApp(ADT.CtorId(_, _), Seq(_)), _) =>
-          returnDefault
+        case Conj(_, _) =>
+          ValSet.union(subres: _*)
 
-        case e @ IEquation(term1, term2) =>
-          (subres :+ ValSet(term1, term2)).reduce(
-            ValSet.merge(_, _)
-          )
+        case Disj(_, _) =>
+          ValSet.intersect(subres(0), subres(1))
 
-        case e @ IIntFormula(IIntRelation.EqZero, term) =>
-          (subres :+ ValSet(0, term)).reduce(
-            ValSet.merge(_, _)
-          )
+        case Eq(IFunApp(ADT.CtorId(_, _), Seq(_)), _) =>
+          ValSet.union(subres: _*)
 
-        case default =>
-          returnDefault
+        // ContainsQuantifiedVisitor(term, depth) returns true if
+        // term contains an v(n) with n < current quantifierDepth,
+        // which implies that term must have an inner quantifier.
+        // The case will still trigger if n >= quantifierDepth, which can happen
+        // if the terms have IVariables that are not bound to local quantifiers,
+        // but are predicate arguments (such as in pre/post condition). In that
+        // case we need to subtract the current quantifierDepth from those vars
+        // to get their actual terms in the outermost context.
+        // e.g., pre(v(0), v(1)) :- (EX. v(1) = v(2)) ...
+        // Inside the quantified formula depth = 1, and we add the fact that
+        // v(0) = v(1) by shifting the terms by -1.
+        case Eq(term1, term2)
+          if !ContainsQuantifiedVisitor(term1, quantifierDepth) && // no quantifiers in term1
+             !ContainsQuantifiedVisitor(term2, quantifierDepth) => // no quantifiers in term2
+          val newEquality = ValSet(shiftTerm(term1), shiftTerm(term2))
+          ValSet.union(subres :+ newEquality: _*)
+
+        case IIntFormula(IIntRelation.EqZero, term)
+          if !ContainsQuantifiedVisitor(term, quantifierDepth) =>
+          val newEquality = ValSet(0, shiftTerm(term))
+          ValSet.union(subres :+ newEquality: _*)
+
+        case _ =>
+          if (subres.isEmpty) ValSet.empty else ValSet.union(subres: _*)
       }
     }
-  }
-
-  // skips all quantified variables (as they don't 'exist' outside formula)
-  object DeBrujinReader
-      extends CollectingVisitor[Int, ValSet]
-      with ExpressionUtils {
-
-    override def preVisit(
-        t: IExpression,
-        quantifierDepth: Int
-    ): PreVisitResult = t match {
-      case IBinFormula(IBinJunctor.Or, _, _) =>
-        ShortCutResult(ValSet.empty()) 
-      case vb: IVariableBinder =>
-        UniSubArgs(quantifierDepth + 1)
-      case _ =>
-        KeepArg
-    }
-
-    override def postVisit(
-        t: IExpression,
-        quantifierDepth: Int,
-        subres: Seq[ValSet]
-    ): ValSet = {
-      def returnDefault = subres.size match {
-        case 0 => ValSet.empty
-        case _ => subres.reduce(ValSet.merge(_, _))
-      }
-
-      def shiftTerm(term: ITerm, quantifierDepth: Int): ITerm = {
-        VariableShiftVisitor(term, quantifierDepth, -quantifierDepth)
-      }
-
-      t match {
-        // skip is_O_<sort>
-        case IExpression.EqLit(IFunApp(ADT.CtorId(_, _), Seq(_)), _) =>
-          returnDefault
-
-        case e @ IEquation(term1, term2)
-            if !ContainsQuantifiedVisitor(term1, quantifierDepth)
-              && !ContainsQuantifiedVisitor(term2, quantifierDepth) =>
-          val shiftedTerm1 = shiftTerm(term1, quantifierDepth)
-          val shiftedTerm2 = shiftTerm(term2, quantifierDepth)
-          (subres :+ ValSet(shiftedTerm1, shiftedTerm2)).reduce(
-            ValSet.merge(_, _)
-          )
-
-        case e @ IIntFormula(IIntRelation.EqZero, term)
-            if !ContainsQuantifiedVisitor(term, quantifierDepth) =>
-          val shiftedTerm = shiftTerm(term, quantifierDepth)
-          (subres :+ ValSet(0, shiftedTerm)).reduce(
-            ValSet.merge(_, _)
-          )
-
-        case default =>
-          returnDefault
-      }
-    }
-
   }
 }

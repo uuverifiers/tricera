@@ -30,8 +30,7 @@
 package tricera.postprocessor
 
 import tricera.{Result, Solution, CounterExample, Empty, FunctionInvariants}
-import tricera.Util.{SourceInfo, printlnDebug}
-import ap.parser.IConstant
+import tricera.Util.printlnDebug
 
 trait ResultProcessor {
   def apply(result: Result): Result = result match {

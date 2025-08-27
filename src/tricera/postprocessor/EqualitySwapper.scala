@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg. All rights reserved.
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2025 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -39,12 +40,8 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Predicate
-
-import tricera.{
-  ConstantAsProgVarProxy, HeapInfo, FunctionInvariants,
-  PostCondition, PreCondition, ProgVarProxy, Invariant, Solution}
-import tricera.concurrency.ccreader.CCExceptions.NeedsHeapModelException
+import IExpression.Eq
+import tricera._
 
 object ToVariableForm extends ResultProcessor {
 
@@ -58,118 +55,82 @@ object ToVariableForm extends ResultProcessor {
     case FunctionInvariants(
       id,
       isSrcAnnotated,
-      preCondition @ PreCondition(preInv),
-      postCondition @ PostCondition(postInv),
+      PreCondition(preInv),
+      PostCondition(postInv),
       loopInvariants) =>
-      val preCondValSet = ValSetReader.deBrujin(preInv.expression)
-      val postCondValSet = ValSet.merge(
-          ValSetReader.deBrujin(preInv.expression),
-          ValSetReader.deBrujin(postInv.expression))
+      val preCondValSet = ValSetReader(preInv.expression)
+      val postCondValSet = ValSet.union(preCondValSet,
+                                        ValSetReader(postInv.expression))
       val newInvs = FunctionInvariants(
         id,
         isSrcAnnotated,
-        PreCondition(toVariableForm(preInv, preCondValSet, preCondition.isCurrentHeap)),
-        PostCondition(toVariableForm(postInv, postCondValSet, postCondition.isCurrentHeap)),
+        PreCondition(toVariableForm(preInv, preCondValSet)),
+        PostCondition(toVariableForm(postInv, postCondValSet)),
         loopInvariants)
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
 
-  def toVariableForm(
-    invariant: Invariant,
-    valueSet: ValSet,
-    isCurrentHeap: ProgVarProxy => Boolean)
-    : Invariant = invariant match {
-      case Invariant(form, maybeHeapInfo, maybeSourceInfo) => 
-        Invariant(
-          EqualitySwapper.deBrujin(
-            form,
-            valueSet.toVariableFormMap,
-            isCurrentHeap).asInstanceOf[IFormula],
-          maybeHeapInfo,
-          maybeSourceInfo)
+  private def toVariableForm(invariant : Invariant,
+                     valueSet : ValSet) : Invariant = invariant match {
+    case Invariant(form, maybeHeapInfo, maybeSourceInfo) =>
+      Invariant(
+        EqualitySwapper(
+          form,
+          valueSet.toCanonicalFormMap).asInstanceOf[IFormula],
+        maybeHeapInfo,
+        maybeSourceInfo)
   }
 }
 
-
 object ToExplicitForm {
-  def deBrujin(expr: IExpression, valueSet: ValSet, isCurrentHeap: ProgVarProxy => Boolean) = {
-    EqualitySwapper.deBrujin(expr, valueSet.toExplicitFormMap, isCurrentHeap)
-  } 
-
-  def invariant(expr: IExpression, valueSet: ValSet, isCurrentHeap: ProgVarProxy => Boolean) = {
-    EqualitySwapper.invariant(expr, valueSet.toExplicitFormMap, isCurrentHeap)
-  } 
+  def apply(expr : IExpression, valueSet : ValSet) =
+    EqualitySwapper(expr, valueSet.toCanonicalFormMap)
 }
 
 object EqualitySwapper {
-  def deBrujin(expr: IExpression, swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean) = {
-    (new EqualitySwapper(swapMap, isCurrentHeap))(expr)
-  }
-
-  def invariant(expr: IExpression, swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean) = {
-    (new InvariantEqualitySwapper(swapMap, isCurrentHeap))(expr)
-  }
+  def apply(expr : IExpression, swapMap : Map[IExpression, ITerm]) =
+    (new EqualitySwapper(swapMap))(expr)
 }
 
-class EqualitySwapper(swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean)
+class EqualitySwapper(swapMap : Map[IExpression, ITerm])
     extends CollectingVisitor[Int, IExpression] 
     with ExpressionUtils {
-
-  // swaps every expression except equalities but including the @h expression
-  def apply(contractCondition: IExpression): IExpression = {
-    def rewriter(expr: IExpression): IExpression = {
+  def apply(contractCondition : IExpression) : IExpression = {
+    def rewriter(expr : IExpression) : IExpression = {
       visit(expr, 0)
     }
     iterateUntilFixedPoint(contractCondition, rewriter)
   }
 
-  override def preVisit(
-      t: IExpression,
-      quantifierDepth: Int
-  ): PreVisitResult = t match {
-    case IEquation(ConstantAsProgVarProxy(v), term) if !isCurrentHeap(v) =>
-      ShortCutResult(t)
-    case IEquation(term, ConstantAsProgVarProxy(v)) if !isCurrentHeap(v) =>
-      ShortCutResult(t)
-    case IIntFormula(IIntRelation.EqZero, term) =>
-      ShortCutResult(t)
-    case vb: IVariableBinder =>
-      UniSubArgs(quantifierDepth + 1)
-    case _ =>
+  override def preVisit(t               : IExpression,
+                        quantifierDepth : Int) : PreVisitResult = t match {
+    // Do not swap if the result will be something like x = x
+    case Eq(left, right) =>
+      val rewrittenRight = swapMap.getOrElse(right, right)
+      if (left == rewrittenRight)
+        return ShortCutResult(t)
+      val rewrittenLeft = swapMap.getOrElse(left, left)
+      if (rewrittenLeft == right || rewrittenLeft == rewrittenRight)
+        return ShortCutResult(t)
       KeepArg
+    case IIntFormula(IIntRelation.EqZero, _) => ShortCutResult(t)
+    case _ : IVariableBinder => UniSubArgs(quantifierDepth + 1)
+    case _                   => KeepArg
   }
 
-  override def postVisit(
-      t: IExpression,
-      quantifierDepth: Int,
-      subres: Seq[IExpression]
-  ): IExpression = t match {
-    case ConstantAsProgVarProxy(h) if isCurrentHeap(h) =>
-      t update subres 
-    case term: ITerm =>
-      swapMap.get(term) match {
-        case Some(variable) => variable
-        case None => t update subres
-      }
-    case default => t update subres
-  }
-}
-
-class InvariantEqualitySwapper(swapMap: Map[IExpression, ITerm], isCurrentHeap: ProgVarProxy => Boolean) 
-  extends EqualitySwapper(swapMap, isCurrentHeap) {
-
-  override def preVisit(
-      t: IExpression,
-      quantifierDepth: Int
-  ): PreVisitResult = t match {
-    case IEquation(ConstantAsProgVarProxy(v), term) if !isCurrentHeap(v) =>
-      ShortCutResult(t)
-    case IEquation(term, ConstantAsProgVarProxy(v)) if !isCurrentHeap(v) =>
-      ShortCutResult(t)
-    case IIntFormula(IIntRelation.EqZero, term) =>
-      ShortCutResult(t)
-    case _ =>
-      KeepArg
+  override def postVisit(t               : IExpression,
+                         quantifierDepth : Int,
+                         subres          : Seq[IExpression]) : IExpression = {
+    val updated = t update subres
+    (updated, swapMap.getOrElse(updated, updated)) match {
+      case (ConstantAsProgVarProxy(upd), ConstantAsProgVarProxy(swp))
+        if upd.isPostExec && swp.isPreExec =>
+        // Keep using the post var, this can only happen in a postconditon,
+        // Reasoning is that we (probably) do not want to replace a post-var\
+        // with a pre-var.
+        upd
+      case _                               => updated
+    }
   }
 }

@@ -46,8 +46,6 @@ import tricera.{
   ConstantAsProgVarProxy, FunctionInvariants, HeapInfo,
   Invariant, InvariantContext, LoopInvariant, PostCondition,
   PreCondition, ProgVarProxy, Solution}
-import tricera.postprocessor.ToExplicitForm.invariant
-
 
 object ACSLExpressionProcessor extends ResultProcessor {
 

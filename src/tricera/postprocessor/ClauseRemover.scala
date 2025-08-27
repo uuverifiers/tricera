@@ -39,12 +39,9 @@
 
 package tricera.postprocessor
 
+import ap.parser.IExpression.{Conj, Disj}
 import ap.parser._
-import IExpression.Predicate
-
-import tricera.{
-  ConstantAsProgVarProxy, FunctionInvariants, HeapInfo, Invariant,
-  PostCondition, PreCondition, ProgVarProxy, Solution}
+import tricera._
 import tricera.Util.FSharpisms
 
 object ClauseRemover extends ResultProcessor {
@@ -97,11 +94,9 @@ object TheoryOfHeapRemoverVisitor {
   class TheoryOfHeapRemoverVisitor(heapInfo: HeapInfo)
     extends CollectingVisitor[Unit, IExpression] {
 
-    override def postVisit(
-        t: IExpression,
-        dummy: Unit,
-        subres: Seq[IExpression]
-    ): IExpression = t match {
+    override def postVisit(t      : IExpression,
+                           dummy  : Unit,
+                           subres : Seq[IExpression]) : IExpression = t match {
       case form @ IBinFormula(_, _, _) =>
         postVisitFormula(form, subres, heapInfo)
       case q @ ISortedQuantified(_, _, _) =>
@@ -109,17 +104,17 @@ object TheoryOfHeapRemoverVisitor {
           case IBoolLit(true) => IBoolLit(true)
           case _ => q update subres
         }
-      case default if (ContainsTOHVisitor(t, heapInfo)) =>
+      case _ if ContainsTOHVisitor(t, heapInfo) =>
         IBoolLit(true)
-      case default =>
+      case _ =>
         t update subres
     }
 
     private def postVisitFormula(form: IFormula, subres: Seq[IExpression], heapInfo: HeapInfo)
     : IExpression = form match {
-      case IBinFormula(IBinJunctor.And, IBoolLit(true), IBoolLit(true))
-         | IBinFormula(IBinJunctor.Or, IBoolLit(true), _)
-         | IBinFormula(IBinJunctor.Or, _, IBoolLit(true))
+      case Conj(IBoolLit(true), IBoolLit(true))
+         | Disj(IBoolLit(true), _)
+         | Disj(_, IBoolLit(true))
          | IBinFormula(IBinJunctor.Eqv, IBoolLit(true), _)
          | IBinFormula(IBinJunctor.Eqv, _, IBoolLit(true)) =>
         // Either or both sides were already true before traversal
@@ -135,7 +130,7 @@ object TheoryOfHeapRemoverVisitor {
             // Neither side was removed during traversal
             form update subres
         }
-      case IBinFormula(IBinJunctor.Or, preLhs, preRhs) =>
+      case Disj(preLhs, preRhs) =>
         // Neither side was true before traversal
         val lhs = subres(0)
         val rhs = subres(1)
@@ -153,15 +148,15 @@ object TheoryOfHeapRemoverVisitor {
             // Neither side was removed during traversal
             form update subres
         }
-      case IBinFormula(IBinJunctor.And, IBoolLit(true), _) =>
+      case Conj(IBoolLit(true), _) =>
         // LHS was true before traversal
         val rhs = subres(1)
         rhs
-      case IBinFormula(IBinJunctor.And, _, IBoolLit(true)) =>
+      case Conj(_, IBoolLit(true)) =>
         // RHS was true before traversal
         val lhs = subres(0)
         lhs
-      case IBinFormula(IBinJunctor.And, preLhs, preRhs) =>
+      case Conj(preLhs, preRhs) =>
         // Neither side was true before traversal
         val lhs = subres(0)
         val rhs = subres(1)
@@ -201,7 +196,10 @@ object ContainsTOHVisitor {
     override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
       case TheoryOfHeapFunApp(_, _) =>
         ShortCutResult(true)
-      case IFunApp(fun, args) if (heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun)) =>
+      case IFunApp(fun, _)
+        if heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun) =>
+        ShortCutResult(true)
+      case Is_O_Sort(_) =>
         ShortCutResult(true)
       case _ =>
         KeepArg
@@ -269,7 +267,7 @@ object ContainsExplicitPointerVisitor {
           ShortCutResult(false)
         case ACSLPredicate(pred) =>
           ShortCutResult(false)
-        case IBinFormula(IBinJunctor.And, _, _) =>
+        case Conj(_, _) =>
           ShortCutResult(false)
         case _ =>
           KeepArg

@@ -29,23 +29,17 @@
 
 package tricera.postprocessor
 
-import tricera.{
-    Result, Invariant, InvariantContext, LoopInvariant, PostCondition,
-    PreCondition, ProgVarProxy}
-import tricera.CounterExample
-import tricera.Empty
-import tricera.Solution
+import tricera._
 
 object PointerTools {
-  def inferSafeHeapPointers(result: Result) = SafePointerExtractor(result)
-  
-  def inferSafeHeapPointers(invContext: InvariantContext) = invContext match {
-    case preCond @ PreCondition(invariant) =>
-      SafePointerExtractor.getSafePointers(invariant, preCond.isCurrentHeap)
-    case postCond @ PostCondition(invariant) =>
-      SafePointerExtractor.getSafePointers(invariant, postCond.isCurrentHeap)
-    case _ : LoopInvariant => Set[ProgVarProxy]()
-  }
+  def inferSafeHeapPointers(invContext: InvariantContext) : ValSet =
+    invContext match {
+      case preCond @ PreCondition(invariant) =>
+        SafePointerExtractor.getSafePointers(invariant, preCond.isCurrentHeap)
+      case postCond @ PostCondition(invariant) =>
+        SafePointerExtractor.getSafePointers(invariant, postCond.isCurrentHeap)
+      case _ : LoopInvariant => ValSet.empty
+    }
 
   def addPointerPredicatesFrom(sourceResult: Result): Result => Result = sourceResult match {
     case CounterExample(counterExample) => identity

@@ -40,8 +40,8 @@ package tricera.postprocessor
 
 import ap.parser._
 
-import ap.theories.{ADT, Theory, TheoryRegistry}
-import ap.types.{MonoSortedIFunction, SortedConstantTerm}
+import ap.theories.ADT
+import ap.types.MonoSortedIFunction
 
 import tricera.{
   FunctionInvariants, Invariant, LoopInvariant,

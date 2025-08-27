@@ -40,9 +40,7 @@ import IExpression.Predicate
 import tricera.concurrency.CCReader.FunctionContext
 import tricera.postprocessor.ContractConditionType._
 import ap.types.MonoSortedIFunction
-import _root_.tricera.concurrency.ccreader.CCHeapPointer
-import _root_.tricera.concurrency.ccreader.CCStackPointer
-import _root_.tricera.concurrency.ccreader.CCHeapArrayPointer
+import tricera.concurrency.ccreader._
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 
 case class ContractInfo(

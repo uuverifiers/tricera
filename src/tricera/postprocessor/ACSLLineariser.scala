@@ -28,7 +28,6 @@
  */
 package tricera.postprocessor
 
-import ap.Signature
 import ap.theories.{ADT, ModuloArithmetic, MulTheory}
 import ap.terfor.ConstantTerm
 import ap.terfor.preds.Predicate

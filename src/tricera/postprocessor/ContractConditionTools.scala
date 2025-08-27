@@ -35,12 +35,9 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Predicate
-import tricera.concurrency.CCReader.FunctionContext
+import IExpression.{Conj, Disj, i}
 import ap.theories.Heap
-import ap.theories.Heap.HeapFunExtractor
 import ap.theories.ADT
-import tricera.postprocessor.ContractConditionType._
 
 trait ExpressionUtils {
   def iterateUntilFixedPoint(
@@ -92,25 +89,20 @@ object CleanupVisitor extends CollectingVisitor[Unit, IExpression] {
     Rewriter.rewrite(expr, (t) => CleanupVisitor.visit(t, ()))
   }
 
-  override def postVisit(
-      t: IExpression,
-      arg: Unit,
-      subres: Seq[IExpression]
-  ): IExpression = t match {
-    case IBinFormula(IBinJunctor.And, f1, f2) if (f1 == IBoolLit(true)) => f2
-    case IBinFormula(IBinJunctor.And, f1, f2) if (f2 == IBoolLit(true)) => f1
-    case IBinFormula(IBinJunctor.And, f1, f2)
-        if (f1 == IBoolLit(false) || f2 == IBoolLit(false)) =>
-      false
-    case IBinFormula(IBinJunctor.Or, f1, f2) if (f1 == IBoolLit(true))  => f1
-    case IBinFormula(IBinJunctor.Or, f1, f2) if (f2 == IBoolLit(true))  => f2
-    case IBinFormula(IBinJunctor.Or, f1, f2) if (f1 == IBoolLit(false)) => f2
-    case IBinFormula(IBinJunctor.Or, f1, f2) if (f2 == IBoolLit(false)) => f1
-    case ISortedQuantified(_, _, f) if (f == IBoolLit(true))  => IBoolLit(true)
-    case ISortedQuantified(_, _, f) if (f == IBoolLit(false)) => IBoolLit(false)
-    case INot(f) if (f == IBoolLit(true))                     => IBoolLit(false)
-    case INot(f) if (f == IBoolLit(false))                    => IBoolLit(true)
-    case _                                                    => t
+  override def postVisit(t      : IExpression,
+                         arg    : Unit,
+                         subres : Seq[IExpression]) : IExpression = t match {
+    case Conj(f1, f2) if f1 == i(true)  => f2
+    case Conj(f1, f2) if f2 == i(true)  => f1
+    case Conj(f1, f2) if f1 == i(false) || f2 == i(false) => i(false)
+    case Disj(f1, f2) if f1 == i(true)  || f2 == i(true)  => i(true)
+    case Disj(f1, f2) if f1 == i(false) => f2
+    case Disj(f1, f2) if f2 == i(false) => f1
+    case ISortedQuantified(_, _, IBoolLit(true))  => i(true)
+    case ISortedQuantified(_, _, IBoolLit(false)) => i(false)
+    case INot(IBoolLit(true))  => i(false)
+    case INot(IBoolLit(false)) => i(true)
+    case _                     => t
   }
 }
 
