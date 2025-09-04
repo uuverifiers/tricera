@@ -31,17 +31,10 @@ package tricera.postprocessor
 
 import ap.parser.{IConstant, IFormula, VariableSubstVisitor}
 import lazabs.horn.preprocessor.HornPreprocessor
-
-
-import tricera.{
-    CounterExample, Empty,
-    FunctionInvariants, HeapInfo, Invariant, Literals, LoopInvariant, 
-    PostCondition, PreCondition, ProgVarProxy, Result, Solution}
+import tricera._
 import tricera.concurrency.CCReader
-import tricera.concurrency.ccreader.{
-    CCVar, CCHeapPointer, CCHeapArrayPointer, CCStackPointer}
+import tricera.concurrency.ccreader._
 import tricera.Util.SourceInfo
-import tricera.Util.printlnDebug
 
 
 object ResultConverter {
@@ -117,7 +110,7 @@ object ResultConverter {
     }
 
     def toLoopInvariant(
-      inv: (CCReader.CCPredicate, SourceInfo),
+      inv: (CCPredicate, SourceInfo),
       solution: SolutionProcessor.Solution,
       heapInfo: Option[HeapInfo],
       paramNames: Seq[String])
@@ -133,7 +126,7 @@ object ResultConverter {
       heapInfo: Option[HeapInfo],
       ctx: CCReader.FunctionContext,
       solution: SolutionProcessor.Solution,
-      loopInvs: Map[String,(CCReader.CCPredicate, SourceInfo)],
+      loopInvs: Map[String,(CCPredicate, SourceInfo)],
       annotatedFuncs: HashSet[String])
       = {
       val paramNames = ctx.acslContext.getParams.map(v => v.name)

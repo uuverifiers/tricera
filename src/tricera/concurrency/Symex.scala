@@ -370,12 +370,14 @@ class Symex private (context        : SymexContext,
   private def isHeapPointer(t : CCExpr) =
     t.typ match {
       case _ : CCHeapPointer      => true
+      case _ : CCInvariantPointer => true
       case _ : CCHeapArrayPointer => true
       case _                      => false
     }
   private def isHeapPointer(exp : Exp, enclosingFunction : String) =
     getVar(asLValue(exp), enclosingFunction).typ match {
       case _ : CCHeapPointer      => true
+      case _ : CCInvariantPointer => true
       case _ : CCHeapArrayPointer => true
       case _                      => false
     }
@@ -391,6 +393,95 @@ class Symex private (context        : SymexContext,
       case ptrType : CCStackPointer => ptrType
       case _ => throw new TranslationException(
         "Trying to use non-pointer as a pointer!")
+    }
+  }
+
+  /**
+   * Recursively traverses an LHS expression AST to find the base pointer.
+   * For example, in `p->left->right`, it finds and evaluates `p`.
+   *
+   * @param exp The expression AST node for the left-hand side.
+   * @param evalCtx The current evaluation context.
+   * @return The CCTerm representing the root pointer.
+   */
+  @scala.annotation.tailrec
+  private def getRootPointerFromLhs(exp: Exp)
+                                   (implicit evalSettings: EvalSettings,
+                                    evalCtx: EvalContext): CCTerm = exp match {
+    case e: Evar =>
+      eval(e).asInstanceOf[CCTerm]
+    case e: EvarWithType =>
+      eval(e).asInstanceOf[CCTerm]
+    case e: Eselect =>
+      getRootPointerFromLhs(e.exp_)
+    case e: Epoint =>
+      getRootPointerFromLhs(e.exp_)
+    case e: Epreop if e.unary_operator_.isInstanceOf[Indirection] =>
+      getRootPointerFromLhs(e.exp_)
+    case e: Earray =>
+      getRootPointerFromLhs(e.exp_1)
+    case _ =>
+      throw new TranslationException(
+        s"Cannot extract a base pointer from the LHS expression: ${context.printer.print(exp)}")
+  }
+
+  // A data structure to hold the result of analyzing an LHS expression.
+  private sealed trait LhsInfo
+  private case class LhsVariable(name : String, indirection : Boolean) extends LhsInfo
+  private case class LhsHeapField(
+    rootPointer      : CCTerm,
+    fieldAccessChain : List[String] // e.g., for p->left->right, this is List("left", "right")
+  ) extends LhsInfo
+  private case class LhsHeapDereference(pointer: CCTerm) extends LhsInfo
+
+  /**
+   * Traverses an LHS expression AST without evaluating it, to determine if it's
+   * a variable access or a heap write, and to extract necessary components.
+   */
+  private def getLhsInfo(exp: Exp)
+                        (implicit evalSettings: EvalSettings,
+                         evalCtx: EvalContext): LhsInfo = {
+
+    // A recursive helper to find the base variable and the access path.
+    def peel(e: Exp, path: List[String]): (Exp, List[String]) = e match {
+      case e : Epoint  => peel(e.exp_, e.cident_ :: path)
+      case e : Eselect => peel(e.exp_, e.cident_ :: path)
+      // For `(*p).f`, the base is `*p`.
+      case e : Epreop if e.unary_operator_.isInstanceOf[Indirection] => (e, path)
+      // Base cases
+      case _ : Evar | _ : EvarWithType => (e, path)
+      case e : Earray => peel(e.exp_1, "[]" :: path) // Represent array access
+      case _ => throw new TranslationException(s"Unsupported LHS expression: ${context.printer.print(e)}")
+    }
+
+    val (base, path) = peel(exp, Nil)
+
+    base match {
+      // Case 1: simple variable, like `p` in `p->left`.
+      case _ : Evar | _ : EvarWithType =>
+        val name = base match {
+          case e : Evar => e.cident_
+          case e : EvarWithType => e.cident_
+        }
+        if (path.isEmpty) {
+          LhsVariable(name, indirection = false)
+        } else {
+          // This is a field access like `p->f`. Evaluate `p` to get the root pointer.
+          val rootPointer = eval(base).asInstanceOf[CCTerm]
+          LhsHeapField(rootPointer, path)
+        }
+
+      // Case 2: a dereference, like `*p` in `(*p).f` or just `*p`.
+      case e : Epreop if e.unary_operator_.isInstanceOf[Indirection] =>
+        // Evaluate the expression inside the dereference to get the pointer.
+        val pointer = eval(e.exp_).asInstanceOf[CCTerm]
+        if (path.isEmpty)
+          LhsHeapDereference(pointer)
+        else
+          LhsHeapField(pointer, path)
+
+      case _ => throw new TranslationException(
+        s"Unsupported LHS base expression: ${context.printer.print(base)}")
     }
   }
 
@@ -549,6 +640,15 @@ class Symex private (context        : SymexContext,
     }
   }
 
+  private def callFunction(name    : String,
+                           args    : Seq[CCExpr],
+                           srcInfo : Option[SourceInfo]) : CCTerm = {
+    args.foreach(pushVal(_))
+    outputClause(srcInfo)
+    handleFunction(name, initPred, args.size)
+    popVal.asInstanceOf[CCTerm]
+  }
+
   private def processHeapResult(result : HeapModel.HeapOperationResult)
   : Option[CCTerm] = result match {
     case HeapModel.SimpleResult(returnValue, newValues, assumptions, assertions) =>
@@ -559,7 +659,13 @@ class Symex private (context        : SymexContext,
       // assertion guards will include the safety formula, which is unsound.
       assumptions.foreach(a => addGuard(a.toFormula))
       returnValue
-    case _ : HeapModel.FunctionCall => ??? // TODO: handle other heap models
+    case call : HeapModel.FunctionCall =>
+      Some(callFunction(call.functionName, call.args, call.sourceInfo))
+    case call : HeapModel.FunctionCallWithGetter =>
+      val callResult = callFunction(call.functionName, call.args, call.sourceInfo)
+      Some(CCTerm(call.getter(callResult.toTerm),
+                  call.resultType,
+                  call.sourceInfo))
   }
 
   def handleArrayInitialization(arrayPtr  : CCHeapArrayPointer,
@@ -619,9 +725,50 @@ class Symex private (context        : SymexContext,
     case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] =>
       // if lhs is array pointer, an alloc rhs evaluation should produce an
       // AddressRange even if the allocation size is only 1.
+
+      // first check if the RHS is the special non-determinism token '_'
+      exp.exp_2 match {
+        case _ : Enondet =>
+          val lhsVal = eval(exp.exp_1) // Evaluate LHS to know its type
+          val nonDetTerm = lhsVal.typ.getNonDet
+          val nonDetVal = CCTerm(nonDetTerm, lhsVal.typ, lhsVal.srcInfo)
+
+          val lhsName = asLValue(exp.exp_1)
+          setValue(lhsName, nonDetVal, evalCtx.enclosingFunctionName)
+          pushVal(nonDetVal)
+          return
+        case _ => // Fall through to normal assignment handling
+      }
+
       evalHelp(exp.exp_2) //first evaluate rhs and push
       maybeOutputClause(Some(getSourceInfo(exp)))
       val rhsVal = popVal
+
+      getLhsInfo(exp.exp_1) match {
+        case LhsVariable(name, _) =>
+          setValue(name, rhsVal, evalCtx.enclosingFunctionName)
+
+        case LhsHeapDereference(pointer) =>
+          val readResult = processHeapResult(heapModel.read(pointer, values)).get
+          val heapOpResult = heapModel.write(
+            pointer,
+            readResult.toTerm.asInstanceOf[IFunApp],
+            rhsVal,
+            values
+            )
+          processHeapResult(heapOpResult)
+
+        case LhsHeapField(rootPointer, fieldAccessChain) =>
+          val objectTerm = eval(exp.exp_1)
+          val heapOpResult = heapModel.write(
+            rootPointer,
+            objectTerm.toTerm.asInstanceOf[IFunApp],
+            rhsVal,
+            values
+            )
+          processHeapResult(heapOpResult)
+      }
+
       val lhsVal = eval(exp.exp_1) //then evaluate lhs and get it
       val updatingPointedValue =
         isHeapRead(lhsVal) || // *(p) = ... where p is a heap ptr
@@ -634,8 +781,9 @@ class Symex private (context        : SymexContext,
       if(evalCtx.lhsIsArrayPointer || isHeapPointer(lhsVal) || updatingPointedValue ||
          lhsIsArraySelect) {
         if (updatingPointedValue) {
+          val rootPointer = getRootPointerFromLhs(exp.exp_1)
           processHeapResult(
-            heapModel.write(lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, values))
+            heapModel.write(rootPointer, lhsVal.toTerm.asInstanceOf[IFunApp], rhsVal, values))
         } else if (lhsIsArraySelect) { // todo: this branch needs to be rewritten, it was hastily coded to deal with arrays inside structs.
           val newTerm = CCTerm(
             writeADT(lhsVal.toTerm.asInstanceOf[IFunApp],
@@ -661,14 +809,14 @@ class Symex private (context        : SymexContext,
                                                "allowed, and the only assignable integer value for " +
                                                "pointers is 0 (NULL)")
               } else CCTerm(context.heap.nullAddr(),
-                            CCHeapPointer(context.heap, lhsVal.typ), rhsVal.srcInfo)
+                            context.createHeapPointer(lhsVal.typ), rhsVal.srcInfo)
             case _ => rhsVal
           }
           val actualLhsTerm = getActualAssignedTerm(lhsVal, actualRhsVal)
           rhsVal.typ match {
             case arrayPtr1 : CCHeapArrayPointer =>
               lhsVal.typ match {
-                case _ : CCHeapPointer =>
+                case _ : CCHeapPointer | _ : CCInvariantPointer =>
                   throw new TranslationException(getLineString(exp) +
                                                  "Cannot assign an array value to " + lhsName + ". " +
                                                  "Declaring " + lhsName + " as " + lhsName + "[] might " +
@@ -754,8 +902,9 @@ class Symex private (context        : SymexContext,
 
       if(isHeapPointer(exp, evalCtx.enclosingFunctionName) &&
          updatingPointedValue) {
+        val rootPointer = getRootPointerFromLhs(exp.exp_1)
         processHeapResult(
-          heapModel.write(lhsVal.toTerm.asInstanceOf[IFunApp], newVal, values))
+          heapModel.write(rootPointer, lhsVal.toTerm.asInstanceOf[IFunApp], newVal, values))
       } else {
         setValue(scope.lookupVar(asLValue(exp.exp_1), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, newVal),
@@ -912,8 +1061,9 @@ class Symex private (context        : SymexContext,
       maybeOutputClause(Some(getSourceInfo(exp)))
       pushVal(popVal mapTerm (_ + op))
       if(isHeapPointer(preExp, evalCtx.enclosingFunctionName)) {
+        val rootPointer = getRootPointerFromLhs(preExp)
         processHeapResult(
-          heapModel.write(lhsVal.toTerm.asInstanceOf[IFunApp], topVal, values))
+          heapModel.write(rootPointer, lhsVal.toTerm.asInstanceOf[IFunApp], topVal, values))
       } else {
         setValue(scope.lookupVar(asLValue(preExp), evalCtx.enclosingFunctionName),
                  getActualAssignedTerm(lhsVal, topVal),
@@ -971,9 +1121,9 @@ class Symex private (context        : SymexContext,
                                   evalCtx.enclosingFunctionName).typ, srcInfo
                          )
                 case _ =>
-                  CCTerm(addrTerm, CCHeapPointer(context.heap,
-                                                 getValue(addrTerm.asInstanceOf[IConstant].c.name,
-                                                          evalCtx.enclosingFunctionName).typ), srcInfo)
+                  CCTerm(addrTerm, context.createHeapPointer(
+                    getValue(addrTerm.asInstanceOf[IConstant].c.name,
+                             evalCtx.enclosingFunctionName).typ), srcInfo)
               }
               popVal
               pushVal(t)
@@ -998,7 +1148,7 @@ class Symex private (context        : SymexContext,
           val v = popVal
           v.typ match { // todo: type checking?
             case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
-            case   _ : CCHeapPointer =>
+            case   _ : CCHeapPointer | _ : CCInvariantPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
               else pushVal(processHeapResult(heapModel.read(v, values)).get)
             case  arr : CCHeapArrayPointer =>
@@ -1032,6 +1182,10 @@ class Symex private (context        : SymexContext,
           if(context.propertiesToCheck contains properties.Reachability)
             assertProperty(false, srcInfo, properties.Reachability)
           pushVal(CCFormula(true, CCInt, srcInfo))
+        case "$HEAP_TYPE_DEFAULT" =>
+          /** A builtin to access the default object of the heap */
+          pushVal(CCTerm(context.heap._defObj,
+                         CCHeapObject(context.heap), srcInfo))
         case name =>
           outputClause(srcInfo)
           handleFunction(name, initPred, 0)
@@ -1102,7 +1256,7 @@ class Symex private (context        : SymexContext,
                 name + " is not a declared channel")
           }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
-          if !TriCeraParameters.parameters.value.useArraysForHeap => // todo: proper alloca and calloc
+          if !TriCeraParameters.get.useArraysForHeap => // todo: proper alloca and calloc
           val (typ, allocSize) = exp.listexp_(0) match {
             case exp : Ebytestype =>
               (context.getType(exp), CCTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
@@ -1160,7 +1314,7 @@ class Symex private (context        : SymexContext,
             // todo: optimise constant size allocations > 1?
           }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
-          if TriCeraParameters.parameters.value.useArraysForHeap =>
+          if TriCeraParameters.get.useArraysForHeap =>
           /**
            * @todo Support checking [[properties.MemValidCleanup]] when using
            *       arrays to model heaps.
@@ -1192,20 +1346,36 @@ class Symex private (context        : SymexContext,
             case _ =>
               (Some(allocSize), None)
           }
-          val arrayLocation = name match {
-            case "malloc" | "calloc"           => ArrayLocation.Heap
-            case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
+
+          sizeInt match {
+            case Some(1) =>
+            // use regular heap model, this is not an array
+              val objectTerm = CCTerm(name match {
+                case "calloc"                                 => typ.getZeroInit
+                case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
+              }, typ, srcInfo)
+
+              val allocatedAddr =
+                processHeapResult(heapModel.alloc(objectTerm, values)).get
+
+              pushVal(allocatedAddr)
+            case _ =>
+              val arrayLocation = name match {
+                case "malloc" | "calloc"           => ArrayLocation.Heap
+                case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
+              }
+
+              val theory = ExtArray(Seq(CCInt.toSort), typ.toSort) // todo: only 1-d int arrays...
+              val arrType = CCArray(typ, sizeExpr, sizeInt, theory, arrayLocation)
+
+              val arrayTerm = CCTerm(name match {
+                case "calloc"                                 => arrType.getZeroInit
+                case "malloc" | "alloca" | "__builtin_alloca" => arrType.getNonDet
+              }, arrType, srcInfo)
+
+              pushVal(arrayTerm)
           }
 
-          val theory = ExtArray(Seq(CCInt.toSort), typ.toSort) // todo: only 1-d int arrays...
-          val arrType = CCArray(typ, sizeExpr, sizeInt, theory, arrayLocation)
-
-          val arrayTerm = CCTerm(name match {
-                                   case "calloc"                                 => arrType.getZeroInit
-                                   case "malloc" | "alloca" | "__builtin_alloca" => arrType.getNonDet
-                                 }, arrType, srcInfo)
-
-          pushVal(arrayTerm)
         case "realloc" =>
           throw new TranslationException("realloc is not supported.")
         case "free" =>
@@ -1293,7 +1463,7 @@ class Symex private (context        : SymexContext,
       val rawFieldName = exp.cident_
       val term = subexpr.typ match {
         case ptrType : CCStackPointer => getPointedTerm(ptrType)
-        case _ : CCHeapPointer =>  //todo: error here if field is null
+        case _ : CCHeapPointer | _ : CCInvariantPointer =>  //todo: error here if field is null
           processHeapResult(heapModel.read(subexpr, values)).get
         case _ => throw new TranslationException(
           "Trying to access field '->" + rawFieldName + "' of non pointer.")
@@ -1327,7 +1497,8 @@ class Symex private (context        : SymexContext,
       val evalExp = topVal
       maybeOutputClause(Some(getSourceInfo(exp)))
       if(isHeapPointer(postExp, evalCtx.enclosingFunctionName)) {
-        processHeapResult(heapModel.write(evalExp.toTerm.asInstanceOf[IFunApp],
+        val rootPointer = getRootPointerFromLhs(postExp)
+        processHeapResult(heapModel.write(rootPointer, evalExp.toTerm.asInstanceOf[IFunApp],
                                      topVal mapTerm (_ + op), values))
       } else {
         setValue(scope.lookupVar(asLValue(postExp), evalCtx.enclosingFunctionName),
@@ -1338,16 +1509,24 @@ class Symex private (context        : SymexContext,
     case exp : Evar =>
       // todo: Unify with EvarWithType, they should always be treated the same.
       val name = exp.cident_
-      pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
-                case -1 =>
-                  (context.enumeratorDefs get name) match {
-                    case Some(e) => e
-                    case None => throw new TranslationException(
-                      getLineString(exp) + "Symbol " + name + " is not declared")
-                  }
-                case ind =>
-                  getValue(ind, false)
-              })
+      name match {
+        // TODO: FIX!!
+        case "HEAP_TYPE_DEFAULT" =>
+          pushVal(CCTerm(context.heap._defObj,
+                         CCHeapObject(context.heap), Some(getSourceInfo(exp))))
+        case _ =>
+          pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+                    case -1 =>
+                      (context.enumeratorDefs get name) match {
+                        case Some(e) => e
+                        case None => throw new TranslationException(
+                          getLineString(exp) + "Symbol " + name + " is not declared")
+                      }
+                    case ind =>
+                      getValue(ind, false)
+                  })
+      }
+
 
     case exp : EvarWithType =>
       // todo: Unify with Evar, they should always be treated the same.

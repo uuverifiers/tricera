@@ -96,6 +96,7 @@ class TriCeraParameters extends GlobalParameters {
   var splitProperties : Boolean = false
 
   var useArraysForHeap : Boolean = false
+  var invEncoding      : Option[String] = None
 
   var devMode : Boolean = false
   var printDebugMessages : Boolean = false
@@ -156,6 +157,11 @@ class TriCeraParameters extends GlobalParameters {
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
     case "-mathArrays" :: rest => useArraysForHeap = true; parseArgs(rest)
+
+    case invEnc :: rest if (invEnc.startsWith("-invEncoding")) =>
+      val parts = invEnc.split(":", 2)
+      invEncoding = Some(if (parts.length > 1) parts(1) else "RW")
+      parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
     case "-abstractPO" :: rest => {
@@ -315,7 +321,8 @@ class TriCeraParameters extends GlobalParameters {
     |-h, --help         Show this information
     |-v, --version      Print version number
     |-arithMode:t       Integer semantics: math (default), ilp32, lp64, llp64
-    |-mathArrays:t      Use mathematical arrays for modeling program arrays (ignores memsafety properties)
+    |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
+    |-invEncoding[:t]   Use an invariant-based heap encoding, where t is the encoding type (R, RW (default))
     |-t:time            Set timeout (in seconds)
     |-cex               Show textual counterexamples
     |-dotCEX            Output counterexample in dot format

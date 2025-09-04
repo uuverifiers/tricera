@@ -54,9 +54,11 @@ abstract sealed class CCType {
         case typ: CCArithType if typ.isUnsigned => Sort.Nat
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
+        case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCInvariantPointer(_, _)       => Sort.Integer
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -75,10 +77,12 @@ abstract sealed class CCType {
         case CCULongLong                    => UnsignedBVSort(64)
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
+        case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCInvariantPointer(_, _)       => Sort.Integer
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
@@ -96,9 +100,11 @@ abstract sealed class CCType {
         case CCULongLong                    => UnsignedBVSort(64)
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
+        case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCInvariantPointer(_, _)       => Sort.Integer
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -117,9 +123,11 @@ abstract sealed class CCType {
         case CCULongLong                    => UnsignedBVSort(64)
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
+        case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCInvariantPointer(_, _)       => Sort.Integer
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -289,6 +297,16 @@ case object CCFloat extends CCType {
 case class CCHeap(heap : Heap) extends CCType {
   override def toString : String = heap.toString
   def shortName = "heap"
+}
+
+case class CCHeapObject(heap : Heap) extends CCType {
+  override def toString : String = heap.ObjectSort.name
+  def shortName = toString
+}
+
+case class CCInvariantPointer(heap : Heap, elementType : CCType) extends CCType {
+  override def toString: String = s"inv_ptr<${elementType.toString}>"
+  override def shortName = toString
 }
 
 /**

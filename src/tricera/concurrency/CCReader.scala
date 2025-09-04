@@ -71,8 +71,13 @@ object CCReader {
             propertiesToCheck : Set[properties.Property] = Set(
               properties.Reachability))
   : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
+    val programText = new java.util.Scanner(input).useDelimiter("\\A").next()
+    input.close() // Close the original reader.
+    val inputVarNames = ParseUtil.parseInputComment(programText) // for the invariant encoding heap model
+    val programReader = new java.io.StringReader(programText)
+
     def entry(parser : concurrent_c.parser) = parser.pProgram
-    val prog = parseWithEntry(input, entry _)
+    val prog = parseWithEntry(programReader, entry _)
     val atCallTransformedProg = CCAstAtExpressionTransformer.transform(prog)
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
@@ -81,7 +86,8 @@ object CCReader {
     var reader : CCReader = null
     while (reader == null)
       try {
-        reader = new CCReader(transformedCallsProg, entryFunction, propertiesToCheck)
+        reader = new CCReader(
+          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -145,23 +151,6 @@ object CCReader {
       super.toString + s" (property: $property)"
   }
 
-  // a wrapper for IExpression.Predicate that keeps more info about arguments
-  case class CCPredicate(pred : Predicate, argVars : Seq[CCVar],
-                         srcInfo : Option[SourceInfo]) {
-    import ap.parser.ITerm
-    import IExpression._
-    def apply(terms : Seq[ITerm]) = pred(terms: _*)
-    def apply[X: scala.reflect.ClassTag](ccVars : Seq[CCVar]) =
-      pred(ccVars.map(_.term): _*)
-    def arity : Int = pred.arity
-    override def toString: String =
-      pred.name + (if(argVars.nonEmpty) "(" + argVars.mkString(", ") + ")" else "")
-    def toStringWithLineNumbers: String =
-      pred.name + (if(argVars.nonEmpty) "(" +
-        argVars.map(_.toStringWithLineNumbers).mkString(", ") + ")" else "")
-    assert(pred.arity == argVars.size)
-  }
-
   class FunctionContext (val prePred  : CCPredicate,
                          val postPred : CCPredicate,
                          val acslContext : ACSLTranslator.FunctionContext,
@@ -198,18 +187,18 @@ object CCReader {
     }
   }
 
-  private def getName (f : Function_def) : String = getName(FuncDef(f).decl)
-  private def getName (t : Thread_def) : String = t match {
+  def getName (f : Function_def) : String = getName(FuncDef(f).decl)
+  def getName (t : Thread_def) : String = t match {
     case decl : SingleThread => decl.cident_
     case decl : ParaThread => decl.cident_2
   }
 
-  private def getName(decl : Declarator) : String = decl match {
+  def getName(decl : Declarator) : String = decl match {
     case decl : NoPointer => getName(decl.direct_declarator_)
     case decl : BeginPointer => getName(decl.direct_declarator_)
   }
 
-  private def getName(decl : Direct_declarator) : String = decl match {
+  def getName(decl : Direct_declarator) : String = decl match {
     case decl : Name      => decl.cident_
     case decl : ParenDecl => getName(decl.declarator_)
     case dec : NewFuncDec => getName(dec.direct_declarator_)
@@ -225,7 +214,8 @@ object CCReader {
 
 class CCReader private (prog              : Program,
                         entryFunction     : String,
-                        propertiesToCheck : Set[properties.Property]) {
+                        propertiesToCheck : Set[properties.Property],
+                        inputVarNames     : Seq[String]) {
 
   import CCReader._
 
@@ -341,6 +331,8 @@ class CCReader private (prog              : Program,
       CCReader.this.translateClockValue(expr)
     override def translateDurationValue(expr : CCExpr): CCExpr =
       CCReader.this.translateDurationValue(expr)
+    override def createHeapPointer(objectType : CCType) : CCType =
+      CCReader.this.createHeapPointer(objectType)
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -658,38 +650,7 @@ class CCReader private (prog              : Program,
     List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
                       defObjCtor)
 
-  private val heapModelFactory : HeapModelFactory =
-    HeapModel.factory(HeapModel.ModelType.TheoryOfHeaps, symexContext, scope)
-
-  private val heapVars : Map[String, CCVar] = if (modelHeap) {
-    (for (v <- heapModelFactory.requiredVars) yield {
-      val newVar =
-        new CCVar(v.name, None, v.typ, if (v.isGlobal) GlobalStorage else AutoStorage)
-      if (v.isGlobal) {
-        scope.GlobalVars.addVar(newVar)
-        scope.GlobalVars.inits += CCTerm(v.initialValue, v.typ, None)
-        scope.variableHints += List() // Add placeholder for hints
-      } else { // For thread-local variables, if any model needs them
-        scope.LocalVars.addVar(newVar)
-      }
-      v.name -> newVar
-    }).toMap } else Map.empty
-
-  private val heapPreds : Map[String, CCPredicate] = if(modelHeap) {
-    (for (pred <- heapModelFactory.requiredPreds) yield {
-      // TODO: properly implement this. will be needed for invariant-based heap encoding
-      val dummyArgs = pred.argTypes.map(t => new CCVar("", None, t, AutoStorage))
-      val newPred   = this.newPred(pred.name, dummyArgs, None)
-      pred.name -> newPred
-    }).toMap
-  } else Map.empty
-
-  private val heapModel : Option[HeapModel] =
-    if(modelHeap)
-      Some(heapModelFactory(HeapModel.Resources(heapVars, heapPreds)))
-    else None
-
-  def getHeapInfo = if (modelHeap) Some(new HeapInfo(heap, heapModel.get)) else None
+  def getHeapInfo = if (modelHeap) Some(HeapInfo(heap, heapModel.get)) else None
 
   /**
    * It is important that globalExitPred has arguments for any variables
@@ -741,10 +702,66 @@ class CCReader private (prog              : Program,
             case _ => typ
           }
       }
-      if(fieldInfos(j).ptrDepth > 0) CCHeapPointer(heap, actualType)
+      if(fieldInfos(j).ptrDepth > 0)
+        createHeapPointer(actualType)
       else actualType})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
+
+  private val globalVars : Seq[CCVarDeclaration] = if (inputVarNames.nonEmpty) {
+    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_ if decl.isInstanceOf[Global]) yield
+      collectVarDecls(decl.asInstanceOf[Global].dec_, true)
+  }.flatten.filter(_.isInstanceOf[CCVarDeclaration]).map(_.asInstanceOf[CCVarDeclaration]) else Seq()
+  private val inputVars : Seq[CCVar] = inputVarNames.map { name =>
+    globalVars.find(_.name == name) match {
+      case Some(v) => new CCVar(v.name, Some(v.srcInfo), v.typ, GlobalStorage)
+      case None => throw new TranslationException(
+        s"INPUT variable '$name' from comment is not declared as a global variable.")
+    }
+  }
+
+  private val heapModelFactory : HeapModelFactory =
+    tricera.params.TriCeraParameters.get.invEncoding match {
+      case Some(_) =>
+        HeapModel.factory(HeapModel.ModelType.Invariants, symexContext, scope, inputVars)
+      case None =>
+        HeapModel.factory(HeapModel.ModelType.TheoryOfHeaps, symexContext, scope, inputVars)
+    }
+
+  for ((name, funcDefAst) <- heapModelFactory.getFunctionsToInject if modelHeap) {
+    if (functionDefs.contains(name)) {
+      throw new TranslationException(
+        s"Heap model function '$name' clashes with an existing function.")
+    }
+    functionDefs.put(name, funcDefAst)
+  }
+
+  private val heapVars : Map[String, CCVar] = if (modelHeap) {
+    (for (v <- heapModelFactory.requiredVars) yield {
+      val newVar =
+        new CCVar(v.name, None, v.typ, if (v.isGlobal) GlobalStorage else AutoStorage)
+      if (v.isGlobal) {
+        scope.GlobalVars.addVar(newVar)
+        scope.GlobalVars.inits += CCTerm(v.initialValue, v.typ, None)
+        scope.variableHints += List() // Add placeholder for hints
+      } else { // For thread-local variables, if any model needs them
+        scope.LocalVars.addVar(newVar)
+      }
+      v.name -> newVar
+    }).toMap } else Map.empty
+
+  private val heapPreds : Map[String, CCPredicate] = if(modelHeap) {
+    (for (pred <- heapModelFactory.requiredPreds) yield {
+      val newPred   = this.newPred(pred.name, pred.args, None)
+      uninterpPredDecls += pred.name -> newPred
+      pred.name -> newPred
+    }).toMap
+  } else Map.empty
+
+  private val heapModel : Option[HeapModel] =
+    if(modelHeap)
+      Some(heapModelFactory(HeapModel.Resources(heapVars, heapPreds)))
+    else None
 
   //////////////////////////////////////////////////////////////////////////////
   private def translateProgram : Unit = {
@@ -962,7 +979,8 @@ class CCReader private (prog              : Program,
         }
 
         def getTypOfPointer(t: CCType): CCType = t match {
-          case p: CCHeapPointer => p.typ
+          case p : CCHeapPointer => p.typ
+          case p : CCInvariantPointer => p.elementType
           case t => t
         }
 
@@ -1254,27 +1272,6 @@ class CCReader private (prog              : Program,
                                    hints            : Seq[Annotation],
                                    sourceInfo       : SourceInfo)
 
-  sealed abstract class CCDeclaration
-  // todo: better handling of function declarations
-  case class CCFunctionDeclaration(name       : String,
-                                   typ        : CCType,
-                                   directDecl : Direct_declarator,
-                                   srcInfo    : SourceInfo) extends CCDeclaration
-  case class CCVarDeclaration(name             : String,
-                              typ              : CCType,
-                              maybeInitializer : Option[Initializer],
-                              hints            : Seq[Annotation],
-                              isArray          : Boolean,
-                              isStatic         : Boolean,
-                              needsHeap        : Boolean,
-                              initArrayExpr    : Option[Constant_expression],
-                              srcInfo          : SourceInfo) extends CCDeclaration
-  case object CCNoDeclaration extends CCDeclaration
-  case class CCPredDeclaration(predHints : ListPred_hint,
-                               srcInfo   : SourceInfo) extends CCDeclaration
-
-  case class CCInterpPredDeclaration(predDecl: Pred_interp) extends CCDeclaration
-
   /**
    * @param dec               The declaration to collect from.
    * @param isGlobal          If this is a global declaration
@@ -1508,11 +1505,13 @@ class CCReader private (prog              : Program,
                     else throw new TranslationException("Pointer arithmetic is not " +
                       "allowed, and the only possible initialization value for " +
                       "pointers is 0 (NULL)")
-                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCHeapArrayPointer] =>
+                  case _ : CCHeapPointer | _ : CCInvariantPointer
+                    if res.typ.isInstanceOf[CCHeapArrayPointer] =>
                     // lhs is actually a heap array pointer
                     (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ,
                                lhsVar.storage), res)
-                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCStackPointer] =>
+                  case _ : CCHeapPointer | _ : CCInvariantPointer
+                    if res.typ.isInstanceOf[CCStackPointer] =>
                     // lhs is actually a stack pointer
                     (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ,
                                lhsVar.storage), res)
@@ -1695,9 +1694,9 @@ class CCReader private (prog              : Program,
 
   private def getPtrType (ptr : Pointer, _typ : CCType) : CCType = {
     ptr match {
-      case _   : Point | _ : PointQual => CCHeapPointer(heap, _typ) // todo; support pointer qualifiers?
+      case _   : Point | _ : PointQual => createHeapPointer(_typ) // todo; support pointer qualifiers?
       case ptr : PointPoint =>
-        getPtrType(ptr.pointer_, CCHeapPointer(heap, _typ))
+        getPtrType(ptr.pointer_, createHeapPointer(_typ))
       case _ => throw new TranslationException(
         "Advanced pointer declarations are not yet supported (line " +
           getSourceInfo(ptr).line + ")"
@@ -1795,10 +1794,10 @@ class CCReader private (prog              : Program,
   }
 
   private def getAnonStructName: String =
-    getAnonName(".AS")
+    getAnonName(Literals.anonStructName)
 
   private def getAnonEnumName: String =
-    getAnonName(".ES")
+    getAnonName(Literals.anonEnumName)
 
   private def getStructName(spec: Tstruct) : String =
     spec.struct_or_union_spec_ match {
@@ -2072,6 +2071,11 @@ class CCReader private (prog              : Program,
                 throw NeedsTimeException
               typ = CCDuration
             }
+            case _ : THeapObject => {
+              if (!modelHeap)
+                throw NeedsHeapModelException
+              typ = CCHeapObject(heap)
+            }
             case x => {
               warn("type " + (printer print x) +
                    " not supported, assuming int")
@@ -2088,7 +2092,7 @@ class CCReader private (prog              : Program,
         getType(listDeclSpecs)
       case None => CCInt
     }
-    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) createHeapPointer(typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 
@@ -2178,20 +2182,27 @@ class CCReader private (prog              : Program,
     scope.LocalVars popFrame
   }
 
-  private def createHeapPointer(decl : BeginPointer, typ : CCType) :
-  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+  private def createHeapPointer(objectType : CCType) : CCType = {
+    if (TriCeraParameters.get.invEncoding.isDefined)
+      CCInvariantPointer(heap, objectType)
+    else
+      CCHeapPointer(heap, objectType)
+  }
 
-  private def createHeapPointer(decl : PointerStart, typ : CCType) :
-  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+  private def createHeapPointer(decl : BeginPointer, typ : CCType) : CCType =
+    createHeapPointerHelper(decl.pointer_, typ)
 
-  private def createHeapPointerHelper(decl : Pointer, typ : CCType) :
-  CCHeapPointer = decl match {
+  private def createHeapPointer(decl : PointerStart, typ : CCType) : CCType =
+    createHeapPointerHelper(decl.pointer_, typ)
+
+  private def createHeapPointerHelper(decl : Pointer, typ : CCType) : CCType =
+    decl match {
       case pp : PointPoint =>
-        CCHeapPointer(heap, createHeapPointerHelper(pp.pointer_, typ))
-      case p : Point =>
-        CCHeapPointer(heap, typ)
-      case _ => throw new TranslationException("Type qualified pointers are " +
-        "currently not supported: " + decl)
+        createHeapPointer(createHeapPointerHelper(pp.pointer_, typ))
+      case p : Point       =>
+        createHeapPointer(typ)
+      case _ => throw new TranslationException(
+        s"Type qualified pointers are currently not supported: $decl")
     }
 
   private def getFunctionArgNames(functionDef : Function_def) : Seq[String] = {
@@ -2523,7 +2534,8 @@ class CCReader private (prog              : Program,
             override def getCtor(s: Sort): Int = sortCtorIdMap(s)
             override def getTypOfPointer(t: CCType): CCType =
               t match {
-                case p: CCHeapPointer => p.typ
+                case p : CCHeapPointer => p.typ
+                case p : CCInvariantPointer => p.elementType
                 case t => t
               }
             override def isHeapEnabled: Boolean = modelHeap
@@ -2615,6 +2627,7 @@ class CCReader private (prog              : Program,
             override def getTypOfPointer(t : CCType) : CCType =
               t match {
                 case p : CCHeapPointer => p.typ
+                case p : CCInvariantPointer => p.elementType
                 case _ => t
               }
             override def isHeapEnabled : Boolean = modelHeap
@@ -2691,33 +2704,58 @@ class CCReader private (prog              : Program,
       case compound : ScompOne =>
         output(addRichClause(Clause(atom(exit, scope.allVarInits take exit.arity),
                                     List(), globalPreconditions),
-          Some(getSourceInfo(compound)))
-        )
+                             Some(getSourceInfo(compound)))
+               )
       case compound : ScompTwo => {
-        scope.LocalVars pushFrame
+        scope.LocalVars.pushFrame
+
+        var currentStatePred = newPred(Nil, Some(getSourceInfo(compound.liststm_.head)))
+        output(addRichClause(
+          Clause(atom(currentStatePred, scope.allVarInits take currentStatePred.arity),
+                 List(), globalPreconditions), currentStatePred.srcInfo))
+
+        if (modelHeap) {
+          val initCodeStrs = heapModelFactory.getInitCodeToInject
+          if (initCodeStrs.nonEmpty) {
+            val initStmts = initCodeStrs.map { code =>
+              ParseUtil.parseStatement(new java.io.StringReader(code))
+            }
+
+            for (stmt <- initStmts) {
+              val nextStatePred = newPred(Nil, currentStatePred.srcInfo)
+              translate(stmt, currentStatePred, nextStatePred)
+              currentStatePred = nextStatePred // The output of one becomes the input to the next.
+            }
+          }
+        }
 
         val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
+        var predForNextBlock = currentStatePred
 
-        // merge simple side-effect-free declarations with
-        // the entry clause
-        var entryPred = newPred(Nil,
-          if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
-        var entryClause =
-          Clause(atom(entryPred, scope.allVarInits take entryPred.arity), List(), globalPreconditions)
+        if (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
+          var sefBlockEntryPred = newPred(Nil, if (stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
+          var sefMergedClause =
+            Clause(atom(sefBlockEntryPred, scope.allVarInits take sefBlockEntryPred.arity),
+                   List(atom(predForNextBlock, scope.allFormalVarTerms take predForNextBlock.arity)),
+                   true)
 
-        while (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
-          val decSymex = Symex(symexContext, scope, entryPred, heapModel)
-          collectVarDecls(stmsIt.next.asInstanceOf[DecS].dec_,
-                          false, decSymex, "", false)
-          val srcInfo = entryPred.srcInfo // todo: correct srcInfo?
-          entryPred = newPred(Nil,
-            if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None) // todo: correct?
-          entryClause = merge((decSymex genClause(entryPred, srcInfo)).clause, entryClause)
+          while (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
+            val decSymex = Symex(symexContext, scope, sefBlockEntryPred, heapModel)
+            collectVarDecls(stmsIt.next().asInstanceOf[DecS].dec_, false, decSymex, "", false)
+
+            val nextPredInChain =
+              newPred(Nil, if (stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
+            sefMergedClause =
+              merge((decSymex.genClause(nextPredInChain, nextPredInChain.srcInfo)).clause, sefMergedClause)
+            sefBlockEntryPred = symexContext.predCCPredMap(sefMergedClause.head.pred)
+          }
+          output(addRichClause(sefMergedClause, sefBlockEntryPred.srcInfo))
+          predForNextBlock = symexContext.predCCPredMap(sefMergedClause.head.pred)
         }
-        output(addRichClause(entryClause, entryPred.srcInfo))
 
-        translateStmSeq(stmsIt, entryPred, exit)
-        scope.LocalVars popFrame
+        translateStmSeq(stmsIt, predForNextBlock, exit)
+
+        scope.LocalVars.popFrame
       }
     }
 

@@ -35,10 +35,11 @@ import ap.parser._
 import ap.types.MonoSortedIFunction
 import lazabs.horn.bottomup.HornClauses.toPrologSyntax
 import tricera.acsl.ACSLTranslator
-import tricera.concurrency.CCReader.{CCAssertionClause, CCPredicate}
+import tricera.concurrency.CCReader.CCAssertionClause
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import tricera.concurrency.ccreader._
-import tricera.concurrency.{CCReader, SymexContext}
+import tricera.concurrency.SymexContext
+import tricera.concurrency.concurrent_c.Absyn.{Function_def, Stm}
 import tricera.params.TriCeraParameters
 import tricera.properties
 import tricera.properties.Property
@@ -76,6 +77,9 @@ final class HeapTheoryFactory(context : SymexContext,
     val memCleanupVar = res.vars.get(memCleanupVarName)
     new HeapTheoryModel(context, scope, heapVar, memCleanupVar)
   }
+
+  override def getFunctionsToInject : Map[String, Function_def] = Map()
+  override def getInitCodeToInject : Seq[String] = Seq()
 }
 
 class HeapTheoryModel(context           : SymexContext,
@@ -170,7 +174,8 @@ class HeapTheoryModel(context           : SymexContext,
       )
   }
 
-  override def write(lhs : IFunApp,
+  override def write(rootPointer: CCTerm,
+                     lhs : IFunApp,
                      rhs : CCExpr,
                      s   : Seq[CCExpr]) : HeapOperationResult = {
     val newHeapTerm = CCTerm(
@@ -241,7 +246,7 @@ class HeapTheoryModel(context           : SymexContext,
         }
 
         val writeResult =
-          write(termToFree,
+          write(???, termToFree,
                 CCTerm(heapPtr.heap._defObj, heapPtr, p.srcInfo),
                 nextState).asInstanceOf[SimpleResult]
         nextState = writeResult.nextState
@@ -481,7 +486,7 @@ class HeapTheoryModel(context           : SymexContext,
         return Seq()
       }
       val newAssertions = for (finalPred <- exitPreds) yield finalPred match {
-        case CCReader.CCPredicate(_, args, _)
+        case CCPredicate(_, args, _)
           if args.size > heapInd && args.size > cleanupVarInd &&
              args(heapInd).sort == context.heap.HeapSort &&
              args(cleanupVarInd).sort == context.heap.AddressSort =>

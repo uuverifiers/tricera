@@ -108,4 +108,5 @@ trait SymexContext {
 
   def translateClockValue   (expr : CCExpr) : CCExpr
   def translateDurationValue(expr : CCExpr) : CCExpr
+  def createHeapPointer(objectType : CCType) : CCType
 }

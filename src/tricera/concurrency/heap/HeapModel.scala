@@ -30,10 +30,13 @@
 package tricera.concurrency.heap
 
 import ap.parser._
+import ap.types.MonoSortedIFunction
+import tricera.Util.SourceInfo
 import tricera.acsl.ACSLTranslator
-import tricera.concurrency.CCReader.{CCAssertionClause, CCPredicate}
+import tricera.concurrency.CCReader._
 import tricera.concurrency.ccreader._
 import tricera.concurrency.SymexContext
+import tricera.concurrency.concurrent_c.Absyn.{Function_def, Stm}
 import tricera.properties.Property
 
 import scala.collection.mutable
@@ -48,7 +51,7 @@ object HeapModel {
                      initialValue : ITerm)
 
   /** Used to specify (uninterpreted) predicates the model requires */
-  case class PredSpec(name: String, argTypes: Seq[CCType])
+  case class PredSpec(name: String, args: Seq[CCVar])
 
   /** A container for all resources declared for the model. */
   case class Resources(
@@ -84,16 +87,26 @@ object HeapModel {
   case class FunctionCall(
     functionName : String,
     args         : Seq[CCExpr],
-    resultType   : CCType // can be CCVoid
+    resultType   : CCType, // can be CCVoid
+    sourceInfo   : Option[SourceInfo]
+  ) extends HeapOperationResult
+
+  case class FunctionCallWithGetter(
+    functionName : String,
+    args         : Seq[CCExpr],
+    resultType   : CCType, // can be CCVoid
+    getter       : MonoSortedIFunction,
+    sourceInfo   : Option[SourceInfo]
   ) extends HeapOperationResult
 
 
-  def factory(mt      : ModelType.Value,
-              context : SymexContext,
-              scope   : CCScope) : HeapModelFactory =
+  def factory(mt        : ModelType.Value,
+              context   : SymexContext,
+              scope     : CCScope,
+              inputVars : Seq[CCVar]) : HeapModelFactory =
     mt match {
       case ModelType.TheoryOfHeaps => new HeapTheoryFactory(context, scope)
-      case ModelType.Invariants    => ??? // new InvariantsHeapFactory(context, scope)
+      case ModelType.Invariants    => new InvariantEncodingsFactory(context, scope, inputVars)
     }
 
 }
@@ -110,6 +123,12 @@ trait HeapModelFactory {
 
   /** Build the concrete model using the resources the caller allocated */
   def apply(resources: Resources): HeapModel
+
+  /** Function definitions provided by the model (name, def) */
+  def getFunctionsToInject : Map[String, Function_def]
+
+  /** Initialization code to be added to the top of the entry method */
+  def getInitCodeToInject: Seq[String]
 }
 
 /**
@@ -126,11 +145,12 @@ trait HeapModel {
 
   /**
    * Updates an object field on the heap (for ADTs/structs).
+   * @param rootPointer The pointer term at the root of the write
    * @param lhs The location of the field to update, represented by a term
    *            from a prior symbolic read (e.g., `getField(read(h, p))`).
    * @param rhs The new value for the field.
    */
-  def write(lhs : IFunApp, rhs : CCExpr, s : Seq[CCExpr]) : HeapOperationResult
+  def write(rootPointer: CCTerm, lhs : IFunApp, rhs : CCExpr, s : Seq[CCExpr]) : HeapOperationResult
 
   /**
    * Allocates an array of objects on the heap
