@@ -120,7 +120,7 @@ trait HeapModel {
   import HeapModel._
 
   def read (p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
-  def write(p: CCTerm, o: CCTerm, s: Seq[CCTerm]): HeapOperationResult
+  def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
   def alloc(o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
   def free (p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
 
