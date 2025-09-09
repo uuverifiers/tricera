@@ -155,20 +155,20 @@ old_unsafe.c
 
 ----------------------------------------------------------------------------------------------------------------------------------------------
 Init:
- foo4_1(newHeap(alloc(emptyHeap, O_Int(46))), nthAddr(0), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), nthAddr(0), -42, nthAddr(1)) 
+ foo4_1(newHeap(alloc(emptyHeap, O_Int(45))), nthAddr(0), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), nthAddr(0), -42, nthAddr(1)) 
 ----------------------------------------------------------------------------------------------------------------------------------------------
                                                                       |                                                                       
                                                                       |                                                                       
                                                                       V                                                                       
-  foo(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(0), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), nthAddr(0), -42, nthAddr(1))   
+  foo(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(0), -42, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), nthAddr(0), -42, nthAddr(1))   
 ----------------------------------------------------------------------------------------------------------------------------------------------
                                                                       |                                                                       
                                                                       |                                                                       
                                                                       V                                                                       
- foo10_8(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(0), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), nthAddr(0), -42, nthAddr(1))  
+ foo10_8(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(0), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), nthAddr(0), -42, nthAddr(1))  
 ----------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- foo10_8(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(0), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(46))), nthAddr(0), -42, nthAddr(1))  
+ foo10_8(newHeap(alloc(emptyHeap, O_Int(42))), nthAddr(0), 0, nthAddr(1), newHeap(alloc(emptyHeap, O_Int(45))), nthAddr(0), -42, nthAddr(1))  
 ----------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
 false :- foo10_8(@h, @v_cleanup, g, p, @h_old, @v_cleanup_old, g_old, p_old), g != g_old + getInt(read(@h_old, p_old)). (line:6 col:22) (property: postcondition of function foo asserted at 4:1.)
