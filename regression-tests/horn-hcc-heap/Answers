@@ -121,9 +121,9 @@ tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmet
 Other Error: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
 
 illegal-access-002.c
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)
-(error "Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)")
-Other Error: Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer assignment only supports 0 (NULL)
+(error "Pointer assignment only supports 0 (NULL)")
+Other Error: Pointer assignment only supports 0 (NULL)
 
 postop.c
 SAFE

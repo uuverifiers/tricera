@@ -63,7 +63,7 @@ class CCScope {
   }
 
   object GlobalVars extends CCVars {
-    val inits = new ArrayBuffer[CCExpr]
+    val inits = new ArrayBuffer[CCTerm]
   }
   object LocalVars extends CCVars {
     val frameStack = new Stack[Int]
@@ -132,11 +132,11 @@ class CCScope {
   def allFormalVarTypes : Seq[CCType] =
     GlobalVars.formalTypes ++ LocalVars.formalTypes
 
-  def allFormalExprs : Seq[CCExpr] =
+  def allFormalCCTerms : Seq[CCTerm] =
     ((for (v <- GlobalVars.iterator)
-      yield CCTerm(v.term, v.typ, v.srcInfo)) ++
+      yield CCTerm.fromTerm(v.term, v.typ, v.srcInfo)) ++
      (for (v <- LocalVars.iterator)
-       yield CCTerm(v.term, v.typ, v.srcInfo))).toList
+       yield CCTerm.fromTerm(v.term, v.typ, v.srcInfo))).toList
   def allVarInits : Seq[ITerm] =
     (GlobalVars.inits.toList map (_.toTerm)) ++
     (LocalVars.formalVarTerms map (IExpression.i(_)))
@@ -147,9 +147,9 @@ class CCScope {
       case _ => false
     })
 
-  def freeFromGlobal(t : CCExpr) : Boolean = t match {
-    case CCTerm(s, _, _) =>    freeFromGlobal(s)
-    case CCFormula(f, _, _) => freeFromGlobal(f)
+  def freeFromGlobal(t : CCTerm) : Boolean = t match {
+    case CCTerm(s, _, _, None) =>    freeFromGlobal(s)
+    case CCTerm(_, _, _, Some(f)) => freeFromGlobal(f)
   }
 
   def updateVarType(name : String, newType : CCType,
