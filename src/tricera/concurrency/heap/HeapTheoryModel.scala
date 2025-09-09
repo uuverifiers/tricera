@@ -410,11 +410,12 @@ class HeapTheoryModel(context           : SymexContext,
       } else {
         arrayPtr.elementType.getZeroInit
       }
+      val wrappedValue = context.sortWrapperMap(Sort.sortOf(valueToInit))(valueToInit)
 
       val addrToWrite = context.heap.nth(arrayBasePtr, i)
       val writeResult = write(
         CCTerm.fromTerm(addrToWrite, CCHeapPointer(context.heap, arrayPtr.elementType), None),
-        CCTerm.fromTerm(valueToInit, arrayPtr.elementType, None),
+        CCTerm.fromTerm(wrappedValue, arrayPtr.elementType, None),
         currentState
         ).asInstanceOf[SimpleResult]
 
