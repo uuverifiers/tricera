@@ -158,7 +158,7 @@ abstract sealed class CCType {
   def isArithType : Boolean = this.isInstanceOf[CCArithType]
 
   /**
-   * @note [[CCExpr.convertToType]] also has some checks regarding conversions,
+   * @note [[CCTerm.convertToType]] also has some checks regarding conversions,
    *       which does not use this class for casting.
    *       In fact this check would be too strong in some cases (e.g., *p = 0),
    *       checking the values is needed to relax this check, which is not
@@ -182,15 +182,15 @@ abstract sealed class CCType {
     case _               => t
   }
 
-  def cast(e : CCExpr) : CCExpr = {
+  def cast(e : CCTerm) : CCTerm = {
     if (!castIsAllowed(e.typ)) {
       throw new UnsupportedCastException(
         getLineStringShort(e.srcInfo) +
         " Casts between pointer and arithmetic types are not supported.")
     }
     e match {
-      case CCTerm(t, _, srcInfo)    => CCTerm(cast(t), this, srcInfo)
-      case CCFormula(f, _, srcInfo) => CCFormula(f, this, srcInfo)
+      case CCTerm(t, _, srcInfo, None)    => CCTerm.fromTerm(cast(t), this, srcInfo)
+      case CCTerm(_, _, srcInfo, Some(f)) => CCTerm.fromFormula(f, this, srcInfo)
     }
   }
 
@@ -524,7 +524,7 @@ case class CCHeapArrayPointer(heap:          Heap,
 // which appear as struct fields (e.g. struct S{int a[4];})
 // and for mathematical arrays (then sizeExpr and sizeInt can be None).
 case class CCArray(elementType:   CCType, // todo: multidimensional arrays?
-                   sizeExpr:      Option[CCExpr],
+                   sizeExpr:      Option[CCTerm],
                    sizeInt:       Option[Int],
                    arrayTheory:   ap.theories.ExtArray,
                    arrayLocation: ArrayLocation)

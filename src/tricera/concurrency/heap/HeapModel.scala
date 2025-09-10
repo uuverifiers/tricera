@@ -68,9 +68,9 @@ object HeapModel {
    */
   case class SimpleResult(
     returnValue : Option[CCTerm],
-    nextState   : Seq[CCExpr],
-    assumptions : Seq[CCFormula] = Seq.empty,
-    assertions  : Seq[(CCFormula, Property)] = Seq.empty
+    nextState   : Seq[CCTerm],
+    assumptions : Seq[CCTerm] = Seq.empty,
+    assertions  : Seq[(CCTerm, Property)] = Seq.empty
   ) extends HeapOperationResult
 
   /**
@@ -83,7 +83,7 @@ object HeapModel {
    */
   case class FunctionCall(
     functionName : String,
-    args         : Seq[CCExpr],
+    args         : Seq[CCTerm],
     resultType   : CCType // can be CCVoid
   ) extends HeapOperationResult
 
@@ -119,18 +119,10 @@ trait HeapModelFactory {
 trait HeapModel {
   import HeapModel._
 
-  def read (p : CCExpr, s : Seq[CCExpr]) : HeapOperationResult
-  def write(p: CCExpr, o: CCExpr, s: Seq[CCExpr]): HeapOperationResult
-  def alloc(o : CCTerm, s : Seq[CCExpr]) : HeapOperationResult
-  def free (p : CCExpr, s : Seq[CCExpr]) : HeapOperationResult
-
-  /**
-   * Updates an object field on the heap (for ADTs/structs).
-   * @param lhs The location of the field to update, represented by a term
-   *            from a prior symbolic read (e.g., `getField(read(h, p))`).
-   * @param rhs The new value for the field.
-   */
-  def write(lhs : IFunApp, rhs : CCExpr, s : Seq[CCExpr]) : HeapOperationResult
+  def read (p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
+  def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
+  def alloc(o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
+  def free (p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
 
   /**
    * Allocates an array of objects on the heap
@@ -142,7 +134,7 @@ trait HeapModel {
   def batchAlloc(o    : CCTerm,
                  size : ITerm,
                  loc  : ArrayLocation.Value,
-                 s    : Seq[CCExpr]) : HeapOperationResult
+                 s    : Seq[CCTerm]) : HeapOperationResult
 
   /**
    * Reads an element from a heap array.
@@ -150,7 +142,9 @@ trait HeapModel {
    * @param index The index to read from
    * @param s     The current symbolic state of all variables
    */
-  def arrayRead(arr : CCExpr, index : CCExpr, s : Seq[CCExpr]) : HeapOperationResult
+  def arrayRead(arr : CCTerm, index : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
+
+  def arrayWrite(arr : CCTerm, index : CCTerm, value : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
 
    /**
    * A hook to handle allocation of an array with an
@@ -166,7 +160,7 @@ trait HeapModel {
     arrayPtr     : CCHeapArrayPointer,
     size         : ITerm,
     initializers : mutable.Stack[ITerm],
-    s            : Seq[CCExpr]) : HeapOperationResult
+    s            : Seq[CCTerm]) : HeapOperationResult
 
    /**
    * Arrays declared without an explicit initializer list (e.g., `int a[n]`).
@@ -175,7 +169,7 @@ trait HeapModel {
   def declUninitializedArray(arrayTyp         : CCHeapArrayPointer,
                              size             : Option[ITerm],
                              isGlobalOrStatic : Boolean,
-                             s                : Seq[CCExpr]) : HeapOperationResult
+                             s                : Seq[CCTerm]) : HeapOperationResult
 
   /**
    * Generates any assertions that will be added to the exits of `entryFunction`.
