@@ -108,7 +108,7 @@ class Symex private (context        : SymexContext,
   }
 
   def atomValuesUnchanged = {
-    val (oldAtom, oldValues, _, /*_,*/ _) = savedStates.top
+    val (oldAtom, oldValues, _, _) = savedStates.top
     initAtom == oldAtom &&
     ((values.iterator zip oldValues.iterator) forall {
       case (x, y) => x == y
@@ -247,7 +247,7 @@ class Symex private (context        : SymexContext,
   private def getPointedTerm (ptrType : CCStackPointer) : CCTerm =
     ptrType.fieldAddress match {
       case Nil =>
-        getValue(ptrType.targetInd, false).asInstanceOf[CCTerm]
+        getValue(ptrType.targetInd, false)
       case _ =>
         val structVal = getValue(ptrType.targetInd, false)
         val structType = structVal.typ.asInstanceOf[CCStruct]
@@ -256,40 +256,14 @@ class Symex private (context        : SymexContext,
           structType.getFieldType(ptrType.fieldAddress), None) // todo: src Info?
     }
 
-  private def setValue(name : String, t : CCTerm, enclosingFunction : String,
-                       isIndirection : Boolean = false) : Unit =
-    setValue(scope.lookupVar(name, enclosingFunction), t, isIndirection)
-  private def setValue(ind: Int, t : CCTerm,
-                       isIndirection : Boolean) : Unit = {
+  private def setValue(name : String, t : CCTerm, enclosingFunction : String) : Unit =
+    setValue(scope.lookupVar(name, enclosingFunction), t)
+  private def setValue(ind: Int, t : CCTerm) : Unit = {
     val actualInd = getValue(ind, false).typ match {
       case stackPtr: CCStackPointer => stackPtr.targetInd
       case _ => ind
     }
     values = values.updated(actualInd, t)
-    /* if(isIndirection) {
-      //val ptrType = getPointerType(ind)
-      getValue(ind, false).typ match {
-        case stackPtr : CCStackPointer =>
-          val actualInd = getActualInd(ind)
-          values(actualInd) = t/* stackPtr.fieldAddress match {
-            case Nil => t
-            case _ =>
-              val pointedStruct = values(stackPtr.targetInd)
-              val structType = pointedStruct.typ.asInstanceOf[CCStruct]
-              CCTerm.fromTerm(
-                structType.setFieldTerm(
-                  pointedStruct.toTerm, t.toTerm, stackPtr.fieldAddress),
-                structType)
-          }*/
-          actualInd
-        case _ => throw new TranslationException(
-          "Trying to use a non-pointer as a pointer!")
-      }
-    }
-    else {
-      values(ind) = t
-      ind
-    }*/
     touchedGlobalState =
       touchedGlobalState || actualInd < scope.GlobalVars.size || !scope.freeFromGlobal(t)
   }
@@ -356,13 +330,6 @@ class Symex private (context        : SymexContext,
       case _ : CCHeapPointer      => true
       case _ : CCHeapArrayPointer => true
       case _                      => false
-    }
-
-  private def isIndirection(exp : Exp) : Boolean =
-    exp match {
-      case exp : Epreop => exp.unary_operator_.isInstanceOf[Indirection]
-      case exp : Epoint => true
-      case _ => false
     }
 
   private def getPointerType(ind : Int) = {
@@ -459,10 +426,6 @@ class Symex private (context        : SymexContext,
             val fieldAddress = structType.getFieldAddress(fieldSelectors)
             CCTerm.fromTerm(structType.setFieldTerm(f, rhs.toTerm, fieldAddress),
                    structType, rhs.srcInfo)
-          /*case _ => {getVarType(rootTerm.name) match {
-              case ptr : CCStackPointer => getPointedTerm(ptr).typ
-              case typ => typ
-            }}.asInstanceOf[CCStruct]*/
         }
       case _ => rhs // a non ADT
     }
@@ -878,9 +841,12 @@ class Symex private (context        : SymexContext,
 
       val valueToAssign = CCTerm.fromTerm(
         lhsE.typ cast (exp.assignment_op_ match {
-        case _ : AssignMul => ap.theories.nia.GroebnerMultiplication.mult(lhsE.toTerm, rhsE.toTerm)
-        case _ : AssignDiv => ap.theories.nia.GroebnerMultiplication.tDiv(lhsE.toTerm, rhsE.toTerm)
-        case _ : AssignMod => ap.theories.nia.GroebnerMultiplication.tMod(lhsE.toTerm, rhsE.toTerm)
+        case _ : AssignMul =>
+          ap.theories.nia.GroebnerMultiplication.mult(lhsE.toTerm, rhsE.toTerm)
+        case _ : AssignDiv =>
+          ap.theories.nia.GroebnerMultiplication.tDiv(lhsE.toTerm, rhsE.toTerm)
+        case _ : AssignMod =>
+          ap.theories.nia.GroebnerMultiplication.tMod(lhsE.toTerm, rhsE.toTerm)
         case _ : AssignAdd =>
           (lhsE.typ, rhsE.typ) match {
             case (arrTyp : CCHeapArrayPointer, _ : CCArithType) =>
@@ -894,11 +860,21 @@ class Symex private (context        : SymexContext,
               throw new TranslationException("Only addition is allowed in array pointer arithmetic.")
             case _ => lhsE.toTerm - rhsE.toTerm
           }
-        case _ : AssignLeft  => ModuloArithmetic.bvshl(lhsE.typ cast2Unsigned lhsE.toTerm, lhsE.typ cast2Unsigned rhsE.toTerm)
-        case _ : AssignRight => ModuloArithmetic.bvashr(lhsE.typ cast2Unsigned lhsE.toTerm, lhsE.typ cast2Unsigned rhsE.toTerm)
-        case _ : AssignAnd   => ModuloArithmetic.bvand(lhsE.typ cast2Unsigned lhsE.toTerm, lhsE.typ cast2Unsigned rhsE.toTerm)
-        case _ : AssignXor   => ModuloArithmetic.bvxor(lhsE.typ cast2Unsigned lhsE.toTerm, lhsE.typ cast2Unsigned rhsE.toTerm)
-        case _ : AssignOr    => ModuloArithmetic.bvor(lhsE.typ cast2Unsigned lhsE.toTerm, lhsE.typ cast2Unsigned rhsE.toTerm)
+        case _ : AssignLeft =>
+          ModuloArithmetic.bvshl(lhsE.typ cast2Unsigned lhsE.toTerm,
+                                 lhsE.typ cast2Unsigned rhsE.toTerm)
+        case _ : AssignRight =>
+          ModuloArithmetic.bvashr(lhsE.typ cast2Unsigned lhsE.toTerm,
+                                  lhsE.typ cast2Unsigned rhsE.toTerm)
+        case _ : AssignAnd =>
+          ModuloArithmetic.bvand(lhsE.typ cast2Unsigned lhsE.toTerm,
+                                 lhsE.typ cast2Unsigned rhsE.toTerm)
+        case _ : AssignXor =>
+          ModuloArithmetic.bvxor(lhsE.typ cast2Unsigned lhsE.toTerm,
+                                 lhsE.typ cast2Unsigned rhsE.toTerm)
+        case _ : AssignOr =>
+          ModuloArithmetic.bvor(lhsE.typ cast2Unsigned lhsE.toTerm,
+                                lhsE.typ cast2Unsigned rhsE.toTerm)
       }), lhsE.typ, lhsE.srcInfo)
 
       pushVal(valueToAssign)
@@ -1091,19 +1067,6 @@ class Symex private (context        : SymexContext,
                   val ptr = CCStackPointer(rootInd, popVal.typ, structType.getFieldAddress(fieldNames))
                   pushVal(CCTerm.fromTerm(IExpression.Int2ITerm(rootInd), ptr, srcInfo)) //we don't care about the value
                 case Right(c) =>
-                  // newAddr(alloc(h, WrappedAddr(getPtrField(getStruct(read(h, p))))))
-                  // here topVal = getPtrField(getStruct(read(h, p))), we construct the rest
-                  // this is to allocate memory for expressions like:
-                  // &((*p)->tail)
-                  // alternatively one could rewrite this using a temporary variable
-                  // and create a stack pointer to it (but this needs to be done during preprocessing,
-                  // otherwise when we evaluate this we would be pushing two terms instead of one)
-//                    val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
-//                    assert(c.args.size == 1)
-//                    val readObj = c.args.head
-//                    val resSort = c.fun.asInstanceOf[MonoSortedIFunction].resSort
-//                    addGuard(context.heap.heapADTs.hasCtor(readObj, context.sortCtorIdMap(resSort)))
-//                    pushVal(newTerm)
                   throw new UnsupportedCFragmentException(
                     getLineStringShort(srcInfo) +
                     " Stack pointers in combination with heap pointers")
@@ -1134,9 +1097,6 @@ class Symex private (context        : SymexContext,
 
             case _ =>
               val t = if (evalCtx.handlingFunContractArgs) {
-                //val newTerm = heapAlloc(popVal.asInstanceOf[CCTerm])
-                //maybeOutputClause(Some(getSourceInfo(exp)))
-                //newTerm
                 throw new UnsupportedCFragmentException(
                   "Function contracts are currently not supported together " +
                   s"with stack pointers (${exp.line_num}:${exp.col_num})")
@@ -1570,7 +1530,6 @@ class Symex private (context        : SymexContext,
         val resVar : Seq[CCVar] = scope.getResVar(context.getType(funDef))
         val postPredArgs : Seq[ITerm] =
           prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
-        //postGlobalVars ++ argTerms ++ globals ++ resVar.map(c => IConstant(c.term))
 
         val preAtom  = ctx.prePred(prePredArgs)
         val postAtom = ctx.postPred(postPredArgs)
@@ -1582,7 +1541,7 @@ class Symex private (context        : SymexContext,
 
         for (((c, t), n) <- (postGlobalVars.iterator zip
                              scope.GlobalVars.formalTypes.iterator).zipWithIndex)
-          setValue(n, CCTerm.fromTerm(c, t, None), false) // todo: srcInfo?
+          setValue(n, CCTerm.fromTerm(c, t, None)) // todo: srcInfo?
 
         resVar match {
           case Seq(v) => pushVal(CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
@@ -1591,7 +1550,6 @@ class Symex private (context        : SymexContext,
       case None =>
         context.uninterpPredDecls get name match {
           case Some(predDecl) =>
-            //val argNames = PredPrintContextPrintContext.predArgNames(predDecl.pred)
             var argTerms : List[ITerm] = List()
             for (_ <- 0 until argCount) {
               argTerms = popVal.toTerm :: argTerms
