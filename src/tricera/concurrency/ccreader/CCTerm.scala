@@ -35,21 +35,32 @@ import CCExceptions._
 import ap.parser.IExpression._
 import tricera.concurrency.CCReader
 
-abstract sealed class CCExpr(val typ: CCType, val srcInfo: Option[SourceInfo]) {
-  def toTerm:             ITerm
-  def toFormula:          IFormula
-  def occurringConstants: Seq[IExpression.ConstantTerm]
-
-  def convertToType(newType: CCType): CCExpr = {
+case class CCTerm(t               : ITerm,
+                  typ             : CCType,
+                  srcInfo         : Option[SourceInfo],
+                  originalFormula : Option[IFormula]) {
+  def toTerm : ITerm = t
+  def toFormula : IFormula = originalFormula getOrElse {
+    t match {
+      case IIntLit(value) => !value.isZero
+      case t if typ.isInstanceOf[CCHeapPointer] =>
+        !IExpression.Eq(t, typ.asInstanceOf[CCHeapPointer].heap.nullAddr())
+      case t if typ == CCBool => t === ap.theories.ADT.BoolADT.True
+      case t => !IExpression.eqZero(t)
+    }
+  }
+  def occurringConstants: Seq[IExpression.ConstantTerm] =
+    SymbolCollector constantsSorted t
+  def convertToType(newType: CCType): CCTerm = {
     (typ, newType) match {
       case (oldType, newType) if (oldType == newType) =>
         this
-      case (oldType: CCArithType, newType: CCArithType) =>
+      case (_: CCArithType, newType: CCArithType) =>
         newType cast this
-      case (oldType: CCArithType, CCDuration) => {
+      case (_: CCArithType, CCDuration) => {
         if (!CCReader.useTime)
           throw NeedsTimeException
-        CCTerm(CCReader.GTU.term * toTerm, CCDuration, srcInfo)
+        CCTerm.fromTerm(CCReader.GTU.term * toTerm, CCDuration, srcInfo)
       }
       // newType is actually heap pointer
       //case (oldType : CCHeapPointer, newType : CCStackPointer) =>
@@ -59,11 +70,11 @@ abstract sealed class CCExpr(val typ: CCType, val srcInfo: Option[SourceInfo]) {
       case (oldType: CCArithType, newType: CCHeapPointer) =>
         toTerm match {
           case lit: IIntLit if lit.value.intValue == 0 =>
-            CCTerm(newType.heap.nullAddr(), newType, srcInfo) //newType cast t
+            CCTerm.fromTerm(newType.heap.nullAddr(), newType, srcInfo) //newType cast t
           case _ =>
             throw new UnsupportedCastException(
               "pointer arithmetic is not allowed, cannot convert " + this + " to" +
-                " " + newType)
+              " " + newType)
         }
       case (oldType : CCHeapPointer, newType : CCArithType) =>
         throw new UnsupportedCastException(
@@ -73,43 +84,25 @@ abstract sealed class CCExpr(val typ: CCType, val srcInfo: Option[SourceInfo]) {
       case _ =>
         throw new UnsupportedCastException(
           "do not know how to convert " + typ + " to " + newType +
-            " for term: " + toTerm + " (srcInfo: " + srcInfo + ")")
+          " for term: " + toTerm + " (srcInfo: " + srcInfo + ")")
     }
   }
 }
 
-case class CCTerm(t: ITerm, _typ: CCType, _srcInfo: Option[SourceInfo])
-    extends CCExpr(_typ, _srcInfo) {
-  def toTerm: ITerm = t
-  def toFormula: IFormula = t match {
-    case IIntLit(value) => !value.isZero
-    case t if _typ.isInstanceOf[CCHeapPointer] =>
-      !IExpression.Eq(t,
-                      _typ
-                        .asInstanceOf[CCHeapPointer]
-                        .heap
-                        .nullAddr())
-    case t if _typ == CCBool => t === ap.theories.ADT.BoolADT.True
-    case t => !IExpression.eqZero(t)
-  }
-  def occurringConstants: Seq[IExpression.ConstantTerm] =
-    SymbolCollector constantsSorted t
-}
+object CCTerm {
+  def fromTerm(t : ITerm, typ : CCType, srcInfo : Option[SourceInfo]) : CCTerm =
+    CCTerm(t, typ, srcInfo, None)
 
-case class CCFormula(f: IFormula, _typ: CCType, _srcInfo: Option[SourceInfo])
-    extends CCExpr(_typ, _srcInfo: Option[SourceInfo]) {
-  def toTerm: ITerm = f match {
-    case IBoolLit(true)  => 1
-    case IBoolLit(false) => 0
-    case f               => IExpression.ite(f, 1, 0)
+  def fromFormula(f: IFormula, typ: CCType, srcInfo: Option[SourceInfo]): CCTerm = {
+    val fAsTerm : ITerm = f match {
+      case IBoolLit(true)  => 1
+      case IBoolLit(false) => 0
+      case formula         => IExpression.ite(formula, 1, 0)
+    }
+    CCTerm(fAsTerm, typ, srcInfo, Some(f))
   }
-  def toFormula: IFormula = f
-  def occurringConstants: Seq[IExpression.ConstantTerm] =
-    SymbolCollector constantsSorted f
-}
 
-object CCExpr {
-  def unifyTypes(a: CCExpr, b: CCExpr): (CCExpr, CCExpr) = {
+  def unifyTypes(a: CCTerm, b: CCTerm): (CCTerm, CCTerm) = {
     (a.typ, b.typ) match {
       case _ if a.typ == b.typ =>
         (a, b)

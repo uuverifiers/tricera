@@ -253,11 +253,11 @@ class CCReader private (prog              : Program,
       CCReader.this.structInfos
     override def uninterpPredDecls : MHashMap[String, CCPredicate] =
       CCReader.this.uninterpPredDecls
-    override def interpPredDefs : MHashMap[String, CCFormula] =
+    override def interpPredDefs : MHashMap[String, CCTerm] =
       CCReader.this.interpPredDefs
     override def channels : MHashMap[String, ParametricEncoder.CommChannel] =
       CCReader.this.channels
-    override def enumeratorDefs : MHashMap[String, CCExpr] =
+    override def enumeratorDefs : MHashMap[String, CCTerm] =
       CCReader.this.enumeratorDefs
     override def sortGetterMap : Map[Sort, MonoSortedIFunction] =
       CCReader.this.sortGetterMap
@@ -327,12 +327,10 @@ class CCReader private (prog              : Program,
       CCReader.this.getType(exp)
     override def getFunctionArgNames(f : Function_def) : Seq[String] =
       CCReader.this.getFunctionArgNames(f)
-    override def translateClockValue(expr : CCExpr) : CCExpr =
+    override def translateClockValue(expr : CCTerm) : CCTerm =
       CCReader.this.translateClockValue(expr)
-    override def translateDurationValue(expr : CCExpr): CCExpr =
+    override def translateDurationValue(expr : CCTerm): CCTerm =
       CCReader.this.translateDurationValue(expr)
-    override def createHeapPointer(objectType : CCType) : CCType =
-      CCReader.this.createHeapPointer(objectType)
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -361,10 +359,10 @@ class CCReader private (prog              : Program,
   private val structInfos   = new ArrayBuffer[StructInfo]
   private val structDefs    = new MHashMap[String, CCStruct]
   private val enumDefs      = new MHashMap[String, CCType]
-  private val enumeratorDefs= new MHashMap[String, CCExpr]
+  private val enumeratorDefs= new MHashMap[String, CCTerm]
 
   private val uninterpPredDecls     = new MHashMap[String, CCPredicate]
-  private val interpPredDefs        = new MHashMap[String, CCFormula]
+  private val interpPredDefs        = new MHashMap[String, CCTerm]
   private val loopInvariants        =
     new MHashMap[String, (CCPredicate, SourceInfo)]
 
@@ -555,9 +553,9 @@ class CCReader private (prog              : Program,
 
   if (useTime) {
     scope.GlobalVars addVar GT
-    scope.GlobalVars.inits += CCTerm(GT.term, CCClock, None)
+    scope.GlobalVars.inits += CCTerm.fromTerm(GT.term, CCClock, None)
     scope.GlobalVars addVar GTU
-    scope.GlobalVars.inits += CCTerm(GTU.term, CCInt, None)
+    scope.GlobalVars.inits += CCTerm.fromTerm(GTU.term, CCInt, None)
     scope.variableHints += List()
     scope.variableHints += List()
   }
@@ -652,15 +650,6 @@ class CCReader private (prog              : Program,
 
   def getHeapInfo = if (modelHeap) Some(HeapInfo(heap, heapModel.get)) else None
 
-  /**
-   * It is important that globalExitPred has arguments for any variables
-   * needed by the heap model - for instance we want to check that memory is
-   * cleaned before exit, and it cannot be done if the variable tracking memory
-   * does not exist at that point.
-   * This exit predicate is reached, for instance, with the `abort` statement.
-   */
-  private val globalExitPred = newPred("exit", scope.allFormalVars, None)
-
   private val structCtorsOffset = predefSignatures.size
   val defObj = heap.userADTCtors.last
   val structCount = structInfos.size
@@ -742,7 +731,7 @@ class CCReader private (prog              : Program,
         new CCVar(v.name, None, v.typ, if (v.isGlobal) GlobalStorage else AutoStorage)
       if (v.isGlobal) {
         scope.GlobalVars.addVar(newVar)
-        scope.GlobalVars.inits += CCTerm(v.initialValue, v.typ, None)
+        scope.GlobalVars.inits += CCTerm.fromTerm(v.initialValue, v.typ, None)
         scope.variableHints += List() // Add placeholder for hints
       } else { // For thread-local variables, if any model needs them
         scope.LocalVars.addVar(newVar)
@@ -762,6 +751,15 @@ class CCReader private (prog              : Program,
     if(modelHeap)
       Some(heapModelFactory(HeapModel.Resources(heapVars, heapPreds)))
     else None
+
+  /**
+   * It is important that globalExitPred has arguments for any variables
+   * needed by the heap model - for instance we want to check that memory is
+   * cleaned before exit, and it cannot be done if the variable tracking memory
+   * does not exist at that point.
+   * This exit predicate is reached, for instance, with the `abort` statement.
+   */
+  private val globalExitPred = newPred("exit", scope.allFormalVars, None)
 
   //////////////////////////////////////////////////////////////////////////////
   private def translateProgram : Unit = {
@@ -1481,7 +1479,7 @@ class CCReader private (prog              : Program,
           varDec.maybeInitializer match {
             case Some(init : InitExpr) =>
               if (init.exp_.isInstanceOf[Enondet]) {
-                (lhsVar, CCTerm(lhsVar.term, varDec.typ, srcInfo),
+                (lhsVar, CCTerm.fromTerm(lhsVar.term, varDec.typ, srcInfo),
                   lhsVar rangePred)
               } else {
                 // discard useless type conversions
@@ -1501,7 +1499,7 @@ class CCReader private (prog              : Program,
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
                   case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
                     if(res.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
-                      (lhsVar, CCTerm(heap.nullAddr(), varDec.typ, srcInfo))
+                      (lhsVar, CCTerm.fromTerm(heap.nullAddr(), varDec.typ, srcInfo))
                     else throw new TranslationException("Pointer arithmetic is not " +
                       "allowed, and the only possible initialization value for " +
                       "pointers is 0 (NULL)")
@@ -1524,7 +1522,7 @@ class CCReader private (prog              : Program,
                 getInitsStack(varDec.maybeInitializer.get, values)
               varDec.typ match {
                 case structType : CCStruct =>
-                  (lhsVar, CCTerm(structType.getInitialized(initStack), varDec.typ, srcInfo),
+                  (lhsVar, CCTerm.fromTerm(structType.getInitialized(initStack), varDec.typ, srcInfo),
                     lhsVar rangePred)
                 case arrayPtr : CCHeapArrayPointer =>
                   val addressRangeValue = varDec.initArrayExpr match {
@@ -1539,7 +1537,7 @@ class CCReader private (prog              : Program,
                         "arrays with unknown size")
                   }
                   // initialise using the first address of the range
-                  (lhsVar, CCTerm(
+                  (lhsVar, CCTerm.fromTerm(
                     addressRangeValue, varDec.typ, srcInfo), IExpression.i(true))
                 case s =>
                   println(s)
@@ -1557,10 +1555,10 @@ class CCReader private (prog              : Program,
                       typ, varDec.initArrayExpr, isGlobal || collectOnlyLocalStatic)
                   (lhsVar, resultExpr, IExpression.i(true))
                 case _ if isGlobal || collectOnlyLocalStatic  =>
-                  (lhsVar, CCTerm(varDec.typ.getZeroInit, varDec.typ, srcInfo),
+                  (lhsVar, CCTerm.fromTerm(varDec.typ.getZeroInit, varDec.typ, srcInfo),
                     lhsVar rangePred)
                 case _ =>
-                  (lhsVar, CCTerm(lhsVar.term, varDec.typ, srcInfo),
+                  (lhsVar, CCTerm.fromTerm(lhsVar.term, varDec.typ, srcInfo),
                     lhsVar rangePred)
               }
           }
@@ -1623,12 +1621,12 @@ class CCReader private (prog              : Program,
             values.saveState
             ccVars.foreach(scope.LocalVars addVar)
             for ((ccVar, ind) <- ccVars.zipWithIndex) {
-              values.addValue(CCTerm(IExpression.v(ind), ccVar.typ, ccVar.srcInfo))
+              values.addValue(CCTerm.fromTerm(IExpression.v(ind), ccVar.typ, ccVar.srcInfo))
             }
-            val predFormula : CCFormula =
+            val predFormula : CCTerm =
               values.eval(predExp.exp_)(values.EvalSettings(
                 noClausesForExprs = true), values.EvalContext()) match {
-              case f : CCFormula => f
+              case f : CCTerm if f.originalFormula.nonEmpty => f
               case _ => throw new TranslationException("Only Boolean " +
                 "expressions are supported inside interpreted predicate " +
                 "declarations.")
@@ -1772,7 +1770,7 @@ class CCReader private (prog              : Program,
                 evalSettings, evalContext
               )
               val arraySize = arraySizeExp match {
-                case CCTerm(IIntLit(IdealInt(n)), typ, srcInfo)
+                case CCTerm(IIntLit(IdealInt(n)), typ, srcInfo, _)
                   if typ.isInstanceOf[CCArithType] => n
                 case _ => throw new TranslationException("Array with non-integer" +
                   "size specified inside struct definition!")
@@ -1957,7 +1955,7 @@ class CCReader private (prog              : Program,
       throw new TranslationException(
         "enum " + enumName + " is already defined")
 
-    def addEnumerator(name : String, t : CCExpr) = {
+    def addEnumerator(name : String, t : CCTerm) = {
       if (enumeratorDefs contains name)
         throw new TranslationException(
           "enumerator " + name + " already defined")
@@ -1977,7 +1975,7 @@ class CCReader private (prog              : Program,
           nextInd = nextInd + 1
           val v = new CCVar(s.cident_, Some(getSourceInfo(s)), CCInt, AutoStorage)
           scope.LocalVars addVar v
-          symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
+          symex.addValue(CCTerm.fromTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
         }
         case s : EnumInit => {
@@ -1993,7 +1991,7 @@ class CCReader private (prog              : Program,
           val v = new CCVar(s.cident_,
             Some(getSourceInfo(s)), CCInt, AutoStorage)
           scope.LocalVars addVar v
-          symex.addValue(CCTerm(IIntLit(ind), CCInt, v.srcInfo))
+          symex.addValue(CCTerm.fromTerm(IIntLit(ind), CCInt, v.srcInfo))
           enumerators += ((s.cident_, ind))
         }
       }
@@ -2004,7 +2002,7 @@ class CCReader private (prog              : Program,
       enumDefs.put(enumName, newEnum)
 
       for ((n, v) <- enumerators)
-        addEnumerator(n, CCTerm(v, newEnum, None)) // todo: srcInfo?
+        addEnumerator(n, CCTerm.fromTerm(v, newEnum, None)) // todo: srcInfo?
       newEnum
     }
   }
@@ -2096,24 +2094,24 @@ class CCReader private (prog              : Program,
     else typ
   }
 
-  private def translateClockValue(expr : CCExpr) : CCExpr = {
+  private def translateClockValue(expr : CCTerm) : CCTerm = {
     import IExpression._
     if (!useTime)
       throw NeedsTimeException
     expr.toTerm match {
       case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm(GT.term + GTU.term*(-v), CCClock, expr.srcInfo)
+        CCTerm.fromTerm(GT.term + GTU.term*(-v), CCClock, expr.srcInfo)
       case t if (expr.typ == CCClock) =>
-        CCTerm(t, CCClock, expr.srcInfo)
+        CCTerm.fromTerm(t, CCClock, expr.srcInfo)
       case t if (expr.typ == CCDuration) =>
-        CCTerm(GT.term - t, CCClock, expr.srcInfo)
+        CCTerm.fromTerm(GT.term - t, CCClock, expr.srcInfo)
       case t =>
         throw new TranslationException(
           "clocks can only be set to or compared with integers")
     }
   }
 
-  private def translateDurationValue(expr : CCExpr) : CCExpr = {
+  private def translateDurationValue(expr : CCTerm) : CCTerm = {
     import IExpression._
     if (!useTime)
       throw NeedsTimeException
@@ -2121,7 +2119,7 @@ class CCReader private (prog              : Program,
       case _ if (expr.typ == CCDuration) =>
         expr
       case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm(GTU.term*v, CCDuration, expr.srcInfo)
+        CCTerm.fromTerm(GTU.term*v, CCDuration, expr.srcInfo)
       case t =>
         throw new TranslationException(
           "duration variable cannot be set or compared to " + t)
@@ -2133,7 +2131,7 @@ class CCReader private (prog              : Program,
   private def translateConstantExpr(expr : Constant_expression,
                                     symex : Symex =
                                     Symex(symexContext, scope, null, heapModel))
-  : CCExpr = {
+  : CCTerm = {
     symex.saveState
     val res = symex.eval(expr.asInstanceOf[Especial].exp_)(
       symex.EvalSettings(), symex.EvalContext())
@@ -2308,7 +2306,7 @@ class CCReader private (prog              : Program,
                                             functionName : String) {
 
     private def symexFor(initPred : CCPredicate,
-                         stm : Expression_stm) : (Symex, Option[CCExpr]) = {
+                         stm : Expression_stm) : (Symex, Option[CCTerm]) = {
       val exprSymex = Symex(symexContext, scope, initPred, heapModel)
       val res = stm match {
         case _ : SexprOne => None
@@ -2506,7 +2504,7 @@ class CCReader private (prog              : Program,
               } match {
                 case Some((v, i)) =>
                   stmSymex.initAtomArgs match {
-                    case Some(args) => Some(CCTerm(args(i), v.typ, v.srcInfo))
+                    case Some(args) => Some(CCTerm.fromTerm(args(i), v.typ, v.srcInfo))
                     case None => None
                   }
                 case None => None
@@ -2599,7 +2597,7 @@ class CCReader private (prog              : Program,
               } match {
                 case Some((v, i)) =>
                   stmSymex.initAtomArgs match {
-                    case Some(args) => Some(CCTerm(args(i), v.typ, v.srcInfo))
+                    case Some(args) => Some(CCTerm.fromTerm(args(i), v.typ, v.srcInfo))
                     case None       => None
                   }
                 case None         => None
@@ -2704,58 +2702,53 @@ class CCReader private (prog              : Program,
       case compound : ScompOne =>
         output(addRichClause(Clause(atom(exit, scope.allVarInits take exit.arity),
                                     List(), globalPreconditions),
-                             Some(getSourceInfo(compound)))
-               )
+          Some(getSourceInfo(compound)))
+        )
       case compound : ScompTwo => {
-        scope.LocalVars.pushFrame
-
-        var currentStatePred = newPred(Nil, Some(getSourceInfo(compound.liststm_.head)))
-        output(addRichClause(
-          Clause(atom(currentStatePred, scope.allVarInits take currentStatePred.arity),
-                 List(), globalPreconditions), currentStatePred.srcInfo))
-
-        if (modelHeap) {
-          val initCodeStrs = heapModelFactory.getInitCodeToInject
-          if (initCodeStrs.nonEmpty) {
-            val initStmts = initCodeStrs.map { code =>
-              ParseUtil.parseStatement(new java.io.StringReader(code))
-            }
-
-            for (stmt <- initStmts) {
-              val nextStatePred = newPred(Nil, currentStatePred.srcInfo)
-              translate(stmt, currentStatePred, nextStatePred)
-              currentStatePred = nextStatePred // The output of one becomes the input to the next.
-            }
-          }
-        }
+        scope.LocalVars pushFrame
 
         val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
-        var predForNextBlock = currentStatePred
 
-        if (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
-          var sefBlockEntryPred = newPred(Nil, if (stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
-          var sefMergedClause =
-            Clause(atom(sefBlockEntryPred, scope.allVarInits take sefBlockEntryPred.arity),
-                   List(atom(predForNextBlock, scope.allFormalVarTerms take predForNextBlock.arity)),
-                   true)
+//        var currentStatePred = newPred(Nil, Some(getSourceInfo(compound.liststm_.head)))
+//        output(addRichClause(
+//          Clause(atom(currentStatePred, scope.allVarInits take currentStatePred.arity),
+//                 List(), globalPreconditions), currentStatePred.srcInfo))
 
-          while (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
-            val decSymex = Symex(symexContext, scope, sefBlockEntryPred, heapModel)
-            collectVarDecls(stmsIt.next().asInstanceOf[DecS].dec_, false, decSymex, "", false)
+//        if (modelHeap) {
+//          val initCodeStrs = heapModelFactory.getInitCodeToInject
+//          if (initCodeStrs.nonEmpty) {
+//            val initStmts = initCodeStrs.map { code =>
+//              ParseUtil.parseStatement(new java.io.StringReader(code))
+//            }
+//
+//            for (stmt <- initStmts) {
+//              val nextStatePred = newPred(Nil, currentStatePred.srcInfo)
+//              translate(stmt, currentStatePred, nextStatePred)
+//              currentStatePred = nextStatePred // The output of one becomes the input to the next.
+//            }
+//          }
+//        }
 
-            val nextPredInChain =
-              newPred(Nil, if (stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
-            sefMergedClause =
-              merge((decSymex.genClause(nextPredInChain, nextPredInChain.srcInfo)).clause, sefMergedClause)
-            sefBlockEntryPred = symexContext.predCCPredMap(sefMergedClause.head.pred)
-          }
-          output(addRichClause(sefMergedClause, sefBlockEntryPred.srcInfo))
-          predForNextBlock = symexContext.predCCPredMap(sefMergedClause.head.pred)
+        // merge simple side-effect-free declarations with
+        // the entry clause
+        var entryPred = newPred(Nil,
+          if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
+        var entryClause =
+          Clause(atom(entryPred, scope.allVarInits take entryPred.arity), List(), globalPreconditions)
+
+        while (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
+          val decSymex = Symex(symexContext, scope, entryPred, heapModel)
+          collectVarDecls(stmsIt.next.asInstanceOf[DecS].dec_,
+                          false, decSymex, "", false)
+          val srcInfo = entryPred.srcInfo // todo: correct srcInfo?
+          entryPred = newPred(Nil,
+            if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None) // todo: correct?
+          entryClause = merge((decSymex genClause(entryPred, srcInfo)).clause, entryClause)
         }
+        output(addRichClause(entryClause, entryPred.srcInfo))
 
-        translateStmSeq(stmsIt, predForNextBlock, exit)
-
-        scope.LocalVars.popFrame
+        translateStmSeq(stmsIt, entryPred, exit)
+        scope.LocalVars popFrame
       }
     }
 
@@ -2843,7 +2836,7 @@ class CCReader private (prog              : Program,
         }
     }
 
-    type SwitchCaseCollector = ArrayBuffer[(CCExpr, CCPredicate)]
+    type SwitchCaseCollector = ArrayBuffer[(CCTerm, CCPredicate)]
 
     var innermostLoopCont : CCPredicate = null
     var innermostLoopExit : CCPredicate = null

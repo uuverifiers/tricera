@@ -121,9 +121,9 @@ tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmet
 Other Error: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
 
 illegal-access-002.c
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)
-(error "Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)")
-Other Error: Pointer arithmetic is not allowed, and the only assignable integer value for pointers is 0 (NULL)
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer assignment only supports 0 (NULL)
+(error "Pointer assignment only supports 0 (NULL)")
+Other Error: Pointer assignment only supports 0 (NULL)
 
 postop.c
 SAFE
@@ -275,10 +275,10 @@ Init:
                                                                                                      |                                                                                                      
                                                                                                      |                                                                                                      
                                                                                                      V                                                                                                      
- main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(48), 2)), O_Int(3))), O_Int(49), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
+ main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(49), 2)), O_Int(3))), O_Int(48), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(48), 2)), O_Int(3))), O_Int(49), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
+ main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(49), 2)), O_Int(3))), O_Int(48), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
 false :- main_2(@h, a:4, b:5), getInt(read(@h, nthAddrRange(a:4, 0))) != 3. (line:10 col:5) (property: user-assertion)

@@ -1,3 +1,32 @@
+/**
+ * Copyright (c) 2025 Zafer Esen. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * * Neither the name of the authors nor the names of their
+ *   contributors may be used to endorse or promote products derived from
+ *   this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package tricera.concurrency.heap
 
 import ap.basetypes.IdealInt
@@ -58,52 +87,6 @@ final class InvariantEncodingsFactory(
       (newInit, newFuncs)
     }
   }
-
-//  private val encoding : ParsedEncoding = createModifiedEncoding()
-
-//  private def createModifiedEncoding(): ParsedEncoding = {
-//    val original = InvariantEncodingParser.parse(encodingName)
-//    if (inputVars.isEmpty) {
-//      return original // No transformation needed, return early.
-//    }
-//
-//    val argsToPrependStr = inputVars.map(_.name).mkString(", ")
-//
-//    val inputArgs : List[Argument] = inputVars.map { ccVar =>
-//      val typeStr = ccVar.typ match {
-//        case _: CCInvariantPointer => "PTR_TYPE"
-//        case _: CCHeapObject       => "HEAP_TYPE"
-//        case CCInt                 => "int"
-//        case CCUInt                => "unsigned int"
-//        case t                     => t.shortName
-//      }
-//      Argument(ccVar.name, typeStr)
-//    }.toList
-//
-//    val newPredicates = original.predicates.map { pred =>
-//      pred.copy(args = inputArgs ++ pred.args)
-//    }
-//    val predNamesToTransform = original.predicates.map(_.name).toSet
-//
-//    def transformCalls(code: String): String = {
-//      transformPredicateCalls(code, predNamesToTransform, argsToPrependStr)
-//    }
-//
-//    val newInitCode = original.init_code.map(transformCalls)
-//    val newReadFn   = original.read_fn.copy(body = transformCalls(original.read_fn.body))
-//    val newWriteFn  = original.write_fn.copy(body = transformCalls(original.write_fn.body))
-//    val newAllocFn  = original.alloc_fn.copy(body = transformCalls(original.alloc_fn.body))
-//    val newFreeFn   = original.free_fn.copy(body = transformCalls(original.free_fn.body))
-//
-//    original.copy(
-//      predicates = newPredicates,
-//      init_code  = newInitCode,
-//      read_fn    = newReadFn,
-//      write_fn   = newWriteFn,
-//      alloc_fn   = newAllocFn,
-//      free_fn    = newFreeFn
-//      )
-//  }
 
   /**
    * Uses regex to find and prepend arguments to predicate calls in a C code string.
@@ -226,12 +209,12 @@ class InvariantEncodingsModel(context  : SymexContext,
   private val allocFnName = "$alloc"
   private val freeFnName  = "$free"
 
-  private def getObjectType(p : CCExpr) : CCType = p.typ match {
+  private def getObjectType(p : CCTerm) : CCType = p.typ match {
     case CCInvariantPointer(_, objT) => objT
     case _ => throw new TranslationException("Expected an invariant heap pointer type.")
   }
 
-  override def read(p : CCExpr, s : Seq[CCExpr]) : HeapOperationResult = {
+  override def read(p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
     val getter = context.sortGetterMap(
       p.typ.asInstanceOf[CCInvariantPointer].elementType.toSort)
     FunctionCallWithGetter(
@@ -243,7 +226,7 @@ class InvariantEncodingsModel(context  : SymexContext,
     )
   }
 
-  override def write(p : CCExpr, o : CCExpr, s : Seq[CCExpr])
+  override def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm])
   : HeapOperationResult = {
     FunctionCall(
       functionName = writeFnName,
@@ -253,7 +236,7 @@ class InvariantEncodingsModel(context  : SymexContext,
     )
   }
 
-  override def alloc(o : CCTerm, s : Seq[CCExpr]) : HeapOperationResult = {
+  override def alloc(o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
     FunctionCall(
       functionName = allocFnName,
       args = Seq(o),
@@ -262,77 +245,13 @@ class InvariantEncodingsModel(context  : SymexContext,
     )
   }
 
-  override def free(p : CCExpr, s : Seq[CCExpr]) : HeapOperationResult = {
+  override def free(p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
     FunctionCall(
       functionName = freeFnName,
       args = Seq(p),
       resultType = CCVoid,
       sourceInfo = p.srcInfo
     )
-  }
-
-// In class InvariantEncodingsModel...
-
-  override def write(rootPointer : CCTerm,
-                     lhs         : IFunApp,
-                     rhs         : CCExpr,
-                     s           : Seq[CCExpr]) : HeapOperationResult = {
-    rootPointer.typ match {
-      case typ : CCInvariantPointer =>
-        typ.elementType match {
-          case structType: CCStruct =>
-            // `lhs` is the term for the field, e.g., `left_selector(struct_getter(...))`
-            val fieldSelector = lhs.fun
-            val oldStructObjectTerm = lhs.args.head // The term for the old struct object.
-
-            val constructor = structType.ctor
-            val allSelectors = structType.sels
-            val updatedSelectorIndex = allSelectors.indexWhere(p => p._1 == fieldSelector)
-
-            if (updatedSelectorIndex == -1) {
-              throw new TranslationException(s"Internal error: could not find selector ${
-                fieldSelector.name} in struct ${structType.shortName}")
-            }
-
-            val constructorArgs = for (i <- allSelectors.indices) yield {
-              if (i == updatedSelectorIndex)
-                rhs.toTerm
-              else
-                allSelectors(i)._1(oldStructObjectTerm)
-            }
-
-            val newStructTerm = constructor(constructorArgs: _*)
-            val wrapper = context.sortWrapperMap.getOrElse(structType.toSort,
-                                                           throw new TranslationException(s"No heap wrapper for struct ${structType.shortName}"))
-            val newHeapObject = CCTerm(wrapper(newStructTerm), CCHeapObject(context.heap), rhs.srcInfo)
-
-            FunctionCall(
-              functionName = writeFnName,
-              args = Seq(rootPointer, newHeapObject),
-              resultType = CCVoid,
-              sourceInfo = rhs.srcInfo)
-
-          case primitiveType =>
-            // `lhs` is the term for the old value, e.g., `getInt(...)`.
-            // `rhs` is the term for the new value, e.g., `42`.
-
-            val wrapper = context.sortWrapperMap.getOrElse(primitiveType.toSort,
-              throw new TranslationException(s"No heap wrapper for primitive type ${primitiveType}"))
-
-            val newHeapObject = CCTerm(wrapper(rhs.toTerm), CCHeapObject(context.heap), rhs.srcInfo)
-
-            FunctionCall(
-              functionName = writeFnName,
-              args = Seq(rootPointer, newHeapObject),
-              resultType = CCVoid,
-              sourceInfo = rhs.srcInfo
-              )
-        }
-
-      case _ =>
-        throw new TranslationException(
-          "Field write attempted with a non-invariant-model pointer type.")
-    }
   }
 
   override def getExitAssertions(exitPreds : Seq[CCPredicate]) = Seq()
@@ -346,27 +265,33 @@ class InvariantEncodingsModel(context  : SymexContext,
   override def batchAlloc(o : CCTerm,
                           size : ITerm,
                           loc : ArrayLocation.Value,
-                          s : Seq[CCExpr]) : HeapOperationResult = {
+                          s : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
 
-  override def arrayRead(arr : CCExpr,
-                         index : CCExpr,
-                         s : Seq[CCExpr]) : HeapOperationResult = {
+  override def arrayRead(arr : CCTerm,
+                         index : CCTerm,
+                         s : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
 
   override def allocAndInitArray(arrayPtr         : CCHeapArrayPointer,
                                  size             : ITerm,
                                  initializers     : mutable.Stack[ITerm],
-                                 s : Seq[CCExpr]) : HeapOperationResult = {
+                                 s : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
 
   override def declUninitializedArray(arrayTyp         : CCHeapArrayPointer,
                                       size             : Option[ITerm],
                                       isGlobalOrStatic : Boolean,
-                                      s : Seq[CCExpr]) : HeapOperationResult = {
+                                      s : Seq[CCTerm]) : HeapOperationResult = {
+    ???
+  }
+  override def arrayWrite(arr   : CCTerm,
+                          index : CCTerm,
+                          value : CCTerm,
+                          s     : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
 }

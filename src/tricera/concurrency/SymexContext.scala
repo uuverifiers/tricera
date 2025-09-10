@@ -61,9 +61,9 @@ trait SymexContext {
   def structDefs        : MHashMap[String, CCStruct]
   def structInfos       : Seq[StructInfo]
   def uninterpPredDecls : MHashMap[String, CCPredicate]
-  def interpPredDefs    : MHashMap[String, CCFormula]
+  def interpPredDefs    : MHashMap[String, CCTerm]
   def channels          : MHashMap[String, ParametricEncoder.CommChannel]
-  def enumeratorDefs    : MHashMap[String, CCExpr]
+  def enumeratorDefs    : MHashMap[String, CCTerm]
   def sortGetterMap     : Map[Sort, MonoSortedIFunction]
   def sortWrapperMap    : Map[Sort, MonoSortedIFunction]
   def sortCtorIdMap     : Map[Sort, Int]
@@ -106,7 +106,6 @@ trait SymexContext {
   def getType(exp : Ebytestype)     : CCType
   def getFunctionArgNames(f : Function_def) : Seq[String]
 
-  def translateClockValue   (expr : CCExpr) : CCExpr
-  def translateDurationValue(expr : CCExpr) : CCExpr
-  def createHeapPointer(objectType : CCType) : CCType
+  def translateClockValue   (value : CCTerm) : CCTerm
+  def translateDurationValue(value : CCTerm) : CCTerm
 }
