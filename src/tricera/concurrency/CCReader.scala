@@ -978,7 +978,6 @@ class CCReader private (prog              : Program,
 
         def getTypOfPointer(t: CCType): CCType = t match {
           case p : CCHeapPointer => p.typ
-          case p : CCInvariantPointer => p.elementType
           case t => t
         }
 
@@ -1497,19 +1496,18 @@ class CCReader private (prog              : Program,
                 val res = values.eval(actualInitExp)(
                   values.EvalSettings(), evalContext)
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
-                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
+                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType]
+                    && TriCeraParameters.get.invEncoding.isEmpty =>
                     if(res.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
                       (lhsVar, CCTerm.fromTerm(heap.nullAddr(), varDec.typ, srcInfo))
                     else throw new TranslationException("Pointer arithmetic is not " +
                       "allowed, and the only possible initialization value for " +
                       "pointers is 0 (NULL)")
-                  case _ : CCHeapPointer | _ : CCInvariantPointer
-                    if res.typ.isInstanceOf[CCHeapArrayPointer] =>
+                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCHeapArrayPointer] =>
                     // lhs is actually a heap array pointer
                     (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ,
                                lhsVar.storage), res)
-                  case _ : CCHeapPointer | _ : CCInvariantPointer
-                    if res.typ.isInstanceOf[CCStackPointer] =>
+                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCStackPointer] =>
                     // lhs is actually a stack pointer
                     (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ,
                                lhsVar.storage), res)
@@ -2180,12 +2178,8 @@ class CCReader private (prog              : Program,
     scope.LocalVars popFrame
   }
 
-  private def createHeapPointer(objectType : CCType) : CCType = {
-    if (TriCeraParameters.get.invEncoding.isDefined)
-      CCInvariantPointer(heap, objectType)
-    else
+  private def createHeapPointer(objectType : CCType) : CCType =
       CCHeapPointer(heap, objectType)
-  }
 
   private def createHeapPointer(decl : BeginPointer, typ : CCType) : CCType =
     createHeapPointerHelper(decl.pointer_, typ)
@@ -2533,7 +2527,6 @@ class CCReader private (prog              : Program,
             override def getTypOfPointer(t: CCType): CCType =
               t match {
                 case p : CCHeapPointer => p.typ
-                case p : CCInvariantPointer => p.elementType
                 case t => t
               }
             override def isHeapEnabled: Boolean = modelHeap
@@ -2625,7 +2618,6 @@ class CCReader private (prog              : Program,
             override def getTypOfPointer(t : CCType) : CCType =
               t match {
                 case p : CCHeapPointer => p.typ
-                case p : CCInvariantPointer => p.elementType
                 case _ => t
               }
             override def isHeapEnabled : Boolean = modelHeap
@@ -2709,26 +2701,6 @@ class CCReader private (prog              : Program,
 
         val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
 
-//        var currentStatePred = newPred(Nil, Some(getSourceInfo(compound.liststm_.head)))
-//        output(addRichClause(
-//          Clause(atom(currentStatePred, scope.allVarInits take currentStatePred.arity),
-//                 List(), globalPreconditions), currentStatePred.srcInfo))
-
-//        if (modelHeap) {
-//          val initCodeStrs = heapModelFactory.getInitCodeToInject
-//          if (initCodeStrs.nonEmpty) {
-//            val initStmts = initCodeStrs.map { code =>
-//              ParseUtil.parseStatement(new java.io.StringReader(code))
-//            }
-//
-//            for (stmt <- initStmts) {
-//              val nextStatePred = newPred(Nil, currentStatePred.srcInfo)
-//              translate(stmt, currentStatePred, nextStatePred)
-//              currentStatePred = nextStatePred // The output of one becomes the input to the next.
-//            }
-//          }
-//        }
-
         // merge simple side-effect-free declarations with
         // the entry clause
         var entryPred = newPred(Nil,
@@ -2747,7 +2719,14 @@ class CCReader private (prog              : Program,
         }
         output(addRichClause(entryClause, entryPred.srcInfo))
 
-        translateStmSeq(stmsIt, entryPred, exit)
+        val initStmts : Iterator[Stm] =
+          if (modelHeap)
+            heapModelFactory.getInitCodeToInject.iterator.map { code =>
+              ParseUtil.parseStatement(new java.io.StringReader(code))
+            }
+          else Iterator.empty
+
+        translateStmSeq(ap.util.PeekIterator(initStmts ++ stmsIt), entryPred, exit)
         scope.LocalVars popFrame
       }
     }

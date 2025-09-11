@@ -161,6 +161,7 @@ class TriCeraParameters extends GlobalParameters {
     case invEnc :: rest if (invEnc.startsWith("-invEncoding")) =>
       val parts = invEnc.split(":", 2)
       invEncoding = Some(if (parts.length > 1) parts(1) else "RW")
+      useArraysForHeap = true
       parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)

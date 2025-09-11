@@ -3,10 +3,10 @@ ptr_type: "int"
 
 # Global variables
 global_decls:
-  - { name: "$allocCtr",     type: "int",          initial_value: "0" }
-  - { name: "$cnt",          type: "unsigned int", initial_value: "0" }
-  - { name: "$last_cnt",     type: "unsigned int", initial_value: "0" }
-  - { name: "$p_g",          type: "int",          initial_value: null }
+  - { name: "$allocCtr", type: "int",          initial_value: "0" }
+  - { name: "$cnt",      type: "unsigned int", initial_value: "0" }
+  - { name: "$last_cnt", type: "unsigned int", initial_value: "0" }
+  - { name: "$p_g",      type: "int",          initial_value: null } # nondet init value
 
 # Uninterpreted predicates
 predicates:
@@ -60,6 +60,9 @@ alloc_fn:
   args: [{ name: "e", type: "HEAP_TYPE" }]
   body: |
     int p = ++$allocCtr;
+    ++$cnt;
+    assert($W($cnt, e));
+    if ($p_g == p) { $last_cnt = $cnt; }
     return p;
 
 free_fn:

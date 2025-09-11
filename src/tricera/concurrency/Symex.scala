@@ -46,6 +46,7 @@ import tricera.params.TriCeraParameters
 import tricera.properties
 import IExpression.toFunApplier
 import tricera.concurrency.ccreader.CCBinaryExpressions.BinaryOperators
+import tricera.concurrency.heap.HeapModel.{HeapOperationResult, SimpleResult}
 import tricera.concurrency.heap.HeapModel
 
 import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator}
@@ -328,9 +329,20 @@ class Symex private (context        : SymexContext,
   private def isHeapPointer(t : CCTerm) =
     t.typ match {
       case _ : CCHeapPointer      => true
-      case _ : CCInvariantPointer => true
       case _ : CCHeapArrayPointer => true
       case _                      => false
+    }
+  private def isHeapPointer(exp : Exp, enclosingFunction : String) =
+    getVar(asLValue(exp), enclosingFunction).typ match {
+      case _ : CCHeapPointer      => true
+      case _ : CCHeapArrayPointer => true
+      case _                      => false
+    }
+
+  private def isIndirection(exp : Exp) : Boolean =
+    exp match {
+      case exp : Epreop => exp.unary_operator_.isInstanceOf[Indirection]
+      case _ => false
     }
 
   private def getPointerType(ind : Int) = {
@@ -467,18 +479,39 @@ class Symex private (context        : SymexContext,
   }
 
   /**
-   * Represents the structural category of an LHS expression.
+   * Represents the target of an assignment operation. Each implementation
+   * encapsulates the logic for writing a value to a specific kind of
+   * program location (simple variable, struct field, etc.).
+   * Examples:
+   *  "s.f1.f2"  -> StructField(base="s", path=["f1", "f2"])
+   *  "p->f"     -> StructField(base="p", path=["f"])
+   *  "(*p).f"   -> StructField(base="p", path=["f"])
+   *  "*p"       -> PointerDeref(base="p")
+   *  "a[i]"     -> ArrayElement(base="a", index="i")
+   *  "a[i].f"   -> ArrayStructField(base="a", index="i", path=["f"])
    */
-  private sealed trait LHSInfo {
-    /** The original sub-expression that this LHSInfo was created from. */
+  private sealed trait AssignmentTarget {
+    /** The original sub-expression that this AssignmentTarget was created from. */
     def originalExp : Exp
 
     /** Performs the state update for this type of LHS. */
     def update(newValue : CCTerm)
-              (implicit symex : Symex, evalSettings : EvalSettings, evalCtx : EvalContext) : Unit
+              (implicit symex : Symex,
+               evalSettings   : EvalSettings,
+               evalCtx        : EvalContext) : Unit
+
+    /** Same as update, but writes a non-deterministic value and also returns that value. */
+    def updateNonDet(implicit symex : Symex,
+                     evalSettings   : EvalSettings,
+                     evalCtx        : EvalContext) : CCTerm = {
+      val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
+      val nondetTerm = CCTerm.fromTerm(lhsVal.typ.getNonDet, lhsVal.typ, lhsVal.srcInfo)
+      this.update(nondetTerm)
+      nondetTerm
+    }
   }
 
-  private case class SimpleVar(exp : Exp) extends LHSInfo {
+  private case class SimpleVar(exp : Exp) extends AssignmentTarget {
     override def originalExp : Exp = exp
     override def update(newValue : CCTerm)
                        (implicit symex : Symex,
@@ -523,7 +556,7 @@ class Symex private (context        : SymexContext,
 
   private case class StructField(baseExp     : Exp,
                                  path        : List[String],
-                                 originalExp : Exp) extends LHSInfo {
+                                 originalExp : Exp) extends AssignmentTarget {
     override def update(newValue : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
@@ -566,7 +599,7 @@ class Symex private (context        : SymexContext,
 
   private case class ArrayElement(arrayBase   : Exp,
                                   index       : Exp,
-                                  originalExp : Exp) extends LHSInfo {
+                                  originalExp : Exp) extends AssignmentTarget {
     override def update(newValue : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
@@ -597,7 +630,7 @@ class Symex private (context        : SymexContext,
   private case class ArrayStructField(arrayBase   : Exp,
                                       index       : Exp,
                                       path        : List[String],
-                                      originalExp : Exp) extends LHSInfo {
+                                      originalExp : Exp) extends AssignmentTarget {
     override def update(newValue : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
@@ -634,7 +667,7 @@ class Symex private (context        : SymexContext,
   }
 
   private case class PointerDeref(pointerExp  : Exp,
-                                  originalExp : Exp) extends LHSInfo {
+                                  originalExp : Exp) extends AssignmentTarget {
     override def update(newValue : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
@@ -651,25 +684,13 @@ class Symex private (context        : SymexContext,
     }
   }
 
-  /**
-   * Classifies an LHS expression into one of several structural categories (LHSInfo)
-   * *before* evaluation, which could have unwanted side effects.
-   *
-   * Examples:
-   *  "s.f1.f2"  -> StructField(base="s", path=["f1", "f2"])
-   *  "p->f"     -> StructField(base="p", path=["f"])
-   *  "(*p).f"   -> StructField(base="p", path=["f"])
-   *  "*p"       -> PointerDeref(base="p")
-   *  "a[i]"     -> ArrayElement(base="a", index="i")
-   *  "a[i].f"   -> ArrayStructField(base="a", index="i", path=["f"])
-   */
-  private def deconstructLHS(exp : Exp) : LHSInfo = exp match {
+  private def getAssignmentTarget(exp : Exp) : AssignmentTarget = exp match {
     case e: Earray =>
       ArrayElement(e.exp_1, e.exp_2, e)
     case e: Epoint =>
       StructField(e.exp_, List(e.cident_), e)
     case e: Eselect =>
-      deconstructLHS(e.exp_) match {
+      getAssignmentTarget(e.exp_) match {
         case StructField(base, path, _) => StructField(base, path :+ e.cident_, e)
         case SimpleVar(base)            => StructField(base, List(e.cident_), e)
         case PointerDeref(base, _)      => StructField(base, List(e.cident_), e)
@@ -752,7 +773,7 @@ class Symex private (context        : SymexContext,
     args.foreach(pushVal(_))
     outputClause(srcInfo)
     handleFunction(name, initPred, args.size)
-    popVal.asInstanceOf[CCTerm]
+    popVal
   }
 
   private def processHeapResult(result : HeapModel.HeapOperationResult)
@@ -829,27 +850,30 @@ class Symex private (context        : SymexContext,
       setValue(asLValue(exp.exp_1), context.translateDurationValue(topVal),
                evalCtx.enclosingFunctionName)
     case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => // Simple assignment: '='
-      val valueToAssign = {
-        evalHelp(exp.exp_2)
-        maybeOutputClause(Some(getSourceInfo(exp)))
-        popVal
+      implicit val symex : Symex = this
+      exp.exp_2 match {
+        case _ : Enondet =>
+          pushVal (getAssignmentTarget(exp.exp_1).updateNonDet)
+        case _ =>
+          evalHelp(exp.exp_2)
+          maybeOutputClause(Some(getSourceInfo(exp)))
+          getAssignmentTarget(exp.exp_1).update(topVal)
       }
-
-      pushVal(valueToAssign)
-      implicit val symex: Symex = this
-      deconstructLHS(exp.exp_1).update(valueToAssign)
 
     case exp : Eassign => // Compound assignment: '+=', '-=', etc.
       // IMPORTANT: Compound assignments are non-atomic so must be handled
       // separately from simple assignments.
-      val lhsInfo = deconstructLHS(exp.exp_1)
-
       evalHelp(exp.exp_1)
       val lhsE = topVal
       maybeOutputClause(Some(getSourceInfo(exp)))
-      evalHelp(exp.exp_2)
-      maybeOutputClause(Some(getSourceInfo(exp)))
-      val rhsE = popVal
+      val rhsE = exp.exp_2 match {
+        case _ : Enondet => CCTerm.fromTerm(
+          lhsE.typ.getNonDet, lhsE.typ, Some(getSourceInfo(exp.exp_2)))
+        case _ =>
+          evalHelp(exp.exp_2)
+          maybeOutputClause(Some(getSourceInfo(exp)))
+          popVal
+      }
       popVal
 
       if (lhsE.typ == CCClock || lhsE.typ == CCDuration)
@@ -895,7 +919,7 @@ class Symex private (context        : SymexContext,
 
       pushVal(valueToAssign)
       implicit val symex: Symex = this
-      deconstructLHS(exp.exp_1).update(valueToAssign)
+      getAssignmentTarget(exp.exp_1).update(valueToAssign)
 
     case exp : Econdition => // exp_1 ? exp_2 : exp_3
       val srcInfo = Some(getSourceInfo(exp))
@@ -1049,7 +1073,7 @@ class Symex private (context        : SymexContext,
       val newValue = popVal mapTerm (_ + op)
       pushVal(newValue)
       implicit val symex: Symex = this
-      deconstructLHS(expToUpdate).update(newValue)
+      getAssignmentTarget(expToUpdate).update(newValue)
 
     case _ : Epostinc | _ : Epostdec =>
       val (expToUpdate, op) = exp match {
@@ -1063,7 +1087,7 @@ class Symex private (context        : SymexContext,
 
       val newValue = oldValue mapTerm (_ + op)
       implicit val symex: Symex = this
-      deconstructLHS(expToUpdate).update(newValue)
+      getAssignmentTarget(expToUpdate).update(newValue)
 
     case exp : Epreop =>
       val srcInfo = Some(getSourceInfo(exp))
@@ -1128,7 +1152,7 @@ class Symex private (context        : SymexContext,
           val v = popVal
           v.typ match { // todo: type checking?
             case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
-            case   _ : CCHeapPointer | _ : CCInvariantPointer =>
+            case   _ : CCHeapPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
               else pushVal(processHeapResult(heapModel.read(v, values)).get)
             case  arr : CCHeapArrayPointer =>
@@ -1441,7 +1465,7 @@ class Symex private (context        : SymexContext,
       val rawFieldName = exp.cident_
       val term = subexpr.typ match {
         case ptrType : CCStackPointer => getPointedTerm(ptrType)
-        case _ : CCHeapPointer | _ : CCInvariantPointer =>  //todo: error here if field is null
+        case _ : CCHeapPointer =>  //todo: error here if field is null
           processHeapResult(heapModel.read(subexpr, values)).get
         case _ => throw new TranslationException(
           "Trying to access field '->" + rawFieldName + "' of non pointer.")

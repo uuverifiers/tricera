@@ -30,18 +30,13 @@
 package tricera.concurrency.heap
 
 import ap.basetypes.IdealInt
-import ap.parser.IExpression.toFunApplier
-import ap.parser.{IExpression, IFunApp, IFunction, ITerm}
-import ap.types.MonoSortedIFunction
+import ap.parser.{IExpression, ITerm}
 import tricera.acsl.ACSLTranslator
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import tricera.concurrency.ccreader._
 import tricera.concurrency.concurrent_c.Absyn.{Afunc, Function_def}
 import tricera.concurrency.heap.HeapModel._
-import tricera.concurrency.heap.InvariantEncodingParser.{
-  Argument,
-  ParsedEncoding
-}
+import tricera.concurrency.heap.InvariantEncodingParser.ParsedEncoding
 import tricera.concurrency.{ParseUtil, SymexContext}
 import tricera.params.TriCeraParameters
 
@@ -209,18 +204,13 @@ class InvariantEncodingsModel(context  : SymexContext,
   private val allocFnName = "$alloc"
   private val freeFnName  = "$free"
 
-  private def getObjectType(p : CCTerm) : CCType = p.typ match {
-    case CCInvariantPointer(_, objT) => objT
-    case _ => throw new TranslationException("Expected an invariant heap pointer type.")
-  }
-
   override def read(p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
-    val getter = context.sortGetterMap(
-      p.typ.asInstanceOf[CCInvariantPointer].elementType.toSort)
+    val resultType = p.typ.asInstanceOf[CCHeapPointer].typ
+    val getter = context.sortGetterMap(resultType.toSort)
     FunctionCallWithGetter(
       functionName = readFnName,
       args = Seq(p),
-      resultType = getObjectType(p),
+      resultType = resultType,
       getter = getter,
       sourceInfo = p.srcInfo
     )
@@ -240,7 +230,7 @@ class InvariantEncodingsModel(context  : SymexContext,
     FunctionCall(
       functionName = allocFnName,
       args = Seq(o),
-      resultType = CCInvariantPointer(context.heap, o.typ),
+      resultType = CCHeapPointer(context.heap, o.typ),
       sourceInfo = o.srcInfo
     )
   }
@@ -288,6 +278,7 @@ class InvariantEncodingsModel(context  : SymexContext,
                                       s : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
+
   override def arrayWrite(arr   : CCTerm,
                           index : CCTerm,
                           value : CCTerm,
