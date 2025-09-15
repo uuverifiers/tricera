@@ -1,0 +1,40 @@
+# Pointer type
+ptr_type: "int"
+
+# Global variables
+global_decls:
+  - { name: "$p_g", type: "int", initial_value: null } # nondet init value
+
+# Uninterpreted predicates
+predicates:
+  - name: "$R"
+    args:
+      - { name: "cnt",      type: "int" }
+      - { name: "last_cnt", type: "int" }
+
+# Initialisation code injected to the start of entry function
+init_code:
+  - ""
+
+# Heap operations
+read_fn:
+  return_type: "HEAP_TYPE"
+  args: [{ name: "p", type: "PTR_TYPE" }]
+  body: ""
+
+write_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "e", type: "HEAP_TYPE" }
+  body: ""
+
+alloc_fn:
+  return_type: "PTR_TYPE"
+  args: [{ name: "e", type: "HEAP_TYPE" }]
+  body: ""
+
+free_fn:
+  return_type: "void"
+  args: [{ name: "p", type: "PTR_TYPE" }]
+  body: ""
