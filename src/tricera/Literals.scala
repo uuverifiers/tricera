@@ -21,4 +21,7 @@ object Literals {
   val annotationMarker = "■■" // ascii 254 times 2
 
   val atExpressionName = "$at"
+
+  val anonStructName = ".AS"
+  val anonEnumName   = ".ES"
 }

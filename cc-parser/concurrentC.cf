@@ -109,6 +109,7 @@ Tenum.        Type_specifier ::= Enum_specifier;
 -- Tname.        Type_specifier ::= "Typedef_name";
 Tclock.       Type_specifier ::= "clock";
 Tduration.    Type_specifier ::= "duration";
+THeapObject.  Type_specifier ::= "$HeapObject";
 
 
 -- MyType.         Storage_class_specifier ::= "typedef"; -- handled by the preprocessor

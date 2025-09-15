@@ -38,7 +38,8 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                           val outputFilePath  : String,
                           val entryFunction   : String,
                           val displayWarnings : Boolean,
-                          val quiet           : Boolean) {
+                          val quiet           : Boolean,
+                          val determinize     : Boolean) {
   val ppPath = sys.env.get("TRI_PP_PATH") match {
     case Some(path) => path + "/tri-pp"
     case _ =>
@@ -50,8 +51,34 @@ class TriCeraPreprocessor(val inputFilePath   : String,
         "variable TRI_PP_PATH is exported and points to the preprocessor's" +
         " base directory")
   }
+  var curInputFilePath = inputFilePath
+  if (determinize) {
+    val cmdLine1 : Seq[String] =
+      Seq(ppPath.toString, curInputFilePath,"-o", outputFilePath) ++
+      (if(quiet) Seq("-q") else Nil) ++
+      Seq("-m", entryFunction, "--make-calls-unique", "--", "-xc") ++
+      (if(displayWarnings) Nil else Seq("-Wno-everything"))
+    try { Process(cmdLine1) ! }
+    catch {
+      case _: Throwable =>
+        throw new Main.MainException("tri-pp failed while trying to make " +
+         "calls unique.\n" + "Preprocessor command: " + cmdLine1.mkString(" "))
+    }
+    curInputFilePath = outputFilePath
+    val cmdLine2 : Seq[String] =
+      Seq(ppPath.toString, curInputFilePath,"-o", curInputFilePath) ++
+      (if(quiet) Seq("-q") else Nil) ++
+      Seq("-m", entryFunction, "--determinize", "--", "-xc") ++
+      (if(displayWarnings) Nil else Seq("-Wno-everything"))
+    try { Process(cmdLine2) ! }
+    catch {
+      case _: Throwable =>
+        throw new Main.MainException("tri-pp failed while trying to make" +
+          "calls unique.\n" + "Preprocessor command: " + cmdLine1.mkString(" "))
+    }
+  }
   private val cmdLine : Seq[String] =
-    Seq(ppPath.toString, inputFilePath,"-o", outputFilePath) ++
+    Seq(ppPath.toString, curInputFilePath,"-o", outputFilePath) ++
     (if(quiet) Seq("-q") else Nil) ++
     Seq("-m", entryFunction, "--", "-xc") ++
     (if(displayWarnings) Nil else Seq("-Wno-everything"))
@@ -63,7 +90,7 @@ class TriCeraPreprocessor(val inputFilePath   : String,
           " be executed. This might be due to TriCera preprocessor binary " +
           "not being in the current directory. Alternatively, use the " +
           "-noPP switch to disable the preprocessor.\n" +
-          "Preprocessor command: " + cmdLine
+          "Preprocessor command: " + cmdLine.mkString(" ")
         )
     }
   val hasError = returnCode != 0

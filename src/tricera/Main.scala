@@ -308,7 +308,8 @@ class Main (args: Array[String]) {
         preprocessedFile.getAbsolutePath,
         displayWarnings = logPPLevel == 2,
         quiet = logPPLevel == 0,
-        entryFunction = TriCeraParameters.get.funcName)
+        entryFunction = TriCeraParameters.get.funcName,
+        determinize = TriCeraParameters.get.invEncoding.nonEmpty)
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)
@@ -406,7 +407,9 @@ class Main (args: Array[String]) {
         import ap.parser.{IBinJunctor, LineariseVisitor, Transform2NNF}
         import ap.parser.IExpression._
         val sameNamedTerms =
-          c.constants.groupBy(_.name).filter(_._2.size > 1)
+          c.constants.groupBy(_.name).filter{
+            case (name, constants) => constants.size > 1 && name != "_"
+          }
         val conjuncts =
           LineariseVisitor(Transform2NNF(c.constraint), IBinJunctor.And)
 
