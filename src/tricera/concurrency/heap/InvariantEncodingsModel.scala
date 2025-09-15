@@ -31,6 +31,7 @@ package tricera.concurrency.heap
 
 import ap.basetypes.IdealInt
 import ap.parser.{IExpression, ITerm}
+import IExpression.toFunApplier
 import tricera.acsl.ACSLTranslator
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import tricera.concurrency.ccreader._
@@ -227,11 +228,13 @@ class InvariantEncodingsModel(context  : SymexContext,
   }
 
   override def alloc(o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
+    val wrappedObj = CCTerm.fromTerm( // TODO: Symex should be responsible for wrap/unwrap
+      context.sortWrapperMap(o.typ.toSort)(o.toTerm), o.typ, o.srcInfo)
     FunctionCall(
       functionName = allocFnName,
-      args = Seq(o),
-      resultType = CCHeapPointer(context.heap, o.typ),
-      sourceInfo = o.srcInfo
+      args = Seq(wrappedObj),
+      resultType = CCHeapPointer(context.heap, wrappedObj.typ),
+      sourceInfo = wrappedObj.srcInfo
     )
   }
 

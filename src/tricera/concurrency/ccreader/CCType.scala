@@ -57,6 +57,8 @@ abstract sealed class CCType {
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
+        case CCHeapPointer(_ , _) if TriCeraParameters.get.invEncoding.nonEmpty =>
+                                               Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCHeapArrayPointer(_, _, _)
           if tricera.params.TriCeraParameters.get.invEncoding.nonEmpty
@@ -82,6 +84,8 @@ abstract sealed class CCType {
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
+        case CCHeapPointer(_ , _) if TriCeraParameters.get.invEncoding.nonEmpty =>
+          Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCHeapArrayPointer(_, _, _)
@@ -107,6 +111,8 @@ abstract sealed class CCType {
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
+        case CCHeapPointer(_ , _) if TriCeraParameters.get.invEncoding.nonEmpty =>
+                                               Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCHeapArrayPointer(_, _, _)
           if tricera.params.TriCeraParameters.get.invEncoding.nonEmpty
@@ -132,6 +138,8 @@ abstract sealed class CCType {
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
+        case CCHeapPointer(_ , _) if TriCeraParameters.get.invEncoding.nonEmpty =>
+                                               Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCHeapArrayPointer(_, _, _)
           if tricera.params.TriCeraParameters.get.invEncoding.nonEmpty
@@ -227,6 +235,8 @@ abstract sealed class CCType {
               case _                            => fieldType.getZeroInit
             }
       structType.ctor(const: _*)
+    case CCHeapPointer(_, _) if TriCeraParameters.get.invEncoding.nonEmpty
+                                        => IIntLit(0)
     case CCHeapPointer(heap, _)         => heap.nullAddr()
     case CCHeapArrayPointer(heap, _, _) => // todo: start = null, but
       // size 0 or 1?
@@ -441,7 +451,12 @@ case class CCStruct(ctor : MonoSortedIFunction,
               structs(name).getInitialized(values)
             case s: CCStruct => s.getInitialized(values)
             case CCHeapPointer(h, _) =>
-              if (values.isEmpty) h.nullAddr() else values.pop()
+              val nullAddr =
+                if (TriCeraParameters.get.invEncoding.nonEmpty)
+                  IIntLit(0)
+                else
+                  h.nullAddr()
+              if (values.isEmpty) nullAddr else values.pop()
             case CCHeapArrayPointer(h, _, _) =>
               throw new TranslationException(
                 "Heap arrays inside structs are" +

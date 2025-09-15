@@ -612,8 +612,12 @@ class CCReader private (prog              : Program,
         for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
               struct.fieldInfos) yield
           (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
-            if (ptrDepth > 0) Heap.AddressCtor
-            else { fieldType match {
+            if (ptrDepth > 0) {
+              if (TriCeraParameters.get.invEncoding.nonEmpty)
+                HeapObj.OtherSort(Sort.Integer)
+              else
+                Heap.AddressCtor
+            } else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
               case Right(typ) =>
                 typ match {

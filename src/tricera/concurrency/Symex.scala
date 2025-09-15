@@ -71,6 +71,7 @@ class Symex private (context        : SymexContext,
   private var guard : IFormula = true
   private var touchedGlobalState : Boolean = false
   private var assignedToStruct : Boolean = false
+  private var calledFunction : Boolean = false
 
   private implicit def toRichTerm(expr : CCTerm) :
   Object{def mapTerm(m:ITerm => ITerm) : CCTerm} = new Object {
@@ -117,7 +118,8 @@ class Symex private (context        : SymexContext,
   }
 
   private def maybeOutputClause(srcInfo : Option[SourceInfo]) : Unit =
-    if (((!context.atomicMode && touchedGlobalState) || assignedToStruct))
+    if ((!context.atomicMode && touchedGlobalState)
+        || assignedToStruct || calledFunction)
       outputClause(srcInfo)
 
   private def pushVal(v : CCTerm, varName : String = "") = {
@@ -203,6 +205,7 @@ class Symex private (context        : SymexContext,
     guard = true
     touchedGlobalState = false
     assignedToStruct = false
+    calledFunction = false
     for ((e, i) <- scope.allFormalCCTerms.iterator.zipWithIndex) {
       values = values.updated(i, e)
     }
@@ -560,8 +563,7 @@ class Symex private (context        : SymexContext,
     override def update(newValue : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
-                        evalCtx        : EvalContext): Unit = {
-      assignedToStruct = true
+                        evalCtx        : EvalContext) : Unit = {
       val baseLHSVal = eval(baseExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
       baseLHSVal.typ match {
         case ptr : CCHeapPointer => // p->f
@@ -571,10 +573,13 @@ class Symex private (context        : SymexContext,
             case _ => throw new TranslationException("Pointer does not point to a struct type.")
           }
           val fieldAddress = getFieldAddress(structType, path)
-          val readResult = processHeapResult(heapModel.read(baseLHSVal, values)).get
-          val oldStructTerm = readResult.toTerm
-          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue.toTerm, fieldAddress)
-          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue.srcInfo)
+          pushVal(newValue)
+          pushVal(processHeapResult(heapModel.read(baseLHSVal, values)).get)
+          maybeOutputClause(baseLHSVal.srcInfo)
+          val oldStructTerm = popVal.toTerm
+          val newValueInClause = popVal
+          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValueInClause.toTerm, fieldAddress)
+          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValueInClause.srcInfo)
           processHeapResult(heapModel.write(baseLHSVal, wrapAsHeapObject(newStructObj), values))
 
         case structType : CCStruct => // s.f
@@ -584,6 +589,7 @@ class Symex private (context        : SymexContext,
           val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue.toTerm, fieldAddress)
           val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue.srcInfo)
           setValue(varName, newStructObj, evalCtx.enclosingFunctionName)
+          assignedToStruct = true
 
         case _ : CCStackPointer => // ps->f
           val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
@@ -773,6 +779,7 @@ class Symex private (context        : SymexContext,
     args.foreach(pushVal(_))
     outputClause(srcInfo)
     handleFunction(name, initPred, args.size)
+    calledFunction = true
     popVal
   }
 
@@ -864,8 +871,8 @@ class Symex private (context        : SymexContext,
       // IMPORTANT: Compound assignments are non-atomic so must be handled
       // separately from simple assignments.
       evalHelp(exp.exp_1)
-      val lhsE = topVal
       maybeOutputClause(Some(getSourceInfo(exp)))
+      val lhsE = topVal
       val rhsE = exp.exp_2 match {
         case _ : Enondet => CCTerm.fromTerm(
           lhsE.typ.getNonDet, lhsE.typ, Some(getSourceInfo(exp.exp_2)))
@@ -1082,12 +1089,11 @@ class Symex private (context        : SymexContext,
       }
 
       evalHelp(expToUpdate)
-      val oldValue = topVal
       maybeOutputClause(Some(getSourceInfo(exp)))
-
-      val newValue = oldValue mapTerm (_ + op)
+      val newValue = topVal mapTerm (_ + op)
       implicit val symex: Symex = this
       getAssignmentTarget(expToUpdate).update(newValue)
+
 
     case exp : Epreop =>
       val srcInfo = Some(getSourceInfo(exp))
