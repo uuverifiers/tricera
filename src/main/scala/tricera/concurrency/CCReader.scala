@@ -322,6 +322,7 @@ class CCReader private (prog              : Program,
                                 fName      : String) : Unit =
       CCReader.this.inlineFunction(f, entry, exit, args, isNoReturn, fName)
     override def isTermUsedInClauses(term : ConstantTerm) : Boolean = {
+      if (clauses.exists(_._1 == null)) return true // can happen in jump stmts
       (assertionClauses.iterator.flatMap(_.clause.constants) ++
        clauses.iterator.flatMap(_._1.constants)).toSet.contains(term)
     }
