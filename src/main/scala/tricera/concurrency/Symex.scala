@@ -541,11 +541,15 @@ class Symex private (context        : SymexContext,
         case CCTerm(_, _: CCStackPointer, srcInfo, _) =>
           throw new UnsupportedCFragmentException(
             getLineStringShort(srcInfo) + " Only limited support for stack pointers")
-        case CCTerm(IIntLit(value), _, _, _) if isHeapPointer(lhsVal) =>
+        case CCTerm(t@IIntLit(value), _, _, _) if isHeapPointer(lhsVal) =>
           if (value.intValue != 0) {
             throw new TranslationException("Pointer assignment only supports 0 (NULL)")
-          } else CCTerm.fromTerm(
-            context.heap.nullAddr(), CCHeapPointer(context.heap, lhsVal.typ), newValue.srcInfo)
+          } else {
+            val rhsVal : ITerm = if(TriCeraParameters.get.invEncoding.isEmpty)
+                                   context.heap.nullAddr()
+                                 else t
+            CCTerm.fromTerm(rhsVal, CCHeapPointer(context.heap, lhsVal.typ), newValue.srcInfo)
+          }
         case _ => newValue
       }
 
@@ -1721,14 +1725,22 @@ class Symex private (context        : SymexContext,
         if (t2.toTerm != IIntLit(IdealInt(0)))
           throw new TranslationException("Pointers can only compared with `null` or `0`. " +
                                          getLineString(t2.srcInfo))
-        else
-          (t1, CCTerm.fromTerm(context.heap.nullAddr(), t1.typ, t1.srcInfo)) // 0 to nullAddr()
+        else {
+          val actualT2 = if(TriCeraParameters.get.invEncoding.isEmpty)
+                           context.heap.nullAddr()
+                         else t2.toTerm
+          (t1, CCTerm.fromTerm(actualT2, t1.typ, t1.srcInfo)) // 0 to nullAddr()
+        }
       case (_: CCArithType, _: CCHeapPointer) =>
         if (t1.toTerm != IIntLit(IdealInt(0)))
           throw new TranslationException("Pointers can only compared with `null` or `0`. " +
                                          getLineString(t2.srcInfo))
-        else
-          (CCTerm.fromTerm(context.heap.nullAddr(), t2.typ, t2.srcInfo), t2) // 0 to nullAddr()
+        else {
+          val actualT1 = if(TriCeraParameters.get.invEncoding.isEmpty)
+                           context.heap.nullAddr()
+                         else t1.toTerm
+          (CCTerm.fromTerm(actualT1, t2.typ, t2.srcInfo), t2) // 0 to nullAddr()
+        }
       case _ => (t1, t2)
     }
   }
