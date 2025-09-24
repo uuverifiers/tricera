@@ -16,8 +16,8 @@ object InvariantEncodingParser {
                          body        : String)
   case class ParsedEncoding(
     ptr_type     : String,
-    global_decls : List[Declaration],
-    predicates   : List[Predicate],
+    global_decls : Option[List[Declaration]],
+    predicates   : Option[List[Predicate]],
     init_code    : List[String],
     read_fn      : FunctionDef,
     write_fn     : FunctionDef,
@@ -34,16 +34,14 @@ object InvariantEncodingParser {
   }
 
   def parse(encodingName : String) : ParsedEncoding = {
-    val resourcePath = s"/tricera/concurrency/heap/encodings/$encodingName.yml"
-    val source = try {
-      scala.io.Source.fromInputStream(getClass.getResourceAsStream(resourcePath))
-    } catch {
-      case _: NullPointerException =>
+    val resourcePath = s"tricera/heap/encodings/$encodingName.yml"
+    val inputStream = Option(getClass.getClassLoader.getResourceAsStream(resourcePath))
+      .getOrElse {
         throw new TranslationException(
           s"Could not find encoding file for '$encodingName'. " +
-          s"Expected to find it at '.../resources$resourcePath'")
-    }
-
+          s"Expected to find it at 'resources/$resourcePath'")
+      }
+    val source = scala.io.Source.fromInputStream(inputStream)
     try {
       import EncodingYamlProtocol._
       val yamlAst = source.mkString.parseYaml

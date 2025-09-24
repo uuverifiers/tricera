@@ -31,6 +31,7 @@ read_fn:
   body: |
     HEAP_TYPE result;
     int t;
+    int l;
     ++$cnt;
     if ($p_g == p) {
       assert($R($cnt, $last_cnt));

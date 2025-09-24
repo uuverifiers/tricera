@@ -3,14 +3,9 @@ ptr_type: "int"
 
 # Global variables
 global_decls:
-  - { name: "$p_g", type: "int", initial_value: null } # nondet init value
 
 # Uninterpreted predicates
 predicates:
-  - name: "$R"
-    args:
-      - { name: "cnt",      type: "int" }
-      - { name: "last_cnt", type: "int" }
 
 # Initialisation code injected to the start of entry function
 init_code:
@@ -19,22 +14,29 @@ init_code:
 # Heap operations
 read_fn:
   return_type: "HEAP_TYPE"
-  args: [{ name: "p", type: "PTR_TYPE" }]
-  body: ""
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: "return $$read(p, loc);"
 
 write_fn:
   return_type: "void"
   args:
     - { name: "p", type: "PTR_TYPE" }
     - { name: "e", type: "HEAP_TYPE" }
-  body: ""
+    - { name: "loc", type: "int" }
+  body: "$$write(p, e, loc);"
 
 alloc_fn:
   return_type: "PTR_TYPE"
-  args: [{ name: "e", type: "HEAP_TYPE" }]
-  body: ""
+  args:
+    - { name: "e", type: "HEAP_TYPE" []}
+    - { name: "loc", type: "int" }
+  body: "return $$alloc(e, loc);"
 
 free_fn:
   return_type: "void"
-  args: [{ name: "p", type: "PTR_TYPE" }]
-  body: ""
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: "$$free(p, loc);"

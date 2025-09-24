@@ -54,6 +54,7 @@ class TriCeraParameters extends GlobalParameters {
   var logPPLevel : Int = 0 // 0: quiet, 1: errors only, 2: errors + warnings
 
   var cPreprocessor : Boolean = false
+  var cPreprocessorLight : Boolean = false
 
   var dumpSimplifiedClauses : Boolean = false
 
@@ -146,6 +147,7 @@ class TriCeraParameters extends GlobalParameters {
       logPPLevel = (ppLogOption drop 7).toInt; parseArgs(rest)
     case "-noPP" :: rest => noPP = true; parseArgs(rest)
     case "-cpp"  :: rest => cPreprocessor = true; parseArgs(rest)
+    case "-cppLight" :: rest => cPreprocessorLight = true; parseArgs(rest)
     case "-dumpClauses" :: rest => printIntermediateClauseSets = true; parseArgs(rest)
     case "-dumpSimplified" :: rest => dumpSimplifiedClauses = true; parseArgs(rest)
     case "-sp" :: rest => smtPrettyPrint = true; parseArgs(rest)
@@ -344,6 +346,8 @@ class TriCeraParameters extends GlobalParameters {
     |                     predicate with 'p1' or 'p2' in its name
     |-m:func            Use function func as entry point (default: main)
     |-cpp               Execute the C preprocessor (cpp) on the input file first, this will produce filename.i
+    |-cppLight          Same as -cpp but does not include system header files and builtin macros.
+    |                   I.e., -nostdinc -undef
 
     |Checked properties:
     |-reachsafety       Enables checking of explicitly specified properties via assert statements.

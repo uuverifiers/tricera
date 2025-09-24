@@ -1,0 +1,86 @@
+# Pointer type
+ptr_type: "int"
+
+# Global variables
+global_decls:
+  - { name: "$allocCtr",  type: "int",          initial_value: "0" }
+  - { name: "$cnt",       type: "unsigned int", initial_value: "0" }
+  - { name: "$last",      type: "HEAP_TYPE",    initial_value: null }
+  - { name: "$last_loc",  type: "int",          initial_value: "0" }
+  - { name: "$p_g",       type: "int",          initial_value: null } # nondet init value
+
+# Uninterpreted predicates
+predicates:
+  - name: "$R"
+    args:
+      - { name: "cnt",       type: "int" }
+      - { name: "last",      type: "HEAP_TYPE" }
+      - { name: "write_loc", type: "int" }
+  - name: "$Locs"
+    args:
+      - { name: "read_loc",  type: "int" }
+      - { name: "write_loc", type: "int" }
+
+
+# Initialisation code injected to the start of entry function
+init_code:
+  - "$p_g = _;"
+  - "$last = $HEAP_TYPE_DEFAULT();"
+
+# Heap operations
+read_fn:
+  return_type: "HEAP_TYPE"
+  args:
+    - { name: "p",   type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    HEAP_TYPE result;
+    int l;
+    ++$cnt;
+    if ($p_g == p) {
+      assert($Locs(loc, $last_loc));
+      assert($R($cnt, $last, $last_loc));
+      result = $last;
+    } else {
+      result = HAVOC_HEAP;
+      l = HAVOC_INT;
+      assume($Locs(loc, l));
+      assume($R($cnt, result, l));
+    }
+    return result;
+
+write_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "e", type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    ++$cnt;
+    if (0 < p && p <= $allocCtr) {
+      if ($p_g == p) {
+        $last = e;
+        $last_loc = loc;
+      }
+    }
+
+alloc_fn:
+  return_type: "PTR_TYPE"
+  args:
+    - { name: "e",   type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    int p = ++$allocCtr;
+    ++$cnt;
+    if ($p_g == p) {
+      $last = e;
+      $last_loc = loc;
+    }
+    return p;
+
+free_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: ""

@@ -31,7 +31,7 @@
 package tricera
 
 import java.io.{FileOutputStream, PrintStream}
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Paths, StandardCopyOption}
 import sys.process._
 import ap.parser.IExpression.{ConstantTerm, Predicate}
 import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
@@ -44,8 +44,7 @@ import tricera.Util.{SourceInfo, printlnDebug}
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
-import tricera.concurrency.ccreader.{CCVar, CCHeapPointer, CCHeapArrayPointer, CCStackPointer}
-
+import tricera.concurrency.ccreader.{CCHeapArrayPointer, CCHeapPointer, CCStackPointer, CCVar}
 import lazabs.horn.preprocessor.HornPreprocessor
 import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
@@ -274,19 +273,51 @@ class Main (args: Array[String]) {
     }
     import java.io.File
 
-    val cppFileName = if (cPreprocessor) {
+    val cppFileName = if (cPreprocessor || cPreprocessorLight) {
       val preprocessedFile = File.createTempFile("tri-", ".i")
-      System.setOut(new PrintStream(new FileOutputStream(preprocessedFile)))
-      val cmdLine = Seq("cpp", fileName, "-E", "-P", "-CC")
-      try Process(cmdLine) !
-      catch {
-        case _: Throwable =>
-          throw new Main.MainException("The C preprocessor could not" +
-            " be executed (option -cpp). This might be due cpp not being " +
-            "installed in the system.\n" + "Attempted command: " +
-            cmdLine.mkString(" "))
-      }
       preprocessedFile.deleteOnExit()
+
+      val baseCmd = Seq("cpp", fileName, "-E", "-P", "-CC")
+
+      val extraFlags = if (cPreprocessorLight) {
+        val macroHeaderTempFile: File = {
+          val resourcePath = arithMode match {
+            case CCReader.ArithmeticMode.Mathematical => "tricera/headers/macros_math.h"
+            case CCReader.ArithmeticMode.ILP32        => "tricera/headers/macros_ilp32.h"
+            case CCReader.ArithmeticMode.LP64         => "tricera/headers/macros_lp64.h"
+            case CCReader.ArithmeticMode.LLP64        => "tricera/headers/macros_llp64.h"
+          }
+
+          val inputStream = Option(getClass.getClassLoader.getResourceAsStream(resourcePath))
+            .getOrElse {
+              throw new Main.MainException(
+                s"Could not find macro header for '$arithMode'. Expected in resources/$resourcePath"
+                )
+            }
+
+          val tmpFile = Files.createTempFile("tricera-macros-", ".h").toFile
+          tmpFile.deleteOnExit()
+          Files.copy(inputStream, tmpFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+          inputStream.close()
+          tmpFile
+        }
+        Seq("-nostdinc", "-undef", "-imacros", macroHeaderTempFile.getAbsolutePath)
+      } else Seq()
+
+      val cmdLine = baseCmd ++ extraFlags
+
+      try {
+        val errorSuppressingLogger = ProcessLogger(_ => (), _ => ())
+        (Process(cmdLine) #> preprocessedFile).!(errorSuppressingLogger)
+      } catch {
+        case t : Throwable =>
+          throw new Main.MainException(
+            "The C preprocessor could not be executed " +
+            (if (cPreprocessorLight) "(option -cppLight)." else "(option -cpp).") +
+            " This might be due to cpp not being installed in the system.\n" +
+            "Attempted command: " + cmdLine.mkString(" ")
+            )
+      }
       preprocessedFile.getAbsolutePath
     } else fileName
 
@@ -680,7 +711,6 @@ class Main (args: Array[String]) {
     case TimeoutException | StoppedException =>
       ExecutionSummary(Timeout, Map(), modelledHeap,
         programTimer.s, preprocessTimer.s)
-    // nothing
     case _: java.lang.OutOfMemoryError =>
       printError(OutOfMemory.toString)
       ExecutionSummary(OutOfMemory, Map(), modelledHeap,

@@ -68,7 +68,7 @@ final class InvariantEncodingsFactory(
         "$free" -> originalEncoding.free_fn
         ))
     } else {
-      val predNames = originalEncoding.predicates.map(_.name).toSet
+      val predNames = originalEncoding.predicates.getOrElse(Nil).map(_.name).toSet
 
       def transform(code : String) : String =
         transformPredicateCalls(code, predNames, inputVars)
@@ -130,8 +130,8 @@ final class InvariantEncodingsFactory(
       s"Unsupported type in encoding file: $typeStr")
   }
 
-override def requiredVars: Seq[VarSpec] = {
-    originalEncoding.global_decls.map { decl =>
+  override def requiredVars: Seq[VarSpec] = originalEncoding.global_decls match {
+    case Some(decls) => decls.map { decl =>
       val ccType = stringToCCType(decl.`type`)
       val initialValue = decl.initial_value match {
         case Some(v) => ccType match {
@@ -142,14 +142,18 @@ override def requiredVars: Seq[VarSpec] = {
       }
       VarSpec(decl.name, ccType, isGlobal = true, initialValue)
     }
+    case None => Seq()
   }
 
-  override def requiredPreds: Seq[PredSpec] =
-    originalEncoding.predicates.map { pred =>
-      val originalArgs = pred.args.map(arg =>
-        new CCVar(arg.name, None, stringToCCType(arg.`type`), AutoStorage))
-      PredSpec(pred.name, inputVars ++ originalArgs)
+  override def requiredPreds: Seq[PredSpec] = originalEncoding.predicates match {
+    case Some(preds) => preds.map {
+      pred =>
+        val originalArgs = pred.args.map (arg =>
+          new CCVar (arg.name, None, stringToCCType (arg.`type`), AutoStorage))
+        PredSpec (pred.name, inputVars ++ originalArgs)
     }
+    case None => Seq()
+  }
 
   private def preprocess(code: String): String = {
     val heapObjectReplacement = Matcher.quoteReplacement("$HeapObject")
@@ -205,43 +209,43 @@ class InvariantEncodingsModel(context  : SymexContext,
   private val allocFnName = "$alloc"
   private val freeFnName  = "$free"
 
-  override def read(p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
+  override def read(p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     val resultType = p.typ.asInstanceOf[CCHeapPointer].typ
     val getter = context.sortGetterMap(resultType.toSort)
     FunctionCallWithGetter(
       functionName = readFnName,
-      args = Seq(p),
+      args = Seq(p, loc),
       resultType = resultType,
       getter = getter,
       sourceInfo = p.srcInfo
     )
   }
 
-  override def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm])
+  override def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm], loc : CCTerm)
   : HeapOperationResult = {
     FunctionCall(
       functionName = writeFnName,
-      args = Seq(p, o),
+      args = Seq(p, o, loc),
       resultType = CCVoid,
       sourceInfo = p.srcInfo
     )
   }
 
-  override def alloc(o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
+  override def alloc(o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     val wrappedObj = CCTerm.fromTerm( // TODO: Symex should be responsible for wrap/unwrap
       context.sortWrapperMap(o.typ.toSort)(o.toTerm), o.typ, o.srcInfo)
     FunctionCall(
       functionName = allocFnName,
-      args = Seq(wrappedObj),
+      args = Seq(wrappedObj, loc),
       resultType = CCHeapPointer(context.heap, wrappedObj.typ),
       sourceInfo = wrappedObj.srcInfo
     )
   }
 
-  override def free(p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
+  override def free(p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     FunctionCall(
       functionName = freeFnName,
-      args = Seq(p),
+      args = Seq(p, loc),
       resultType = CCVoid,
       sourceInfo = p.srcInfo
     )
@@ -255,23 +259,33 @@ class InvariantEncodingsModel(context  : SymexContext,
   override def getACSLPostStateHeapTerm(
     acslContext : ACSLTranslator.FunctionContext) : ITerm = ???
 
-  override def batchAlloc(o : CCTerm,
-                          size : ITerm,
-                          loc : ArrayLocation.Value,
-                          s : Seq[CCTerm]) : HeapOperationResult = {
+  override def batchAlloc(o        : CCTerm,
+                          size     : ITerm,
+                          arrayLoc : ArrayLocation.Value,
+                          s        : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
 
-  override def arrayRead(arr : CCTerm,
+  override def arrayRead(arr   : CCTerm,
                          index : CCTerm,
-                         s : Seq[CCTerm]) : HeapOperationResult = {
+                         s     : Seq[CCTerm],
+                         loc   : CCTerm) : HeapOperationResult = {
+    ???
+  }
+
+  override def arrayWrite(arr   : CCTerm,
+                          index : CCTerm,
+                          value : CCTerm,
+                          s     : Seq[CCTerm],
+                          loc   : CCTerm) : HeapOperationResult = {
     ???
   }
 
   override def allocAndInitArray(arrayPtr         : CCHeapArrayPointer,
                                  size             : ITerm,
                                  initializers     : mutable.Stack[ITerm],
-                                 s : Seq[CCTerm]) : HeapOperationResult = {
+                                 s                : Seq[CCTerm],
+                                 loc              : CCTerm) : HeapOperationResult = {
     ???
   }
 
@@ -279,13 +293,6 @@ class InvariantEncodingsModel(context  : SymexContext,
                                       size             : Option[ITerm],
                                       isGlobalOrStatic : Boolean,
                                       s : Seq[CCTerm]) : HeapOperationResult = {
-    ???
-  }
-
-  override def arrayWrite(arr   : CCTerm,
-                          index : CCTerm,
-                          value : CCTerm,
-                          s     : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
 }

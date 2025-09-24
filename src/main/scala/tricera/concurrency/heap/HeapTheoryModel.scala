@@ -98,7 +98,7 @@ class HeapTheoryModel(context           : SymexContext,
     s(scope.GlobalVars.lastIndexWhere(v))
   }
 
-  override def read(p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
+  override def read(p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     val (objectGetter, typ : CCType) = p.typ match {
       case typ: CCHeapPointer =>
         (context.sortGetterMap(typ.typ.toSort), typ.typ)
@@ -126,7 +126,7 @@ class HeapTheoryModel(context           : SymexContext,
       )
   }
 
-  override def alloc(o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult = {
+  override def alloc(o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     val objTerm  = context.sortWrapperMap(o.typ.toSort)(o.toTerm)
     val newAlloc = context.heap.alloc(getValue(heapVar, s).toTerm, objTerm)
     val newHeapTerm = CCTerm.fromTerm(context.heap.newHeap(newAlloc),
@@ -161,7 +161,8 @@ class HeapTheoryModel(context           : SymexContext,
 
   override def write(p    : CCTerm,
                      o    : CCTerm,
-                     s    : Seq[CCTerm]) : HeapOperationResult = {
+                     s    : Seq[CCTerm],
+                     loc  : CCTerm) : HeapOperationResult = {
     val newHeapTerm = CCTerm.fromTerm(
       context.heap.write(getValue(heapVar, s).toTerm, p.toTerm, o.toTerm),
       CCHeap(context.heap),
@@ -192,7 +193,7 @@ class HeapTheoryModel(context           : SymexContext,
       )
   }
 
-  override def free(p: CCTerm, s: Seq[CCTerm]): HeapOperationResult = {
+  override def free(p: CCTerm, s: Seq[CCTerm], loc : CCTerm): HeapOperationResult = {
     var assertions  = List[(CCTerm, Property)]()
     var nextState   = s
 
@@ -214,7 +215,7 @@ class HeapTheoryModel(context           : SymexContext,
         }
 
         val writeResult =
-          write(p, CCTerm.fromTerm(heapPtr.heap._defObj, heapPtr.typ, p.srcInfo), nextState)
+          write(p, CCTerm.fromTerm(heapPtr.heap._defObj, heapPtr.typ, p.srcInfo), nextState, loc)
 
         nextState = writeResult.asInstanceOf[SimpleResult].nextState
 
@@ -294,10 +295,10 @@ class HeapTheoryModel(context           : SymexContext,
       )
   }
 
-  override def batchAlloc(o    : CCTerm,
-                          size : ITerm,
-                          loc  : ArrayLocation.Value,
-                          s    : Seq[CCTerm]) : HeapOperationResult = {
+  override def batchAlloc(o        : CCTerm,
+                          size     : ITerm,
+                          arrayLoc : ArrayLocation.Value,
+                          s        : Seq[CCTerm]) : HeapOperationResult = {
     val newBatchAlloc =
       context.heap.batchAlloc(getValue(heapVar, s).toTerm,
                               context.sortWrapperMap(o.typ.toSort)(o.toTerm), size)
@@ -305,11 +306,11 @@ class HeapTheoryModel(context           : SymexContext,
                              CCHeap(context.heap),
                              o.srcInfo)
     val newAddrRange = CCTerm.fromTerm(context.heap.newAddrRange(newBatchAlloc),
-                              CCHeapArrayPointer(context.heap, o.typ, loc),
-                              o.srcInfo)
+                                       CCHeapArrayPointer(context.heap, o.typ, arrayLoc),
+                                       o.srcInfo)
     var nextState = updateValue(heapVar, newHeapTerm, s)
 
-    if (loc == ArrayLocation.Heap &&
+    if (arrayLoc == ArrayLocation.Heap &&
         ((context.propertiesToCheck contains properties.MemValidCleanup) ||
          (context.propertiesToCheck.contains(properties.MemValidTrack) &&
           TriCeraParameters.get.useMemCleanupForMemTrack))) {
@@ -332,13 +333,14 @@ class HeapTheoryModel(context           : SymexContext,
 
   override def arrayRead(arr   : CCTerm,
                          index : CCTerm,
-                         s     : Seq[CCTerm]) : HeapOperationResult = {
+                         s     : Seq[CCTerm],
+                         loc   : CCTerm) : HeapOperationResult = {
     val arrType = arr.typ.asInstanceOf[CCHeapArrayPointer]
     val readAddress = CCTerm.fromTerm(context.heap.nth(arr.toTerm, index.toTerm),
                              CCHeapPointer(context.heap, arrType.elementType),
                              arr.srcInfo)
 
-    val readResult = read(readAddress, s)
+    val readResult = read(readAddress, s, loc)
 
     val boundsAssertion =
       if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
@@ -361,13 +363,14 @@ class HeapTheoryModel(context           : SymexContext,
   override def arrayWrite(arr   : CCTerm,
                           index : CCTerm,
                           value : CCTerm,
-                          s     : Seq[CCTerm]) : HeapOperationResult = {
+                          s     : Seq[CCTerm],
+                          loc   : CCTerm) : HeapOperationResult = {
     val arrType = arr.typ.asInstanceOf[CCHeapArrayPointer]
     val writeAddress = CCTerm.fromTerm(context.heap.nth(arr.toTerm, index.toTerm),
                               CCHeapPointer(context.heap, arrType.elementType),
                               arr.srcInfo)
 
-    val writeResult = write(writeAddress, value, s)
+    val writeResult = write(writeAddress, value, s, loc)
 
     val boundsAssertion =
       if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
@@ -390,7 +393,8 @@ class HeapTheoryModel(context           : SymexContext,
   override def allocAndInitArray(arrayPtr     : CCHeapArrayPointer,
                                  size         : ITerm,
                                  initializers : mutable.Stack[ITerm],
-                                 s            : Seq[CCTerm])
+                                 s            : Seq[CCTerm],
+                                 loc : CCTerm)
   : HeapOperationResult = {
     val objToAlloc = CCTerm.fromTerm(arrayPtr.elementType.getZeroInit, arrayPtr.elementType, None)
     val allocResult =
@@ -420,7 +424,7 @@ class HeapTheoryModel(context           : SymexContext,
       val writeResult = write(
         CCTerm.fromTerm(addrToWrite, CCHeapPointer(context.heap, arrayPtr.elementType), None),
         CCTerm.fromTerm(wrappedValue, arrayPtr.elementType, None),
-        currentState
+        currentState, loc
         ).asInstanceOf[SimpleResult]
 
       currentState = writeResult.nextState

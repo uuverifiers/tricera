@@ -632,10 +632,11 @@ class CCReader private (prog              : Program,
   // todo: only add types that exist in the program - should also add machine arithmetic types
   val predefSignatures =
     List(("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
-         ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(Sort.Nat))), ObjSort)),
+         ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(Sort.Nat))), ObjSort))) ++
+    (if (TriCeraParameters.get.invEncoding.nonEmpty) Nil else List(
          ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort)),
          ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddressRangeCtor)), ObjSort))
-    )
+    ))
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
     predefSignatures ++
@@ -1533,7 +1534,8 @@ class CCReader private (prog              : Program,
                         values.eval(expr.asInstanceOf[Especial].exp_)(
                           values.EvalSettings(), values.EvalContext())
                       values.handleArrayInitialization(
-                        arrayPtr, arraySizeTerm, initStack).toTerm
+                        arrayPtr, arraySizeTerm, initStack,
+                        values.getStaticLocationId(varDec.srcInfo)).toTerm
                     case None =>
                       throw new TranslationException("Cannot initialize" +
                         "arrays with unknown size")

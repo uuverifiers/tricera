@@ -73,6 +73,8 @@ case class CCTerm(t               : ITerm,
       // todo: do not do anything for casts to void?
       case (oldType: CCArithType, newType: CCHeapPointer) =>
         toTerm match {
+          case lit: IIntLit if lit.value.intValue == 0 && TriCeraParameters.get.invEncoding.nonEmpty =>
+            CCTerm.fromTerm(IIntLit(0), newType, srcInfo)
           case lit: IIntLit if lit.value.intValue == 0 =>
             CCTerm.fromTerm(newType.heap.nullAddr(), newType, srcInfo) //newType cast t
           case _ =>
