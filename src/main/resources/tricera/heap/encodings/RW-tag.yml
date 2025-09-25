@@ -3,26 +3,30 @@ ptr_type: "int"
 
 # Global variables
 global_decls:
-  - { name: "$allocCtr",  type: "int",          initial_value: "0" }
-  - { name: "$cnt",       type: "unsigned int", initial_value: "0" }
-  - { name: "$last",      type: "HEAP_TYPE",    initial_value: null }
-  - { name: "$last_loc",  type: "int",          initial_value: "0" }
-  - { name: "$p_g",       type: "int",          initial_value: null } # nondet init value
+  - { name: "$allocCtr", type: "int",          initial_value: "0" }
+  - { name: "$cnt",      type: "unsigned int", initial_value: "0" }
+  - { name: "$last_cnt", type: "unsigned int", initial_value: "0" }
+  - { name: "$last_loc", type: "int",          initial_value: "0" }
+  - { name: "$p_g",      type: "int",          initial_value: null } # nondet init value
 
 # Uninterpreted predicates
 predicates:
   - name: "$R"
     args:
       - { name: "cnt",       type: "int" }
-      - { name: "last",      type: "HEAP_TYPE" }
+      - { name: "last_cnt",  type: "int" }
       - { name: "read_loc",  type: "int" }
       - { name: "write_loc", type: "int" }
-
+  - name: "$W"
+    args:
+      - { name: "last_cnt",  type: "int" }
+      - { name: "o",         type: "HEAP_TYPE" }
+      - { name: "write_loc", type: "int" }
 
 # Initialisation code injected to the start of entry function
 init_code:
   - "$p_g = _;"
-  - "$last = $HEAP_TYPE_DEFAULT();"
+  - "assert($W(0, $HEAP_TYPE_DEFAULT()));"
 
 # Heap operations
 read_fn:
@@ -31,16 +35,18 @@ read_fn:
     - { name: "p",   type: "PTR_TYPE" }
     - { name: "loc", type: "int" }
   body: |
-    HEAP_TYPE result;
+    HEAP_TYPE result = HAVOC_HEAP;
+    int t;
     int l;
     ++$cnt;
     if ($p_g == p) {
-      assert($R($cnt, $last, loc, $last_loc));
-      result = $last;
+      assert($R($cnt, $last_cnt, loc, $last_loc));
+      assume($W($last_cnt, result, $last_loc));
     } else {
-      result = HAVOC_HEAP;
+      t = HAVOC_INT;
       l = HAVOC_INT;
-      assume($R($cnt, result, loc, l));
+      assume($R($cnt, t, loc, l));
+      assume($W(t, result, l));
     }
     return result;
 
@@ -53,8 +59,9 @@ write_fn:
   body: |
     ++$cnt;
     if (0 < p && p <= $allocCtr) {
+      assert($W($cnt, e, loc));
       if ($p_g == p) {
-        $last = e;
+        $last_cnt = $cnt;
         $last_loc = loc;
       }
     }
@@ -67,8 +74,9 @@ alloc_fn:
   body: |
     int p = ++$allocCtr;
     ++$cnt;
+    assert($W($cnt, e, loc));
     if ($p_g == p) {
-      $last = e;
+      $last_cnt = $cnt;
       $last_loc = loc;
     }
     return p;

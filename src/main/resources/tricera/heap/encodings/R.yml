@@ -6,9 +6,6 @@ global_decls:
   - { name: "$allocCtr",  type: "int",          initial_value: "0" }
   - { name: "$cnt",       type: "unsigned int", initial_value: "0" }
   - { name: "$last",      type: "HEAP_TYPE",    initial_value: null }
-  - { name: "$last_loc",  type: "int",          initial_value: "0" }
-  - { name: "$last_addr", type: "int",          initial_value: "-1" }
-  - { name: "$last_data", type: "HEAP_TYPE",    initial_value: null }
   - { name: "$p_g",       type: "int",          initial_value: null } # nondet init value
 
 # Uninterpreted predicates
@@ -17,18 +14,11 @@ predicates:
     args:
       - { name: "cnt",       type: "int" }
       - { name: "last",      type: "HEAP_TYPE" }
-      - { name: "write_loc", type: "int" }
-  - name: "$Locs"
-    args:
-      - { name: "read_loc",  type: "int" }
-      - { name: "write_loc", type: "int" }
-
 
 # Initialisation code injected to the start of entry function
 init_code:
   - "$p_g = _;"
   - "$last = $HEAP_TYPE_DEFAULT();"
-  - "$last_data = $HEAP_TYPE_DEFAULT();"
 
 # Heap operations
 read_fn:
@@ -38,23 +28,13 @@ read_fn:
     - { name: "loc", type: "int" }
   body: |
     HEAP_TYPE result;
-    int l;
     ++$cnt;
-    if ($last_addr == p) {
-      result = $last_data;  
+    if ($p_g == p) {
+      assert($R($cnt, $last));
+      result = $last;
     } else {
-      if ($p_g == p) {
-        assert($Locs(loc, $last_loc));
-        assert($R($cnt, $last, $last_loc));
-        result = $last;
-      } else {
-        result = HAVOC_HEAP;
-        l = HAVOC_INT;
-        assume($Locs(loc, l));
-        assume($R($cnt, result, l));
-      }
-      $last_addr = p;
-      $last_data = result;
+      result = HAVOC_HEAP;
+      assume($R($cnt, result));
     }
     return result;
 
@@ -67,12 +47,7 @@ write_fn:
   body: |
     ++$cnt;
     if (0 < p && p <= $allocCtr) {
-      $last_addr = p;
-      $last_data = e;
-      if ($p_g == p) {
-        $last = e;
-        $last_loc = loc;
-      }
+      if ($p_g == p) { $last = e; }
     }
 
 alloc_fn:
@@ -83,12 +58,7 @@ alloc_fn:
   body: |
     int p = ++$allocCtr;
     ++$cnt;
-    $last_addr = p;
-    $last_data = e;
-    if ($p_g == p) {
-      $last = e;
-      $last_loc = loc;
-    }
+    if ($p_g == p) { $last = e; }
     return p;
 
 free_fn:

@@ -57,13 +57,13 @@ write_fn:
     - { name: "loc", type: "int" }
   body: |
     ++$cnt;
-    if (0 < p && p <= $allocCtr) {
+    //if (0 < p && p <= $allocCtr) {
       assert($W($cnt, e, loc));
       if ($p_g == p) {
         $last_cnt = $cnt;
         $last_loc = loc;
       }
-    }
+    //}
 
 alloc_fn:
   return_type: "PTR_TYPE"
