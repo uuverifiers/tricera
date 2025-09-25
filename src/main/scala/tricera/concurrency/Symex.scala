@@ -1100,7 +1100,8 @@ class Symex private (context        : SymexContext,
               val t = if (evalCtx.handlingFunContractArgs) {
                 throw new UnsupportedCFragmentException(
                   "Function contracts are currently not supported together " +
-                  s"with stack pointers (${exp.line_num}:${exp.col_num})")
+                  s"with stack pointers (${exp.line_num}:${exp.col_num})." +
+                  s"(Recursive functions are encoded using contracts.)")
               } else {
                 val ind = values.indexWhere(v => v == topVal)
                 assert(ind > -1 && ind < values.size - 1) // todo
