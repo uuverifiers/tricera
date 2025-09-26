@@ -26,7 +26,7 @@ predicates:
 # Initialisation code injected to the start of entry function
 init_code:
   - "$p_g = _;"
-  - "assert($W(0, $HEAP_TYPE_DEFAULT()));"
+  - "assert($W(0, $HEAP_TYPE_DEFAULT(), -1));"
 
 # Heap operations
 read_fn:
