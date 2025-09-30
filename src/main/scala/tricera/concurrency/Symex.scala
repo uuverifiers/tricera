@@ -592,14 +592,17 @@ class Symex private (context        : SymexContext,
             case _ => throw new TranslationException("Pointer does not point to a struct type.")
           }
           val fieldAddress = getFieldAddress(structType, path)
+          pushVal(baseLHSVal) // keep the address to be written in case we generate clauses
           pushVal(newValue)
+          // TODO: do NOT read if the struct has only a single field
           pushVal(processHeapResult(heapModel.read(baseLHSVal, values, locTerm)).get)
           maybeOutputClause(baseLHSVal.srcInfo)
           val oldStructTerm = popVal.toTerm
           val newValueInClause = popVal
+          val curBaseLHSVal = popVal
           val newStructTerm = structType.setFieldTerm(oldStructTerm, newValueInClause.toTerm, fieldAddress)
           val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValueInClause.srcInfo)
-          processHeapResult(heapModel.write(baseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
+          processHeapResult(heapModel.write(curBaseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
 
         case structType : CCStruct => // s.f
           val varName = asLValue(baseExp)
