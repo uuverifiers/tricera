@@ -591,18 +591,23 @@ class Symex private (context        : SymexContext,
             case sf : CCStructField => sf.structs(sf.structName)
             case _ => throw new TranslationException("Pointer does not point to a struct type.")
           }
-          val fieldAddress = getFieldAddress(structType, path)
-          pushVal(baseLHSVal) // keep the address to be written in case we generate clauses
-          pushVal(newValue)
-          // TODO: do NOT read if the struct has only a single field
-          pushVal(processHeapResult(heapModel.read(baseLHSVal, values, locTerm)).get)
-          maybeOutputClause(baseLHSVal.srcInfo)
-          val oldStructTerm = popVal.toTerm
-          val newValueInClause = popVal
-          val curBaseLHSVal = popVal
-          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValueInClause.toTerm, fieldAddress)
-          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValueInClause.srcInfo)
-          processHeapResult(heapModel.write(curBaseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
+          if (structType.sels.size > 1 || path.size > 1) {
+            val fieldAddress = getFieldAddress(structType, path)
+            pushVal(baseLHSVal) // keep the address to be written in case we generate clauses
+            pushVal(newValue)
+            evalHelp(baseExp)
+            maybeOutputClause(baseLHSVal.srcInfo)
+            val oldStructTerm = popVal.toTerm // the result of the read
+            val curNewValue = popVal     // the rhs value
+            val curBaseLHSVal = popVal        // the address to write
+            val newStructTerm = structType.setFieldTerm(oldStructTerm, curNewValue.toTerm, fieldAddress)
+            val newStructObj = CCTerm.fromTerm(newStructTerm, structType, curNewValue.srcInfo)
+            processHeapResult(heapModel.write(curBaseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
+          } else { // path.size == 1 && structType.sels.size == 1
+            val newStructTerm = structType.setFieldTerm(newValue.toTerm)
+            val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue.srcInfo)
+            processHeapResult(heapModel.write(baseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
+          }
 
         case structType : CCStruct => // s.f
           val varName = asLValue(baseExp)
