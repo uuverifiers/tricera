@@ -1774,11 +1774,20 @@ class Symex private (context        : SymexContext,
       if (evalSettings.noClausesForExprs) {
         (eval(left), eval(right))
       } else {
-        evalHelp(left)
+        // Do not push/pop lhs if it is a simple constant.
+        val maybeLHS = eval(left) match {
+          case lhs@CCTerm(IIntLit(v), _, _, _) => Some(lhs)
+          case lhs =>
+            pushVal(lhs)
+            None
+        }
         maybeOutputClause(Some(getSourceInfo(left)))
         evalHelp(right)
         val rhs = popVal
-        val lhs = popVal
+        val lhs = maybeLHS match {
+          case Some(lhs) => lhs
+          case None => popVal
+        }
         (lhs, rhs)
       }
     checkPointerIntComparison(lhs, rhs)
