@@ -340,7 +340,7 @@ class Main (args: Array[String]) {
         displayWarnings = logPPLevel == 2,
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName,
-        determinize = TriCeraParameters.get.invEncoding.nonEmpty)
+        determinize = TriCeraParameters.get.determinizeInput)
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)

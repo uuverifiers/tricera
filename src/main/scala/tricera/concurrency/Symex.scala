@@ -100,20 +100,22 @@ class Symex private (context        : SymexContext,
 
   def initAtomArgs = if(initAtom != null) Some(initAtom.args) else None
 
-  private val savedStates = new Stack[(IAtom, Seq[CCTerm], IFormula, /*IFormula,*/ Boolean)]
+  private val savedStates = new Stack[(IAtom, Seq[CCTerm], IFormula, /*IFormula,*/ Boolean, Boolean, Boolean)]
   def saveState =
-    savedStates push ((initAtom, values.toList, guard, touchedGlobalState))
+    savedStates push ((initAtom, values.toList, guard, touchedGlobalState, assignedToStruct, calledFunction))
   def restoreState = {
-    val (oldAtom, oldValues, oldGuard, /*oldPullGuard,*/ oldTouched) = savedStates.pop
+    val (oldAtom, oldValues, oldGuard, /*oldPullGuard,*/ oldTouched, oldAssignedToStruct, oldCalledFunction) = savedStates.pop
     initAtom = oldAtom
     values = oldValues
     scope.LocalVars.pop(scope.LocalVars.size - values.size + scope.GlobalVars.size)
     guard = oldGuard
     touchedGlobalState = oldTouched
+    assignedToStruct = oldAssignedToStruct
+    calledFunction = oldCalledFunction
   }
 
   def atomValuesUnchanged = {
-    val (oldAtom, oldValues, _, _) = savedStates.top
+    val (oldAtom, oldValues, _, _, _, _) = savedStates.top
     initAtom == oldAtom &&
     ((values.iterator zip oldValues.iterator) forall {
       case (x, y) => x == y
@@ -582,7 +584,9 @@ class Symex private (context        : SymexContext,
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
                         evalCtx        : EvalContext) : Unit = {
+      pushVal(newValue)
       val baseLHSVal = eval(baseExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
+      val newValue2 = popVal
       val locTerm = getStaticLocationId(originalExp)
       baseLHSVal.typ match {
         case ptr : CCHeapPointer => // p->f
@@ -594,34 +598,36 @@ class Symex private (context        : SymexContext,
           if (structType.sels.size > 1 || path.size > 1) {
             val fieldAddress = getFieldAddress(structType, path)
             pushVal(baseLHSVal) // keep the address to be written in case we generate clauses
-            pushVal(newValue)
-            evalHelp(baseExp)
+            pushVal(newValue2)
+            pushVal(processHeapResult(heapModel.read(baseLHSVal, values, locTerm)).get)
             maybeOutputClause(baseLHSVal.srcInfo)
             val oldStructTerm = popVal.toTerm // the result of the read
-            val curNewValue = popVal     // the rhs value
+            val newValue3 = popVal     // the rhs value
             val curBaseLHSVal = popVal        // the address to write
-            val newStructTerm = structType.setFieldTerm(oldStructTerm, curNewValue.toTerm, fieldAddress)
-            val newStructObj = CCTerm.fromTerm(newStructTerm, structType, curNewValue.srcInfo)
-            processHeapResult(heapModel.write(curBaseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
+            val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue3.toTerm, fieldAddress)
+            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, newValue3.srcInfo))
+            processHeapResult(heapModel.write(curBaseLHSVal, newStructObj, values, locTerm))
           } else { // path.size == 1 && structType.sels.size == 1
-            val newStructTerm = structType.setFieldTerm(newValue.toTerm)
-            val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue.srcInfo)
-            processHeapResult(heapModel.write(baseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
+            val newStructTerm = structType.setFieldTerm(newValue2.toTerm)
+            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, newValue2.srcInfo))
+            processHeapResult(heapModel.write(baseLHSVal, newStructObj, values, locTerm))
           }
 
         case structType : CCStruct => // s.f
           val varName = asLValue(baseExp)
           val fieldAddress = getFieldAddress(structType, path)
           val oldStructTerm = baseLHSVal.toTerm
-          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue.toTerm, fieldAddress)
-          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue.srcInfo)
+          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue2.toTerm, fieldAddress)
+          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue2.srcInfo)
           setValue(varName, newStructObj, evalCtx.enclosingFunctionName)
           assignedToStruct = true
 
         case _ : CCStackPointer => // ps->f
+          pushVal(newValue2)
           val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
+          val newValue3 = popVal
           val lhsName = asLValue(originalExp)
-          val actualLhsTerm = getActualAssignedTerm(lhsVal, newValue)
+          val actualLhsTerm = getActualAssignedTerm(lhsVal, newValue3)
           setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
 
         case _ => throw new TranslationException(
@@ -826,11 +832,11 @@ class Symex private (context        : SymexContext,
       Some(callFunction(call.functionName, call.args, call.sourceInfo))
     case call : HeapModel.FunctionCallWithGetter =>
       val callResult = callFunction(call.functionName, call.args, call.sourceInfo)
-      if(!context.propertiesToCheck.contains(properties.MemValidDeref)) {
-        val safetyFormula = context.heap.heapADTs.hasCtor(
-          callResult.toTerm, context.sortCtorIdMap(call.resultType.toSort))
-        addGuard(safetyFormula)
-      }
+//      if(!context.propertiesToCheck.contains(properties.MemValidDeref)) {
+//        val safetyFormula = context.heap.heapADTs.hasCtor(
+//          callResult.toTerm, context.sortCtorIdMap(call.resultType.toSort))
+//        addGuard(safetyFormula)
+//      }
       Some(CCTerm.fromTerm(call.getter(callResult.toTerm),
                   call.resultType,
                   call.sourceInfo))
@@ -1152,7 +1158,7 @@ class Symex private (context        : SymexContext,
                     getLineStringShort(srcInfo) +
                     " Stack pointers in combination with heap pointers")
               }
-            case f : IFunApp if context.objectGetters contains f.fun => // a heap read (might also be from a heap array)
+            case f : IFunApp if context.objectGetters contains f.fun =>
               val readFunApp = f.args.head.asInstanceOf[IFunApp] // sth like read(h, ...)
               val Seq(heapTerm, addrTerm) = readFunApp.args
               // todo: below type extraction is not safe!
@@ -1175,6 +1181,12 @@ class Symex private (context        : SymexContext,
               }
               popVal
               pushVal(t)
+
+            case IFunApp(f@ExtArray.Select(arrTheory), Seq(arrayTerm, indexTerm)) =>
+              throw new UnsupportedCFragmentException(
+                getLineString(srcInfo) +
+                "Stack pointers to mathematical array fields are not yet supported."
+              )
 
             case _ =>
               val t = if (evalCtx.handlingFunContractArgs) {

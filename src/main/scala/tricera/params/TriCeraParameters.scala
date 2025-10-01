@@ -97,6 +97,7 @@ class TriCeraParameters extends GlobalParameters {
   var splitProperties : Boolean = false
 
   var useArraysForHeap : Boolean = false
+  var determinizeInput : Boolean = false
   var invEncoding      : Option[String] = None
 
   var devMode : Boolean = false
@@ -163,6 +164,7 @@ class TriCeraParameters extends GlobalParameters {
     case invEnc :: rest if (invEnc.startsWith("-invEncoding")) =>
       val parts = invEnc.split(":", 2)
       invEncoding = Some(if (parts.length > 1) parts(1) else "RW")
+      determinizeInput = true
       useArraysForHeap = true
       parseArgs(rest)
 

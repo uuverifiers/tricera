@@ -178,11 +178,6 @@ final class InvariantEncodingsFactory(
   }
 
   override def getInitCodeToInject: Seq[String] = {
-    // First initialize the input variables added by tri-pp to nondet,
-    // this must happen first to fix their values, as other init statements
-    // might rely on their values (e.g., an assume/assert over the invariants).
-    val nonDetInits = inputVars.map(v => s"${v.name} = _;")
-
     val originalInitCode = {
       val code = transformedInitCode
       if (code.size == 1 && code.head.isEmpty)
@@ -193,8 +188,7 @@ final class InvariantEncodingsFactory(
           preprocess(terminatedStmt)
         }
     }
-
-    nonDetInits ++ originalInitCode
+    originalInitCode
   }
 
   override def apply(resources: Resources): HeapModel =

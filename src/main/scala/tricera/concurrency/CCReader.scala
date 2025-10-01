@@ -2726,12 +2726,19 @@ class CCReader private (prog              : Program,
         }
         output(addRichClause(entryClause, entryPred.srcInfo))
 
-        val initStmts : Iterator[Stm] =
-          if (modelHeap)
-            heapModelFactory.getInitCodeToInject.iterator.map { code =>
-              ParseUtil.parseStatement(new java.io.StringReader(code))
-            }
-          else Iterator.empty
+        val initStmts : Iterator[Stm] = {
+          val inputInitCode =
+            if(TriCeraParameters.get.determinizeInput)
+              inputVars.map(v => s"${v.name} = _;")
+            else Seq()
+
+          val heapModelInitCode =
+            if (modelHeap) heapModelFactory.getInitCodeToInject else Seq()
+
+          (inputInitCode ++ heapModelInitCode).iterator.map { code =>
+            ParseUtil.parseStatement(new java.io.StringReader(code))
+          }
+        }
 
         translateStmSeq(ap.util.PeekIterator(initStmts ++ stmsIt), entryPred, exit)
         scope.LocalVars popFrame
@@ -2814,7 +2821,7 @@ class CCReader private (prog              : Program,
           }
           case stm => {
             val srcInfo = Some(getSourceInfo(stm))
-            var nextPred = if (stmsIt.hasNext) newPred(Nil, None) // todo: line no?
+            val nextPred = if (stmsIt.hasNext) newPred(Nil, None) // todo: line no?
                            else exit
             translate(stm, prevPred, nextPred)
             prevPred = nextPred
@@ -3070,6 +3077,10 @@ class CCReader private (prog              : Program,
         implicit val evalContext  = symex.EvalContext()
                                          .withFunctionName(functionName)
         val retValue = symex eval jump.exp_
+        if (retValue.typ.isInstanceOf[CCStackPointer]) {
+          throw new UnsupportedCFragmentException(
+            "Returning stack pointers from functions is not yet supported.")
+        }
         returnPred match {
           case Some(rp) =>
             val args = (symex.getValuesAsTerms take (rp.arity - 1)) ++
