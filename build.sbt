@@ -99,10 +99,6 @@ lazy val root = (project in file(".")).
 
 //
 settings(
-  scalaSource in Compile := baseDirectory.value / "src",
-  //
-  scalaSource in Test := baseDirectory.value / "unit-tests",
-  //
   mainClass in Compile := Some("tricera.Main"),
   //
   scalacOptions in Compile ++=

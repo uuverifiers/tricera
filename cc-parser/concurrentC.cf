@@ -109,6 +109,7 @@ Tenum.        Type_specifier ::= Enum_specifier;
 -- Tname.        Type_specifier ::= "Typedef_name";
 Tclock.       Type_specifier ::= "clock";
 Tduration.    Type_specifier ::= "duration";
+THeapObject.  Type_specifier ::= "$HeapObject";
 
 
 -- MyType.         Storage_class_specifier ::= "typedef"; -- handled by the preprocessor
@@ -266,8 +267,6 @@ SjumpTwo.   Jump_stm ::= "continue" ";" ;
 SjumpThree. Jump_stm ::= "break" ";" ;
 SjumpFour.  Jump_stm ::= "return" ";" ;
 SjumpFive.  Jump_stm ::= "return" Exp ";" ;
-SjumpAbort. Jump_stm ::= "abort" "(" ")" ";" ;
-SjumpExit.  Jump_stm ::= "exit" "(" Exp ")" ";" ;
 
 SatomicOne. Atomic_stm ::= "atomic" Stm;
 SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
