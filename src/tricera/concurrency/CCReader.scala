@@ -1482,11 +1482,18 @@ class CCReader private (prog              : Program,
 
         val (actualLhsVar, initValue, initGuard) =
           varDec.maybeInitializer match {
-            case Some(init : InitExpr) =>
-              if (init.exp_.isInstanceOf[Enondet]) {
-                (lhsVar, CCTerm.fromTerm(lhsVar.term, varDec.typ, srcInfo),
-                  lhsVar rangePred)
-              } else {
+            case Some(init : InitExpr) if init.exp_.isInstanceOf[Enondet] => 
+              lhsVar.typ match {
+                case typ : CCHeapArrayPointer =>
+                  val resultExpr =
+                    values.handleUninitializedArrayDecl(
+                      typ, varDec.initArrayExpr, isGlobal || collectOnlyLocalStatic, true)
+                  (lhsVar, resultExpr, IExpression.i(true))
+                case _ =>
+                  (lhsVar, CCTerm.fromTerm(lhsVar.term, varDec.typ, srcInfo),
+                   lhsVar rangePred)
+              }
+            case Some(init : InitExpr) if !init.exp_.isInstanceOf[Enondet] =>
                 // discard useless type conversions
                 val actualInitExp = init.exp_ match {
                   case typeConv : Etypeconv
@@ -1519,7 +1526,6 @@ class CCReader private (prog              : Program,
                   case _ => (lhsVar, res)
                 }
                 (actualLhsVar, actualRes, IExpression.i(true))
-              }
             case Some(_ : InitListOne) | Some(_: InitListTwo) => {
               val initStack =
                 getInitsStack(varDec.maybeInitializer.get, values)
@@ -1555,9 +1561,9 @@ class CCReader private (prog              : Program,
                 case typ : CCHeapArrayPointer =>
                   val resultExpr =
                     values.handleUninitializedArrayDecl(
-                      typ, varDec.initArrayExpr, isGlobal || collectOnlyLocalStatic)
+                      typ, varDec.initArrayExpr, isGlobal || collectOnlyLocalStatic, TriCeraParameters.parameters.value.forceNondetInit)
                   (lhsVar, resultExpr, IExpression.i(true))
-                case _ if isGlobal || collectOnlyLocalStatic  =>
+                case _ if (isGlobal || collectOnlyLocalStatic) && !TriCeraParameters.parameters.value.forceNondetInit =>
                   (lhsVar, CCTerm.fromTerm(varDec.typ.getZeroInit, varDec.typ, srcInfo),
                     lhsVar rangePred)
                 case _ =>
