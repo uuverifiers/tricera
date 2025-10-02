@@ -428,9 +428,10 @@ class HeapTheoryModel(context           : SymexContext,
   override def declUninitializedArray(arrayTyp         : CCHeapArrayPointer,
                                       size             : Option[ITerm],
                                       isGlobalOrStatic : Boolean,
+                                      forceNondetInit  : Boolean,
                                       s                : Seq[CCTerm])
   : HeapOperationResult = {
-    val objValue = if (isGlobalOrStatic)
+    val objValue = if (isGlobalOrStatic && !forceNondetInit)
                      arrayTyp.elementType.getZeroInit
                    else arrayTyp.elementType.getNonDet
     val objTerm = CCTerm.fromTerm(objValue, arrayTyp.elementType, None)
