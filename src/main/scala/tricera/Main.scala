@@ -1,5 +1,5 @@
 /**
-  * Copyright (c) 2011-2024 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
+  * Copyright (c) 2011-2025 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
   * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without
@@ -273,54 +273,13 @@ class Main (args: Array[String]) {
     }
     import java.io.File
 
-    val cppFileName = if (cPreprocessor || cPreprocessorLight) {
-      val preprocessedFile = File.createTempFile("tri-", ".i")
-      preprocessedFile.deleteOnExit()
+    // C preprocessor (cpp)
+    val cppFileName =
+      if(params.cPreprocessor || params.cPreprocessorLight)
+        CPreprocessor(fileName, includeSystemHeaders = params.cPreprocessor, params.arithMode)
+      else fileName
 
-      val baseCmd = Seq("cpp", fileName, "-E", "-P", "-CC")
-
-      val extraFlags = if (cPreprocessorLight) {
-        val macroHeaderTempFile: File = {
-          val resourcePath = arithMode match {
-            case CCReader.ArithmeticMode.Mathematical => "tricera/headers/macros_math.h"
-            case CCReader.ArithmeticMode.ILP32        => "tricera/headers/macros_ilp32.h"
-            case CCReader.ArithmeticMode.LP64         => "tricera/headers/macros_lp64.h"
-            case CCReader.ArithmeticMode.LLP64        => "tricera/headers/macros_llp64.h"
-          }
-
-          val inputStream = Option(getClass.getClassLoader.getResourceAsStream(resourcePath))
-            .getOrElse {
-              throw new Main.MainException(
-                s"Could not find macro header for '$arithMode'. Expected in resources/$resourcePath"
-                )
-            }
-
-          val tmpFile = Files.createTempFile("tricera-macros-", ".h").toFile
-          tmpFile.deleteOnExit()
-          Files.copy(inputStream, tmpFile.toPath, StandardCopyOption.REPLACE_EXISTING)
-          inputStream.close()
-          tmpFile
-        }
-        Seq("-nostdinc", "-undef", "-imacros", macroHeaderTempFile.getAbsolutePath)
-      } else Seq()
-
-      val cmdLine = baseCmd ++ extraFlags
-
-      try {
-        val errorSuppressingLogger = ProcessLogger(_ => (), _ => ())
-        (Process(cmdLine) #> preprocessedFile).!(errorSuppressingLogger)
-      } catch {
-        case t : Throwable =>
-          throw new Main.MainException(
-            "The C preprocessor could not be executed " +
-            (if (cPreprocessorLight) "(option -cppLight)." else "(option -cpp).") +
-            " This might be due to cpp not being installed in the system.\n" +
-            "Attempted command: " + cmdLine.mkString(" ")
-            )
-      }
-      preprocessedFile.getAbsolutePath
-    } else fileName
-
+    // TriCera preprocessor (tri-pp)
     preprocessTimer.start()
     val ppFileName: String = if (noPP) {
       if (printPP || dumpPP)

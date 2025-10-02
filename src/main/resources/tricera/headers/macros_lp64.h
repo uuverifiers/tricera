@@ -25,6 +25,9 @@
 
 #define SIZE_MAX 18446744073709551615UL
 
+typedef unsigned long size_t;
+typedef long ptrdiff_t;
+
 #define NULL 0
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1

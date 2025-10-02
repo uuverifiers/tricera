@@ -23,4 +23,7 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
+typedef unsigned int size_t;
+typedef int ptrdiff_t;
+
 #endif

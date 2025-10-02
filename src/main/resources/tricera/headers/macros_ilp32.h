@@ -25,6 +25,9 @@
 
 #define SIZE_MAX 4294967295U
 
+typedef unsigned int size_t;
+typedef int ptrdiff_t;
+
 #define NULL 0
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
