@@ -794,20 +794,6 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
     }
   }
 
-  override def visit(p: SjumpAbort, arg: A): Unit = {
-    bumpLineNumberAfter {
-      setLineNumber(p, lineNumber)
-      super.visit(p, arg)
-    }
-  }
-
-  override def visit(p: SjumpExit, arg: A): Unit = {
-    bumpLineNumberAfter {
-      setLineNumber(p, lineNumber)
-      super.visit(p, arg)
-    }
-  }
-
   override def visit(p: SatomicOne, arg: A): Unit = {
     setLineNumber(p, lineNumber)
     super.visit(p, arg)
