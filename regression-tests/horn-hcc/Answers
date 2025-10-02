@@ -71,6 +71,33 @@ false :- main(g:3, h:4), g:3 != 0. (line:8 col:3) (property: user-assertion)
 
 UNSAFE
 
+inits4.hcc
+SAFE
+
+inits4-explicit.hcc
+
+---------------
+Init:
+ main3_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+ main4_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+  main(1, 0)   
+---------------
+Final:
+  main(1, 0)   
+---------------
+Failed assertion:
+false :- main(g:3, h:4), g:3 != 0. (line:9 col:3) (property: user-assertion)
+
+UNSAFE
+
 shadowing-global.hcc
 SAFE
 
@@ -242,6 +269,39 @@ SAFE
 
 static-shadowing-true.c
 SAFE
+
+inits2-opt.hcc
+
+---------------
+Init:
+ main9_3(0, 1) 
+---------------
+Final:
+ main9_3(0, 1) 
+---------------
+Failed assertion:
+false :- main9_3(g:3, h:4), g:3 != 0 | h:4 != 0. (line:9 col:3) (property: user-assertion)
+
+UNSAFE
+
+inits4-opt.hcc
+
+---------------
+Init:
+ main6_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+  main(1, 0)   
+---------------
+Final:
+  main(1, 0)   
+---------------
+Failed assertion:
+false :- main(g:3, h:4), g:3 != 0. (line:9 col:3) (property: user-assertion)
+
+UNSAFE
 
 test2b.hcc
 Warning: entry function "main" not found
