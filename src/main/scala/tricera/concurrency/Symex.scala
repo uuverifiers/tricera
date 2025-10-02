@@ -1235,10 +1235,14 @@ class Symex private (context        : SymexContext,
         case "reach_error" =>
           /**
            * A special SV-COMP function used in the unreach-call category.
-           * We directly rewrite this as `assert(0)`.
+           * We directly rewrite this as `assert(0)` when checking reach safety..
            */
           if(context.propertiesToCheck contains properties.Reachability)
             assertProperty(false, srcInfo, properties.Reachability)
+          pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
+        case "abort" =>
+          /** Treat abort as assert(0). */
+          assertProperty(false, srcInfo, properties.UserAssertion)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "$HEAP_TYPE_DEFAULT" =>
           /** A builtin to access the default object of the heap */
@@ -1277,7 +1281,10 @@ class Symex private (context        : SymexContext,
           }
           assertProperty(property, srcInfo, properties.UserAssertion)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
-        case "assume" if (exp.listexp_.size == 1) =>
+        case "exit" if exp.listexp_.size == 1 =>
+          addGuard(IBoolLit(false))
+          pushVal(CCTerm.fromFormula(false, CCInt, srcInfo))
+        case "assume" if exp.listexp_.size == 1 =>
           val property = exp.listexp_.head match {
             case a : Efunkpar
               if context.uninterpPredDecls contains(GetId.orString(a)) =>

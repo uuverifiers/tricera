@@ -3040,62 +3040,57 @@ class CCReader private (prog              : Program,
                           exit : CCPredicate) : Unit = {
       val srcInfo = Some(getSourceInfo(jump)) // todo: correct line no?
       jump match {
-      case jump : SjumpOne => { // goto
-        jumpLocs += ((jump.cident_, entry, scope.allFormalVarTerms, clauses.size,
-          getSourceInfo(jump)))
-        // reserve space for the later jump clause
-        output(new CCClause(null, null))
-      }
-      case jump : SjumpTwo => { // continue
-        if (innermostLoopCont == null)
-          throw new TranslationException(
-            "\"continue\" can only be used within loops")
-        Symex(symexContext, scope, entry, heapModel).outputClause(innermostLoopCont, srcInfo)
-      }
-      case jump : SjumpThree => { // break
-        if (innermostLoopExit == null)
-          throw new TranslationException(
-            "\"break\" can only be used within loops")
-        Symex(symexContext, scope, entry, heapModel).outputClause(innermostLoopExit, srcInfo)
-      }
-      case jump : SjumpFour => // return
-        returnPred match {
-          case Some(rp) => {
-            var nextPred = entry
-            val args = scope.allFormalVarTerms take rp.arity
-            output(addRichClause(Clause(atom(rp, args),
-                          List(atom(nextPred, scope.allFormalVarTerms take nextPred.arity)),
-                          true), srcInfo))
+        case jump : SjumpOne   => { // goto
+          jumpLocs += ((jump.cident_, entry, scope.allFormalVarTerms, clauses.size,
+            getSourceInfo(jump)))
+          // reserve space for the later jump clause
+          output(new CCClause(null, null))
+        }
+        case jump : SjumpTwo   => { // continue
+          if (innermostLoopCont == null)
+            throw new TranslationException(
+              "\"continue\" can only be used within loops")
+          Symex(symexContext, scope, entry, heapModel).outputClause(innermostLoopCont, srcInfo)
+        }
+        case jump : SjumpThree => { // break
+          if (innermostLoopExit == null)
+            throw new TranslationException(
+              "\"break\" can only be used within loops")
+          Symex(symexContext, scope, entry, heapModel).outputClause(innermostLoopExit, srcInfo)
+        }
+        case jump : SjumpFour  => // return
+          returnPred match {
+            case Some(rp) => {
+              var nextPred = entry
+              val args     = scope.allFormalVarTerms take rp.arity
+              output(addRichClause(Clause(atom(rp, args),
+                                          List(atom(nextPred, scope.allFormalVarTerms take nextPred.arity)),
+                                          true), srcInfo))
+            }
+            case None     =>
+              throw new TranslationException(
+                "\"return\" can only be used within functions")
           }
-          case None =>
-            throw new TranslationException(
-              "\"return\" can only be used within functions")
+        case jump : SjumpFive  => { // return exp
+          val symex = Symex(symexContext, scope, entry, heapModel)
+          implicit val evalSettings = symex.EvalSettings()
+          implicit val evalContext  = symex.EvalContext()
+                                           .withFunctionName(functionName)
+          val retValue = symex eval jump.exp_
+          if (retValue.typ.isInstanceOf[CCStackPointer]) {
+            throw new UnsupportedCFragmentException(
+              "Returning stack pointers from functions is not yet supported.")
+          }
+          returnPred match {
+            case Some(rp) =>
+              val args = (symex.getValuesAsTerms take(rp.arity - 1)) ++
+                         List(retValue.toTerm)
+              symex outputClause(atom(rp, args), srcInfo)
+            case None     =>
+              throw new TranslationException(
+                "\"return\" can only be used within functions")
+          }
         }
-      case jump : SjumpFive => { // return exp
-        val symex = Symex(symexContext, scope, entry, heapModel)
-        implicit val evalSettings = symex.EvalSettings()
-        implicit val evalContext  = symex.EvalContext()
-                                         .withFunctionName(functionName)
-        val retValue = symex eval jump.exp_
-        if (retValue.typ.isInstanceOf[CCStackPointer]) {
-          throw new UnsupportedCFragmentException(
-            "Returning stack pointers from functions is not yet supported.")
-        }
-        returnPred match {
-          case Some(rp) =>
-            val args = (symex.getValuesAsTerms take (rp.arity - 1)) ++
-                       List(retValue.toTerm)
-            symex outputClause(atom(rp, args), srcInfo)
-          case None =>
-            throw new TranslationException(
-              "\"return\" can only be used within functions")
-        }
-      }
-      case _ : SjumpAbort | _ : SjumpExit => // abort() or exit(int status)
-        output(addRichClause(
-          Clause(atom(globalExitPred, scope.allFormalVarTerms take globalExitPred.arity),
-                 List(atom(entry, scope.allFormalVarTerms take entry.arity)),
-                 true), srcInfo))
       }
     }
 

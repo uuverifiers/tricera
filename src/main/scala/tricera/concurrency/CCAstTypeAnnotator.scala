@@ -50,7 +50,7 @@ class CCAstTypeAnnotator {
     program.accept(visitor, getPreloadedSymbolTable())
   }
 
-  private def getPreloadedSymbolTable() = {
+  private def getPreloadedSymbolTable() : CCAstTypeAnnotationData = {
     def createDeclSpecifiers(tps: List[Type_specifier]) = {
       val declSpec = new ListDeclaration_specifier
       for (tp <- tps) {
@@ -72,6 +72,8 @@ class CCAstTypeAnnotator {
     val symTab = new CCAstTypeAnnotationData
     symTab.put("assume", createDeclaration("assume", List(new Tint)))
     symTab.put("assert", createDeclaration("assert", List(new Tvoid)))
+    symTab.put("abort", createDeclaration("abort", List(new Tvoid)))
+    symTab.put("exit", createDeclaration("exit", List(new Tint, new Tvoid)))
     symTab.put("malloc", createPointerDeclaration("malloc", List(new Tunsigned, new Tlong)))
     symTab.put("calloc", createPointerDeclaration("calloc", List(new Tunsigned, new Tlong)))
     symTab.put("alloca", createPointerDeclaration("alloca", List(new Tunsigned, new Tlong)))

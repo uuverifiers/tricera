@@ -614,14 +614,6 @@ class CCAstCopyWithLocation[A] extends ComposVisitor[A] with CopyAstLocation {
     copyLocationInformation(p, super.visit(p, arg))
   }
 
-  override def visit(p: SjumpAbort, arg: A): Jump_stm = {
-    copyLocationInformation(p, super.visit(p, arg))
-  }
-
-  override def visit(p: SjumpExit, arg: A): Jump_stm = {
-    copyLocationInformation(p, super.visit(p, arg))
-  }
-
   override def visit(p: SatomicOne, arg: A): Atomic_stm = {
     copyLocationInformation(p, super.visit(p, arg))
   }
