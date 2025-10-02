@@ -32,4 +32,11 @@ typedef int ptrdiff_t;
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
+#ifndef __bool_true_false_are_defined
+#define __bool_true_false_are_defined 1
+#define bool _Bool
+#define true 1
+#define false 0
+#endif /* __bool_true_false_are_defined */
+
 #endif
