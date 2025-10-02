@@ -1455,10 +1455,11 @@ class CCReader private (prog              : Program,
       case funDec : CCFunctionDeclaration =>
         functionDecls.put(funDec.name, (funDec.directDecl, funDec.typ))
       case varDec : CCVarDeclaration
-        if varDec.isStatic && !collectOnlyLocalStatic ||
-           !varDec.isStatic && collectOnlyLocalStatic =>
+        if !isGlobal && (
+             varDec.isStatic && !collectOnlyLocalStatic ||
+             !varDec.isStatic && collectOnlyLocalStatic) =>
       /**
-       * Do nothing when
+       * Do nothing when collecting non-global variables and
        * - collecting static variables & this is a non-static variable
        * - collecting non-static variables & this is a static variable (handled before)
        */
@@ -1472,10 +1473,12 @@ class CCReader private (prog              : Program,
         if(!modelHeap && varDec.needsHeap)
           throw NeedsHeapModelException
 
-        val storage = varDec.isStatic match {
-          case true => StaticStorage(enclosingFuncName)
-          case false => if(isGlobal) GlobalStorage else AutoStorage
+        val storage = {
+          if (isGlobal) GlobalStorage // ignore static in globals
+          else if (varDec.isStatic) StaticStorage(enclosingFuncName)
+          else AutoStorage
         }
+
         val lhsVar = new CCVar(varDec.name, Some(varDec.srcInfo), varDec.typ,
                                storage)
         val srcInfo = lhsVar.srcInfo
