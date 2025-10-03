@@ -177,8 +177,9 @@ class HeapTheoryModel(context           : SymexContext,
         CCHeap(context.heap),
         o.srcInfo)
 
+      val ptrType = p.typ.asInstanceOf[CCHeapPointer].typ
       val safetyFormula = CCTerm.fromFormula(
-        context.heap.heapADTs.hasCtor(curO.toTerm, context.sortCtorIdMap(o.typ.toSort)),
+        context.heap.heapADTs.hasCtor(curO.toTerm, context.sortCtorIdMap(ptrType.toSort)),
         CCInt, p.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
