@@ -832,11 +832,16 @@ class Symex private (context        : SymexContext,
       Some(callFunction(call.functionName, call.args, call.sourceInfo))
     case call : HeapModel.FunctionCallWithGetter =>
       val callResult = callFunction(call.functionName, call.args, call.sourceInfo)
-//      if(!context.propertiesToCheck.contains(properties.MemValidDeref)) {
-//        val safetyFormula = context.heap.heapADTs.hasCtor(
-//          callResult.toTerm, context.sortCtorIdMap(call.resultType.toSort))
-//        addGuard(safetyFormula)
-//      }
+      val canAssumeMemorySafety = TriCeraParameters.get.invEncoding match {
+        case Some(enc) => enc contains "-fun-"
+        case None => false
+      }
+      if(canAssumeMemorySafety ||
+         !context.propertiesToCheck.contains(properties.MemValidDeref)) {
+        val safetyFormula = context.heap.heapADTs.hasCtor(
+          callResult.toTerm, context.sortCtorIdMap(call.resultType.toSort))
+        addGuard(safetyFormula)
+      }
       Some(CCTerm.fromTerm(call.getter(callResult.toTerm),
                   call.resultType,
                   call.sourceInfo))
