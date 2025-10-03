@@ -126,14 +126,13 @@ class HeapTheoryModel(context           : SymexContext,
       )
   }
 
-  override def alloc(o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
-    val objTerm  = context.sortWrapperMap(o.typ.toSort)(o.toTerm)
-    val newAlloc = context.heap.alloc(getValue(heapVar, s).toTerm, objTerm)
+  override def alloc(o : CCTerm, oType : CCType, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
+    val newAlloc = context.heap.alloc(getValue(heapVar, s).toTerm, o.toTerm)
     val newHeapTerm = CCTerm.fromTerm(context.heap.newHeap(newAlloc),
                              CCHeap(context.heap),
                              o.srcInfo)
     val newAddrTerm = CCTerm.fromTerm(context.heap.newAddr(newAlloc),
-                             CCHeapPointer(context.heap, o.typ),
+                             CCHeapPointer(context.heap, oType),
                              o.srcInfo)
     var nextState = updateValue(heapVar, newHeapTerm, s)
 
@@ -299,6 +298,7 @@ class HeapTheoryModel(context           : SymexContext,
                           size     : ITerm,
                           arrayLoc : ArrayLocation.Value,
                           s        : Seq[CCTerm]) : HeapOperationResult = {
+    // TODO: remvoe the wrappers from here too!
     val newBatchAlloc =
       context.heap.batchAlloc(getValue(heapVar, s).toTerm,
                               context.sortWrapperMap(o.typ.toSort)(o.toTerm), size)

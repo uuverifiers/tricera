@@ -225,14 +225,12 @@ class InvariantEncodingsModel(context  : SymexContext,
     )
   }
 
-  override def alloc(o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
-    val wrappedObj = CCTerm.fromTerm( // TODO: Symex should be responsible for wrap/unwrap
-      context.sortWrapperMap(o.typ.toSort)(o.toTerm), o.typ, o.srcInfo)
+  override def alloc(o : CCTerm, oType : CCType, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     FunctionCall(
       functionName = allocFnName,
-      args = Seq(wrappedObj, loc),
-      resultType = CCHeapPointer(context.heap, wrappedObj.typ),
-      sourceInfo = wrappedObj.srcInfo
+      args = Seq(o, loc),
+      resultType = CCHeapPointer(context.heap, oType),
+      sourceInfo = o.srcInfo
     )
   }
 

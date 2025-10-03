@@ -141,7 +141,7 @@ trait HeapModel {
 
   def read (p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
   def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
-  def alloc(o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def alloc(o : CCTerm, oType : CCType, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
   def free (p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
 
   /**

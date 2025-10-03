@@ -802,7 +802,7 @@ class Symex private (context        : SymexContext,
   private def wrapAsHeapObject(term : CCTerm) : CCTerm =
     context.sortWrapperMap get term.typ.toSort match {
       case Some(wrapper) =>
-        CCTerm.fromTerm(wrapper(term.toTerm), term.typ, term.srcInfo)
+        CCTerm.fromTerm(wrapper(term.toTerm), CCHeapObject(context.heap), term.srcInfo)
       case None =>
         throw new TranslationException(
           s"No constructor found to make ${term.typ} a heap object!")
@@ -1374,7 +1374,7 @@ class Symex private (context        : SymexContext,
                */
 
               val allocatedAddr = processHeapResult(
-                heapModel.alloc(objectTerm, values, getStaticLocationId(exp))).get
+                heapModel.alloc(wrapAsHeapObject(objectTerm), objectTerm.typ, values, getStaticLocationId(exp))).get
 
               pushVal(allocatedAddr)
             case CCTerm(sizeExp, typ, _, _) if typ.isInstanceOf[CCArithType] =>
@@ -1435,7 +1435,7 @@ class Symex private (context        : SymexContext,
               }, typ, srcInfo)
 
               val allocatedAddr = processHeapResult(
-                heapModel.alloc(objectTerm, values, getStaticLocationId(exp))).get
+                heapModel.alloc(wrapAsHeapObject(objectTerm), objectTerm.typ, values, getStaticLocationId(exp))).get
 
               pushVal(allocatedAddr)
             case _ =>
