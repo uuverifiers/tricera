@@ -38,7 +38,8 @@ import tricera.acsl.ACSLTranslator
 import tricera.concurrency.CCReader.CCAssertionClause
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import tricera.concurrency.ccreader._
-import tricera.concurrency.{CCReader, SymexContext}
+import tricera.concurrency.SymexContext
+import tricera.concurrency.concurrent_c.Absyn.{Function_def, Stm}
 import tricera.params.TriCeraParameters
 import tricera.properties
 import tricera.properties.Property
@@ -76,6 +77,9 @@ final class HeapTheoryFactory(context : SymexContext,
     val memCleanupVar = res.vars.get(memCleanupVarName)
     new HeapTheoryModel(context, scope, heapVar, memCleanupVar)
   }
+
+  override def getFunctionsToInject : Map[String, Function_def] = Map()
+  override def getInitCodeToInject : Seq[String] = Seq()
 }
 
 class HeapTheoryModel(context           : SymexContext,
@@ -173,8 +177,9 @@ class HeapTheoryModel(context           : SymexContext,
         CCHeap(context.heap),
         o.srcInfo)
 
+      val ptrType = p.typ.asInstanceOf[CCHeapPointer].typ
       val safetyFormula = CCTerm.fromFormula(
-        context.heap.heapADTs.hasCtor(curO.toTerm, context.sortCtorIdMap(o.typ.toSort)),
+        context.heap.heapADTs.hasCtor(curO.toTerm, context.sortCtorIdMap(ptrType.toSort)),
         CCInt, p.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
@@ -497,8 +502,8 @@ class HeapTheoryModel(context           : SymexContext,
                          resVar.map(v => IConstant(v.term)) take finalPred.arity),
             None, properties.MemValidCleanup)
         case _ =>
-          assert(false, s"$finalPred does not contain the heap variable or" +
-                        s"the memory cleanup prophecy variable!")
+          assert(false, s"$finalPred does not contain the heap variable or " +
+                         "the memory cleanup prophecy variable!")
           null
       }
       newAssertions.filter(_ != null)

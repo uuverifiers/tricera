@@ -397,7 +397,9 @@ class Main (args: Array[String]) {
         import ap.parser.{IBinJunctor, LineariseVisitor, Transform2NNF}
         import ap.parser.IExpression._
         val sameNamedTerms =
-          c.constants.groupBy(_.name).filter(_._2.size > 1)
+          c.constants.groupBy(_.name).filter{
+            case (name, constants) => constants.size > 1 && name != "_"
+          }
         val conjuncts =
           LineariseVisitor(Transform2NNF(c.constraint), IBinJunctor.And)
 

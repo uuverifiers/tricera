@@ -380,9 +380,9 @@ case class CCStruct(ctor : MonoSortedIFunction,
       case _ => sel(t)
     }
   }
-  def setFieldTerm(rootTerm:     ITerm,
-                   setVal:       ITerm,
-                   fieldAddress: List[Int]): ITerm = {
+  def setFieldTerm(rootTerm     :     ITerm,
+                   setVal       :       ITerm,
+                   fieldAddress : List[Int]) : ITerm = {
     fieldAddress match {
       case hd :: tl => {
         val childTerm = getFieldType(hd) match {
@@ -410,6 +410,12 @@ case class CCStruct(ctor : MonoSortedIFunction,
     }
   }
 
+  // A helper to set a field of a struct containing a single field
+  def setFieldTerm(fieldVal : ITerm) : ITerm = {
+    assert(sels.size == 1)
+    ctor(fieldVal)
+  }
+
   def getADTSelector(ind: Int): MonoSortedIFunction = sels(ind)._1
 
   // Initializes a struct using a stack and returns the initialized term.
@@ -431,10 +437,6 @@ case class CCStruct(ctor : MonoSortedIFunction,
               throw new TranslationException(
                 "Heap arrays inside structs are" +
                   "not supported.")
-              ???
-              if (values.isEmpty)
-                h.addressRangeCtor(h.nullAddr(), IIntLit(1))
-              else values.pop()
             case CCArray(elemTyp,
                          sizeExpr,
                          Some(arraySize),

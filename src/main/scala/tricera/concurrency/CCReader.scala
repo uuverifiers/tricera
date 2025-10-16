@@ -81,7 +81,8 @@ object CCReader {
     var reader : CCReader = null
     while (reader == null)
       try {
-        reader = new CCReader(transformedCallsProg, entryFunction, propertiesToCheck)
+        reader = new CCReader(
+          transformedCallsProg, entryFunction, propertiesToCheck, Seq())
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -181,18 +182,18 @@ object CCReader {
     }
   }
 
-  private def getName (f : Function_def) : String = getName(FuncDef(f).decl)
-  private def getName (t : Thread_def) : String = t match {
+  def getName (f : Function_def) : String = getName(FuncDef(f).decl)
+  def getName (t : Thread_def) : String = t match {
     case decl : SingleThread => decl.cident_
     case decl : ParaThread => decl.cident_2
   }
 
-  private def getName(decl : Declarator) : String = decl match {
+  def getName(decl : Declarator) : String = decl match {
     case decl : NoPointer => getName(decl.direct_declarator_)
     case decl : BeginPointer => getName(decl.direct_declarator_)
   }
 
-  private def getName(decl : Direct_declarator) : String = decl match {
+  def getName(decl : Direct_declarator) : String = decl match {
     case decl : Name      => decl.cident_
     case decl : ParenDecl => getName(decl.declarator_)
     case dec : NewFuncDec => getName(dec.direct_declarator_)
@@ -208,7 +209,8 @@ object CCReader {
 
 class CCReader private (prog              : Program,
                         entryFunction     : String,
-                        propertiesToCheck : Set[properties.Property]) {
+                        propertiesToCheck : Set[properties.Property],
+                        inputVarNames     : Seq[String]) {
 
   import CCReader._
 
@@ -642,47 +644,7 @@ class CCReader private (prog              : Program,
     List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
                       defObjCtor)
 
-  private val heapModelFactory : HeapModelFactory =
-    HeapModel.factory(HeapModel.ModelType.TheoryOfHeaps, symexContext, scope)
-
-  private val heapVars : Map[String, CCVar] = if (modelHeap) {
-    (for (v <- heapModelFactory.requiredVars) yield {
-      val newVar =
-        new CCVar(v.name, None, v.typ, if (v.isGlobal) GlobalStorage else AutoStorage)
-      if (v.isGlobal) {
-        scope.GlobalVars.addVar(newVar)
-        scope.GlobalVars.inits += CCTerm.fromTerm(v.initialValue, v.typ, None)
-        scope.variableHints += List() // Add placeholder for hints
-      } else { // For thread-local variables, if any model needs them
-        scope.LocalVars.addVar(newVar)
-      }
-      v.name -> newVar
-    }).toMap } else Map.empty
-
-  private val heapPreds : Map[String, CCPredicate] = if(modelHeap) {
-    (for (pred <- heapModelFactory.requiredPreds) yield {
-      // TODO: properly implement this. will be needed for invariant-based heap encoding
-      val dummyArgs = pred.argTypes.map(t => new CCVar("", None, t, AutoStorage))
-      val newPred   = this.newPred(pred.name, dummyArgs, None)
-      pred.name -> newPred
-    }).toMap
-  } else Map.empty
-
-  private val heapModel : Option[HeapModel] =
-    if(modelHeap)
-      Some(heapModelFactory(HeapModel.Resources(heapVars, heapPreds)))
-    else None
-
-  def getHeapInfo = if (modelHeap) Some(new HeapInfo(heap, heapModel.get)) else None
-
-  /**
-   * It is important that globalExitPred has arguments for any variables
-   * needed by the heap model - for instance we want to check that memory is
-   * cleaned before exit, and it cannot be done if the variable tracking memory
-   * does not exist at that point.
-   * This exit predicate is reached, for instance, with the `abort` statement.
-   */
-  private val globalExitPred = newPred("exit", scope.allFormalVars, None)
+  def getHeapInfo = if (modelHeap) Some(HeapInfo(heap, heapModel.get)) else None
 
   private val structCtorsOffset = predefSignatures.size
   val defObj = heap.userADTCtors.last
@@ -729,6 +691,65 @@ class CCReader private (prog              : Program,
       else actualType})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
+
+  private val globalVars : Seq[CCVarDeclaration] = if (inputVarNames.nonEmpty) {
+    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_ if decl.isInstanceOf[Global]) yield
+      collectVarDecls(decl.asInstanceOf[Global].dec_, true)
+  }.flatten.filter(_.isInstanceOf[CCVarDeclaration]).map(_.asInstanceOf[CCVarDeclaration]) else Seq()
+  private val inputVars : Seq[CCVar] = inputVarNames.map { name =>
+    globalVars.find(_.name == name) match {
+      case Some(v) => new CCVar(v.name, Some(v.srcInfo), v.typ, GlobalStorage)
+      case None => throw new TranslationException(
+        s"INPUT variable '$name' from comment is not declared as a global variable.")
+    }
+  }
+
+  private val heapModelFactory : HeapModelFactory =
+    HeapModel.factory(HeapModel.ModelType.TheoryOfHeaps, symexContext, scope, inputVars)
+
+  for ((name, funcDefAst) <- heapModelFactory.getFunctionsToInject if modelHeap) {
+    if (functionDefs.contains(name)) {
+      throw new TranslationException(
+        s"Heap model function '$name' clashes with an existing function.")
+    }
+    functionDefs.put(name, funcDefAst)
+  }
+
+  private val heapVars : Map[String, CCVar] = if (modelHeap) {
+    (for (v <- heapModelFactory.requiredVars) yield {
+      val newVar =
+        new CCVar(v.name, None, v.typ, if (v.isGlobal) GlobalStorage else AutoStorage)
+      if (v.isGlobal) {
+        scope.GlobalVars.addVar(newVar)
+        scope.GlobalVars.inits += CCTerm.fromTerm(v.initialValue, v.typ, None)
+        scope.variableHints += List() // Add placeholder for hints
+      } else { // For thread-local variables, if any model needs them
+        scope.LocalVars.addVar(newVar)
+      }
+      v.name -> newVar
+    }).toMap } else Map.empty
+
+  private val heapPreds : Map[String, CCPredicate] = if(modelHeap) {
+    (for (pred <- heapModelFactory.requiredPreds) yield {
+      val newPred   = this.newPred(pred.name, pred.args, None)
+      uninterpPredDecls += pred.name -> newPred
+      pred.name -> newPred
+    }).toMap
+  } else Map.empty
+
+  private val heapModel : Option[HeapModel] =
+    if(modelHeap)
+      Some(heapModelFactory(HeapModel.Resources(heapVars, heapPreds)))
+    else None
+
+  /**
+   * It is important that globalExitPred has arguments for any variables
+   * needed by the heap model - for instance we want to check that memory is
+   * cleaned before exit, and it cannot be done if the variable tracking memory
+   * does not exist at that point.
+   * This exit predicate is reached, for instance, with the `abort` statement.
+   */
+  private val globalExitPred = newPred("exit", scope.allFormalVars, None)
 
   //////////////////////////////////////////////////////////////////////////////
   private def translateProgram : Unit = {
@@ -2045,6 +2066,11 @@ class CCReader private (prog              : Program,
                 throw NeedsTimeException
               typ = CCDuration
             }
+            case _ : THeapObject => {
+              if (!modelHeap)
+                throw NeedsHeapModelException
+              typ = CCHeapObject(heap)
+            }
             case x => {
               warn("type " + (printer print x) +
                    " not supported, assuming int")
@@ -2496,7 +2522,7 @@ class CCReader private (prog              : Program,
             override def getCtor(s: Sort): Int = sortCtorIdMap(s)
             override def getTypOfPointer(t: CCType): CCType =
               t match {
-                case p: CCHeapPointer => p.typ
+                case p : CCHeapPointer => p.typ
                 case t => t
               }
             override def isHeapEnabled: Boolean = modelHeap
@@ -2689,7 +2715,18 @@ class CCReader private (prog              : Program,
         }
         output(addRichClause(entryClause, entryPred.srcInfo))
 
-        translateStmSeq(stmsIt, entryPred, exit)
+        val initStmts : Iterator[Stm] = {
+          val inputInitCode = Seq()
+
+          val heapModelInitCode =
+            if (modelHeap) heapModelFactory.getInitCodeToInject else Seq()
+
+          (inputInitCode ++ heapModelInitCode).iterator.map { code =>
+            ParseUtil.parseStatement(new java.io.StringReader(code))
+          }
+        }
+
+        translateStmSeq(ap.util.PeekIterator(initStmts ++ stmsIt), entryPred, exit)
         scope.LocalVars popFrame
       }
     }
@@ -2770,7 +2807,7 @@ class CCReader private (prog              : Program,
           }
           case stm => {
             val srcInfo = Some(getSourceInfo(stm))
-            var nextPred = if (stmsIt.hasNext) newPred(Nil, None) // todo: line no?
+            val nextPred = if (stmsIt.hasNext) newPred(Nil, None) // todo: line no?
                            else exit
             translate(stm, prevPred, nextPred)
             prevPred = nextPred
