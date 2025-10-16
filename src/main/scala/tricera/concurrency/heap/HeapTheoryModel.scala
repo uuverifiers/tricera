@@ -35,7 +35,7 @@ import ap.parser._
 import ap.types.MonoSortedIFunction
 import lazabs.horn.bottomup.HornClauses.toPrologSyntax
 import tricera.acsl.ACSLTranslator
-import tricera.concurrency.CCReader.{CCAssertionClause, CCPredicate}
+import tricera.concurrency.CCReader.CCAssertionClause
 import tricera.concurrency.ccreader.CCExceptions.TranslationException
 import tricera.concurrency.ccreader._
 import tricera.concurrency.{CCReader, SymexContext}
@@ -484,7 +484,7 @@ class HeapTheoryModel(context           : SymexContext,
         return Seq()
       }
       val newAssertions = for (finalPred <- exitPreds) yield finalPred match {
-        case CCReader.CCPredicate(_, args, _)
+        case CCPredicate(_, args, _)
           if args.size > heapInd && args.size > cleanupVarInd &&
              args(heapInd).sort == context.heap.HeapSort &&
              args(cleanupVarInd).sort == context.heap.AddressSort =>

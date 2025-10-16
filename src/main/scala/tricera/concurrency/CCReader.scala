@@ -145,23 +145,6 @@ object CCReader {
       super.toString + s" (property: $property)"
   }
 
-  // a wrapper for IExpression.Predicate that keeps more info about arguments
-  case class CCPredicate(pred : Predicate, argVars : Seq[CCVar],
-                         srcInfo : Option[SourceInfo]) {
-    import ap.parser.ITerm
-    import IExpression._
-    def apply(terms : Seq[ITerm]) = pred(terms: _*)
-    def apply[X: scala.reflect.ClassTag](ccVars : Seq[CCVar]) =
-      pred(ccVars.map(_.term): _*)
-    def arity : Int = pred.arity
-    override def toString: String =
-      pred.name + (if(argVars.nonEmpty) "(" + argVars.mkString(", ") + ")" else "")
-    def toStringWithLineNumbers: String =
-      pred.name + (if(argVars.nonEmpty) "(" +
-        argVars.map(_.toStringWithLineNumbers).mkString(", ") + ")" else "")
-    assert(pred.arity == argVars.size)
-  }
-
   class FunctionContext (val prePred  : CCPredicate,
                          val postPred : CCPredicate,
                          val acslContext : ACSLTranslator.FunctionContext,
@@ -963,7 +946,7 @@ class CCReader private (prog              : Program,
         }
 
         def getTypOfPointer(t: CCType): CCType = t match {
-          case p: CCHeapPointer => p.typ
+          case p : CCHeapPointer => p.typ
           case t => t
         }
 
@@ -1254,27 +1237,6 @@ class CCReader private (prog              : Program,
                                    maybeInitializer : Option[Initializer],
                                    hints            : Seq[Annotation],
                                    sourceInfo       : SourceInfo)
-
-  sealed abstract class CCDeclaration
-  // todo: better handling of function declarations
-  case class CCFunctionDeclaration(name       : String,
-                                   typ        : CCType,
-                                   directDecl : Direct_declarator,
-                                   srcInfo    : SourceInfo) extends CCDeclaration
-  case class CCVarDeclaration(name             : String,
-                              typ              : CCType,
-                              maybeInitializer : Option[Initializer],
-                              hints            : Seq[Annotation],
-                              isArray          : Boolean,
-                              isStatic         : Boolean,
-                              needsHeap        : Boolean,
-                              initArrayExpr    : Option[Constant_expression],
-                              srcInfo          : SourceInfo) extends CCDeclaration
-  case object CCNoDeclaration extends CCDeclaration
-  case class CCPredDeclaration(predHints : ListPred_hint,
-                               srcInfo   : SourceInfo) extends CCDeclaration
-
-  case class CCInterpPredDeclaration(predDecl: Pred_interp) extends CCDeclaration
 
   /**
    * @param dec               The declaration to collect from.
@@ -1806,10 +1768,10 @@ class CCReader private (prog              : Program,
   }
 
   private def getAnonStructName: String =
-    getAnonName(".AS")
+    getAnonName(Literals.anonStructName)
 
   private def getAnonEnumName: String =
-    getAnonName(".ES")
+    getAnonName(Literals.anonEnumName)
 
   private def getStructName(spec: Tstruct) : String =
     spec.struct_or_union_spec_ match {

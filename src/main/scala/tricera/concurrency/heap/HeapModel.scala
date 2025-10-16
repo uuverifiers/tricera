@@ -31,7 +31,7 @@ package tricera.concurrency.heap
 
 import ap.parser._
 import tricera.acsl.ACSLTranslator
-import tricera.concurrency.CCReader.{CCAssertionClause, CCPredicate}
+import tricera.concurrency.CCReader._
 import tricera.concurrency.ccreader._
 import tricera.concurrency.SymexContext
 import tricera.properties.Property
