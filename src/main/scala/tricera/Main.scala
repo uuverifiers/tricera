@@ -670,6 +670,7 @@ class Main (args: Array[String]) {
     case TimeoutException | StoppedException =>
       ExecutionSummary(Timeout, Map(), modelledHeap,
         programTimer.s, preprocessTimer.s)
+    // nothing
     case _: java.lang.OutOfMemoryError =>
       printError(OutOfMemory.toString)
       ExecutionSummary(OutOfMemory, Map(), modelledHeap,

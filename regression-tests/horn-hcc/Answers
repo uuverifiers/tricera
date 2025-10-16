@@ -270,6 +270,36 @@ SAFE
 static-shadowing-true.c
 SAFE
 
+static-global.c
+SAFE
+
+abort-1.c
+SAFE
+
+abort-2.c
+
+--------------
+Init:
+ main3_3(42)  
+--------------
+      |       
+      |       
+      V       
+ main3_15(42) 
+--------------
+      |       
+      |       
+      V       
+   main(42)   
+--------------
+Final:
+   main(42)   
+--------------
+Failed assertion:
+false :- main(x:2). (line:8 col:3) (property: user-assertion)
+
+UNSAFE
+
 inits2-opt.hcc
 
 ---------------
