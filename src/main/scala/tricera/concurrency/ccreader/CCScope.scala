@@ -172,9 +172,9 @@ class CCScope {
   private val evalVars = new MHashSet[String]
 
   def getFreshEvalVar (typ     : CCType,
-                               srcInfo : Option[SourceInfo],
-                               name    : String = "",
-                               storage : VariableStorage = AutoStorage) : CCVar = {
+                       srcInfo : Option[SourceInfo],
+                       name    : String = "",
+                       storage : VariableStorage = AutoStorage) : CCVar = {
     val varName = {
       if (name.nonEmpty) {
         name

@@ -288,6 +288,28 @@ UNSAFE
 stack-array-2-safe.c
 SAFE
 
+struct-chained-ptr-field-1-safe.c
+SAFE
+
+struct-chained-ptr-field-1-unsafe.c
+
+-------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                   main9_3(emptyHeap)                                                    
+-------------------------------------------------------------------------------------------------------------------------
+                                                            |                                                            
+                                                            |                                                            
+                                                            V                                                            
+ main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nthAddr(0), 0)))), nthAddr(1)) 
+-------------------------------------------------------------------------------------------------------------------------
+Final:
+ main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nthAddr(0), 0)))), nthAddr(1)) 
+-------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main_4(@h, head:9), Node::data(getNode(read(@h, head:9))) != 0. (line:13 col:3) (property: user-assertion)
+
+UNSAFE
+
 stack-ptr-bug-1.c
 UNKNOWN (Unsupported C fragment. 11:10 Stack pointers in combination with heap pointers)
 
