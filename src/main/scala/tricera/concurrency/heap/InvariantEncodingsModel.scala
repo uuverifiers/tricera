@@ -284,6 +284,7 @@ class InvariantEncodingsModel(context  : SymexContext,
   override def declUninitializedArray(arrayTyp         : CCHeapArrayPointer,
                                       size             : Option[ITerm],
                                       isGlobalOrStatic : Boolean,
+                                      forceNondetInit : Boolean,
                                       s : Seq[CCTerm]) : HeapOperationResult = {
     ???
   }
