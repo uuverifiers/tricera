@@ -222,9 +222,6 @@ nondet-global-array-explicit-2.c
 SAFE
 
 nondet-global-array-explicit-3.c
-Warning: The following clause has different terms with the same name (term: _)
-main5_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
-
 SAFE
 
 nondet-static-array-explicit-1.c
@@ -250,9 +247,6 @@ nondet-static-array-explicit-2.c
 SAFE
 
 nondet-static-array-explicit-3.c
-Warning: The following clause has different terms with the same name (term: _)
-main3_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
-
 SAFE
 
 simple-global-memsafety1.c
@@ -321,9 +315,6 @@ nondet-global-array-opt-2.c
 SAFE
 
 nondet-global-array-opt-3.c
-Warning: The following clause has different terms with the same name (term: _)
-main7_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
-
 SAFE
 
 nondet-static-array-opt-1.c
@@ -349,7 +340,4 @@ nondet-static-array-opt-2.c
 SAFE
 
 nondet-static-array-opt-3.c
-Warning: The following clause has different terms with the same name (term: _)
-main4_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
-
 SAFE
