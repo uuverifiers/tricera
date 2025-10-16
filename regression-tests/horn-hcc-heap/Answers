@@ -31,13 +31,13 @@ Init:
                                                 |                                                
                                                 |                                                
                                                 V                                                
- main_3(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
+ main_4(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
 -------------------------------------------------------------------------------------------------
 Final:
- main_3(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
+ main_4(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
 -------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_3(@h, list:14, tail:17), list:14 = tail:17. (line:29 col:3) (property: user-assertion)
+false :- main_4(@h, list:14, tail:17), list:14 = tail:17. (line:29 col:3) (property: user-assertion)
 
 UNSAFE
 
