@@ -204,6 +204,57 @@ UNSAFE
 array-of-ptr-1.c
 SAFE
 
+nondet-global-array-explicit-1.c
+
+-------------------------------------------------------------------------------------
+Init:
+ main5_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+-------------------------------------------------------------------------------------
+Final:
+ main5_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+-------------------------------------------------------------------------------------
+Failed assertion:
+false :- main5_5(@h, a:1), getInt(read(@h, nthAddrRange(a:1, 0))) != 0. (line:5 col:5) (property: user-assertion)
+
+UNSAFE
+
+nondet-global-array-explicit-2.c
+SAFE
+
+nondet-global-array-explicit-3.c
+Warning: The following clause has different terms with the same name (term: _)
+main5_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
+
+SAFE
+
+nondet-static-array-explicit-1.c
+
+---------------------------------------------------------------------------------------
+Init:
+  main3_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5))  
+---------------------------------------------------------------------------------------
+                                           |                                           
+                                           |                                           
+                                           V                                           
+ main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+---------------------------------------------------------------------------------------
+Final:
+ main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+---------------------------------------------------------------------------------------
+Failed assertion:
+false :- main3_5_1(@h, a:3), getInt(read(@h, nthAddrRange(a:3, 0))) != 0. (line:6 col:5) (property: user-assertion)
+
+UNSAFE
+
+nondet-static-array-explicit-2.c
+SAFE
+
+nondet-static-array-explicit-3.c
+Warning: The following clause has different terms with the same name (term: _)
+main3_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
+
+SAFE
+
 simple-global-memsafety1.c
 SAFE
 
@@ -251,3 +302,54 @@ false :- main7_36_3(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6
 
 UNSAFE
 UNSAFE
+
+nondet-global-array-opt-1.c
+
+-------------------------------------------------------------------------------------
+Init:
+ main7_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+-------------------------------------------------------------------------------------
+Final:
+ main7_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+-------------------------------------------------------------------------------------
+Failed assertion:
+false :- main7_5(@h, a:3), getInt(read(@h, nthAddrRange(a:3, 1))) != 0. (line:7 col:5) (property: user-assertion)
+
+UNSAFE
+
+nondet-global-array-opt-2.c
+SAFE
+
+nondet-global-array-opt-3.c
+Warning: The following clause has different terms with the same name (term: _)
+main7_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
+
+SAFE
+
+nondet-static-array-opt-1.c
+
+---------------------------------------------------------------------------------------
+Init:
+  main3_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5))  
+---------------------------------------------------------------------------------------
+                                           |                                           
+                                           |                                           
+                                           V                                           
+ main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+---------------------------------------------------------------------------------------
+Final:
+ main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
+---------------------------------------------------------------------------------------
+Failed assertion:
+false :- main3_5_1(@h, a:3), getInt(read(@h, nthAddrRange(a:3, 1))) != 0. (line:6 col:5) (property: user-assertion)
+
+UNSAFE
+
+nondet-static-array-opt-2.c
+SAFE
+
+nondet-static-array-opt-3.c
+Warning: The following clause has different terms with the same name (term: _)
+main4_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5)), newAddrRange(batchAlloc(@h, O_Int(_), 5)), newAddrRange(batchAlloc(newBatchHeap(batchAlloc(@h, O_Int(_), 5)), O_Int(_), 5))).
+
+SAFE

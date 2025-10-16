@@ -862,7 +862,8 @@ class Symex private (context        : SymexContext,
 
   def handleUninitializedArrayDecl(arrayTyp         : CCHeapArrayPointer,
                                    sizeExpr         : Option[Constant_expression],
-                                   isGlobalOrStatic : Boolean) : CCTerm = {
+                                   isGlobalOrStatic : Boolean,
+                                   forceNondetInit  : Boolean) : CCTerm = {
     val sizeTerm = sizeExpr match {
       case Some(expr) =>
         Some(eval(expr.asInstanceOf[Especial].exp_)
@@ -872,7 +873,7 @@ class Symex private (context        : SymexContext,
     }
 
     val result =
-      heapModel.declUninitializedArray(arrayTyp, sizeTerm, isGlobalOrStatic, values)
+      heapModel.declUninitializedArray(arrayTyp, sizeTerm, isGlobalOrStatic, forceNondetInit, values)
     processHeapResult(result).getOrElse(
       throw new TranslationException(
         "Uninitialized array declaration did not return a pointer.")

@@ -6,7 +6,7 @@ TESTS="test1.hcc test2.hcc test3.hcc test4.hcc \
        test-para2.hcc lazy-eval1.hcc \
        jumps.hcc jumps2.hcc jumps3.hcc \
        functions.hcc functions2.hcc extended-decl.hcc \
-       inits.hcc inits2.hcc inits3.hcc \
+       inits.hcc inits2.hcc inits3.hcc inits4.hcc inits4-explicit.hcc \
        shadowing-global.hcc shadowing.hcc disconnected-assertions.hcc \
        atomic1.hcc atomic2.hcc atomic3.hcc atomic3b.hcc atomic3c.hcc \
        atomic3d.hcc \
@@ -23,6 +23,15 @@ for name in $TESTS; do
     echo
     echo $name
     $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done
+
+# Tests that depend on -forceNondetInit option
+TESTS="inits2-opt.hcc inits4-opt.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off -forceNondetInit "$@" $name 2>&1 | grep -v 'at '
 done
 
 # disable cex for tests producing unstable output, likely due to different java versions

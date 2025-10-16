@@ -2,7 +2,13 @@
 
 LAZABS=../../tri
 
-TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-bounds-line4.c dynamic-loop1.c simple-dynamic-array.c simple-global-array.c array-single-alloc.c array-inside-struct-1.c pointer-arith-1-safe.c pointer-arith-1-unsafe.c  pointer-arith-2-safe.c  pointer-arith-2-unsafe.c  global-struct-array-1.c array-of-ptr-1.c"
+TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-bounds-line4.c \
+       dynamic-loop1.c simple-dynamic-array.c simple-global-array.c \
+       array-single-alloc.c array-inside-struct-1.c \
+       pointer-arith-1-safe.c pointer-arith-1-unsafe.c  pointer-arith-2-safe.c  pointer-arith-2-unsafe.c \
+       global-struct-array-1.c array-of-ptr-1.c \
+       nondet-global-array-explicit-1.c nondet-global-array-explicit-2.c nondet-global-array-explicit-3.c \
+       nondet-static-array-explicit-1.c nondet-static-array-explicit-2.c nondet-static-array-explicit-3.c"
 
 for name in $TESTS; do
     echo
@@ -26,4 +32,14 @@ for name in $SPLITPROPERTYTESTS; do
     echo $name
     $LAZABS -cex -abstract:off -splitProperties "$@" $name 2>&1 | grep -v 'at '
     # -memtrack can also be added but not required when .yml files are present
+done
+
+NONDETINITESTS="\
+  nondet-global-array-opt-1.c nondet-global-array-opt-2.c nondet-global-array-opt-3.c \
+  nondet-static-array-opt-1.c nondet-static-array-opt-2.c nondet-static-array-opt-3.c"
+
+for name in $NONDETINITESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off -forceNondetInit "$@" $name 2>&1 | grep -v 'at '
 done

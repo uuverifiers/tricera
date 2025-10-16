@@ -1,0 +1,10 @@
+
+void main() {
+  static int g;
+  static unsigned int h;
+
+  assert(h >= 0);
+
+  // Should be UNSAFE due to command line option -forceNondetInit
+  assert(g == 0);
+}

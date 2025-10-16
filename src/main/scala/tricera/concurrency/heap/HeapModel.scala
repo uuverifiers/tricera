@@ -192,6 +192,7 @@ trait HeapModel {
   def declUninitializedArray(arrayTyp         : CCHeapArrayPointer,
                              size             : Option[ITerm],
                              isGlobalOrStatic : Boolean,
+                             forceNondetInit  : Boolean,
                              s                : Seq[CCTerm]) : HeapOperationResult
 
   /**

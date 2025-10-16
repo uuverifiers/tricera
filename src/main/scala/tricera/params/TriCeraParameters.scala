@@ -61,6 +61,13 @@ class TriCeraParameters extends GlobalParameters {
   var showVarLineNumbersInTerms : Boolean = false
 
   /**
+   * If set, static and global variables are initialized to
+   * non-deterministic values. Otherwise, they are
+   * initialized to zero (or the given initializer value).
+   */
+  var forceNondetInit : Boolean = false
+
+  /**
    * Properties that TriCera should check.
    * Note that reach safety will be checked by default when no other properties
    * are specified. If any other property is specified, reach safety is not
@@ -318,6 +325,8 @@ class TriCeraParameters extends GlobalParameters {
     case "-valid-memcleanup" :: rest => checkMemCleanup = true; parseArgs(rest)
     case "-splitProperties"  :: rest => splitProperties = true; parseArgs(rest)
 
+    case "-forceNondetInit"  :: rest => forceNondetInit = true; parseArgs(rest)
+
     case arg :: rest if Set("-v", "--version").contains(arg) =>
       println(version); false
     case arg :: rest if Set("-h", "--help").contains(arg) =>
@@ -350,6 +359,7 @@ class TriCeraParameters extends GlobalParameters {
     |-cpp               Execute the C preprocessor (cpp) on the input file first, this will produce filename.i
     |-cppLight          Same as -cpp but does not include system header files and builtin macros.
     |                   I.e., -nostdinc -undef
+    |-forceNondetInit   Initialize static and global variables to non-deterministic values.
 
     |Checked properties:
     |-reachsafety       Enables checking of explicitly specified properties via assert statements.
