@@ -59,6 +59,10 @@ object Symex {
             maybeHeapModel : Option[HeapModel]) : Symex = {
     new Symex(context, scope, initPred, maybeHeapModel)
   }
+
+  // These need to be here for now as we create many Symexes...
+  private val locationMap = mutable.Map[SourceInfo, Int]()
+  private var locationCounter = 0
 }
 
 class Symex private (context        : SymexContext,
@@ -465,6 +469,17 @@ class Symex private (context        : SymexContext,
     }
   }
 
+  def getStaticLocationId(srcInfo : SourceInfo) : CCTerm = {
+    Symex.locationMap.getOrElseUpdate(srcInfo, {
+      Symex.locationCounter += 1
+      Symex.locationCounter
+    })
+    CCTerm.fromTerm(IIntLit(Symex.locationCounter), CCInt, Some(srcInfo))
+  }
+
+  private def getStaticLocationId(exp : Exp) : CCTerm =
+    getStaticLocationId(getSourceInfo(exp))
+
   /**
    * Represents the structural category of an LHS expression.
    */
@@ -529,6 +544,7 @@ class Symex private (context        : SymexContext,
                         evalCtx        : EvalContext): Unit = {
       assignedToStruct = true
       val baseLHSVal = eval(baseExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
+      val locTerm = getStaticLocationId(originalExp)
       baseLHSVal.typ match {
         case ptr : CCHeapPointer => // p->f
           val structType = ptr.typ match {
@@ -537,11 +553,14 @@ class Symex private (context        : SymexContext,
             case _ => throw new TranslationException("Pointer does not point to a struct type.")
           }
           val fieldAddress = getFieldAddress(structType, path)
-          val readResult = processHeapResult(heapModel.read(baseLHSVal, values)).get
-          val oldStructTerm = readResult.toTerm
-          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue.toTerm, fieldAddress)
-          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue.srcInfo)
-          processHeapResult(heapModel.write(baseLHSVal, wrapAsHeapObject(newStructObj), values))
+          pushVal(newValue)
+          pushVal(processHeapResult(heapModel.read(baseLHSVal, values, locTerm)).get)
+          maybeOutputClause(baseLHSVal.srcInfo)
+          val oldStructTerm = popVal.toTerm
+          val newValueInClause = popVal
+          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValueInClause.toTerm, fieldAddress)
+          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValueInClause.srcInfo)
+          processHeapResult(heapModel.write(baseLHSVal, wrapAsHeapObject(newStructObj), values, locTerm))
 
         case structType : CCStruct => // s.f
           val varName = asLValue(baseExp)
@@ -574,7 +593,7 @@ class Symex private (context        : SymexContext,
       arrayTerm.typ match {
         case _ : CCHeapArrayPointer =>
           processHeapResult(heapModel.arrayWrite(
-            arrayTerm, indexTerm, wrapAsHeapObject(newValue), values))
+            arrayTerm, indexTerm, wrapAsHeapObject(newValue), values, getStaticLocationId(originalExp)))
         case _ : CCArray =>
           val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
           val newTerm = CCTerm.fromTerm(writeADT(
@@ -616,14 +635,15 @@ class Symex private (context        : SymexContext,
             newArrayTerm, arrayTerm.typ, newValue.srcInfo), evalCtx.enclosingFunctionName)
 
         case array : CCHeapArrayPointer =>
-          val readResult = processHeapResult(heapModel.arrayRead(arrayTerm, indexTerm, values)).get
+          val locTerm = getStaticLocationId(originalExp)
+          val readResult = processHeapResult(heapModel.arrayRead(arrayTerm, indexTerm, values, locTerm)).get
           val oldStructTerm = readResult.toTerm
           val structType = array.elementType.asInstanceOf[CCStruct]
           val fieldAddress = getFieldAddress(structType, path)
           val newStructInnerTerm = structType.setFieldTerm(oldStructTerm, newValue.toTerm, fieldAddress)
           val newStructObj = CCTerm.fromTerm(newStructInnerTerm, structType, newValue.srcInfo)
           processHeapResult(heapModel.arrayWrite(
-            arrayTerm, indexTerm, wrapAsHeapObject(newStructObj), values))
+            arrayTerm, indexTerm, wrapAsHeapObject(newStructObj), values, locTerm))
 
         case _ => throw new TranslationException(
           "Field access on an element of a non-struct array.")
@@ -639,7 +659,8 @@ class Symex private (context        : SymexContext,
                         evalCtx        : EvalContext) : Unit = {
       val pointerVal = eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
       if (isHeapPointer(pointerVal)) {
-        processHeapResult(heapModel.write(pointerVal, wrapAsHeapObject(newValue), values))
+        processHeapResult(heapModel.write(pointerVal, wrapAsHeapObject(newValue),
+                                          values, getStaticLocationId(originalExp)))
       } else {
         val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
         val lhsName = asLValue(originalExp)
@@ -760,9 +781,10 @@ class Symex private (context        : SymexContext,
 
   def handleArrayInitialization(arrayPtr  : CCHeapArrayPointer,
                                 arraySize : CCTerm,
-                                initStack : mutable.Stack[ITerm]): CCTerm = {
+                                initStack : mutable.Stack[ITerm],
+                                locTerm   : CCTerm) : CCTerm = {
     val result =
-      heapModel.allocAndInitArray(arrayPtr, arraySize.toTerm, initStack, values)
+      heapModel.allocAndInitArray(arrayPtr, arraySize.toTerm, initStack, values, locTerm)
 
     val returnValue = processHeapResult(result)
 
@@ -1116,11 +1138,11 @@ class Symex private (context        : SymexContext,
             case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
             case   _ : CCHeapPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
-              else pushVal(processHeapResult(heapModel.read(v, values)).get)
+              else pushVal(processHeapResult(heapModel.read(v, values, getStaticLocationId(exp))).get)
             case  arr : CCHeapArrayPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
               else pushVal(processHeapResult(heapModel.arrayRead(
-                v, CCTerm.fromTerm(IIntLit(0), CCInt, srcInfo), values)).get)
+                v, CCTerm.fromTerm(IIntLit(0), CCInt, srcInfo), values, getStaticLocationId(exp))).get)
             case _ => throw new TranslationException(
               "Cannot dereference non-pointer: " + v.typ + " " + v.toTerm)
           }
@@ -1269,8 +1291,9 @@ class Symex private (context        : SymexContext,
                * checking memory properties (e.g., only heap allocated memory
                * can be freed).
                */
-              val allocatedAddr =
-                processHeapResult(heapModel.alloc(objectTerm, values)).get
+
+              val allocatedAddr = processHeapResult(
+                heapModel.alloc(objectTerm, values, getStaticLocationId(exp))).get
 
               pushVal(allocatedAddr)
             case CCTerm(sizeExp, typ, _, _) if typ.isInstanceOf[CCArithType] =>
@@ -1315,25 +1338,42 @@ class Symex private (context        : SymexContext,
             case _ =>
               (Some(allocSize), None)
           }
-          val arrayLocation = name match {
-            case "malloc" | "calloc"           => ArrayLocation.Heap
-            case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
+
+          sizeInt match {
+            case Some(1) =>
+            // use regular heap model, this is not an array
+
+              val objectTerm = CCTerm.fromTerm(name match {
+                case "calloc"                                 => typ.getZeroInit
+                case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
+              }, typ, srcInfo)
+
+              val allocatedAddr = processHeapResult(
+                heapModel.alloc(objectTerm, values, getStaticLocationId(exp))).get
+
+              pushVal(allocatedAddr)
+            case _ =>
+              val arrayLocation = name match {
+                case "malloc" | "calloc"           => ArrayLocation.Heap
+                case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
+              }
+
+              val theory = ExtArray(Seq(CCInt.toSort), typ.toSort) // todo: only 1-d int arrays...
+              val arrType = CCArray(typ, sizeExpr, sizeInt, theory, arrayLocation)
+
+              val arrayTerm = CCTerm.fromTerm(name match {
+                case "calloc"                                 => arrType.getZeroInit
+                case "malloc" | "alloca" | "__builtin_alloca" => arrType.getNonDet
+              }, arrType, srcInfo)
+
+              pushVal(arrayTerm)
           }
 
-          val theory = ExtArray(Seq(CCInt.toSort), typ.toSort) // todo: only 1-d int arrays...
-          val arrType = CCArray(typ, sizeExpr, sizeInt, theory, arrayLocation)
-
-          val arrayTerm = CCTerm.fromTerm(name match {
-                                   case "calloc"                                 => arrType.getZeroInit
-                                   case "malloc" | "alloca" | "__builtin_alloca" => arrType.getNonDet
-                                 }, arrType, srcInfo)
-
-          pushVal(arrayTerm)
         case "realloc" =>
           throw new TranslationException("realloc is not supported.")
         case "free" =>
           val ptrExpr = atomicEval(exp.listexp_.head, evalCtx)
-          processHeapResult(heapModel.free(ptrExpr, values))
+          processHeapResult(heapModel.free(ptrExpr, values, getStaticLocationId(exp)))
           pushVal(CCTerm.fromTerm(0, CCVoid, srcInfo)) // free returns no value, push dummy
         case name =>
           // then we inline the called function
@@ -1415,7 +1455,7 @@ class Symex private (context        : SymexContext,
       val term = subexpr.typ match {
         case ptrType : CCStackPointer => getPointedTerm(ptrType)
         case _ : CCHeapPointer =>  //todo: error here if field is null
-          processHeapResult(heapModel.read(subexpr, values)).get
+          processHeapResult(heapModel.read(subexpr, values, getStaticLocationId(exp))).get
         case _ => throw new TranslationException(
           "Trying to access field '->" + rawFieldName + "' of non pointer.")
       }
@@ -1476,7 +1516,8 @@ class Symex private (context        : SymexContext,
       import IExpression._
       arrayTerm.typ match {
         case _ : CCHeapArrayPointer =>
-          pushVal(processHeapResult(heapModel.arrayRead(arrayTerm, index, values)).get)
+          pushVal(processHeapResult(heapModel.arrayRead(
+            arrayTerm, index, values, getStaticLocationId(exp))).get)
         case array : CCArray => // todo: move to separate method
           val readValue = CCTerm.fromTerm(
             array.arrayTheory.select(arrayTerm.toTerm, index.toTerm),
@@ -1577,7 +1618,7 @@ class Symex private (context        : SymexContext,
   private def callFunctionInlining(name : String,
                                    functionEntry : CCPredicate,
                                    pointerArgs : List[CCType] = Nil) =
-    (context.functionDefs get name) match {
+    context.functionDefs get name match {
       case Some(fundef) =>
         val typ = context.getType(fundef)
         val isNoReturn = typ == CCVoid

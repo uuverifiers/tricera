@@ -270,6 +270,9 @@ SAFE
 static-shadowing-true.c
 SAFE
 
+static-global.c
+SAFE
+
 abort-1.c
 SAFE
 

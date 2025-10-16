@@ -114,27 +114,28 @@ trait HeapModelFactory {
 
 /**
  * An interface for heap memory models. Each operation also takes the current
- * state `s` (i.e., `values`) as input.
+ * state `s` (i.e., `values`) as input. The input `loc` is a term representing
+ * the operation's location (i.e., meta-information).
  */
 trait HeapModel {
   import HeapModel._
 
-  def read (p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
-  def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
-  def alloc(o : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
-  def free (p : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
+  def read (p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def alloc(o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def free (p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
 
   /**
    * Allocates an array of objects on the heap
    * @param o    The object to populate the array with
    * @param size The symbolic size of the array
-   * @param loc  The location of the allocation
+   * @param arrayLoc  The location of the allocation
    * @param s    The current symbolic state of all variables
    */
-  def batchAlloc(o    : CCTerm,
-                 size : ITerm,
-                 loc  : ArrayLocation.Value,
-                 s    : Seq[CCTerm]) : HeapOperationResult
+  def batchAlloc(o        : CCTerm,
+                 size     : ITerm,
+                 arrayLoc : ArrayLocation.Value,
+                 s        : Seq[CCTerm]) : HeapOperationResult
 
   /**
    * Reads an element from a heap array.
@@ -142,9 +143,11 @@ trait HeapModel {
    * @param index The index to read from
    * @param s     The current symbolic state of all variables
    */
-  def arrayRead(arr : CCTerm, index : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
+  def arrayRead(arr : CCTerm, index : CCTerm, s : Seq[CCTerm],
+                loc : CCTerm) : HeapOperationResult
 
-  def arrayWrite(arr : CCTerm, index : CCTerm, value : CCTerm, s : Seq[CCTerm]) : HeapOperationResult
+  def arrayWrite(arr : CCTerm, index : CCTerm, value : CCTerm,
+                 s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
 
    /**
    * A hook to handle allocation of an array with an
@@ -160,7 +163,8 @@ trait HeapModel {
     arrayPtr     : CCHeapArrayPointer,
     size         : ITerm,
     initializers : mutable.Stack[ITerm],
-    s            : Seq[CCTerm]) : HeapOperationResult
+    s            : Seq[CCTerm],
+    loc          : CCTerm) : HeapOperationResult
 
    /**
    * Arrays declared without an explicit initializer list (e.g., `int a[n]`).
