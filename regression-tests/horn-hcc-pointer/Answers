@@ -59,3 +59,7 @@ SAFE
 
 ptr-to-int-cast.c
 UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
+
+stack-ptr-fun-ret.c
+Warning: no definition of function "nondet" available
+UNKNOWN (Unsupported C fragment. Returning stack pointers from functions is not yet supported.)
