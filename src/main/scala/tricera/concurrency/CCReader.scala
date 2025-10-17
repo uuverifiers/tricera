@@ -242,6 +242,8 @@ class CCReader private (prog              : Program,
       CCReader.this.functionDefs
     override def functionDecls : MHashMap[String, (Direct_declarator, CCType)] =
       CCReader.this.functionDecls
+    override def functionIds : MHashMap[String, ITerm] =
+      CCReader.this.functionIds
     override def structDefs : MHashMap[String, CCStruct] =
       CCReader.this.structDefs
     override def structInfos : Seq[StructInfo] =
@@ -345,6 +347,7 @@ class CCReader private (prog              : Program,
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
+  private val functionIds   = new MHashMap[String, ITerm] // Maps each known function to a unique id
   private val warnedFunctionNames = new MHashSet[String]
   private val functionContexts = new MHashMap[String, FunctionContext]
   private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
@@ -789,6 +792,11 @@ class CCReader private (prog              : Program,
 
         case _ => // nothing
       }
+
+    // assign one unique integer to each function name
+    val functionNamesIterator = functionDecls.keys.toIterator ++ functionDefs.keys.toIterator
+    for ((functionName, id) <- functionNamesIterator.zipWithIndex)
+      functionIds.put(functionName, IIntLit(IdealInt(id)))
 
     val globalsSize = scope.GlobalVars.size
     /**
@@ -1293,8 +1301,28 @@ class CCReader private (prog              : Program,
           directDecl match {
             // function declaration
             case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
-              CCFunctionDeclaration(name, typeWithPtrs, directDecl,
-                initDeclWrapper.sourceInfo) // todo: check that typeWithPtrs is correct here
+              val calleeDecl = directDecl match {
+                case f: NewFuncDec => f.direct_declarator_
+                case f: OldFuncDec => f.direct_declarator_
+              }
+              // todo func-ptr: consider adding support for more types of declarations, function pointer pointer for example
+              calleeDecl match {
+                case parenDecl: ParenDecl =>
+                  parenDecl.declarator_ match {
+                    case beginPointer: BeginPointer =>
+                      (beginPointer.pointer_, beginPointer.direct_declarator_) match {
+                        case (_: Point, name: Name) =>
+                          CCVarDeclaration(name.cident_, CCFunctionPointer, initDeclWrapper.maybeInitializer,
+                                           initDeclWrapper.hints, isArray = false, needsHeap = false,
+                                           initArrayExpr = None, srcInfo = initDeclWrapper.sourceInfo, isStatic = false)
+                        case _ => throw new TranslationException("Unsupported declaration.")
+                      }
+                    case _ => throw new TranslationException("Unsupported declaration.")
+                  }
+                case _ =>
+                  CCFunctionDeclaration(name, typeWithPtrs, directDecl,
+                                        initDeclWrapper.sourceInfo) // todo: check that typeWithPtrs is correct here
+              }
             // array declaration
             case _: InitArray | _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
               val (arrayType, initArrayExpr) = {
@@ -1385,6 +1413,8 @@ class CCReader private (prog              : Program,
                 //CCHeapArrayPointer(heap, typ, HeapArray)
                 throw new TranslationException(
                   "Arrays inside predicate declarations are not supported.")
+              case _ : NewFuncDec | _ : OldFuncDec =>
+                CCFunctionPointer
               case _ => typ
             }
             case _ => typ
@@ -1750,8 +1780,7 @@ class CCReader private (prog              : Program,
           }
           directDecl match {
             case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
-              throw new TranslationException("Functions as struct fields" +
-                " are not supported.")
+              CCFunctionPointer
             case _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
               if (!modelHeap) throw NeedsHeapModelException
               CCHeapArrayPointer(heap, typ, ArrayLocation.Heap)
@@ -2252,6 +2281,8 @@ class CCReader private (prog              : Program,
                       if TriCeraParameters.parameters.value.useArraysForHeap =>
                       CCArray(typ, None, None, ExtArray(
                         Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap)
+                    case _ : NewFuncDec | _ : OldFuncDec =>
+                      CCFunctionPointer
                     case _ => typ
                   }
                 case _ => typ

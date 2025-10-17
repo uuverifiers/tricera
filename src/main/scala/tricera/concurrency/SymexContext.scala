@@ -58,6 +58,7 @@ trait SymexContext {
   def functionContexts  : MHashMap[String, FunctionContext]
   def functionDefs      : MHashMap[String, Absyn.Function_def]
   def functionDecls     : MHashMap[String, (Direct_declarator, CCType)]
+  def functionIds       : MHashMap[String, ITerm]
   def structDefs        : MHashMap[String, CCStruct]
   def structInfos       : Seq[StructInfo]
   def uninterpPredDecls : MHashMap[String, CCPredicate]
