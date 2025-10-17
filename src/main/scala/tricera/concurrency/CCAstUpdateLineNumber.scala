@@ -356,11 +356,6 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
     super.visit(p, arg)
   }
 
-  override def visit(p: Extension, arg: A): Unit = {
-    setLineNumber(p, lineNumber)
-    super.visit(p, arg)
-  }
-
   override def visit(p: Tag, arg: A): Unit = {
     setLineNumber(p, lineNumber)
     super.visit(p, arg)

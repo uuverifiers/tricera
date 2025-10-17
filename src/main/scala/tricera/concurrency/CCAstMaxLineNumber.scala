@@ -270,10 +270,6 @@ class CCAstMaxLineNumber extends FoldVisitor[Int, Unit] with GetLineNumber {
     getLineNumber(p).max(super.visit(p, arg))
   }
 
-  override def visit(p: Extension, arg: Unit): Int = {
-    getLineNumber(p).max(super.visit(p, arg))
-  }
-
   override def visit(p: Tag, arg: Unit): Int = {
     getLineNumber(p).max(super.visit(p, arg))
   }

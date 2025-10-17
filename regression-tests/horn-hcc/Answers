@@ -379,3 +379,9 @@ SAFE
 
 preprocess-1.c
 SAFE
+
+preprocess-2-assert.c
+UNSAFE
+
+preprocess-3-assert.c
+SAFE
