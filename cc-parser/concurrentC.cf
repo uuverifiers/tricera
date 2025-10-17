@@ -126,7 +126,6 @@ Const.      Type_qualifier ::= "const" ;
 NoOptim.    Type_qualifier ::= "volatile";
 Restrict1.  Type_qualifier ::= "__restrict__";
 Restrict2.  Type_qualifier ::= "__restrict";
-Extension.  Type_qualifier ::= "__extension__";
 
 separator nonempty Type_qualifier "";
 
@@ -313,45 +312,51 @@ token CLongDouble (((digit+ '.' digit+)|(digit+ '.')|('.' digit+))(('e'|'E')('-'
 
 
 
-Ecomma.      Exp   ::= Exp "," Exp2;
-Eassign.     Exp2  ::= Exp15 Assignment_op Exp2;
-Econdition.  Exp3  ::= Exp4 "?" Exp ":" Exp3;
-Elor.        Exp4  ::= Exp4 "||" Exp5;
-Eland.       Exp5  ::= Exp5 "&&" Exp6;
-Ebitor.      Exp6  ::= Exp6 "|" Exp7;
-Ebitexor.    Exp7  ::= Exp7 "^" Exp8;
-Ebitand.     Exp8  ::= Exp8 "&" Exp9;
-Eeq.         Exp9  ::= Exp9 "==" Exp10;
-Eneq.        Exp9  ::= Exp9 "!=" Exp10;
-Elthen.      Exp10 ::= Exp10 "<" Exp11;
-Egrthen.     Exp10 ::= Exp10 ">" Exp11;
-Ele.         Exp10 ::= Exp10 "<=" Exp11;
-Ege.         Exp10 ::= Exp10 ">=" Exp11;
-Eleft.       Exp11 ::= Exp11 "<<" Exp12;
-Eright.      Exp11 ::= Exp11 ">>" Exp12;
-Eplus.       Exp12 ::= Exp12 "+" Exp13;
-Eminus.      Exp12 ::= Exp12 "-" Exp13;
-Etimes.      Exp13 ::= Exp13 "*" Exp14;
-Ediv.        Exp13 ::= Exp13 "/" Exp14;
-Emod.        Exp13 ::= Exp13 "%" Exp14;
-Etypeconv.   Exp14 ::= "(" Type_name ")" Exp14;
-Epreinc.     Exp15 ::= "++" Exp15;
-Epredec.     Exp15 ::= "--" Exp15;
-Epreop.      Exp15 ::= Unary_operator Exp14;
-Ebytesexpr.  Exp15 ::= "sizeof" Exp15;
-Ebytestype.  Exp15 ::= "sizeof" "(" Type_name ")";
-Earray.      Exp16 ::= Exp16 "[" Exp "]" ;
-Efunk.       Exp16 ::= Exp16 "(" ")";
-Efunkpar.    Exp16 ::= Exp16 "(" [Exp2] ")";
-Eselect.     Exp16 ::= Exp16 "." CIdent;
-Epoint.      Exp16 ::= Exp16 "->" CIdent;
-Epostinc.    Exp16 ::= Exp16 "++";
-Epostdec.    Exp16 ::= Exp16 "--";
-Evar.        Exp17 ::= CIdent;
-internal EvarWithType.        Exp17 ::= CIdent "<[" [Declaration_specifier] Init_declarator "]>" ;
-Econst.      Exp17 ::= Constant;
-Estring.     Exp17 ::= String;
-Enondet.     Exp17 ::= "_";
+Ecomma.       Exp   ::= Exp "," Exp2;
+Eassign.      Exp2  ::= Exp15 Assignment_op Exp2;
+Econdition.   Exp3  ::= Exp4 "?" Exp ":" Exp3;
+Elor.         Exp4  ::= Exp4 "||" Exp5;
+Eland.        Exp5  ::= Exp5 "&&" Exp6;
+Ebitor.       Exp6  ::= Exp6 "|" Exp7;
+Ebitexor.     Exp7  ::= Exp7 "^" Exp8;
+Ebitand.      Exp8  ::= Exp8 "&" Exp9;
+Eeq.          Exp9  ::= Exp9 "==" Exp10;
+Eneq.         Exp9  ::= Exp9 "!=" Exp10;
+Elthen.       Exp10 ::= Exp10 "<" Exp11;
+Egrthen.      Exp10 ::= Exp10 ">" Exp11;
+Ele.          Exp10 ::= Exp10 "<=" Exp11;
+Ege.          Exp10 ::= Exp10 ">=" Exp11;
+Eleft.        Exp11 ::= Exp11 "<<" Exp12;
+Eright.       Exp11 ::= Exp11 ">>" Exp12;
+Eplus.        Exp12 ::= Exp12 "+" Exp13;
+Eminus.       Exp12 ::= Exp12 "-" Exp13;
+Etimes.       Exp13 ::= Exp13 "*" Exp14;
+Ediv.         Exp13 ::= Exp13 "/" Exp14;
+Emod.         Exp13 ::= Exp13 "%" Exp14;
+Etypeconv.    Exp14 ::= "(" Type_name ")" Exp14;
+Epreinc.      Exp15 ::= "++" Exp15;
+Epredec.      Exp15 ::= "--" Exp15;
+Epreop.       Exp15 ::= Unary_operator Exp14;
+Ebytesexpr.   Exp15 ::= "sizeof" Exp15;
+Ebytestype.   Exp15 ::= "sizeof" "(" Type_name ")";
+Earray.       Exp16 ::= Exp16 "[" Exp "]" ;
+Efunk.        Exp16 ::= Exp16 "(" ")";
+Efunkpar.     Exp16 ::= Exp16 "(" [Exp2] ")";
+Eselect.      Exp16 ::= Exp16 "." CIdent;
+Epoint.       Exp16 ::= Exp16 "->" CIdent;
+Epostinc.     Exp16 ::= Exp16 "++";
+Epostdec.     Exp16 ::= Exp16 "--";
+Estmexp.      Exp16 ::= "(" Compound_stm ")";
+_.            Exp16 ::= "__extension__" Exp16;
+Evar.         Exp17 ::= CIdent;
+internal
+EvarWithType. Exp17 ::= CIdent "<[" [Declaration_specifier] Init_declarator "]>" ;
+Econst.       Exp17 ::= Constant;
+Estring.      Exp17 ::= String;
+Enondet.      Exp17 ::= "_";
+
+coercions Exp 17;
+separator nonempty Exp2 ",";
 
 Efloat.        Constant ::= Double;
 Echar.         Constant ::= Char;
@@ -376,17 +381,12 @@ Eint.          Constant ::= UnboundedInteger;
 
 Especial. Constant_expression ::= Exp3;
 
-coercions Exp 17;
-
-
 Address.     Unary_operator ::= "&" ;
 Indirection. Unary_operator ::= "*" ;
 Plus.        Unary_operator ::= "+" ;
 Negative.    Unary_operator ::= "-" ;
 Complement.  Unary_operator ::= "~" ;
 Logicalneg.  Unary_operator ::= "!" ;
-
-separator nonempty Exp2 ",";
 
 
 Assign.       Assignment_op ::= "=" ;

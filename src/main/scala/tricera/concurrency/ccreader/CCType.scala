@@ -132,6 +132,74 @@ abstract sealed class CCType {
       }
   }
 
+  def sizeInBytes: Int = {
+    tricera.params.TriCeraParameters.get.arithMode match {
+      case ArithmeticMode.Mathematical =>
+        this match {
+          case CCBool                                      => 1
+          case CCInt | CCUInt                              => 4
+          case CCLong | CCULong | CCLongLong | CCULongLong => 8
+          case CCFloat                                     => 4
+          case _: CCPointer                                => 8
+          case CCHeapArrayPointer(_, _, _)                 => 8
+          case CCIntEnum(_, _)                             => 4
+          case CCArray(elemTyp, _, Some(n), _, _)          => elemTyp.sizeInBytes * n
+          case s: CCStruct                                 => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in Mathematical mode.")
+        }
+
+      case ArithmeticMode.ILP32 =>
+        this match {
+          case CCBool                             => 1
+          case CCInt | CCUInt | CCLong | CCULong  => 4
+          case CCLongLong | CCULongLong           => 8
+          case CCFloat                            => 4
+          case _: CCPointer                       => 4
+          case CCHeapArrayPointer(_, _, _)        => 4
+          case CCIntEnum(_, _)                    => 4
+          case CCArray(elemTyp, _, Some(n), _, _) => elemTyp.sizeInBytes * n
+          case s: CCStruct                        => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in ILP32 mode.")
+        }
+
+      case ArithmeticMode.LP64 =>
+        this match {
+          case CCBool                                      => 1
+          case CCInt | CCUInt                              => 4
+          case CCLong | CCULong | CCLongLong | CCULongLong => 8
+          case CCFloat                                     => 4
+          case _: CCPointer                                => 8
+          case CCHeapArrayPointer(_, _, _)                 => 8
+          case CCIntEnum(_, _)                             => 4
+          case CCArray(elemTyp, _, Some(n), _, _)          => elemTyp.sizeInBytes * n
+          case s: CCStruct                                 => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in LP64 mode.")
+        }
+
+      case ArithmeticMode.LLP64 =>
+        this match {
+          case CCBool                             => 1
+          case CCInt | CCUInt | CCLong | CCULong  => 4
+          case CCLongLong | CCULongLong           => 8
+          case CCFloat                            => 4
+          case _: CCPointer                       => 8
+          case CCHeapArrayPointer(_, _, _)        => 8
+          case CCIntEnum(_, _)                    => 4
+          case CCArray(elemTyp, _, Some(n), _, _) => elemTyp.sizeInBytes * n
+          case s: CCStruct                        => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in LLP64 mode.")
+        }
+    }
+  }
+
   def rangePred(t : ITerm) : IFormula =
     toSort match {
       case Sort.Nat =>
@@ -479,6 +547,17 @@ case class CCStruct(ctor : MonoSortedIFunction,
                   .pop()
           }
     ctor(const: _*)
+  }
+
+  def structSizeInBytes : Int = {
+    sels.foldLeft(0) {
+      case (sum, (_, fieldType)) =>
+        val concreteFieldType = fieldType match {
+          case CCStructField(name, structs) => structs(name)
+          case typ => typ
+        }
+        sum + concreteFieldType.sizeInBytes
+    }
   }
 }
 

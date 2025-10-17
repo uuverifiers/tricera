@@ -53,7 +53,7 @@ for name in $TESTS; do
     $LAZABS -cex -abstract "$@" $name
 done
 
-TESTS="preprocess-1.c "
+TESTS="preprocess-1.c preprocess-2-assert.c preprocess-3-assert.c"
 
 for name in $TESTS; do
     echo

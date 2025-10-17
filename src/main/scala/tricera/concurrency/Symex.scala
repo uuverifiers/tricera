@@ -1204,8 +1204,15 @@ class Symex private (context        : SymexContext,
         case _ : Logicalneg =>
           pushVal(CCTerm.fromFormula(~popVal.toFormula, CCInt, srcInfo))
       }
-//    case exp : Ebytesexpr.  Exp15 ::= "sizeof" Exp15;
-//    case exp : Ebytestype.  Exp15 ::= "sizeof" "(" Type_name ")";
+    case exp : Ebytesexpr => // Exp15 ::= "sizeof" Exp15;
+      val srcInfo = Some(getSourceInfo(exp))
+      val inner = eval(exp.exp_)
+      pushVal(CCTerm.fromTerm(IdealInt(inner.typ.sizeInBytes), CCUInt, srcInfo))
+    case exp : Ebytestype => //  Exp15 ::= "sizeof" "(" Type_name ")";
+      val srcInfo = Some(getSourceInfo(exp))
+      val typ = context.getType(exp)
+      pushVal(CCTerm.fromTerm(IdealInt(typ.sizeInBytes), CCUInt, srcInfo))
+
 //    case exp : Earray.      Exp16 ::= Exp16 "[" Exp "]" ;
 
     case exp : Efunk =>
@@ -1597,6 +1604,45 @@ class Symex private (context        : SymexContext,
           throw new TranslationException(getLineString(exp) +
                                          arrayTerm + " is not a supported array type - currently only " +
                                          "1-d arrays are supported.")
+      }
+
+    // Only one very specific statement expression is support for now:
+    // ((void) sizeof(int), ({ if (guard) ; /* empty */ else __assert_fail (...); }));
+    // This is used as a macro to implement "assert" in "assert.h", so we reduce it to that.
+    case exp : Estmexp =>
+      def throwUnsupportedFragment = throw new UnsupportedCFragmentException(
+        getLineString(exp) + "Only limited support for statement expressions")
+      exp.compound_stm_ match {
+        case _ : ScompOne => throw new TranslationException(
+          getLineString(exp) + "Empty statement expression.")
+        case comp : ScompTwo if comp.liststm_.size() == 1 &&
+                          comp.liststm_.head.isInstanceOf[SelS] =>
+          comp.liststm_.head.asInstanceOf[SelS].selection_stm_ match {
+            case ssel : SselTwo if ssel.stm_1.isInstanceOf[ExprS] &&
+                                   ssel.stm_2.isInstanceOf[ExprS] =>
+              if (!ssel.stm_1.asInstanceOf[ExprS].expression_stm_
+                       .isInstanceOf[SexprOne] || // first part is not an empty stm or
+                  !ssel.stm_2.asInstanceOf[ExprS].expression_stm_
+                       .isInstanceOf[SexprTwo])   // second part is an empty stm
+                throwUnsupportedFragment
+              val lastExp = ssel.stm_2.asInstanceOf[ExprS].expression_stm_
+                                .asInstanceOf[SexprTwo].exp_
+              lastExp match {
+                case funExp : Efunkpar =>
+                  val funName = asLValue(funExp.exp_)
+                  funName match {
+                    case "__assert_fail" =>
+                      // transform the whole thing to an assert statement
+                      val assertArgList = new ListExp()
+                      assertArgList.add(ssel.exp_) // add the guard as arg
+                      evalHelp(new Efunkpar(new Evar("assert"), assertArgList))
+                    case _ => throwUnsupportedFragment
+                  }
+                case _ => throwUnsupportedFragment
+              }
+            case _ => throwUnsupportedFragment
+          }
+        case _ => throwUnsupportedFragment
       }
 
     case _ =>

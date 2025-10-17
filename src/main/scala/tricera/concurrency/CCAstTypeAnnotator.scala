@@ -72,8 +72,10 @@ class CCAstTypeAnnotator {
     val symTab = new CCAstTypeAnnotationData
     symTab.put("assume", createDeclaration("assume", List(new Tint)))
     symTab.put("assert", createDeclaration("assert", List(new Tvoid)))
+    symTab.put("__assert_fail", createDeclaration("__assert_fail", List(new Tvoid)))
     symTab.put("abort", createDeclaration("abort", List(new Tvoid)))
     symTab.put("exit", createDeclaration("exit", List(new Tint, new Tvoid)))
+    symTab.put("__PRETTY_FUNCTION__", createDeclaration("__PRETTY_FUNCTION__", List(new Tvoid)))
     symTab.put("malloc", createPointerDeclaration("malloc", List(new Tunsigned, new Tlong)))
     symTab.put("calloc", createPointerDeclaration("calloc", List(new Tunsigned, new Tlong)))
     symTab.put("alloca", createPointerDeclaration("alloca", List(new Tunsigned, new Tlong)))
