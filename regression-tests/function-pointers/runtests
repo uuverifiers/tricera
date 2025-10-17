@@ -1,0 +1,25 @@
+#!/bin/sh
+
+LAZABS=../../tri
+
+TESTS="parse_variables.c\
+       equality.c\
+       inequality.c\
+       evaluate_address_and_indirection.c\
+       call_safe.c\
+       call_unsafe.c\
+       call_nested_safe.c\
+       call_nested_unsafe.c\
+       call_reassign.c\
+       call_contracts.c\
+       call_global.c\
+       call_struct.c\
+       select_one_min_max.c\
+	   call_uninitialized_pointer.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex "$@" $name 2>&1 | grep -v 'at '
+done
+
