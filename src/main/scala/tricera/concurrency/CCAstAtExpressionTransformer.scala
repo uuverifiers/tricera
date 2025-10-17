@@ -117,8 +117,8 @@ object CCAstAtExpressionTransformer {
     }
 
     override def visit(p : Efunkpar, currentFunc : Function_def) : Efunkpar = {
-      val funcName = p.accept(getName, ())
-      if (funcName == atExpressionName) {
+      if ((p.exp_.isInstanceOf[Evar] || p.exp_.isInstanceOf[EvarWithType]) &&
+          p.accept(getName, ()) == atExpressionName) {
         if (currentFunc != null && p.listexp_.size() == 2) {
           val labelArg = p.listexp_.get(0)
           val expressionArg = p.listexp_.get(1)

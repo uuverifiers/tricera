@@ -279,20 +279,25 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
   }
 
   override def visit(efunkpar: Efunkpar, symTab: CCAstTypeAnnotationData)
-  : Exp = efunkpar.exp_.accept(getName, ()) match {
-      case "assume" | "assert" =>
-        /*
+  : Exp = {
+    if (efunkpar.exp_.isInstanceOf[Evar] ||
+        efunkpar.exp_.isInstanceOf[EvarWithType]) {
+      efunkpar.exp_.accept(getName, ()) match {
+        case "assume" | "assert" =>
+          /*
           Set up special treatment of TriCera 'assume' and 'assert'
           functions. This is needed because the arguments to these
           functions may contain predicates that are not true C
           identifiers but defined in $...$ comments. We therefore
           ignore missing declarations in the arguments.
         */
-        withIgnoreMissingDeclarations {
+          withIgnoreMissingDeclarations{
+            super.visit(efunkpar, symTab)
+          }
+        case _                   =>
           super.visit(efunkpar, symTab)
-        }
-      case _ =>
-        super.visit(efunkpar, symTab)
+      }
+    } else super.visit(efunkpar, symTab)
   }
 
   /**

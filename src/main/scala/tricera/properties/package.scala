@@ -162,4 +162,6 @@ package object properties {
    * exist.
    */
   case object SwitchCaseValidJump extends Property
+
+  case object FunctionPointerSafety extends Property
 }

@@ -856,8 +856,7 @@ class Symex private (context        : SymexContext,
 
   private def evalHelp(exp : Exp)
                       (implicit evalSettings : EvalSettings,
-                       evalCtx      : EvalContext)
-  : Unit = exp match {
+                       evalCtx      : EvalContext) : Unit = exp match {
     case exp : Ecomma =>
       evalHelp(exp.exp_1)
       popVal
@@ -1168,6 +1167,8 @@ class Symex private (context        : SymexContext,
                 "Stack pointers to mathematical array fields are not yet supported."
               )
 
+            case _ if topVal.typ == CCFunctionPointer =>
+              // do nothing, the conversion has already been done
             case _ =>
               val t = if (evalCtx.handlingFunContractArgs) {
                 throw new UnsupportedCFragmentException(
@@ -1182,6 +1183,8 @@ class Symex private (context        : SymexContext,
               }
               pushVal(t) //we don't care about the value
           }
+        case _ if topVal.typ == CCFunctionPointer =>
+        // do nothing, the conversion has already been done
         case _ : Indirection =>
           val v = popVal
           v.typ match { // todo: type checking?
@@ -1193,6 +1196,9 @@ class Symex private (context        : SymexContext,
               if(evalCtx.evaluatingLHS) pushVal(v)
               else pushVal(processHeapResult(heapModel.arrayRead(
                 v, CCTerm.fromTerm(IIntLit(0), CCInt, srcInfo), values, getStaticLocationId(exp))).get)
+            case CCFunctionPointer =>
+              // we automatically convert to a function pointer in this case
+              pushVal(v)
             case _ => throw new TranslationException(
               "Cannot dereference non-pointer: " + v.typ + " " + v.toTerm)
           }
@@ -1235,9 +1241,8 @@ class Symex private (context        : SymexContext,
           /** A builtin to access the default object of the heap */
           pushVal(CCTerm.fromTerm(context.heap._defObj,
                                   CCHeapObject(context.heap), srcInfo))
-        case name =>
-          outputClause(srcInfo)
-          handleFunction(name, initPred, 0)
+        case _ =>
+          evalCall(exp.exp_, new ListExp(), srcInfo)
       }
 
     case exp : Efunkpar =>
@@ -1443,52 +1448,53 @@ class Symex private (context        : SymexContext,
           // todo: if we are to handle a function contract, arguments are handled
           // as heap pointers. if the function is to be inlined, then arguments
           // are handled as stack pointers. here we set a flag to notify this
-          val handlingFunctionContractArgs = context.functionContexts.contains(name)
-          val newEvalCtx = evalCtx
-            .withHandlingFunContractArgs(handlingFunctionContractArgs)
-            .incrementCallDepth
-          for (e <- exp.listexp_)
-            evalHelp(e)(evalSettings, newEvalCtx.withFunctionName(name))
-
-          // substitute fresh variable names (e.g., __eval) with actual function argument names
-          val argCount = exp.listexp_.size
-          val argNames = context.functionDefs get name match {
-            case Some(f) => context.getFunctionArgNames(f)
-            case None =>
-              context.uninterpPredDecls get name match {
-                case Some(predDecl) =>
-                  predDecl.argVars.map(_.name)
-                case None => Nil
-              }
-          }
-          if(argNames.nonEmpty) {
-            val evalVars = scope.LocalVars.getVarsInTopFrame.takeRight(argCount)
-            scope.LocalVars.pop(argCount) // remove those vars
-            assert(argNames.length == argCount && evalVars.length == argCount)
-            val newVars = if (evalVars.exists(v => context.isTermUsedInClauses(v.term))) {
-              // todo: replace terms by substituting them if they were added to clauses too!
-              evalVars
-            } else {
-              for ((oldVar, argName) <- evalVars zip argNames) yield {
-                val uniqueArgName = name + "`" + argName
-                new CCVar(uniqueArgName, oldVar.srcInfo, oldVar.typ,
-                          oldVar.storage)
-              }
-            }
-            newVars.foreach(v => scope.LocalVars.addVar(v))
-          }
-          //////////////////////////////////////////////////////////////////////
-
-          /**
-           * @todo Below might be buggy and break when there is more than
-           *       one nested call
-           */
-          if(!handlingFunctionContractArgs || evalCtx.nestedCallDepth == 0)
-            outputClause(Some(getSourceInfo(exp)))
-
-          val functionEntry = initPred
-
-          handleFunction(name, functionEntry, argCount)
+//          val handlingFunctionContractArgs = context.functionContexts.contains(name)
+//          val newEvalCtx = evalCtx
+//            .withHandlingFunContractArgs(handlingFunctionContractArgs)
+//            .incrementCallDepth
+//          for (e <- exp.listexp_)
+//            evalHelp(e)(evalSettings, newEvalCtx.withFunctionName(name))
+//
+//          // substitute fresh variable names (e.g., __eval) with actual function argument names
+//          val argCount = exp.listexp_.size
+//          val argNames = context.functionDefs get name match {
+//            case Some(f) => context.getFunctionArgNames(f)
+//            case None =>
+//              context.uninterpPredDecls get name match {
+//                case Some(predDecl) =>
+//                  predDecl.argVars.map(_.name)
+//                case None => Nil
+//              }
+//          }
+//          if(argNames.nonEmpty) {
+//            val evalVars = scope.LocalVars.getVarsInTopFrame.takeRight(argCount)
+//            scope.LocalVars.pop(argCount) // remove those vars
+//            assert(argNames.length == argCount && evalVars.length == argCount)
+//            val newVars = if (evalVars.exists(v => context.isTermUsedInClauses(v.term))) {
+//              // todo: replace terms by substituting them if they were added to clauses too!
+//              evalVars
+//            } else {
+//              for ((oldVar, argName) <- evalVars zip argNames) yield {
+//                val uniqueArgName = name + "`" + argName
+//                new CCVar(uniqueArgName, oldVar.srcInfo, oldVar.typ,
+//                          oldVar.storage)
+//              }
+//            }
+//            newVars.foreach(v => scope.LocalVars.addVar(v))
+//          }
+//          //////////////////////////////////////////////////////////////////////
+//
+//          /**
+//           * @todo Below might be buggy and break when there is more than
+//           *       one nested call
+//           */
+//          if(!handlingFunctionContractArgs || evalCtx.nestedCallDepth == 0)
+//            outputClause(Some(getSourceInfo(exp)))
+//
+//          val functionEntry = initPred
+//
+//          handleFunction(name, functionEntry, argCount)
+          evalCall(exp.exp_, exp.listexp_, srcInfo)
       }
 
     case exp : Eselect =>
@@ -1537,18 +1543,27 @@ class Symex private (context        : SymexContext,
 
     case exp : Evar =>
       // todo: Unify with EvarWithType, they should always be treated the same.
+      val srcInfo = Some(getSourceInfo(exp))
       val name = exp.cident_
       name match {
         // TODO: FIX!!
         case "HEAP_TYPE_DEFAULT" =>
           pushVal(CCTerm.fromTerm(context.heap._defObj,
-                                  CCHeapObject(context.heap), Some(getSourceInfo(exp))))
+                                  CCHeapObject(context.heap), srcInfo))
         case _ =>
           pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
                     case -1 =>
-                      (context.enumeratorDefs get name) match {
-                        case Some(e) => e
-                        case None => throw new TranslationException(
+                      val enumeratorDef = context.enumeratorDefs get name
+                      val functionId = context.functionIds get name
+                      (enumeratorDef, functionId) match {
+                        case (_, Some(t)) =>
+//                          // we only have a function designator and nothing else
+//                          ret.wasJustFunctionDesignator = true
+//                          // we automatically convert to a function pointer in this case
+//                          ret.convertedFunctionDesignator = true
+                          CCTerm.fromTerm(t, CCFunctionPointer, srcInfo)
+                        case (Some(e), _) => e
+                        case (None, None) => throw new TranslationException(
                           getLineString(exp) + "Symbol " + name + " is not declared")
                       }
                     case ind =>
@@ -1557,20 +1572,7 @@ class Symex private (context        : SymexContext,
       }
 
 
-    case exp : EvarWithType =>
-      // todo: Unify with Evar, they should always be treated the same.
-      val name = exp.cident_
-      pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
-                case -1 =>
-                  (context.enumeratorDefs get name) match {
-                    case Some(e) => e
-                    case None => throw new TranslationException(
-                      getLineString(exp) + "Symbol " + name + " is not declared")
-                  }
-                case ind =>
-                  getValue(ind, false)
-              })
-
+    case exp : EvarWithType => evalHelp(new Evar(exp.cident_))
     case exp : Econst => evalHelp(exp.constant_)
     case exp : Estring => // todo: implement this properly
       warn("ignoring string argument")
@@ -1649,6 +1651,134 @@ class Symex private (context        : SymexContext,
       throw new TranslationException(getLineString(exp) +
                                      "Expression currently not supported by TriCera: " +
                                      (context.printer print exp))
+  }
+
+  private def parameterListIsVoid(decl: NewFuncDec) = {
+    val parameterList = decl.parameter_type_.asInstanceOf[AllSpec].listparameter_declaration_
+    parameterList.get(0) match {
+      case t : OnlyType =>
+        t.listdeclaration_specifier_.get(0) match {
+          case t : Type => t.type_specifier_.isInstanceOf[Tvoid]
+          case _ => false
+        }
+      case _ => false
+    }
+  }
+
+  private def getNumArgsForFunction(name : String) : Option[Int] = {
+    val functionDef = context.functionDefs get name
+    val functionDecl = context.functionDecls get name
+    val directDecl = (functionDef, functionDecl) match {
+      case (Some(d), _) =>
+        Some(FuncDef(d).decl match {
+               case d : BeginPointer => d.direct_declarator_
+               case d : NoPointer => d.direct_declarator_
+             })
+      case (_, Some((d, _))) => Some(d)
+      case _ => None
+    }
+    directDecl match {
+      case Some(d : NewFuncDec) if parameterListIsVoid(d) =>
+        Some(0)
+      case Some(d : NewFuncDec) =>
+        Some(d.parameter_type_.asInstanceOf[AllSpec].listparameter_declaration_.size)
+      case Some(d : OldFuncDec) =>
+        Some(0)
+      case _ => None
+    }
+  }
+
+  private def getPossibleCalleesWithGuards(calleeExpr : CCTerm, argNum : Int) : Iterable[(String, IFormula)] = {
+    context.functionIds.filter(_ match{
+       case (name, _) =>
+         getNumArgsForFunction(name) match {
+           case Some(num) =>
+             num == argNum
+           case None => false
+         }
+     }).map(_ match {
+              case (name, id) => (name, calleeExpr.toTerm === id)
+            })
+  }
+
+  // evaluates a call f(x, y, z) where the expression f evaluates to a function pointer
+  private def evalFunctionPointerCall(evaledCallee : CCTerm,
+                                      argExprs : ListExp,
+                                      srcInfo : Option[SourceInfo])
+                                     (implicit evalSettings : EvalSettings,
+                                      evalContext  : EvalContext): Unit = {
+    // create predicate representing the state after the function call returns
+    val retVar = new CCVar("fp_call_return", srcInfo, CCInt, AutoStorage)
+    val postCall = context.newPred(Seq(retVar), None)
+    // get all possible callees
+    val calleesWithGuards = getPossibleCalleesWithGuards(evaledCallee, argExprs.size)
+    // ensure that some branch is taken
+    val guards = calleesWithGuards.map(_._2)
+    assertProperty(IExpression.or(guards), srcInfo, properties.FunctionPointerSafety)
+    // create one branch for each function
+    for ((name, guard) <- calleesWithGuards) {
+      saveState
+      addGuard(guard)
+      // evaluate the arguments, this is done after saveState since restoreState
+      // is not able to increase localVars.size (at the moment when this is implemented)
+      // todo: if we are to handle a function contract, arguments are handled
+      // as heap pointers. if the function is to be inlined, then arguments
+      // are handled as stack pointers. here we set a flag to notify this
+      for (e <- argExprs)
+        evalHelp(e)(evalSettings, evalContext
+          .withHandlingFunContractArgs(context.functionContexts.contains(name)))
+      outputClause(srcInfo)
+      // call the function and ensure that the result return value is in postCall
+      handleFunction(name, initPred, argExprs.size)
+      outputClause(postCall, srcInfo)
+      restoreState
+    }
+    // todo func-ptr: do not assume that function returns integer
+    // continue generating future clauses from postCall clause
+    pushFormalVal(CCInt, srcInfo)
+    resetFields(postCall)
+  }
+
+  // evaluates a call f(x, y, z) where the expression f is just the name of a function
+  private def evalFunctionCall(name: String, argExprs: ListExp, srcInfo: Option[SourceInfo])
+                              (implicit evalSettings : EvalSettings,
+                               evalContext : EvalContext) : Unit = {
+    // todo: if we are to handle a function contract, arguments are handled
+    // as heap pointers. if the function is to be inlined, then arguments
+    // are handled as stack pointers. here we set a flag to notify this
+    val handlingFunContractArgs = context.functionContexts.contains(name)
+    for (e <- argExprs)
+      evalHelp(e)(evalSettings, evalContext
+        .withHandlingFunContractArgs(handlingFunContractArgs))
+    // This condition makes sure that the encoding is the same as before
+    // function pointer support was added.
+    if (!handlingFunContractArgs || argExprs.size == 0) outputClause(srcInfo)
+
+    handleFunction(name, initPred, argExprs.size)
+  }
+
+  // after this returns topVal will be a variable representing the return value of the function call
+  private def evalCall(calleeExpr : Exp, argExprs : ListExp, srcInfo : Option[SourceInfo])
+                      (implicit evalSettings : EvalSettings,
+                       evalContext : EvalContext) : Unit = {
+    val name = context.printer print calleeExpr
+    context.uninterpPredDecls get name match {
+      case Some(predDecl) =>
+        val argTerms : List[ITerm] =
+          for (e <- argExprs.toList) yield eval(e).toTerm
+        pushVal(CCTerm.fromFormula(predDecl(argTerms), CCInt, srcInfo))
+      case None =>
+        // eval the callee
+        val evalRet = evalHelp(calleeExpr)
+        popVal match {
+          case callee if callee.typ != CCFunctionPointer =>
+            throw new TranslationException("Can only call function pointers")
+//          case _ if (evalRet.wasJustFunctionDesignator) =>
+//            evalFunctionCall(name, argExprs, srcInfo)
+          case callee =>
+            evalFunctionPointerCall(callee, argExprs, srcInfo)
+        }
+    }
   }
 
   private def handleFunction(name : String,

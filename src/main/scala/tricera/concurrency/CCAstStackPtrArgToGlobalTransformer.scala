@@ -586,6 +586,11 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
   }
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {
+    if (!callSite.exp_.isInstanceOf[Evar] &&
+        !callSite.exp_.isInstanceOf[EvarWithType]) {
+      return super.visit(callSite, transforms)
+    }
+
     (callSite.listexp_.asScala.find(CCAstUtils.isStackPtr),
      functionDefinitions.get(callSite.accept(getName, ()))) match {
       case (Some(_), Some(funcDef)) => 

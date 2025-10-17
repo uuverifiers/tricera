@@ -571,6 +571,15 @@ case class CCIntEnum(name:   String, enumerators: Seq[(String, IdealInt)])
   def shortName = name
 }
 
+// CCFunctionPointer does not derive from CCPointer as it does not point to a CCType.
+// CCFunction is not implemented as toSort cannot be defined for it.
+// (Without adding support for function designators in the output.)
+case object CCFunctionPointer
+  extends CCType {
+  def shortName = "func-ptr"
+  override def toString: String = "function pointer"
+}
+
 abstract sealed class CCPointer(typ: CCType) extends CCType {
   def shortName = typ.shortName + "*"
 }

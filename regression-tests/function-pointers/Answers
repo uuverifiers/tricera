@@ -1,0 +1,110 @@
+
+parse_variables.c
+SAFE
+
+equality.c
+SAFE
+
+inequality.c
+SAFE
+
+evaluate_address_and_indirection.c
+SAFE
+
+call_safe.c
+SAFE
+
+call_unsafe.c
+UNSAFE
+
+-----------------------
+Init:
+         main2         
+-----------------------
+           |           
+           |           
+           V           
+    main13(1, 2, 2)    
+-----------------------
+           |           
+           |           
+           V           
+  main21(1, 2, 2, 3)   
+-----------------------
+           |           
+           |           
+           V           
+ main29(1, 2, 2, 3, 2) 
+-----------------------
+           |           
+           |           
+           V           
+ main30(1, 2, 2, 3, 2) 
+-----------------------
+Final:
+ main30(1, 2, 2, 3, 2) 
+-----------------------
+
+Related assertions: 
+ false :- main30(f:17, g:18, x:19, two:20, three:21), three:21 != 3. (assertion source: line 23) 
+
+call_nested_safe.c
+SAFE
+
+call_nested_unsafe.c
+UNSAFE
+
+---------------------
+Init:
+        main2        
+---------------------
+          |          
+          |          
+          V          
+   main13(1, 2, 2)   
+---------------------
+          |          
+          |          
+          V          
+ main231(1, 2, 2, 4) 
+---------------------
+Final:
+ main231(1, 2, 2, 4) 
+---------------------
+
+Related assertions: 
+ false :- main231(f:17, g:18, x:19, not_five:20), not_five:20 != 5. (assertion source: line 21) 
+
+call_reassign.c
+SAFE
+
+call_contracts.c
+SAFE
+
+call_global.c
+SAFE
+
+call_struct.c
+SAFE
+
+select_one_min_max.c
+SAFE
+
+call_uninitialized_pointer.c
+UNSAFE
+
+----------
+Init:
+  main2   
+----------
+    |     
+    |     
+    V     
+ main7(0) 
+----------
+Final:
+ main7(0) 
+----------
+
+Related assertions: 
+ false :- main7(fp:11), fp:11 != 1. (assertion source: line 12) 
