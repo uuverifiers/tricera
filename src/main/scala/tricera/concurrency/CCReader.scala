@@ -29,18 +29,6 @@
 
 package tricera.concurrency
 
-/**
-  * In Scala 2.13, `scala.Seq` changed from aliasing `scala.collection.Seq` to aliasing
-  * `scala.collection.immutable.Seq`.  In this code base usage of unqualified `Seq` is banned: use
-  * `immutable.Seq` or `collection.Seq` instead.
-  *
-  * import scala.collection
-  * import scala.collection.immutable
-  *
-  * This `Seq` trait is a dummy type to prevent the use of `Seq`.
-  */
-private[concurrency] trait Seq[A1]
-
 import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ADT, ExtArray, Heap}
