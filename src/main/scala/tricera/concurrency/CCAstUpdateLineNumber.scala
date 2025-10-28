@@ -56,8 +56,8 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
     result
   }
 
-  override def leaf(x: A): Unit = Unit
-  override def combine(x: Unit, r: Unit, a: A): Unit = Unit
+  override def leaf(x: A): Unit = ()
+  override def combine(x: Unit, r: Unit, a: A): Unit = ()
 
   override def visit(p: Progr, arg: A): Unit = {
     setLineNumber(p, lineNumber)

@@ -5,13 +5,13 @@ import ap.parser.{IAtom, ITerm}
 import tricera.Util.SourceInfo
 
 // a wrapper for IExpression.Predicate that keeps more info about arguments
-case class CCPredicate(pred : Predicate, argVars : Seq[CCVar],
+case class CCPredicate(pred : Predicate, argVars : scala.Seq[CCVar],
                        srcInfo : Option[SourceInfo]) {
 
 
-  def apply(terms : Seq[ITerm]) : IAtom =
+  def apply(terms : scala.Seq[ITerm]) : IAtom =
     pred(terms: _*)
-  def apply[X: scala.reflect.ClassTag](ccVars : Seq[CCVar]) : IAtom =
+  def apply[X: scala.reflect.ClassTag](ccVars : scala.Seq[CCVar]) : IAtom =
     pred(ccVars.map(_.term): _*)
   def arity : Int = pred.arity
   override def toString: String =

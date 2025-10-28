@@ -44,14 +44,15 @@ import tricera.Util.{SourceInfo, printlnDebug}
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 import tricera.concurrency.ccreader.CCExceptions._
-import tricera.concurrency.ccreader.{CCVar, CCHeapPointer, CCHeapArrayPointer, CCStackPointer}
-
+import tricera.concurrency.ccreader.{CCHeapArrayPointer, CCHeapPointer, CCStackPointer, CCVar}
 import lazabs.horn.preprocessor.HornPreprocessor
 import tricera.postprocessor.FunctionInvariantsFilter
 import tricera.postprocessor.ACSLLinearisedContract
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 import tricera.postprocessor.MergeTransformedFunctionsContracts
 import tricera.postprocessor.AddValidPointerPredicates
+
+import java.util.concurrent.ExecutionException
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -64,10 +65,9 @@ object Main {
   // entry point
   def main(args: Array[String]): Unit = {
     val res = doMain(args, false)
-    res match {
-      case _ : ExecutionError => throw new MainException(res.toString)
-      case e : ExecutionSummary => //println(e)
-      case _ => // nothing
+    res.executionResult match {
+      case _ : ExecutionError   => throw new MainException(res.toString)
+      case _ =>
     }
   }
 
@@ -320,7 +320,7 @@ class Main (args: Array[String]) {
       if (dumpPP) {
         import java.io.{File, FileInputStream, FileOutputStream}
         val dest = new File(fileName + ".tri")
-        new FileOutputStream(dest) getChannel() transferFrom(
+        new FileOutputStream(dest).getChannel transferFrom(
           new FileInputStream(preprocessedFile) getChannel, 0, Long.MaxValue)
       }
       //if (res.usesArrays)
@@ -407,7 +407,7 @@ class Main (args: Array[String]) {
           for ((_, terms) <- sameNamedTerms) yield {
             val termEqualityFormulas =
               terms.toSeq.combinations(2).flatMap(ts =>
-                Seq(ts(0) === ts(1), ts(1) === ts(0))).toSeq
+                scala.Seq(ts(0) === ts(1), ts(1) === ts(0))).toSeq
             termEqualityFormulas
           }
 
@@ -565,9 +565,9 @@ class Main (args: Array[String]) {
       case _: Empty =>
         Safe
       case CounterExample(cex) => {
-        val clauseToUnmergedRichClauses : Map[Clause, Seq[CCClause]] = cex._2.iterator.map {
+        val clauseToUnmergedRichClauses : Map[Clause, scala.Seq[CCClause]] = cex._2.iterator.map {
           case (_, clause) =>
-            val richClauses : Seq[CCClause] = mergedToOriginal get clause
+            val richClauses : scala.Seq[CCClause] = mergedToOriginal get clause
             match {
               case Some(clauses) =>
                 for (Some(richClause) <- clauses map reader.getRichClause) yield
@@ -575,7 +575,7 @@ class Main (args: Array[String]) {
               case None =>
                 reader.getRichClause(clause) match {
                   case None => Nil
-                  case Some(richClause) => Seq(richClause)
+                  case Some(richClause) => scala.Seq(richClause)
                 }
             }
             (clause -> richClauses)

@@ -202,12 +202,12 @@ object Util {
    * @return    : the new ADT term
    */
   def writeADT (lhs : IFunApp, rhs : ITerm,
-                adtCtors : Seq[MonoSortedIFunction],
-                adtSels : Seq[Seq[MonoSortedIFunction]]) : ITerm = {
+                adtCtors : scala.Seq[MonoSortedIFunction],
+                adtSels : scala.Seq[scala.Seq[MonoSortedIFunction]]) : ITerm = {
     import IExpression.toFunApplier
 
     case class ADTFieldPath (ctor : MonoSortedIFunction,
-                                     sels : Seq[MonoSortedIFunction],
+                                     sels : scala.Seq[MonoSortedIFunction],
                                      updatedSelInd : Int)
     def generateADTUpdateStack (termPointingToADTField : IFunApp)
     : (List[ADTFieldPath], ITerm) = {
@@ -287,8 +287,8 @@ object Util {
   * */
 
   def show[D](d : Dag[D], name : String,
-              clauseSrcInfos : Map[Clause, Seq[SourceInfo]], // todo: this is actually a bit overkill, we do not need the rich clause, only used in assertions (for others we look at predicate lines)
-              predArgNames : IExpression.Predicate => Seq[String],
+              clauseSrcInfos : Map[Clause, scala.Seq[SourceInfo]], // todo: this is actually a bit overkill, we do not need the rich clause, only used in assertions (for others we look at predicate lines)
+              predArgNames : IExpression.Predicate => scala.Seq[String],
               predSrcInfos : IExpression.Predicate => Option[SourceInfo],
               isUnintPred  : Predicate => Boolean) : Unit = {
     if (!TriCeraParameters.get.pngNo) {
@@ -313,7 +313,7 @@ object Util {
     }
   }
 
-  val colors = Seq( // K Kelly, Color Eng., 3 (6) (1965), colors of max contrast
+  val colors = scala.Seq( // K Kelly, Color Eng., 3 (6) (1965), colors of max contrast
     //"FFB300", // Vivid Yellow
     "803E75", // Strong Purple
     "FF6800", // Vivid Orange
@@ -345,8 +345,8 @@ object Util {
   }
 
   def dotPrint[D](dag : Dag[D],
-                  clauseSrcInfos : Map[Clause, Seq[SourceInfo]],
-                  predArgNames : IExpression.Predicate => Seq[String],
+                  clauseSrcInfos : Map[Clause, scala.Seq[SourceInfo]],
+                  predArgNames : IExpression.Predicate => scala.Seq[String],
                   predSrcInfos : IExpression.Predicate => Option[SourceInfo],
                   isUnintPred  : Predicate => Boolean) : Unit = {
 
@@ -354,7 +354,7 @@ object Util {
 
       // new Color((int)(Math.random() * 0x1000000))
 
-    def updateColors (argNames : Seq[String]) : Unit =
+    def updateColors (argNames : scala.Seq[String]) : Unit =
       for (arg <- argNames if !(argColorMap contains arg)) {
         argColorMap += ((arg, getNextColor))
       }
@@ -402,9 +402,9 @@ object Util {
 
           updateColors(curArgs ++ prevArgs)
 
-          val expiredArgs =
+          val expiredArgs : scala.Seq[String] =
             if (isUnintPred(atom.pred)) Nil
-            else (prevArgs diff curArgs) diff unintPredArgs
+            else (prevArgs.toSeq diff curArgs) diff unintPredArgs
           val expiredArgStrings = expiredArgs.map(a => getGraphVizColored(a))
           val newArgs =
             if (isUnintPred(atom.pred)) Nil else curArgs diff prevArgs
@@ -418,7 +418,7 @@ object Util {
           val changedArgStrings =
             changedArgs.map(arg => getGraphVizColored(arg) + " = " + curArgValues(arg))
 
-          def getString(s: Seq[String], seqName: String,
+          def getString(s: scala.Seq[String], seqName: String,
                         newLine: Boolean = false): String = {
             if (s.nonEmpty) {
               (if (newLine) "<BR/>" else "") +
@@ -479,12 +479,12 @@ object Util {
               LineariseVisitor(Transform2NNF(getColoredConstraint(c)), IBinJunctor.And)
             val constrString = (for (conjunct <- conjuncts) yield {
               class GeqAtom(left : ITerm, right : ITerm)
-                extends IAtom(new Predicate(" &ge; ", 2), Seq(left, right)) {
+                extends IAtom(new Predicate(" &ge; ", 2), scala.Seq(left, right)) {
                 override def toString: String =
                   args(0) + pred.name + args(1)
               }
               class LtAtom(left : ITerm, right : ITerm)
-                extends IAtom(new Predicate(" &lt; ", 2), Seq(left, right)) {
+                extends IAtom(new Predicate(" &lt; ", 2), scala.Seq(left, right)) {
                 override def toString: String =
                   args(0) + pred.name + args(1)
               }
@@ -508,7 +508,7 @@ object Util {
                     KeepArg
                 }
                 def postVisit(t : IExpression,
-                              ctxt : Unit, subres : Seq[IExpression]) : IExpression =
+                              ctxt : Unit, subres : scala.Seq[IExpression]) : IExpression =
                   t update subres
               }
 
@@ -571,7 +571,7 @@ object Util {
   class FunAppsFromExtractorCollector(theoryExtractor : TheoryExtractor)
     extends CollectingVisitor[Int, List[(IFunApp, Theory)]] {
     def postVisit(t: IExpression, boundVars: Int,
-                  subres: Seq[List[(IFunApp, Theory)]]): List[(IFunApp, Theory)] = {
+                  subres: scala.Seq[List[(IFunApp, Theory)]]): List[(IFunApp, Theory)] = {
       t match {
         case f@IFunApp(fun@theoryExtractor(theory), _) =>
           (f, theory) :: subres.flatten.toList
