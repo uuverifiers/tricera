@@ -49,7 +49,7 @@ object ReaderMain {
   trait PredPrintContext {
     def predWithArgNames (pred : Predicate) : String
     def predWithArgNamesAndLineNumbers (pred : Predicate) : String
-    def predArgNames (pred : Predicate) : Seq[String]
+    def predArgNames (pred : Predicate) : scala.Seq[String]
   }
 
   def printClauses(system : ParametricEncoder.System,
@@ -226,7 +226,7 @@ object ReaderMain {
         if (atomIsFalse(a)) a.pred.name
         else printContext.predWithArgNames(a.pred)
       }
-      def getCanonicalArgNames (a : IAtom) : Seq[String] = {
+      def getCanonicalArgNames (a : IAtom) : scala.Seq[String] = {
         if(atomIsFalse(a)) Nil
         else printContext.predArgNames(a.pred)
       }

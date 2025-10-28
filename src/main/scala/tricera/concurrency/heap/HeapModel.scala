@@ -51,7 +51,7 @@ object HeapModel {
                      initialValue : ITerm)
 
   /** Used to specify (uninterpreted) predicates the model requires */
-  case class PredSpec(name: String, args: Seq[CCVar])
+  case class PredSpec(name: String, args: scala.Seq[CCVar])
 
   /** A container for all resources declared for the model. */
   case class Resources(
@@ -71,9 +71,9 @@ object HeapModel {
    */
   case class SimpleResult(
     returnValue : Option[CCTerm],
-    nextState   : Seq[CCTerm],
-    assumptions : Seq[CCTerm] = Seq.empty,
-    assertions  : Seq[(CCTerm, Property)] = Seq.empty
+    nextState   : scala.Seq[CCTerm],
+    assumptions : scala.Seq[CCTerm] = scala.Seq.empty,
+    assertions  : scala.Seq[(CCTerm, Property)] = scala.Seq.empty
   ) extends HeapOperationResult
 
   /**
@@ -86,14 +86,14 @@ object HeapModel {
    */
   case class FunctionCall(
     functionName : String,
-    args         : Seq[CCTerm],
+    args         : scala.Seq[CCTerm],
     resultType   : CCType, // can be CCVoid
     sourceInfo   : Option[SourceInfo]
   ) extends HeapOperationResult
 
   case class FunctionCallWithGetter(
     functionName : String,
-    args         : Seq[CCTerm],
+    args         : scala.Seq[CCTerm],
     resultType   : CCType, // can be CCVoid
     getter       : MonoSortedIFunction,
     sourceInfo   : Option[SourceInfo]
@@ -103,7 +103,7 @@ object HeapModel {
   def factory(mt        : ModelType.Value,
               context   : SymexContext,
               scope     : CCScope,
-              inputVars : Seq[CCVar]) : HeapModelFactory =
+              inputVars : scala.Seq[CCVar]) : HeapModelFactory =
     mt match {
       case ModelType.TheoryOfHeaps => new HeapTheoryFactory(context, scope)
       case ModelType.Invariants    => ??? // new InvariantsHeapFactory(context, scope)
@@ -116,10 +116,10 @@ trait HeapModelFactory {
   import HeapModel._
 
   /** What CCVar declarations this model needs from the caller */
-  def requiredVars : Seq[VarSpec]
+  def requiredVars : scala.Seq[VarSpec]
 
   /** What CCPredicate declarations this model needs from the caller */
-  def requiredPreds : Seq[PredSpec]
+  def requiredPreds : scala.Seq[PredSpec]
 
   /** Build the concrete model using the resources the caller allocated */
   def apply(resources: Resources): HeapModel
@@ -128,7 +128,7 @@ trait HeapModelFactory {
   def getFunctionsToInject : Map[String, Function_def]
 
   /** Initialization code to be added to the top of the entry method */
-  def getInitCodeToInject: Seq[String]
+  def getInitCodeToInject: scala.Seq[String]
 }
 
 /**
@@ -139,10 +139,10 @@ trait HeapModelFactory {
 trait HeapModel {
   import HeapModel._
 
-  def read (p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
-  def write(p : CCTerm, o : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
-  def alloc(o : CCTerm, oType : CCType, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
-  def free (p : CCTerm, s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def read (p : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def write(p : CCTerm, o : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def alloc(o : CCTerm, oType : CCType, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+  def free (p : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult
 
   /**
    * Allocates an array of objects on the heap
@@ -154,7 +154,7 @@ trait HeapModel {
   def batchAlloc(o        : CCTerm,
                  size     : ITerm,
                  arrayLoc : ArrayLocation.Value,
-                 s        : Seq[CCTerm]) : HeapOperationResult
+                 s        : scala.Seq[CCTerm]) : HeapOperationResult
 
   /**
    * Reads an element from a heap array.
@@ -162,11 +162,11 @@ trait HeapModel {
    * @param index The index to read from
    * @param s     The current symbolic state of all variables
    */
-  def arrayRead(arr : CCTerm, index : CCTerm, s : Seq[CCTerm],
+  def arrayRead(arr : CCTerm, index : CCTerm, s : scala.Seq[CCTerm],
                 loc : CCTerm) : HeapOperationResult
 
   def arrayWrite(arr : CCTerm, index : CCTerm, value : CCTerm,
-                 s : Seq[CCTerm], loc : CCTerm) : HeapOperationResult
+                 s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult
 
    /**
    * A hook to handle allocation of an array with an
@@ -182,7 +182,7 @@ trait HeapModel {
     arrayPtr     : CCHeapArrayPointer,
     size         : ITerm,
     initializers : mutable.Stack[ITerm],
-    s            : Seq[CCTerm],
+    s            : scala.Seq[CCTerm],
     loc          : CCTerm) : HeapOperationResult
 
    /**
@@ -193,14 +193,14 @@ trait HeapModel {
                              size             : Option[ITerm],
                              isGlobalOrStatic : Boolean,
                              forceNondetInit  : Boolean,
-                             s                : Seq[CCTerm]) : HeapOperationResult
+                             s                : scala.Seq[CCTerm]) : HeapOperationResult
 
   /**
    * Generates any assertions that will be added to the exits of `entryFunction`.
    * For instance any assertions to check for memory leaks at exit from main.
    * @return A sequence of formulas to be asserted at exits from `entryFunction`
    */
-  def getExitAssertions(exitPreds : Seq[CCPredicate]) : Seq[CCAssertionClause]
+  def getExitAssertions(exitPreds : scala.Seq[CCPredicate]) : scala.Seq[CCAssertionClause]
 
   /**
    * Hooks for the ACSL translator to get the pre/post-state heap terms.

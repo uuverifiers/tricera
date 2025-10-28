@@ -162,15 +162,15 @@ Warning: no definition of function "non_det_int" available
 
 Inferred ACSL annotations
 ================================================================================
-/* contract for incdec */
-/*@
-  requires \valid(p) && 2147483646 >= p->val && p->val >= -2147483648;
-  ensures \valid(p) && (\old(p->val) >= 2147483647 || -2147483649 >= \old(p->val) || (p->val == \old(p->val) && 2147483646 >= \old(p->val) && \old(p->val) >= -2147483648));
-*/
 /* contract for decr */
 /*@
   requires \valid(q) && 2147483647 >= q->val && q->val >= -2147483647;
   ensures \valid(q) && (\old(q->val) - q->val == 1 || \old(q->val) >= 2147483648 || -2147483648 >= \old(q->val));
+*/
+/* contract for incdec */
+/*@
+  requires \valid(p) && 2147483646 >= p->val && p->val >= -2147483648;
+  ensures \valid(p) && (\old(p->val) >= 2147483647 || -2147483649 >= \old(p->val) || (p->val == \old(p->val) && 2147483646 >= \old(p->val) && \old(p->val) >= -2147483648));
 */
 ================================================================================
 

@@ -31,8 +31,8 @@ package tricera.concurrency
 import concurrent_c._
 import concurrent_c.Absyn._
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable.{MutableList}
+import scala.jdk.CollectionConverters._
+import scala.collection.mutable.ListBuffer
 
 /**
   * This trait defines a function to set the line number of
@@ -459,12 +459,12 @@ class CCAstParamToAstDeclarationVistor extends AbstractVisitor[CCAstDeclaration,
 /**
   * Vistor to get declared type from a specifier.
   */
-class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, MutableList[Type_specifier]] {
+class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, ListBuffer[Type_specifier]] {
   /* Declaration_specifier */
-  override def visit(spec: Type, types: MutableList[Type_specifier]) = { types += spec.type_specifier_; true }
-  override def visit(spec: Storage, types: MutableList[Type_specifier]) = { false }
-  override def visit(spec: SpecProp, types: MutableList[Type_specifier]) = { false }
-  override def visit(spec: SpecFunc, types: MutableList[Type_specifier]) = { false }
+  override def visit(spec: Type, types: ListBuffer[Type_specifier]) = { types += spec.type_specifier_; true }
+  override def visit(spec: Storage, types: ListBuffer[Type_specifier]) = { false }
+  override def visit(spec: SpecProp, types: ListBuffer[Type_specifier]) = { false }
+  override def visit(spec: SpecFunc, types: ListBuffer[Type_specifier]) = { false }
 }
 
 /**

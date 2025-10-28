@@ -31,8 +31,8 @@ package tricera.concurrency
 import concurrent_c._
 import concurrent_c.Absyn._
 
-import scala.collection.mutable.{HashMap => MHashMap, MutableList}
-import scala.collection.JavaConverters._
+import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
+import scala.jdk.CollectionConverters._
 
 private object CCAstUtils {
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
@@ -149,7 +149,7 @@ class CCAstPointerToGlobalVisitor extends CCAstCopyWithLocation[Map[String, CCAs
   * arguments), with global variables.
   */
 object CallSiteTransform {
-  type CallSiteTransforms = MutableList[CallSiteTransform]
+  type CallSiteTransforms = ListBuffer[CallSiteTransform]
   private val copyAst = new CCAstCopyVisitor
   private val getDeclarator = new CCAstGetDeclaratorVistor
   private val getFunctionDeclaration = new CCAstGetFunctionDeclarationVistor
@@ -352,7 +352,7 @@ class CallSiteTransform(
 
     def resultDeclaration(): Option[CCAstDeclaration] = {
       val getType = new CCAstGetTypeVisitor
-      val types = new MutableList[Type_specifier]
+      val types = new ListBuffer[Type_specifier]
       specifiers.asScala.foreach(s => s.accept(getType, types))
       types.contains(new Tvoid) match {
         case true => 

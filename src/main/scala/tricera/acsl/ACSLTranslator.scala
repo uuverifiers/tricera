@@ -32,7 +32,7 @@ package tricera.acsl
 
 import tricera.acsl.{Absyn => AST}
 
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import ap.parser._
 import ap.theories.nia.GroebnerMultiplication._
 import ap.types.{Sort, SortedConstantTerm}

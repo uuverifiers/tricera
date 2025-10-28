@@ -1,6 +1,7 @@
 import scala.sys.process._
-import java.nio.file.{Paths, Files}
+import java.nio.file.{Files, Paths}
 import java.nio.file.attribute.PosixFilePermissions
+import scala.language.postfixOps
 import scala.util.Try
 
 lazy val commonSettings = Seq(
@@ -10,8 +11,8 @@ lazy val commonSettings = Seq(
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
-    scalaVersion         := "2.11.12",
-    crossScalaVersions   := Seq("2.11.12", "2.12.18"),
+    scalaVersion         := "2.13.17", // released 2025-10-06
+    crossScalaVersions   := Seq("2.13.17"),
     publishTo            := Some(Resolver.file("file",  new File( "/home/compilation/public_html/maven/" )) ),
     useCoursier          := false
 )
@@ -104,20 +105,21 @@ settings(
   scalacOptions in Compile ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
-  scalacOptions += (scalaVersion map { sv => sv match {
-                                        case "2.11.12" => "-optimise"
-                                        case "2.12.18" => "-opt:_"
-                                      }}).value,
+  scalacOptions += (scalaVersion map {
+    case "2.11.12" => "-optimise"
+    case "2.12.18" => "-opt:_"
+    case "2.13.17" => "-opt:_"
+  }).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.2",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
-  libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
-  libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",
+  libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.19",
+  libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % "test",
   excludeDependencies ++= Seq(
     // exclude java-cup from transitive dependencies, ccParser includes newer version
     ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
-)
+  )
 
 // project can also be built by providing dependencies under the lib directory
 // and uncommenting below code to discard clashing transitive dependencies

@@ -32,7 +32,7 @@ import concurrent_c._
 import concurrent_c.Absyn._
 
 import scala.collection.mutable.{HashMap => MHashMap}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Stack
 
 class TypeAnnotationException(msg : String) extends Exception(msg)

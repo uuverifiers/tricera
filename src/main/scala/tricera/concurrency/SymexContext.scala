@@ -59,7 +59,7 @@ trait SymexContext {
   def functionDefs      : MHashMap[String, Absyn.Function_def]
   def functionDecls     : MHashMap[String, (Direct_declarator, CCType)]
   def structDefs        : MHashMap[String, CCStruct]
-  def structInfos       : Seq[StructInfo]
+  def structInfos       : scala.Seq[StructInfo]
   def uninterpPredDecls : MHashMap[String, CCPredicate]
   def interpPredDefs    : MHashMap[String, CCTerm]
   def channels          : MHashMap[String, ParametricEncoder.CommChannel]
@@ -67,24 +67,24 @@ trait SymexContext {
   def sortGetterMap     : Map[Sort, MonoSortedIFunction]
   def sortWrapperMap    : Map[Sort, MonoSortedIFunction]
   def sortCtorIdMap     : Map[Sort, Int]
-  def objectGetters     : Seq[MonoSortedIFunction]
+  def objectGetters     : scala.Seq[MonoSortedIFunction]
   def defObj            : IFunction
 
   // --- Clause & Predicate Generation ---
   def output(c    : CCClause,
              sync : ParametricEncoder.Synchronisation = ParametricEncoder.NoSync) : Unit
   def addAssertion(assertion : CCAssertionClause) : Unit
-  def newPred(extraArgs : Seq[CCVar],
+  def newPred(extraArgs : scala.Seq[CCVar],
               srcInfo   : Option[SourceInfo]) : CCPredicate
   def newPred(name : String,
-              args : Seq[CCVar],
+              args : scala.Seq[CCVar],
               srcInfo : Option[SourceInfo]) : CCPredicate
   def getRichClause(c : Clause) : Option[CCClause]
   def addRichClause(c : Clause, srcInfo : Option[SourceInfo]) : CCClause
   def mkRichAssertionClause(c       : Clause,
                             srcInfo : Option[SourceInfo],
                             p       : properties.Property) : CCAssertionClause
-  def atom(p : CCPredicate, a       : Seq[ITerm]) : IAtom
+  def atom(p : CCPredicate, a       : scala.Seq[ITerm]) : IAtom
   def atom(p : CCPredicate) : IAtom
 
   // --- Control Flow & Inlining ---
@@ -104,7 +104,7 @@ trait SymexContext {
   def getType(s   : Type_specifier) : CCType
   def getType(tn  : Type_name)      : CCType
   def getType(exp : Ebytestype)     : CCType
-  def getFunctionArgNames(f : Function_def) : Seq[String]
+  def getFunctionArgNames(f : Function_def) : scala.Seq[String]
 
   def translateClockValue   (value : CCTerm) : CCTerm
   def translateDurationValue(value : CCTerm) : CCTerm

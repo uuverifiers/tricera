@@ -48,7 +48,7 @@ import IExpression.toFunApplier
 import tricera.concurrency.ccreader.CCBinaryExpressions.BinaryOperators
 import tricera.concurrency.heap.HeapModel
 
-import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator}
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Stack}
 
@@ -69,7 +69,7 @@ class Symex private (context        : SymexContext,
                      scope          : CCScope,
                      oriInitPred    : CCPredicate,
                      maybeHeapModel : Option[HeapModel]) {
-  private var values : Seq[CCTerm] =
+  private var values : scala.Seq[CCTerm] =
     scope.allFormalVars.map(v => CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
   private var guard : IFormula = true
   private var touchedGlobalState : Boolean = false
@@ -100,7 +100,7 @@ class Symex private (context        : SymexContext,
 
   def initAtomArgs = if(initAtom != null) Some(initAtom.args) else None
 
-  private val savedStates = new Stack[(IAtom, Seq[CCTerm], IFormula, /*IFormula,*/ Boolean, Boolean, Boolean)]
+  private val savedStates = new Stack[(IAtom, scala.Seq[CCTerm], IFormula, /*IFormula,*/ Boolean, Boolean, Boolean)]
   def saveState =
     savedStates push ((initAtom, values.toList, guard, touchedGlobalState, assignedToStruct, calledFunction))
   def restoreState = {
@@ -148,7 +148,7 @@ class Symex private (context        : SymexContext,
       if (varMapping forall { case (_, ind) => ind >= 0 }) {
         val defTerm =
           ConstantSubstVisitor(v.toTerm,
-                               varMapping mapValues (IExpression.v(_)))
+                               varMapping.view.mapValues(IExpression.v(_)).toMap)
         val rhs = IExpression.v(scope.variableHints.size - 1)
 
         if (defTerm != rhs) {
@@ -238,7 +238,7 @@ class Symex private (context        : SymexContext,
   }
 
   def addValue(t : CCTerm) = {
-    values = values ++ Seq(t)
+    values = values ++ scala.Seq(t)
     touchedGlobalState = touchedGlobalState || !scope.freeFromGlobal(t)
   }
 
@@ -286,9 +286,9 @@ class Symex private (context        : SymexContext,
     getVar(ind)
   }
 
-  def getValues : Seq[CCTerm] =
+  def getValues : scala.Seq[CCTerm] =
     values.toList
-  def getValuesAsTerms : Seq[ITerm] =
+  def getValuesAsTerms : scala.Seq[ITerm] =
     for (expr <- values.toList) yield expr.toTerm
 
   def asAtom(pred : CCPredicate) =
@@ -358,7 +358,7 @@ class Symex private (context        : SymexContext,
     res
   }
 
-  def evalList(exp : Exp) : Seq[CCTerm] = {
+  def evalList(exp : Exp) : scala.Seq[CCTerm] = {
     val res = new ArrayBuffer[CCTerm]
 
     var e = exp
@@ -376,7 +376,7 @@ class Symex private (context        : SymexContext,
   def atomicEval(exp : Exp, evalCtx : EvalContext) : CCTerm =
     atomicEval(List(exp), evalCtx, Some(getSourceInfo(exp)))
 
-  def atomicEval(exps : Seq[Exp], evalCtx : EvalContext,
+  def atomicEval(exps : scala.Seq[Exp], evalCtx : EvalContext,
                  srcInfo : Option[SourceInfo]) : CCTerm = {
     val currentClauseNum = context.clausesSize
     val initSize = values.size
@@ -793,7 +793,7 @@ class Symex private (context        : SymexContext,
     }
 
   private def callFunction(name    : String,
-                           args    : Seq[CCTerm],
+                           args    : scala.Seq[CCTerm],
                            srcInfo : Option[SourceInfo]) : CCTerm = {
     args.foreach(pushVal(_))
     outputClause(srcInfo)
@@ -1140,12 +1140,12 @@ class Symex private (context        : SymexContext,
               }
             case f : IFunApp if context.objectGetters contains f.fun =>
               val readFunApp = f.args.head.asInstanceOf[IFunApp] // sth like read(h, ...)
-              val Seq(heapTerm, addrTerm) = readFunApp.args
+              val scala.Seq(heapTerm, addrTerm) = readFunApp.args
               // todo: below type extraction is not safe!
               val heap = context.heap
               val t = addrTerm match {
                 case IFunApp(heap.nth, args) => // if nthAddrRange(a, i)
-                  val Seq(arrTerm, indTerm) = args
+                  val scala.Seq(arrTerm, indTerm) = args
                   // return the addressRange starting from i
                   import heap._
                   val newTerm = addressRangeCtor(nth(arrTerm, indTerm),
@@ -1162,7 +1162,7 @@ class Symex private (context        : SymexContext,
               popVal
               pushVal(t)
 
-            case IFunApp(f@ExtArray.Select(arrTheory), Seq(arrayTerm, indexTerm)) =>
+            case IFunApp(f@ExtArray.Select(arrTheory), scala.Seq(arrayTerm, indexTerm)) =>
               throw new UnsupportedCFragmentException(
                 getLineString(srcInfo) +
                 "Stack pointers to mathematical array fields are not yet supported."
@@ -1244,27 +1244,27 @@ class Symex private (context        : SymexContext,
       val srcInfo = Some(getSourceInfo(exp))
       GetId.orString(exp) match {
         case "assert" | "static_assert" if exp.listexp_.size == 1 =>
-          val property = exp.listexp_.head match {
+          val property = exp.listexp_.asScala.head match {
             case a : Efunkpar
               if context.uninterpPredDecls contains(GetId.orString(a)) =>
-              val args = a.listexp_.map(exp => atomicEval(exp, evalCtx))
+              val args = a.listexp_.asScala.map(exp => atomicEval(exp, evalCtx))
               if(args.exists(a => a.typ.isInstanceOf[CCStackPointer])) {
                 throw new TranslationException(
                   getLineStringShort(srcInfo) + " Unsupported operation: " +
                   "stack pointer argument to uninterpreted predicate.")
               }
               val pred = context.uninterpPredDecls(GetId.orString(a))
-              context.atom(pred, args.map(_.toTerm))
+              context.atom(pred, args.map(_.toTerm).toSeq)
             case interpPred : Efunkpar
               if context.interpPredDefs contains(GetId.orString(interpPred)) =>
-              val args    = interpPred.listexp_.map(
+              val args    = interpPred.listexp_.asScala.map(
                 exp => atomicEval(exp, evalCtx)).map(_.toTerm)
               val formula = context.interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.toFormula, (args.toList, 0))
             case _ =>
-              atomicEvalFormula(exp.listexp_.head, evalCtx).toFormula
+              atomicEvalFormula(exp.listexp_. asScala.head, evalCtx).toFormula
           }
           assertProperty(property, srcInfo, properties.UserAssertion)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
@@ -1272,28 +1272,28 @@ class Symex private (context        : SymexContext,
           addGuard(IBoolLit(false))
           pushVal(CCTerm.fromFormula(false, CCInt, srcInfo))
         case "assume" if exp.listexp_.size == 1 =>
-          val property = exp.listexp_.head match {
+          val property = exp.listexp_.asScala.head match {
             case a : Efunkpar
               if context.uninterpPredDecls contains(GetId.orString(a)) =>
-              val args = a.listexp_.map(exp => atomicEval(exp, evalCtx))
-                          .map(_.toTerm)
+              val args = a.listexp_.asScala.map(exp => atomicEval(exp, evalCtx))
+                          .map(_.toTerm).toSeq
               val pred = context.uninterpPredDecls(GetId.orString(a))
               context.atom(pred, args)
             case interpPred : Efunkpar
               if context.interpPredDefs contains (GetId.orString(interpPred)) =>
-              val args = interpPred.listexp_.map(
+              val args = interpPred.listexp_.asScala.map(
                 exp => atomicEval(exp, evalCtx)).map(_.toTerm)
               val formula = context.interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.toFormula, (args.toList, 0))
             case _ =>
-              atomicEvalFormula(exp.listexp_.head, evalCtx).toFormula
+              atomicEvalFormula(exp.listexp_.asScala.head, evalCtx).toFormula
           }
           addGuard(property)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case cmd@("chan_send" | "chan_receive") if (exp.listexp_.size == 1) =>
-          val name = GetId.orString(exp.listexp_.head)
+          val name = GetId.orString(exp.listexp_.asScala.head)
           (context.channels get name) match {
             case Some(chan) => {
               val sync = cmd match {
@@ -1309,7 +1309,7 @@ class Symex private (context        : SymexContext,
           }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
           if !TriCeraParameters.get.useArraysForHeap => // todo: proper alloca and calloc
-          val (typ, allocSize) = exp.listexp_(0) match {
+          val (typ, allocSize) = exp.listexp_.asScala(0) match {
             case exp : Ebytestype =>
               (context.getType(exp), CCTerm.fromTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
             //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
@@ -1373,7 +1373,7 @@ class Symex private (context        : SymexContext,
            *       arrays to model heaps.
            */
 
-          val (typ, allocSize) = exp.listexp_(0) match {
+          val (typ, allocSize) = exp.listexp_.asScala(0) match {
             case exp : Ebytestype =>
               (context.getType(exp), CCTerm.fromTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
             //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
@@ -1419,7 +1419,7 @@ class Symex private (context        : SymexContext,
                 case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
               }
 
-              val theory = ExtArray(Seq(CCInt.toSort), typ.toSort) // todo: only 1-d int arrays...
+              val theory = ExtArray(scala.Seq(CCInt.toSort), typ.toSort) // todo: only 1-d int arrays...
               val arrType = CCArray(typ, sizeExpr, sizeInt, theory, arrayLocation)
 
               val arrayTerm = CCTerm.fromTerm(name match {
@@ -1433,7 +1433,7 @@ class Symex private (context        : SymexContext,
         case "realloc" =>
           throw new TranslationException("realloc is not supported.")
         case "free" =>
-          val ptrExpr = atomicEval(exp.listexp_.head, evalCtx)
+          val ptrExpr = atomicEval(exp.listexp_.asScala.head, evalCtx)
           processHeapResult(heapModel.free(ptrExpr, values, getStaticLocationId(exp)))
           pushVal(CCTerm.fromTerm(0, CCVoid, srcInfo)) // free returns no value, push dummy
         case name =>
@@ -1447,7 +1447,7 @@ class Symex private (context        : SymexContext,
           val newEvalCtx = evalCtx
             .withHandlingFunContractArgs(handlingFunctionContractArgs)
             .incrementCallDepth
-          for (e <- exp.listexp_)
+          for (e <- exp.listexp_.asScala)
             evalHelp(e)(evalSettings, newEvalCtx.withFunctionName(name))
 
           // substitute fresh variable names (e.g., __eval) with actual function argument names
@@ -1616,8 +1616,8 @@ class Symex private (context        : SymexContext,
         case _ : ScompOne => throw new TranslationException(
           getLineString(exp) + "Empty statement expression.")
         case comp : ScompTwo if comp.liststm_.size() == 1 &&
-                          comp.liststm_.head.isInstanceOf[SelS] =>
-          comp.liststm_.head.asInstanceOf[SelS].selection_stm_ match {
+                          comp.liststm_.asScala.head.isInstanceOf[SelS] =>
+          comp.liststm_.asScala.head.asInstanceOf[SelS].selection_stm_ match {
             case ssel : SselTwo if ssel.stm_1.isInstanceOf[ExprS] &&
                                    ssel.stm_2.isInstanceOf[ExprS] =>
               if (!ssel.stm_1.asInstanceOf[ExprS].expression_stm_
@@ -1666,8 +1666,8 @@ class Symex private (context        : SymexContext,
         for (_ <- 0 until argCount)
           argTerms = popVal.toTerm :: argTerms
 
-        val postGlobalVars : Seq[ITerm] = // todo : use ctx postglobal?
-          for (v <- scope.GlobalVars.vars) yield {
+        val postGlobalVars : scala.Seq[ITerm] = // todo : use ctx postglobal?
+          (for (v <- scope.GlobalVars.vars) yield {
             if (v.isStatic) {
               throw new TranslationException(
                 "Static variables with contracts are not supported yet.")
@@ -1677,16 +1677,16 @@ class Symex private (context        : SymexContext,
             }
             IExpression.i(v.sort newConstant(v.name + Literals.postExecSuffix)) //
             // todo: refactor
-          }
+          }).toSeq
 
-        val globals : Seq[ITerm] =
+        val globals : scala.Seq[ITerm] =
           for (n <- 0 until scope.GlobalVars.size)
             yield getValue(n, false).toTerm
 
-        val prePredArgs : Seq[ITerm] = globals ++ argTerms
+        val prePredArgs : scala.Seq[ITerm] = globals ++ argTerms
 
-        val resVar : Seq[CCVar] = scope.getResVar(context.getType(funDef))
-        val postPredArgs : Seq[ITerm] =
+        val resVar : scala.Seq[CCVar] = scope.getResVar(context.getType(funDef))
+        val postPredArgs : scala.Seq[ITerm] =
           prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
 
         val preAtom  = ctx.prePred(prePredArgs)
@@ -1702,8 +1702,8 @@ class Symex private (context        : SymexContext,
           setValue(n, CCTerm.fromTerm(c, t, None)) // todo: srcInfo?
 
         resVar match {
-          case Seq(v) => pushVal(CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
-          case Seq()  => pushVal(CCTerm.fromTerm(0, CCVoid, None)) // push a dummy result
+          case scala.Seq(v) => pushVal(CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
+          case scala.Seq()  => pushVal(CCTerm.fromTerm(0, CCVoid, None)) // push a dummy result
         }
       case None =>
         context.uninterpPredDecls get name match {

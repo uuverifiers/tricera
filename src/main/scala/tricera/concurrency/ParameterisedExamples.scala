@@ -832,7 +832,7 @@ object ParameterisedExamples extends App {
                           List((for (c <- List(c1, c2, c3, c4, c5, c6, c7))
                                   yield (c, NoSync),
                                 Infinite)),
-                          5, Some({ case Seq(_, _, _, delay1, delay2) =>
+                          5, Some({ case scala.Seq(_, _, _, delay1, delay2) =>
                                       delay1 > 0 & delay2 >= delay1 }),
                           DiscreteTime(0),
                           List(timeInv),
@@ -856,7 +856,7 @@ object ParameterisedExamples extends App {
   val H = new ConstantTerm("H")
   val I = new ConstantTerm("I")
   
-  def genFischerProcess(id : ITerm) : (Process, Seq[Clause], Predicate) = {
+  def genFischerProcess(id : ITerm) : (Process, scala.Seq[Clause], Predicate) = {
     val p0 = new Predicate("p0", 5)
     val p1 = new Predicate("p1", 5)
     val p2 = new Predicate("p2", 5)
