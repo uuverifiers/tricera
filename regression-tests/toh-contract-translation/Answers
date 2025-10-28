@@ -129,7 +129,7 @@ Inferred ACSL annotations
 /* contract for swap */
 /*@
   requires \true;
-  ensures \valid(x) && \valid(y) && \old(*x) == *y && \old(*y) == *x;
+  ensures \valid(y) && \valid(x) && *x == \old(*y) && \old(*x) == *y;
 */
 ================================================================================
 
