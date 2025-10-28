@@ -65,10 +65,7 @@ object Main {
   // entry point
   def main(args: Array[String]): Unit = {
     val res = doMain(args, false)
-    res.executionResult match {
-      case _ : ExecutionError   => throw new MainException(res.toString)
-      case _ =>
-    }
+    println(res.executionResult)
   }
 
   def doMain(args: Array[String], stoppingCond: => Boolean) : ExecutionSummary = {
@@ -124,7 +121,6 @@ object Main {
       triMain.run(stoppingCond, propertiesToCheck, propertyToExpected,
                   remainingTimeout)
     }
-    println(result.executionResult)
     result
   }
 
