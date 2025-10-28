@@ -114,7 +114,7 @@ object ResultPrinters {
       println("\nInferred ACSL annotations")
       println("=" * 80)
       
-      for (contract <- result.contracts) {
+      for (contract <- result.contracts.sortBy(_.funcName)) {
         println(f"/* contract for ${contract.funcName} */")
         println( "/*@")
         println(f"  requires ${contract.preCondition};")
@@ -124,7 +124,7 @@ object ResultPrinters {
       }
       if (!result.disassociatedLoopInvariants.isEmpty) {
         println("/* Other loop invariants */")
-        result.disassociatedLoopInvariants.foreach(print)
+        result.disassociatedLoopInvariants.sortBy(_.invariant).foreach(print)
       }
       println("=" * 80 + "\n")
     }
