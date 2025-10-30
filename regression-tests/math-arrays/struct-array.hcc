@@ -1,0 +1,17 @@
+struct A {
+    int a;
+};
+
+// Not working
+void main() {
+    struct A arr[3];
+    struct A old_arr[3];
+
+    assume(arr[2].a >= 10);
+    assume(old_arr == arr);
+    
+    arr[2].a = arr[2].a * 2;
+
+    assert(arr[2].a == old_arr[2].a * 2);
+    assert(arr[1] == old_arr[1]);
+}
