@@ -2,7 +2,7 @@
 
 LAZABS=../../tri
 
-TESTS="simple-math-array-1.hcc"
+TESTS="simple-math-array-1.hcc struct-array.hcc"
 
 for name in $TESTS; do
     echo
