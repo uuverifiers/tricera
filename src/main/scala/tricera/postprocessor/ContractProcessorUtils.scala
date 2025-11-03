@@ -129,10 +129,10 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
   def isAllocFun(function: IFunction): Boolean = function == heapTheory.alloc
 
   def isNewHeapFun(function: IFunction): Boolean =
-    function == heapTheory.newHeap
+    function == heapTheory.allocResHeap
 
   def isNewAddrFun(function: IFunction): Boolean =
-    function == heapTheory.newAddr
+    function == heapTheory.allocResAddr
 
   def isGetter(function: IFunction): Boolean =
     acslContext.getterSort(function).isDefined
@@ -141,7 +141,7 @@ case class ContractConditionInfo(predicate: Predicate, ci: ContractInfo) {
     acslContext.wrapperSort(function).isDefined
 
   def isStructCtor(fun: MonoSortedIFunction): Boolean = {
-    acslContext.getStructMap.get(fun).isDefined
+    acslContext.getStructMap.contains(fun)
   }
 
   def isACSLFunction(fun: IFunction): Boolean = {
