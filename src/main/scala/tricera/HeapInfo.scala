@@ -35,8 +35,8 @@ import tricera.concurrency.heap.{HeapModel, HeapTheoryModel}
 
 final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
   private def findObjectCtorsAndSels(heap: Heap): Map[IFunction, Option[IFunction]] = {
-    heap.userADTCtors
-      .zip(heap.userADTSels)
+    heap.userHeapConstructors
+      .zip(heap.userHeapSelectors)
       .withFilter({
         case (ctor, sels) => ctor.resSort == heap.ObjectSort
       })
@@ -66,10 +66,10 @@ final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
     function == heap.alloc
 
   def isNewHeapFun(function: IFunction): Boolean =
-    function == heap.newHeap
+    function == heap.allocResHeap
 
   def isNewAddrFun(function: IFunction): Boolean =
-    function == heap.newAddr
+    function == heap.allocResAddr
 
   def isHeap(constant: ProgVarProxy): Boolean = heapModel match {
     case m : HeapTheoryModel =>

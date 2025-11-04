@@ -179,8 +179,9 @@ object CCBinaryExpressions {
       override def getIntRes = (lhs.typ, rhs.typ) match {
         case (arrTyp: CCHeapArrayPointer, _: CCArithType) =>
           import arrTyp.heap._
-          addressRangeCtor(nth(lhs.toTerm, rhs.toTerm),
-                           addrRangeSize(lhs.toTerm) - rhs.toTerm)
+//          addressRangeCtor(nth(lhs.toTerm, rhs.toTerm),
+//                           addrRangeSize(lhs.toTerm) - rhs.toTerm)
+        ???
         case _ =>
           lhs.toTerm + rhs.toTerm
       }
