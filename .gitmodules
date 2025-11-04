@@ -1,0 +1,9 @@
+[submodule "eldarica"]
+	path = eldarica
+	url = https://github.com/uuverifiers/eldarica
+[submodule "horn-concurrency"]
+	path = horn-concurrency
+	url = https://github.com/uuverifiers/horn-concurrency
+[submodule "princess"]
+	path = princess
+	url = https://github.com/uuverifiers/princess
