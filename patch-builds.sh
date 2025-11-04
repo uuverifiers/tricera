@@ -41,7 +41,7 @@ if [[ -f "$HORN_BUILD" ]]; then
     # Append after the main project definition
     awk '
       /lazy val root = \(project in file\("\."\)\)\./ {
-        print $0 "\n  dependsOn(ProjectRef(file(\"../eldarica\"), \"root\"))"
+        print $0 "\n  dependsOn(ProjectRef(file(\"../eldarica\"), \"root\"))."
         next
       }
       { print }
