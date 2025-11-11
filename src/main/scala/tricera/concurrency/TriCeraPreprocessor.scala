@@ -31,40 +31,54 @@ package tricera.concurrency
 
 import tricera.Main
 
-import sys.process._
+import sys.process.Process
 import java.nio.file.{Files, Paths}
 
 class TriCeraPreprocessor(val inputFilePath   : String,
                           val outputFilePath  : String,
                           val entryFunction   : String,
                           val displayWarnings : Boolean,
-                          val quiet           : Boolean) {
-  val ppPath = sys.env.get("TRI_PP_PATH") match {
+                          val quiet           : Boolean,
+                          val determinize     : Boolean) {
+  val ppPath : String = sys.env.get("TRI_PP_PATH") match {
     case Some(path) => path + "/tri-pp"
     case _ =>
       val path = Paths.get(System.getProperty("user.dir") + "/tri-pp")
-      if (Files.exists(path)) path
-      else
-        throw new Main.MainException("The preprocessor binary" +
+      if (Files.exists(path)) path.toString
+      else throw new Main.MainException("The preprocessor binary" +
         " (tri-pp) could not be found. Please ensure that the environment " +
         "variable TRI_PP_PATH is exported and points to the preprocessor's" +
         " base directory")
   }
-  private val cmdLine : scala.Seq[String] =
-    (scala.Seq(ppPath.toString, inputFilePath,"-o", outputFilePath) ++
-    (if(quiet) scala.Seq("-q") else Nil) ++
-    scala.Seq("-m", entryFunction, "--", "-xc") ++
-    (if(displayWarnings) Nil else scala.Seq("-Wno-everything")))
-  private val returnCode =
-    try { Process(cmdLine) ! }
-    catch {
+
+  private def runPreprocessor(extraArgs : scala.Seq[String],
+                              errorMsg  : String,
+                              input     : String,
+                              output    : String) : Int = {
+    val cmdLine : scala.Seq[String] = Seq(ppPath, input, "-o", output) ++
+                     (if (quiet) scala.Seq("-q") else Nil) ++ extraArgs ++
+                     scala.Seq("-m", entryFunction, "--", "-xc") ++
+                     (if (displayWarnings) Nil else scala.Seq("-Wno-everything"))
+
+    try { Process(cmdLine) ! } catch {
       case _: Throwable =>
-        throw new Main.MainException("TriCera preprocessor could not" +
-          " be executed. This might be due to TriCera preprocessor binary " +
-          "not being in the current directory. Alternatively, use the " +
-          "-noPP switch to disable the preprocessor.\n" +
-          "Preprocessor command: " + cmdLine
-        )
+        throw new Main.MainException(s"$errorMsg\nPreprocessor command: ${cmdLine.mkString(" ")}")
     }
-  val hasError = returnCode != 0
+  }
+
+  private val initialReturnCode = runPreprocessor(
+    Nil, "TriCera preprocessor could not be executed.", inputFilePath, outputFilePath)
+  val hasError : Boolean = initialReturnCode != 0
+
+  if (determinize) {
+    val determinizeSteps = Seq(
+      ("--make-calls-unique", "tri-pp failed while trying to make calls unique."),
+      ("--determinize", "tri-pp failed while trying to make the program deterministic.")
+    )
+
+    determinizeSteps.foldLeft(0){
+      case (_, (arg, msg)) =>
+        runPreprocessor(Seq(arg), msg, outputFilePath, outputFilePath)
+    }
+  }
 }

@@ -31,7 +31,7 @@
 package tricera
 
 import java.io.{FileOutputStream, PrintStream}
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Paths, StandardCopyOption}
 import sys.process._
 import ap.parser.IExpression.{ConstantTerm, Predicate}
 import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
@@ -272,8 +272,8 @@ class Main (args: Array[String]) {
 
     // C preprocessor (cpp)
     val cppFileName =
-      if(params.cPreprocessor)
-        CPreprocessor(fileName, includeSystemHeaders = true, params.arithMode)
+      if(params.cPreprocessor || params.cPreprocessorLight)
+        CPreprocessor(fileName, includeSystemHeaders = params.cPreprocessor, params.arithMode)
       else fileName
 
     // TriCera preprocessor (tri-pp)
@@ -295,7 +295,8 @@ class Main (args: Array[String]) {
         preprocessedFile.getAbsolutePath,
         displayWarnings = logPPLevel == 2,
         quiet = logPPLevel == 0,
-        entryFunction = TriCeraParameters.get.funcName)
+        entryFunction = TriCeraParameters.get.funcName,
+        determinize = TriCeraParameters.get.determinizeInput)
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)

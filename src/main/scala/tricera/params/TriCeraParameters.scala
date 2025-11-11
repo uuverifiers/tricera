@@ -60,6 +60,7 @@ class TriCeraParameters extends GlobalParameters {
   var logPPLevel : Int = 0 // 0: quiet, 1: errors only, 2: errors + warnings
 
   var cPreprocessor : Boolean = false
+  var cPreprocessorLight : Boolean = false
 
   var dumpSimplifiedClauses : Boolean = false
 
@@ -109,6 +110,8 @@ class TriCeraParameters extends GlobalParameters {
   var splitProperties : Boolean = false
 
   var useArraysForHeap : Boolean = false
+  var determinizeInput : Boolean = false
+  var invEncoding      : Option[String] = None
 
   var heapModel : TriCeraParameters.HeapModel = TriCeraParameters.NativeHeap
 
@@ -160,6 +163,7 @@ class TriCeraParameters extends GlobalParameters {
       logPPLevel = (ppLogOption drop 7).toInt; parseArgs(rest)
     case "-noPP" :: rest => noPP = true; parseArgs(rest)
     case "-cpp"  :: rest => cPreprocessor = true; parseArgs(rest)
+    case "-cppLight" :: rest => cPreprocessorLight = true; parseArgs(rest)
     case "-dumpClauses" :: rest => printIntermediateClauseSets = true; parseArgs(rest)
     case "-dumpSimplified" :: rest => dumpSimplifiedClauses = true; parseArgs(rest)
     case "-sp" :: rest => smtPrettyPrint = true; parseArgs(rest)
@@ -177,6 +181,13 @@ class TriCeraParameters extends GlobalParameters {
       heapModel = TriCeraParameters.ArrayHeap
       parseArgs(rest)
     case "-mathArrays" :: rest => useArraysForHeap = true; parseArgs(rest)
+
+    case invEnc :: rest if (invEnc.startsWith("-invEncoding")) =>
+      val parts = invEnc.split(":", 2)
+      invEncoding = Some(if (parts.length > 1) parts(1) else "RW")
+      determinizeInput = true
+      useArraysForHeap = true
+      parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
     case "-abstractPO" :: rest => {
@@ -358,6 +369,8 @@ class TriCeraParameters extends GlobalParameters {
     |                     predicate with 'p1' or 'p2' in its name
     |-m:func            Use function func as entry point (default: main)
     |-cpp               Execute the C preprocessor (cpp) on the input file first, this will produce filename.i
+    |-cppLight          Same as -cpp but does not include system header files and builtin macros.
+    |                   I.e., -nostdinc -undef
     |-forceNondetInit   Initialize static and global variables to non-deterministic values.
 
     |Checked properties:
@@ -385,8 +398,8 @@ class TriCeraParameters extends GlobalParameters {
     |-heapModel:t       Model heap memory using where t : {native, array}
     |                     native : theory of heaps (default)
     |                     array  : theory of arrays
+    |-invEncoding[:t]   Use an invariant-based heap encoding, where t is the encoding type (R, RW (default))
     |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
-    |
     |Horn engine options (Eldarica):
     |-sym               (Experimental) Use symbolic execution with the default engine (bfs)
     |-sym:x             Use symbolic execution where x : {dfs, bfs}

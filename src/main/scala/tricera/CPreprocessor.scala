@@ -49,7 +49,32 @@ object CPreprocessor {
     try {
       val errorSuppressingLogger = ProcessLogger(_ => (), _ => ())
       if (!includeSystemHeaders) {
-        ???
+        val macroHeaderTempFile: File = {
+          val resourcePath = arithMode match {
+            case CCReader.ArithmeticMode.Mathematical => "tricera/headers/macros_math.h"
+            case CCReader.ArithmeticMode.ILP32        => "tricera/headers/macros_ilp32.h"
+            case CCReader.ArithmeticMode.LP64         => "tricera/headers/macros_lp64.h"
+            case CCReader.ArithmeticMode.LLP64        => "tricera/headers/macros_llp64.h"
+          }
+
+          val inputStream = Option(getClass.getClassLoader.getResourceAsStream(resourcePath))
+            .getOrElse {
+              throw new Main.MainException(
+                s"Could not find macro header for '$arithMode'. Expected in resources/$resourcePath"
+                )
+            }
+
+          val tmpFile = Files.createTempFile("tricera-macros-", ".h").toFile
+          tmpFile.deleteOnExit()
+          Files.copy(inputStream, tmpFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+          inputStream.close()
+          tmpFile
+        }
+
+        cmdLine = Seq("cpp", "-E", "-P", "-CC", "-nostdinc", "-undef")
+        val pipedInput = s"""#include "${macroHeaderTempFile.getAbsolutePath}"\n#include "$fileName"""""
+        val inputStream = new java.io.ByteArrayInputStream(pipedInput.getBytes)
+        (Process(cmdLine) #< inputStream #> preprocessedFile).!(errorSuppressingLogger)
       } else {
         cmdLine = Seq("cpp", fileName, "-E", "-P", "-CC")
         (Process(cmdLine) #> preprocessedFile).!(errorSuppressingLogger)

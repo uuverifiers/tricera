@@ -34,6 +34,7 @@ import tricera.Util.SourceInfo
 import CCExceptions._
 import ap.parser.IExpression._
 import tricera.concurrency.CCReader
+import tricera.params.TriCeraParameters
 
 case class CCTerm(t               : ITerm,
                   typ             : CCType,
@@ -43,7 +44,7 @@ case class CCTerm(t               : ITerm,
   def toFormula : IFormula = originalFormula getOrElse {
     t match {
       case IIntLit(value) => !value.isZero
-      case t if typ.isInstanceOf[CCHeapPointer] =>
+      case t if typ.isInstanceOf[CCHeapPointer] && TriCeraParameters.get.invEncoding.isEmpty =>
         !IExpression.Eq(t, typ.asInstanceOf[CCHeapPointer].heap.nullAddr())
       case t if typ == CCBool => t === ap.theories.ADT.BoolADT.True
       case t => !IExpression.eqZero(t)
@@ -52,10 +53,13 @@ case class CCTerm(t               : ITerm,
   def occurringConstants: Seq[IExpression.ConstantTerm] =
     SymbolCollector constantsSorted t
   def convertToType(newType: CCType): CCTerm = {
+    val isInvEncoding = TriCeraParameters.get.invEncoding.nonEmpty
     (typ, newType) match {
       case (oldType, newType) if (oldType == newType) =>
         this
       case (_: CCArithType, newType: CCArithType) =>
+        newType cast this
+      case (_: CCArithType, newType: CCHeapPointer) if isInvEncoding =>
         newType cast this
       case (_: CCArithType, CCDuration) => {
         if (!CCReader.useTime)
@@ -69,6 +73,8 @@ case class CCTerm(t               : ITerm,
       // todo: do not do anything for casts to void?
       case (oldType: CCArithType, newType: CCHeapPointer) =>
         toTerm match {
+          case lit: IIntLit if lit.value.intValue == 0 && TriCeraParameters.get.invEncoding.nonEmpty =>
+            CCTerm.fromTerm(IIntLit(0), newType, srcInfo)
           case lit: IIntLit if lit.value.intValue == 0 =>
             CCTerm.fromTerm(newType.heap.nullAddr(), newType, srcInfo) //newType cast t
           case _ =>

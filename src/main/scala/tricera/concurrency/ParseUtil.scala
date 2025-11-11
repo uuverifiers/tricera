@@ -89,4 +89,19 @@ object ParseUtil {
     CCReader.parseWithEntry(new StringReader(programText), entry)
   }
 
+  /**
+   * Parses the "/* INPUT: ... */" comment from the raw program text.
+   * This is produced by tri-pp when using the [[InvariantEncodingModel]] for heap.
+   * @param programText The full content of the C source file.
+   * @return A sequence of input variable names found, or an empty sequence if not found.
+   */
+  def parseInputComment(programText : String) : Seq[String] = {
+    val pattern = """/\*\s*INPUT:\s*([^/\\*]+)\*/""".r
+    pattern.findFirstMatchIn(programText) match {
+      case Some(m) =>
+        m.group(1).split(',').map(_.trim).filter(_.nonEmpty).toSeq
+      case None =>
+        Seq.empty
+    }
+  }
 }

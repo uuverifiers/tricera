@@ -106,7 +106,7 @@ object HeapModel {
               inputVars : scala.Seq[CCVar]) : HeapModelFactory =
     mt match {
       case ModelType.TheoryOfHeaps => new HeapTheoryFactory(context, scope)
-      case ModelType.Invariants    => ??? // new InvariantsHeapFactory(context, scope)
+      case ModelType.Invariants    => new InvariantEncodingsFactory(context, scope, inputVars)
     }
 
 }

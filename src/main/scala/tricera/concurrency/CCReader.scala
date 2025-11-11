@@ -73,8 +73,13 @@ object CCReader {
             propertiesToCheck : Set[properties.Property] = Set(
               properties.Reachability))
   : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
+    val programText = new java.util.Scanner(input).useDelimiter("\\A").next()
+    input.close() // Close the original reader.
+    val inputVarNames = ParseUtil.parseInputComment(programText) // for the invariant encoding heap model
+    val programReader = new java.io.StringReader(programText)
+
     def entry(parser : concurrent_c.parser) = parser.pProgram
-    val prog = parseWithEntry(input, entry _)
+    val prog = parseWithEntry(programReader, entry _)
     val atCallTransformedProg = CCAstAtExpressionTransformer.transform(prog)
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
@@ -84,7 +89,7 @@ object CCReader {
     while (reader == null)
       try {
         reader = new CCReader(
-          transformedCallsProg, entryFunction, propertiesToCheck, scala.Seq())
+          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -606,8 +611,12 @@ class CCReader private (prog              : Program,
         for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
               struct.fieldInfos) yield
           (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
-            if (ptrDepth > 0) Heap.AddrSort
-            else { fieldType match {
+            if (ptrDepth > 0) {
+              if (TriCeraParameters.get.invEncoding.nonEmpty)
+                HeapObj.OtherSort(Sort.Integer)
+              else
+                Heap.AddrSort
+            } else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
               case Right(typ) =>
                 typ match {
@@ -694,7 +703,8 @@ class CCReader private (prog              : Program,
             case _ => typ
           }
       }
-      if(fieldInfos(j).ptrDepth > 0) CCHeapPointer(heap, actualType)
+      if(fieldInfos(j).ptrDepth > 0)
+        createHeapPointer(actualType)
       else actualType})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
@@ -716,7 +726,12 @@ class CCReader private (prog              : Program,
   }
 
   private val heapModelFactory : HeapModelFactory =
-    HeapModel.factory(HeapModel.ModelType.TheoryOfHeaps, symexContext, scope, inputVars)
+    tricera.params.TriCeraParameters.get.invEncoding match {
+      case Some(_) =>
+        HeapModel.factory(HeapModel.ModelType.Invariants, symexContext, scope, inputVars)
+      case None =>
+        HeapModel.factory(HeapModel.ModelType.TheoryOfHeaps, symexContext, scope, inputVars)
+    }
 
   for ((name, funcDefAst) <- heapModelFactory.getFunctionsToInject if modelHeap) {
     if (functionDefs.contains(name)) {
@@ -1515,7 +1530,8 @@ class CCReader private (prog              : Program,
                 val res = values.eval(actualInitExp)(
                   values.EvalSettings(), evalContext)
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
-                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
+                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType]
+                    && TriCeraParameters.get.invEncoding.isEmpty =>
                     if(res.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
                       (lhsVar, CCTerm.fromTerm(heap.nullAddr(), varDec.typ, srcInfo))
                     else throw new TranslationException("Pointer arithmetic is not " +
@@ -1712,9 +1728,9 @@ class CCReader private (prog              : Program,
 
   private def getPtrType (ptr : Pointer, _typ : CCType) : CCType = {
     ptr match {
-      case _   : Point | _ : PointQual => CCHeapPointer(heap, _typ) // todo; support pointer qualifiers?
+      case _   : Point | _ : PointQual => createHeapPointer(_typ) // todo; support pointer qualifiers?
       case ptr : PointPoint =>
-        getPtrType(ptr.pointer_, CCHeapPointer(heap, _typ))
+        getPtrType(ptr.pointer_, createHeapPointer(_typ))
       case _ => throw new TranslationException(
         "Advanced pointer declarations are not yet supported (line " +
           getSourceInfo(ptr).line + ")"
@@ -2110,7 +2126,7 @@ class CCReader private (prog              : Program,
         getType(listDeclSpecs)
       case None => CCInt
     }
-    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) createHeapPointer(typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 
@@ -2200,20 +2216,23 @@ class CCReader private (prog              : Program,
     scope.LocalVars popFrame
   }
 
-  private def createHeapPointer(decl : BeginPointer, typ : CCType) :
-  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+  private def createHeapPointer(objectType : CCType) : CCType =
+      CCHeapPointer(heap, objectType)
 
-  private def createHeapPointer(decl : PointerStart, typ : CCType) :
-  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+  private def createHeapPointer(decl : BeginPointer, typ : CCType) : CCType =
+    createHeapPointerHelper(decl.pointer_, typ)
 
-  private def createHeapPointerHelper(decl : Pointer, typ : CCType) :
-  CCHeapPointer = decl match {
+  private def createHeapPointer(decl : PointerStart, typ : CCType) : CCType =
+    createHeapPointerHelper(decl.pointer_, typ)
+
+  private def createHeapPointerHelper(decl : Pointer, typ : CCType) : CCType =
+    decl match {
       case pp : PointPoint =>
-        CCHeapPointer(heap, createHeapPointerHelper(pp.pointer_, typ))
-      case p : Point =>
-        CCHeapPointer(heap, typ)
-      case _ => throw new TranslationException("Type qualified pointers are " +
-        "currently not supported: " + decl)
+        createHeapPointer(createHeapPointerHelper(pp.pointer_, typ))
+      case p : Point       =>
+        createHeapPointer(typ)
+      case _ => throw new TranslationException(
+        s"Type qualified pointers are currently not supported: $decl")
     }
 
   private def getFunctionArgNames(functionDef : Function_def) : scala.Seq[String] = {
@@ -2739,7 +2758,10 @@ class CCReader private (prog              : Program,
         output(addRichClause(entryClause, entryPred.srcInfo))
 
         val initStmts : Iterator[Stm] = {
-          val inputInitCode = scala.Seq()
+          val inputInitCode =
+            if(TriCeraParameters.get.determinizeInput)
+              inputVars.map(v => s"${v.name} = _;")
+            else scala.Seq()
 
           val heapModelInitCode =
             if (modelHeap) heapModelFactory.getInitCodeToInject else scala.Seq()
