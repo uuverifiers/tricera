@@ -2,68 +2,68 @@
 out-of-bounds-line1.c
 Warning: no definition of function "nondet" available
 
----------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
 Init:
-               main9_3(emptyHeap, nthAddr(0), AddrRange(nthAddr(0), 0))                
----------------------------------------------------------------------------------------
-                                           |                                           
-                                           |                                           
-                                           V                                           
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nthAddr(0), AddrRange(nthAddr(1), 1), 1) 
----------------------------------------------------------------------------------------
+                main9_3(emptyHeap, nullAddr, AddrRange(nullAddr, 0))                 
+-------------------------------------------------------------------------------------
+                                          |                                          
+                                          |                                          
+                                          V                                          
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
+-------------------------------------------------------------------------------------
 Final:
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nthAddr(0), AddrRange(nthAddr(1), 1), 1) 
----------------------------------------------------------------------------------------
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
+-------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line:6 col:5) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(read(@h, AddrRangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
 
 UNSAFE
 
 out-of-bounds-line2.c
 
------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
 Init:
- main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nthAddr(0), AddrRange(nthAddr(1), 42)) 
------------------------------------------------------------------------------------------------------
+ main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
+---------------------------------------------------------------------------------------------------
 Final:
- main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nthAddr(0), AddrRange(nthAddr(1), 42)) 
------------------------------------------------------------------------------------------------------
+ main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
+---------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, 42))). (line:4 col:5) (property: valid-deref)
+false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_Int(read(@h, AddrRangeNth(a:4, 42))). (line:4 col:5) (property: valid-deref)
 
 UNSAFE
 
 out-of-bounds-line3.c
 Warning: no definition of function "nondet" available
 
----------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
 Init:
-               main9_3(emptyHeap, nthAddr(0), AddrRange(nthAddr(0), 0))                
----------------------------------------------------------------------------------------
-                                           |                                           
-                                           |                                           
-                                           V                                           
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nthAddr(0), AddrRange(nthAddr(1), 1), 1) 
----------------------------------------------------------------------------------------
+                main9_3(emptyHeap, nullAddr, AddrRange(nullAddr, 0))                 
+-------------------------------------------------------------------------------------
+                                          |                                          
+                                          |                                          
+                                          V                                          
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
+-------------------------------------------------------------------------------------
 Final:
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nthAddr(0), AddrRange(nthAddr(1), 1), 1) 
----------------------------------------------------------------------------------------
+ main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
+-------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(read(@h, nthAddrRange(a:6, n:9))). (line:6 col:5) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(read(@h, AddrRangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
 
 UNSAFE
 
 out-of-bounds-line4.c
 
----------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------
 Init:
- main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nthAddr(0), AddrRange(nthAddr(1), 42)) 
----------------------------------------------------------------------------------------------------
+ main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
+-------------------------------------------------------------------------------------------------
 Final:
- main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nthAddr(0), AddrRange(nthAddr(1), 42)) 
----------------------------------------------------------------------------------------------------
+ main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
+-------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3(@h, @v_cleanup, a:4), !is_O_Int(read(@h, nthAddrRange(a:4, -1*1))). (line:4 col:5) (property: valid-deref)
+false :- main7_3(@h, @v_cleanup, a:4), !is_O_Int(read(@h, AddrRangeNth(a:4, -1*1))). (line:4 col:5) (property: valid-deref)
 
 UNSAFE
 
@@ -197,7 +197,7 @@ Final:
  main8_3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2)) 
 ------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main8_3(@h, sArr:5), S::f(getS(read(@h, nthAddrRange(sArr:5, 0)))) != 0. (line:8 col:3) (property: user-assertion)
+false :- main8_3(@h, sArr:5), S::f(getS(read(@h, AddrRangeNth(sArr:5, 0)))) != 0. (line:8 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -214,7 +214,7 @@ Final:
  main5_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
 -------------------------------------------------------------------------------------
 Failed assertion:
-false :- main5_5(@h, a:1), getInt(read(@h, nthAddrRange(a:1, 0))) != 0. (line:5 col:5) (property: user-assertion)
+false :- main5_5(@h, a:1), getInt(read(@h, AddrRangeNth(a:1, 0))) != 0. (line:5 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -239,7 +239,7 @@ Final:
  main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
 ---------------------------------------------------------------------------------------
 Failed assertion:
-false :- main3_5_1(@h, a:3), getInt(read(@h, nthAddrRange(a:3, 0))) != 0. (line:6 col:5) (property: user-assertion)
+false :- main3_5_1(@h, a:3), getInt(read(@h, AddrRangeNth(a:3, 0))) != 0. (line:6 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -307,7 +307,7 @@ Final:
  main7_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
 -------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_5(@h, a:3), getInt(read(@h, nthAddrRange(a:3, 1))) != 0. (line:7 col:5) (property: user-assertion)
+false :- main7_5(@h, a:3), getInt(read(@h, AddrRangeNth(a:3, 1))) != 0. (line:7 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -332,7 +332,7 @@ Final:
  main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
 ---------------------------------------------------------------------------------------
 Failed assertion:
-false :- main3_5_1(@h, a:3), getInt(read(@h, nthAddrRange(a:3, 1))) != 0. (line:6 col:5) (property: user-assertion)
+false :- main3_5_1(@h, a:3), getInt(read(@h, AddrRangeNth(a:3, 1))) != 0. (line:6 col:5) (property: user-assertion)
 
 UNSAFE
 
