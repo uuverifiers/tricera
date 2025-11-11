@@ -260,9 +260,7 @@ class Symex private (context        : SymexContext,
       case _ =>
         val structVal = getValue(ptrType.targetInd, false)
         val structType = structVal.typ.asInstanceOf[CCStruct]
-        CCTerm.fromTerm(
-          structType.getFieldTerm(structVal.toTerm, ptrType.fieldAddress),
-          structType.getFieldType(ptrType.fieldAddress), None) // todo: src Info?
+        structType.getFieldTerm(structVal, ptrType.fieldAddress)
     }
 
   private def setValue(name : String, t : CCTerm, enclosingFunction : String) : Unit =
@@ -399,7 +397,7 @@ class Symex private (context        : SymexContext,
   }
 
   def atomicEvalFormula(exp : Exp, evalCtx : EvalContext) : CCTerm = {
-    val initSize         = values.size
+    val initSize = values.size
 
     context.inAtomicMode{
       evalHelp(exp)(EvalSettings(), evalCtx)
@@ -577,12 +575,27 @@ class Symex private (context        : SymexContext,
           val structType = ptr.typ match {
             case st : CCStruct => st
             case sf : CCStructField => sf.structs(sf.structName)
-            case _ => throw new TranslationException("Pointer does not point to a struct type.")
+            case _ => throw new TranslationException(
+              "Pointer does not point to a struct type.")
           }
+
+          val fieldAddress = getFieldAddress(structType, path)
+          val fieldTerm = structType.getFieldTerm(baseLHSVal, fieldAddress)
+          val actualRhsVal = newValue match { // must match on newValue, not newValue2
+            case CCTerm(_, _: CCStackPointer, srcInfo, _) =>
+              throw new UnsupportedCFragmentException(
+                getLineStringShort(srcInfo) + " Only limited support for stack pointers")
+            case CCTerm(IIntLit(value), _, _, _) if isHeapPointer(fieldTerm) =>
+              if (value.intValue != 0) {
+                throw new TranslationException("Pointer assignment only supports 0 (NULL)")
+              } else CCTerm.fromTerm(
+                context.heap.nullAddr(), CCHeapPointer(context.heap, fieldTerm.typ), newValue.srcInfo)
+            case _ => newValue2
+          }
+
           if (structType.sels.size > 1 || path.size > 1) {
-            val fieldAddress = getFieldAddress(structType, path)
             pushVal(baseLHSVal) // keep the address to be written in case we generate clauses
-            pushVal(newValue2)
+            pushVal(actualRhsVal)
             pushVal(processHeapResult(heapModel.read(baseLHSVal, values, locTerm)).get)
             maybeOutputClause(baseLHSVal.srcInfo)
             val oldStructTerm = popVal.toTerm // the result of the read
@@ -592,8 +605,8 @@ class Symex private (context        : SymexContext,
             val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, newValue3.srcInfo))
             processHeapResult(heapModel.write(curBaseLHSVal, newStructObj, values, locTerm))
           } else { // path.size == 1 && structType.sels.size == 1
-            val newStructTerm = structType.setFieldTerm(newValue2.toTerm)
-            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, newValue2.srcInfo))
+            val newStructTerm = structType.setFieldTerm(actualRhsVal.toTerm)
+            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, actualRhsVal.srcInfo))
             processHeapResult(heapModel.write(baseLHSVal, newStructObj, values, locTerm))
           }
 

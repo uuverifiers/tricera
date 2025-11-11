@@ -24,18 +24,18 @@ UNSAFE
 list-002-fail.c
 Warning: no definition of function "nondet_bool" available
 
--------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
 Init:
-                                       main14_3(emptyHeap)                                       
--------------------------------------------------------------------------------------------------
-                                                |                                                
-                                                |                                                
-                                                V                                                
- main_4(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
--------------------------------------------------------------------------------------------------
+                                     main14_3(emptyHeap)                                     
+---------------------------------------------------------------------------------------------
+                                              |                                              
+                                              |                                              
+                                              V                                              
+ main_4(newHeap(alloc(emptyHeap, O_node(node(nullAddr, nullAddr)))), nthAddr(1), nthAddr(1)) 
+---------------------------------------------------------------------------------------------
 Final:
- main_4(newHeap(alloc(emptyHeap, O_node(node(nthAddr(0), nthAddr(0))))), nthAddr(1), nthAddr(1)) 
--------------------------------------------------------------------------------------------------
+ main_4(newHeap(alloc(emptyHeap, O_node(node(nullAddr, nullAddr)))), nthAddr(1), nthAddr(1)) 
+---------------------------------------------------------------------------------------------
 Failed assertion:
 false :- main_4(@h, list:14, tail:17), list:14 = tail:17. (line:29 col:3) (property: user-assertion)
 
@@ -49,18 +49,18 @@ SAFE
 
 mutually-referential-structs-unsafe.c
 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
-                                                                               main14_3(emptyHeap)                                                                               
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                        |                                                                                        
-                                                                                        |                                                                                        
-                                                                                        V                                                                                        
- main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1)) 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                              main14_3(emptyHeap)                                                                              
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                       |                                                                                       
+                                                                                       |                                                                                       
+                                                                                       V                                                                                       
+ main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nullAddr)))), nthAddr(1)) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nthAddr(0))))), nthAddr(1)) 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nullAddr)))), nthAddr(1)) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
 false :- main_3(@h, list:14), child::p(getchild(read(@h, parent::child1(getparent(read(@h, list:14)))))) != child::p(getchild(read(@h, parent::child2(getparent(read(@h, list:14)))))). (line:20 col:3) (property: user-assertion)
 
@@ -95,18 +95,18 @@ SAFE
 
 typecastUnsafe-001.c
 
-----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 Init:
-                          main6_3(emptyHeap, nthAddr(0))                          
-----------------------------------------------------------------------------------
-                                        |                                         
-                                        |                                         
-                                        V                                         
- main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(1)) 
-----------------------------------------------------------------------------------
+                          main6_3(emptyHeap, nullAddr)                          
+--------------------------------------------------------------------------------
+                                       |                                        
+                                       |                                        
+                                       V                                        
+ main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------------------
 Final:
- main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(1)) 
-----------------------------------------------------------------------------------
+ main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nthAddr(1)) 
+--------------------------------------------------------------------------------
 Failed assertion:
 false :- main7_3(@h, @v_cleanup, x:6, y:7), !is_O_S(read(@h, y:7)). (line:7 col:12) (property: valid-deref)
 
@@ -145,18 +145,18 @@ SAFE
 
 unsafe-access-001.c
 
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 Init:
-                          main2_3(emptyHeap, nthAddr(0))                          
-----------------------------------------------------------------------------------
-                                        |                                         
-                                        |                                         
-                                        V                                         
- main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(0)) 
-----------------------------------------------------------------------------------
+                         main2_3(emptyHeap, nullAddr)                         
+------------------------------------------------------------------------------
+                                      |                                       
+                                      |                                       
+                                      V                                       
+ main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nullAddr) 
+------------------------------------------------------------------------------
 Final:
- main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nthAddr(0), nthAddr(1), nthAddr(0)) 
-----------------------------------------------------------------------------------
+ main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nullAddr) 
+------------------------------------------------------------------------------
 Failed assertion:
 false :- main3_3(@h, @v_cleanup, x:2, y:3), !is_O_Addr(read(@h, y:3)). (line:3 col:7) (property: valid-deref)
 
@@ -170,23 +170,23 @@ UNKNOWN (Unsupported C fragment. 6:8 Only limited support for stack pointers)
 
 free-1-unsafe.c
 
-------------------------------------------------------------------------
+----------------------------------------------------------------------
 Init:
-                     main2_3(emptyHeap, nthAddr(0))                     
-------------------------------------------------------------------------
-                                   |                                    
-                                   |                                    
-                                   V                                    
- main2_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(0), nthAddr(1)) 
-------------------------------------------------------------------------
-                                   |                                    
-                                   |                                    
-                                   V                                    
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
-------------------------------------------------------------------------
+                     main2_3(emptyHeap, nullAddr)                     
+----------------------------------------------------------------------
+                                  |                                   
+                                  |                                   
+                                  V                                   
+ main2_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nullAddr, nthAddr(1)) 
+----------------------------------------------------------------------
+                                  |                                   
+                                  |                                   
+                                  V                                   
+    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
+----------------------------------------------------------------------
 Final:
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
-------------------------------------------------------------------------
+    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
+----------------------------------------------------------------------
 Failed assertion:
 false :- main(@h, @v_cleanup, a:2), !is_O_Int(read(@h, a:2)). (line:2 col:7) (property: valid-deref)
 
@@ -195,23 +195,23 @@ UNSAFE
 free-2-nondet-unsafe.c
 Warning: no definition of function "nondet" available
 
-------------------------------------------------------------------------
+----------------------------------------------------------------------
 Init:
-                     main4_3(emptyHeap, nthAddr(0))                     
-------------------------------------------------------------------------
-                                   |                                    
-                                   |                                    
-                                   V                                    
- main5_6_2(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(0), nthAddr(1)) 
-------------------------------------------------------------------------
-                                   |                                    
-                                   |                                    
-                                   V                                    
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
-------------------------------------------------------------------------
+                     main4_3(emptyHeap, nullAddr)                     
+----------------------------------------------------------------------
+                                  |                                   
+                                  |                                   
+                                  V                                   
+ main5_6_2(newHeap(alloc(emptyHeap, O_Int(9))), nullAddr, nthAddr(1)) 
+----------------------------------------------------------------------
+                                  |                                   
+                                  |                                   
+                                  V                                   
+    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
+----------------------------------------------------------------------
 Final:
-    main(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1))     
-------------------------------------------------------------------------
+    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
+----------------------------------------------------------------------
 Failed assertion:
 false :- main(@h, @v_cleanup, a:4), !is_O_Int(read(@h, a:4)). (line:4 col:7) (property: valid-deref)
 
@@ -222,23 +222,23 @@ SAFE
 
 free-4-unsafe.c
 
---------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 Init:
-                         main4_3(emptyHeap, nthAddr(0))                         
---------------------------------------------------------------------------------
-                                       |                                        
-                                       |                                        
-                                       V                                        
-     main4_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nthAddr(0), nthAddr(1))     
---------------------------------------------------------------------------------
-                                       |                                        
-                                       |                                        
-                                       V                                        
- main6_3(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1), nthAddr(1)) 
---------------------------------------------------------------------------------
+                         main4_3(emptyHeap, nullAddr)                         
+------------------------------------------------------------------------------
+                                      |                                       
+                                      |                                       
+                                      V                                       
+     main4_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nullAddr, nthAddr(1))     
+------------------------------------------------------------------------------
+                                      |                                       
+                                      |                                       
+                                      V                                       
+ main6_3(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------------------
 Final:
- main6_3(newHeap(alloc(emptyHeap, defObj)), nthAddr(0), nthAddr(1), nthAddr(1)) 
---------------------------------------------------------------------------------
+ main6_3(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1), nthAddr(1)) 
+------------------------------------------------------------------------------
 Failed assertion:
 false :- main6_3(@h, @v_cleanup, a:4, b:6), !is_O_Int(read(@h, b:6)). (line:6 col:7) (property: valid-deref)
 
@@ -262,7 +262,7 @@ Final:
  main5_5(newBatchHeap(batchAlloc(newBatchHeap(batchAlloc(emptyHeap, O_Int(14), 3)), O_Int(12), 3)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main5_5(@h, a:4, b:5), getInt(read(@h, nthAddrRange(a:4, 0))) != getInt(read(@h, nthAddrRange(b:5, 0))). (line:7 col:5) (property: user-assertion)
+false :- main5_5(@h, a:4, b:5), getInt(read(@h, AddrRangeNth(a:4, 0))) != getInt(read(@h, AddrRangeNth(b:5, 0))). (line:7 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -275,13 +275,13 @@ Init:
                                                                                                      |                                                                                                      
                                                                                                      |                                                                                                      
                                                                                                      V                                                                                                      
- main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(48), 2)), O_Int(3))), O_Int(49), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
+ main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(49), 2)), O_Int(3))), O_Int(48), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(48), 2)), O_Int(3))), O_Int(49), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
+ main_2(newBatchHeap(batchAlloc(newHeap(alloc(newBatchHeap(batchAlloc(newHeap(alloc(emptyHeap, O_Int(42))), O_Int(49), 2)), O_Int(3))), O_Int(48), 2)), AddrRange(nthAddr(1), 3), AddrRange(nthAddr(4), 3)) 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, a:4, b:5), getInt(read(@h, nthAddrRange(a:4, 0))) != 3. (line:10 col:5) (property: user-assertion)
+false :- main_2(@h, a:4, b:5), getInt(read(@h, AddrRangeNth(a:4, 0))) != 3. (line:10 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -293,18 +293,18 @@ SAFE
 
 struct-chained-ptr-field-1-unsafe.c
 
--------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------
 Init:
-                                                   main9_3(emptyHeap)                                                    
--------------------------------------------------------------------------------------------------------------------------
-                                                            |                                                            
-                                                            |                                                            
-                                                            V                                                            
- main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nthAddr(0), 0)))), nthAddr(1)) 
--------------------------------------------------------------------------------------------------------------------------
+                                                  main9_3(emptyHeap)                                                   
+-----------------------------------------------------------------------------------------------------------------------
+                                                           |                                                           
+                                                           |                                                           
+                                                           V                                                           
+ main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nullAddr, 0)))), nthAddr(1)) 
+-----------------------------------------------------------------------------------------------------------------------
 Final:
- main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nthAddr(0), 0)))), nthAddr(1)) 
--------------------------------------------------------------------------------------------------------------------------
+ main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nullAddr, 0)))), nthAddr(1)) 
+-----------------------------------------------------------------------------------------------------------------------
 Failed assertion:
 false :- main_4(@h, head:9), Node::data(getNode(read(@h, head:9))) != 0. (line:13 col:3) (property: user-assertion)
 
