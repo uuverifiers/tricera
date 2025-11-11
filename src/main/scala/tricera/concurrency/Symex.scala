@@ -637,8 +637,8 @@ class Symex private (context        : SymexContext,
           val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
           val newTerm = CCTerm.fromTerm(writeADT(
             lhsVal.toTerm.asInstanceOf[IFunApp],
-            newValue.toTerm, context.heap.userADTCtors,
-            context.heap.userADTSels), lhsVal.typ, newValue.srcInfo)
+            newValue.toTerm, context.heap.userHeapConstructors,
+            context.heap.userHeapSelectors), lhsVal.typ, newValue.srcInfo)
           val lhsName = asLValue(arrayBase)
           val oldLhsVal = getValue(lhsName, evalCtx.enclosingFunctionName)
           val innerTerm = lhsVal.toTerm.asInstanceOf[IFunApp].args.head
@@ -918,8 +918,11 @@ class Symex private (context        : SymexContext,
         case _ : AssignAdd =>
           (lhsE.typ, rhsE.typ) match {
             case (arrTyp : CCHeapArrayPointer, _ : CCArithType) =>
-              import arrTyp.heap._
-              addressRangeCtor(nth(lhsE.toTerm, rhsE.toTerm), addrRangeSize(lhsE.toTerm) - rhsE.toTerm)
+              // import arrTyp.heap._
+              // nthAddrRange(addressRangeNth(lhsE.toTerm, rhsE.toTerm), addressRangeSize(lhsE.toTerm) - rhsE.toTerm)
+              // TODO: this is unsafe, need to
+              throw new UnsupportedCFragmentException(
+                "Pointer arithmetic is currently not supported.")
             case _ => lhsE.toTerm + rhsE.toTerm
           }
         case _ : AssignSub =>
@@ -1124,7 +1127,7 @@ class Symex private (context        : SymexContext,
           topVal.toTerm match {
             case fieldFun: IFunApp
               if !(context.objectGetters contains fieldFun.fun) &&
-                 (context.heap.userADTSels exists(_ contains fieldFun.fun)) => // an ADT
+                 (context.heap.userHeapSelectors exists(_ contains fieldFun.fun)) => // an ADT
               val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
               rootTerm match {
                 case Left(c) =>
@@ -1144,20 +1147,25 @@ class Symex private (context        : SymexContext,
               // todo: below type extraction is not safe!
               val heap = context.heap
               val t = addrTerm match {
-                case IFunApp(heap.nth, args) => // if nthAddrRange(a, i)
+                case IFunApp(heap.addressRangeNth, args) => // if nthAddrRange(a, i)
                   val scala.Seq(arrTerm, indTerm) = args
                   // return the addressRange starting from i
                   import heap._
-                  val newTerm = addressRangeCtor(nth(arrTerm, indTerm),
-                                                 addrRangeSize(arrTerm) - indTerm)
-                  CCTerm.fromTerm(newTerm,
-                         getValue(arrTerm.asInstanceOf[IConstant].c.name,
-                                  evalCtx.enclosingFunctionName).typ, srcInfo
-                         )
+                // TODO: implement this properly by adding an offset to pointers
+//                  val newTerm = nthAddrRange(addressRangeNth(arrTerm, indTerm),
+//                                             addressRangeSize(arrTerm) - indTerm)
+//                  CCTerm.fromTerm(newTerm,
+//                         getValue(arrTerm.asInstanceOf[IConstant].c.name,
+//                                  evalCtx.enclosingFunctionName).typ, srcInfo)
+                  throw new UnsupportedCFragmentException(
+                    "There is currently limited support for arrays, " +
+                    "we are working on it.")
                 case _ =>
-                  CCTerm.fromTerm(addrTerm, CCHeapPointer(context.heap,
-                                                 getValue(addrTerm.asInstanceOf[IConstant].c.name,
-                                                          evalCtx.enclosingFunctionName).typ), srcInfo)
+                  CCTerm.fromTerm(
+                    addrTerm,
+                    CCHeapPointer(context.heap,
+                                  getValue(addrTerm.asInstanceOf[IConstant].c.name,
+                                           evalCtx.enclosingFunctionName).typ), srcInfo)
               }
               popVal
               pushVal(t)
@@ -1233,7 +1241,7 @@ class Symex private (context        : SymexContext,
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "$HEAP_TYPE_DEFAULT" =>
           /** A builtin to access the default object of the heap */
-          pushVal(CCTerm.fromTerm(context.heap._defObj,
+          pushVal(CCTerm.fromTerm(context.heap.defaultObject,
                                   CCHeapObject(context.heap), srcInfo))
         case name =>
           outputClause(srcInfo)
@@ -1541,7 +1549,7 @@ class Symex private (context        : SymexContext,
       name match {
         // TODO: FIX!!
         case "HEAP_TYPE_DEFAULT" =>
-          pushVal(CCTerm.fromTerm(context.heap._defObj,
+          pushVal(CCTerm.fromTerm(context.heap.defaultObject,
                                   CCHeapObject(context.heap), Some(getSourceInfo(exp))))
         case _ =>
           pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {

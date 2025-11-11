@@ -31,7 +31,8 @@ package tricera.concurrency
 
 import ap.basetypes.IdealInt
 import ap.parser._
-import ap.theories.{ADT, ExtArray, Heap}
+import ap.theories.{ADT, ExtArray}
+import ap.theories.heaps._
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate}
 import ap.util.Seqs.reduceToSize
 import concurrent_c._
@@ -593,11 +594,7 @@ class CCReader private (prog              : Program,
 
   import ap.theories.{Heap => HeapObj}
 
-  def defObjCtor(objectCtors : scala.Seq[IFunction],
-                 heapADTs : ADT) : ITerm = {
-    objectCtors.last()
-  }
-
+  def defObjCtor(objectCtors : scala.Seq[IFunction]) : ITerm = objectCtors.last()
   val ObjSort = HeapObj.ADTSort(0)
 
   val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
@@ -609,12 +606,12 @@ class CCReader private (prog              : Program,
         for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
               struct.fieldInfos) yield
           (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
-            if (ptrDepth > 0) Heap.AddressCtor
+            if (ptrDepth > 0) Heap.AddrSort
             else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
               case Right(typ) =>
                 typ match {
-                  case _ : CCHeapArrayPointer => HeapObj.AddressRangeCtor
+                  case _ : CCHeapArrayPointer => HeapObj.AddrRangeSort
                   case _ => HeapObj.OtherSort(typ.toSort)
                 }
             }
@@ -626,8 +623,8 @@ class CCReader private (prog              : Program,
   val predefSignatures =
     List(("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
          ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(Sort.Nat))), ObjSort)),
-         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort)),
-         ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddressRangeCtor)), ObjSort))
+         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddrSort)), ObjSort)),
+         ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddrRangeSort)), ObjSort))
     )
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
@@ -639,24 +636,33 @@ class CCReader private (prog              : Program,
 
   // TODO: use ADT/Heap depending on HeapModel, and move heap theory declaration
   //       to HeapModel.
-  val heap = new Heap("Heap", "Addr", ObjSort,
-    List("HeapObject") ++ structCtorSignatures.unzip._1,
-    wrapperSignatures ++ structCtorSignatures ++
-    List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
-                      defObjCtor)
+  val heap = TriCeraParameters.get.heapModel match {
+    case TriCeraParameters.NativeHeap =>
+      new NativeHeap("Heap", "Addr", "AddrRange", ObjSort,
+                     List("HeapObject") ++ structCtorSignatures.unzip._1,
+                     wrapperSignatures ++ structCtorSignatures ++
+                     List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+                     defObjCtor)
+    case TriCeraParameters.ArrayHeap =>
+      new ArrayHeap("Heap", "Addr", "AddrRange", ObjSort,
+                    List("HeapObject") ++ structCtorSignatures.unzip._1,
+                    wrapperSignatures ++ structCtorSignatures ++
+                    List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+                    defObjCtor)
+  }
 
   def getHeapInfo = if (modelHeap) Some(HeapInfo(heap, heapModel.get)) else None
 
   private val structCtorsOffset = predefSignatures.size
-  val defObj = heap.userADTCtors.last
+  val defObj = heap.userHeapConstructors.last
   val structCount = structInfos.size
-  val objectWrappers = heap.userADTCtors.take(structCount+structCtorsOffset)
+  val objectWrappers = heap.userHeapConstructors.take(structCount+structCtorsOffset)
   val objectGetters =
-    for (sels <- heap.userADTSels.take(structCount+structCtorsOffset)
+    for (sels <- heap.userHeapSelectors.take(structCount+structCtorsOffset)
          if sels.nonEmpty) yield sels.head
-  val structCtors = heap.userADTCtors.slice(structCtorsOffset+structCount,
+  val structCtors = heap.userHeapConstructors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
-  val structSels = heap.userADTSels.slice(structCtorsOffset+structCount,
+  val structSels = heap.userHeapSelectors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
 
   val objectSorts : scala.IndexedSeq[Sort] = objectGetters.toIndexedSeq.map(f => f.resSort)

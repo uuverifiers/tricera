@@ -155,7 +155,7 @@ object PostconditionSimplifier extends ResultProcessor {
   private class HeapFunDetector extends CollectingVisitor[Unit, Unit] {
     var hasHeap = false
     override def preVisit(t : IExpression, arg : Unit) : PreVisitResult = t match {
-      case IFunApp(Heap.HeapFunExtractor(_), _) =>
+      case IFunApp(Heap.HeapRelatedFunction(_), _) =>
         hasHeap = true
         ShortCutResult() // heap fun detected
       case _ => KeepArg
