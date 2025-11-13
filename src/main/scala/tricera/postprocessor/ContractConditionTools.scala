@@ -184,7 +184,7 @@ object TheoryOfHeapFunApp {
       expr: IExpression
   ): Option[(IFunction, Seq[IExpression])] = expr match {
     case IFunApp(
-          function @ Heap.HeapFunExtractor(_),
+          function @ Heap.HeapRelatedFunction(_),
           args
         ) =>
       Some((function, args))
