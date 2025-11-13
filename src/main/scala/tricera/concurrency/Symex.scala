@@ -1051,7 +1051,8 @@ class Symex private (context        : SymexContext,
 
         restoreState
         addGuard(cond)
-        pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
+        pushVal(CCTerm.fromFormula(
+          true, intermediatePred.argVars.last.typ, srcInfo))
         outputClause(intermediatePred, srcInfo)
       }
     case exp : Eland =>
@@ -1077,7 +1078,8 @@ class Symex private (context        : SymexContext,
 
         restoreState
         addGuard(~cond)
-        pushVal(CCTerm.fromFormula(false, CCInt, srcInfo))
+        pushVal(CCTerm.fromFormula(
+          false, intermediatePred.argVars.last.typ, srcInfo))
         outputClause(intermediatePred, srcInfo)
       }
     case exp : Ebitor =>
