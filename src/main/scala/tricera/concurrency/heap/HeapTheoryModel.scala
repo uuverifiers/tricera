@@ -127,7 +127,8 @@ class HeapTheoryModel(context           : SymexContext,
 
     if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
       val safetyFormula = CCTerm.fromFormula(
-        context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort)),
+        context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort))
+        &&& context.heap.valid(getValue(heapVar, s).toTerm, p.toTerm),
         CCInt, p.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
@@ -195,7 +196,8 @@ class HeapTheoryModel(context           : SymexContext,
       val ptrType = p.typ.asInstanceOf[CCHeapPointer].typ
       val safetyFormula = CCTerm.fromFormula(
         context.heap.hasUserHeapCtor(
-          curO.toTerm, context.sortCtorIdMap(ptrType.toSort)),
+          curO.toTerm, context.sortCtorIdMap(ptrType.toSort)) &&&
+        context.heap.valid(getValue(heapVar, s).toTerm, p.toTerm),
         CCInt, p.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
