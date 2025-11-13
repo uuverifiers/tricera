@@ -7,8 +7,8 @@ int f(int p) {
   g = 30;
   // p = 20, g = 30
 
-  assert($at(Pre, (int)(p + g)) == 15);
-  assert($at(Old, (int)(p + g)) == 15);
+  assert($at("Pre", (int)(p + g)) == 15);
+  assert($at("Old", (int)(p + g)) == 15);
  
   p = 3;
   g = 5;
