@@ -20,6 +20,8 @@ jobs:
         distribution: 'adopt'
     - name: Set up sbt
       uses: sbt/setup-sbt@v1
+    - name: Patch build.sbt files of submodules
+      run: ./patch-builds.sh
     - name: Build
       run: sbt assembly
     - name: Test
