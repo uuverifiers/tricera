@@ -7,7 +7,7 @@ void f(int p) {
   g = 30;
   // p = 20, g = 30
 
-  assert($at(Pre, (int)(p)) == 10);
+  assert($at("Pre", (int)(p)) == 10);
  
   g = 5;
 }
