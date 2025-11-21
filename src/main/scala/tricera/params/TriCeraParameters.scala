@@ -138,6 +138,9 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
+  lazabs.GlobalParameters.get.solutionReconstruction =
+    GlobalParameters.SolutionReconstruction.CEGAR
+
   private val version = "0.4"
 
   private val greeting =
