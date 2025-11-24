@@ -29,8 +29,9 @@
 
 package tricera.params
 
-import java.io.FileReader
+import ap.parameters.Param
 
+import java.io.FileReader
 import lazabs.GlobalParameters
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
 import tricera.Main.MainException
@@ -40,6 +41,11 @@ object TriCeraParameters {
   def get : TriCeraParameters = parameters.value
   val parameters =
     new scala.util.DynamicVariable[TriCeraParameters] (new TriCeraParameters)
+
+  /** Heap memory models */
+  sealed trait HeapModel
+  case object NativeHeap extends HeapModel
+  case object ArrayHeap extends HeapModel
 }
 
 class TriCeraParameters extends GlobalParameters {
@@ -104,6 +110,8 @@ class TriCeraParameters extends GlobalParameters {
 
   var useArraysForHeap : Boolean = false
 
+  var heapModel : TriCeraParameters.HeapModel = TriCeraParameters.NativeHeap
+
   var devMode : Boolean = false
   var printDebugMessages : Boolean = false
 
@@ -162,6 +170,12 @@ class TriCeraParameters extends GlobalParameters {
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
+    case "-heapModel:native" :: rest =>
+      heapModel = TriCeraParameters.NativeHeap
+      parseArgs(rest)
+    case "-heapModel:array"  :: rest =>
+      heapModel = TriCeraParameters.ArrayHeap
+      parseArgs(rest)
     case "-mathArrays" :: rest => useArraysForHeap = true; parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
@@ -324,7 +338,6 @@ class TriCeraParameters extends GlobalParameters {
     |-h, --help         Show this information
     |-v, --version      Print version number
     |-arithMode:t       Integer semantics: math (default), ilp32, lp64, llp64
-    |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
     |-t:time            Set timeout (in seconds)
     |-cex               Show textual counterexamples
     |-dotCEX            Output counterexample in dot format
@@ -368,6 +381,12 @@ class TriCeraParameters extends GlobalParameters {
     |                   The printed clauses are the ones after Eldarica's default preprocessor
     |-varLines          Print program variables in clauses together with their line numbers (e.g., x:42)
 
+    |Heap memory model
+    |-heapModel:t       Model heap memory using where t : {native, array}
+    |                     native : theory of heaps (default)
+    |                     array  : theory of arrays
+    |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
+    |
     |Horn engine options (Eldarica):
     |-sym               (Experimental) Use symbolic execution with the default engine (bfs)
     |-sym:x             Use symbolic execution where x : {dfs, bfs}
