@@ -125,7 +125,15 @@ object CCAstAtExpressionTransformer {
 
           expressionArg match {
             case typecast: Etypeconv =>
-              val label = labelArg.accept(getName, ())
+              val label = labelArg match {
+                case str : Estring =>
+                  str.string_
+                case _ =>
+                  throw new IllegalArgumentException(
+                    s"${tricera.Util.getLineString(p)}: " +
+                    s"The first argument to $atExpressionName must be a " +
+                    s"string containing a label.")
+              }
               val typeName = typecast.type_name_
               val innerExpr = typecast.exp_
               atCallsBuffer += AtCallInfo(label, typeName, innerExpr, p, currentFunc)
