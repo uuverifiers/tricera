@@ -390,7 +390,7 @@ class TriCeraParameters extends GlobalParameters {
     |Heap memory model
     |-heapModel:t       Model heap memory using where t : {native, array}
     |                     native : theory of heaps (default)
-    |                     array  : theory of arrays
+    |                     array  : theory of arrays (experimental)
     |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
     |
     |Horn engine options (Eldarica):
@@ -413,7 +413,8 @@ class TriCeraParameters extends GlobalParameters {
     |-abstractPO        Run with and w/o interpolation abstraction in parallel
     |-splitClauses:n    Aggressiveness when splitting disjunctions in clauses
     |                     (0 <= n <= 2, default: 1)
-    | solutionReconstruction:t Solution reconstruction method where t : {wp, cegar}
+    |-solutionReconstruction:t
+    |                   Solution reconstruction method where t : {wp, cegar}
     |                     wp    : weakest-preconditions-based reconstruction
     |                     cegar : CEGAR-based reconstruction (default)
     |-pHints            Print initial predicates and abstraction templates
