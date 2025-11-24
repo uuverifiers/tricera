@@ -7,7 +7,7 @@ import scala.util.Try
 lazy val commonSettings = Seq(
     name                 := "TriCera",
     organization         := "uuverifiers",
-    version              := "0.3.2",
+    version              := "0.4",
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
@@ -105,14 +105,10 @@ settings(
   scalacOptions in Compile ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
-  scalacOptions += (scalaVersion map {
-    case "2.11.12" => "-optimise"
-    case "2.12.18" => "-opt:_"
-    case "2.13.17" => "-opt:_"
-  }).value,
+  scalacOptions += "-opt:_".value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.2",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.2.1",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2.1",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.19",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % "test",
