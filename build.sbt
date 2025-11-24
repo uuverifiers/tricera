@@ -105,7 +105,7 @@ settings(
   scalacOptions in Compile ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
-  scalacOptions += "-opt:_".value,
+  scalacOptions += "-opt:_",
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.2.1",
   libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2.1",
