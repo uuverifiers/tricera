@@ -136,7 +136,7 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  solutionReconstruction = GlobalParameters.SolutionReconstruction.CEGAR
+  solutionReconstruction = GlobalParameters.SolutionReconstruction.WP
 
   private val version = "0.4"
 
@@ -415,8 +415,8 @@ class TriCeraParameters extends GlobalParameters {
     |                     (0 <= n <= 2, default: 1)
     |-solutionReconstruction:t
     |                   Solution reconstruction method where t : {wp, cegar}
-    |                     wp    : weakest-preconditions-based reconstruction
-    |                     cegar : CEGAR-based reconstruction (default)
+    |                     wp    : weakest-preconditions-based reconstruction (default)
+    |                     cegar : CEGAR-based reconstruction
     |-pHints            Print initial predicates and abstraction templates
     |-logSimplified     Show clauses after Eldarica preprocessing in Prolog format
     |-logSimplifiedSMT  Show clauses after Eldarica preprocessing in SMT-LIB format
