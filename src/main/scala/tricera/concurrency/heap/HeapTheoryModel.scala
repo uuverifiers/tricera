@@ -110,18 +110,14 @@ class HeapTheoryModel(context           : SymexContext,
     var assumptions = List[CCTerm]()
     var assertions = List[(CCTerm, Property)]()
 
-    val typeSafetyFormula = CCTerm.fromFormula(
-      context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort)),
-      CCInt, p.srcInfo)
-    val validityFormula = CCTerm.fromFormula(
-      context.heap.valid(getValue(heapVar, s).toTerm, p.toTerm),
-      CCInt, p.srcInfo)
     if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
-      assertions = (typeSafetyFormula, properties.MemValidDeref) :: assertions
-    }
-    assumptions = List(typeSafetyFormula, validityFormula) ::: assumptions
+      val safetyFormula = CCTerm.fromFormula(
+        context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort)),
+        CCInt, p.srcInfo)
+      assertions = (safetyFormula, properties.MemValidDeref) :: assertions
+      assumptions = safetyFormula :: assumptions
       // todo: add tester methods for user ADT sorts?
-
+    }
     SimpleResult(
       returnValue = Some(CCTerm.fromTerm(objectGetter(readObj), typ, p.srcInfo)),
       nextState   = s,
@@ -174,7 +170,6 @@ class HeapTheoryModel(context           : SymexContext,
     var assumptions = List[CCTerm]()
     var assertions = List[(CCTerm, Property)]()
 
-    // Memory-safety assertion/assumption
     if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
       // We need to read the current heap to check if it is OK to write.
       val curO = CCTerm.fromTerm(
@@ -183,16 +178,13 @@ class HeapTheoryModel(context           : SymexContext,
         o.srcInfo)
 
       val ptrType = p.typ.asInstanceOf[CCHeapPointer].typ
-      val typeSafetyFormula = CCTerm.fromFormula(
+      val safetyFormula = CCTerm.fromFormula(
         context.heap.hasUserHeapCtor(
           curO.toTerm, context.sortCtorIdMap(ptrType.toSort)),
         CCInt, p.srcInfo)
-      assertions = (typeSafetyFormula, properties.MemValidDeref) :: assertions
+      assertions = (safetyFormula, properties.MemValidDeref) :: assertions
+      assumptions = safetyFormula :: assumptions
     }
-    val validityFormula = CCTerm.fromFormula(
-      context.heap.valid(getValue(heapVar, s).toTerm, p.toTerm),
-      CCInt, p.srcInfo)
-    assumptions = validityFormula :: assumptions
 
     SimpleResult(
       returnValue = None,
