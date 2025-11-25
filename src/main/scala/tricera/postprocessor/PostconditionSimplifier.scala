@@ -155,9 +155,16 @@ object PostconditionSimplifier extends ResultProcessor {
   private class HeapFunDetector extends CollectingVisitor[Unit, Unit] {
     var hasHeap = false
     override def preVisit(t : IExpression, arg : Unit) : PreVisitResult = t match {
-      case IFunApp(Heap.HeapRelatedFunction(_), _) =>
+      case IFunApp(function @ Heap.HeapRelatedFunction(heap), _)
+        if heap.functions.contains(function) =>
+        //  heap.functions.contains(function) excludes functions allocResHeap
+        //  and allocResAddr, but those should not be appearing in results
         hasHeap = true
-        ShortCutResult() // heap fun detected
+        ShortCutResult()
+      case IAtom(predicate @ Heap.HeapRelatedPredicate(heap), _)
+        if heap.predicates.contains(predicate) =>
+        hasHeap = true
+        ShortCutResult()
       case _ => KeepArg
     }
     override def postVisit(t      : IExpression,
