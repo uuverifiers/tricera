@@ -1173,8 +1173,7 @@ class Symex private (context        : SymexContext,
 //                         getValue(arrTerm.asInstanceOf[IConstant].c.name,
 //                                  evalCtx.enclosingFunctionName).typ, srcInfo)
                   throw new UnsupportedCFragmentException(
-                    "There is currently limited support for arrays, " +
-                    "we are working on it.")
+                    "Pointer arithmetic is currently not supported.")
                 case _ =>
                   CCTerm.fromTerm(
                     addrTerm,

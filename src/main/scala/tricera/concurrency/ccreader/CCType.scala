@@ -429,24 +429,26 @@ case class CCStruct(ctor : MonoSortedIFunction,
     }
 
   def contains(rawFieldName : String) = getFieldIndex(rawFieldName) != -1
-  def getFieldTerm(t : CCTerm, fieldAddress: List[Int]) : CCTerm = {
+  def getFieldTerm(t : CCTerm, fieldAddress : List[Int]) : CCTerm = {
+    val fieldTerm = getFieldTerm(t.toTerm, fieldAddress)
+    val fieldType = getFieldType(fieldAddress)
+    CCTerm.fromTerm(fieldTerm, fieldType, t.srcInfo)
+  }
+  def getFieldTerm(t : ITerm, fieldAddress : List[Int]): ITerm = {
     val hd :: tl = fieldAddress
     val sel      = getADTSelector(hd)
     getFieldType(hd) match {
       case nested: CCStructField =>
         tl match {
-          case Nil => CCTerm.fromTerm(sel(t.toTerm), getFieldType(hd), t.srcInfo)
-          case _   => nested.structs(nested.structName).getFieldTerm(
-            CCTerm.fromTerm(sel(t.toTerm), getFieldType(hd), t.srcInfo), tl)
+          case Nil => sel(t)
+          case _   => nested.structs(nested.structName).getFieldTerm(sel(t), tl)
         }
       case nested: CCStruct => // todo: simplify
         tl match {
-          case Nil =>
-            CCTerm.fromTerm(sel(t.toTerm), getFieldType(hd), t.srcInfo)
-          case _   => nested.getFieldTerm(
-            CCTerm.fromTerm(sel(t.toTerm), getFieldType(hd), t.srcInfo), tl)
+          case Nil => sel(t)
+          case _   => nested.getFieldTerm(sel(t), tl)
         }
-      case _ => CCTerm.fromTerm(sel(t.toTerm), getFieldType(hd), t.srcInfo)
+      case _ => sel(t)
     }
   }
   def setFieldTerm(rootTerm     :     ITerm,
