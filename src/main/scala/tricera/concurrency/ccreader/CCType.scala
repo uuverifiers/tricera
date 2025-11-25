@@ -57,7 +57,7 @@ abstract sealed class CCType {
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -80,7 +80,7 @@ abstract sealed class CCType {
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCArray(_, _, _, s, _)         => s.sort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
@@ -101,7 +101,7 @@ abstract sealed class CCType {
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -123,7 +123,7 @@ abstract sealed class CCType {
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -281,9 +281,7 @@ abstract sealed class CCType {
             }
       structType.ctor(const: _*)
     case CCHeapPointer(heap, _)         => heap.nullAddr()
-    case CCHeapArrayPointer(heap, _, _) => // todo: start = null, but
-      // size 0 or 1?
-      heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
+    case CCHeapArrayPointer(heap, _, _) => heap.nthAddrRange(0, IIntLit(1))
     case CCArray(_, _, _, arrayTheory, _) => arrayTheory.const(0)
     case _                                => IIntLit(0)
   }
@@ -431,7 +429,12 @@ case class CCStruct(ctor : MonoSortedIFunction,
     }
 
   def contains(rawFieldName : String) = getFieldIndex(rawFieldName) != -1
-  def getFieldTerm(t : ITerm, fieldAddress: List[Int]): ITerm = {
+  def getFieldTerm(t : CCTerm, fieldAddress : List[Int]) : CCTerm = {
+    val fieldTerm = getFieldTerm(t.toTerm, fieldAddress)
+    val fieldType = getFieldType(fieldAddress)
+    CCTerm.fromTerm(fieldTerm, fieldType, t.srcInfo)
+  }
+  def getFieldTerm(t : ITerm, fieldAddress : List[Int]): ITerm = {
     val hd :: tl = fieldAddress
     val sel      = getADTSelector(hd)
     getFieldType(hd) match {

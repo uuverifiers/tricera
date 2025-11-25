@@ -260,9 +260,7 @@ class Symex private (context        : SymexContext,
       case _ =>
         val structVal = getValue(ptrType.targetInd, false)
         val structType = structVal.typ.asInstanceOf[CCStruct]
-        CCTerm.fromTerm(
-          structType.getFieldTerm(structVal.toTerm, ptrType.fieldAddress),
-          structType.getFieldType(ptrType.fieldAddress), None) // todo: src Info?
+        structType.getFieldTerm(structVal, ptrType.fieldAddress)
     }
 
   private def setValue(name : String, t : CCTerm, enclosingFunction : String) : Unit =
@@ -399,7 +397,7 @@ class Symex private (context        : SymexContext,
   }
 
   def atomicEvalFormula(exp : Exp, evalCtx : EvalContext) : CCTerm = {
-    val initSize         = values.size
+    val initSize = values.size
 
     context.inAtomicMode{
       evalHelp(exp)(EvalSettings(), evalCtx)
@@ -577,12 +575,27 @@ class Symex private (context        : SymexContext,
           val structType = ptr.typ match {
             case st : CCStruct => st
             case sf : CCStructField => sf.structs(sf.structName)
-            case _ => throw new TranslationException("Pointer does not point to a struct type.")
+            case _ => throw new TranslationException(
+              "Pointer does not point to a struct type.")
           }
+
+          val fieldAddress = getFieldAddress(structType, path)
+          val fieldTerm = structType.getFieldTerm(baseLHSVal, fieldAddress)
+          val actualRhsVal = newValue match { // must match on newValue, not newValue2
+            case CCTerm(_, _: CCStackPointer, srcInfo, _) =>
+              throw new UnsupportedCFragmentException(
+                getLineStringShort(srcInfo) + " Only limited support for stack pointers")
+            case CCTerm(IIntLit(value), _, _, _) if isHeapPointer(fieldTerm) =>
+              if (value.intValue != 0) {
+                throw new TranslationException("Pointer assignment only supports 0 (NULL)")
+              } else CCTerm.fromTerm(
+                context.heap.nullAddr(), CCHeapPointer(context.heap, fieldTerm.typ), newValue.srcInfo)
+            case _ => newValue2
+          }
+
           if (structType.sels.size > 1 || path.size > 1) {
-            val fieldAddress = getFieldAddress(structType, path)
             pushVal(baseLHSVal) // keep the address to be written in case we generate clauses
-            pushVal(newValue2)
+            pushVal(actualRhsVal)
             pushVal(processHeapResult(heapModel.read(baseLHSVal, values, locTerm)).get)
             maybeOutputClause(baseLHSVal.srcInfo)
             val oldStructTerm = popVal.toTerm // the result of the read
@@ -592,8 +605,8 @@ class Symex private (context        : SymexContext,
             val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, newValue3.srcInfo))
             processHeapResult(heapModel.write(curBaseLHSVal, newStructObj, values, locTerm))
           } else { // path.size == 1 && structType.sels.size == 1
-            val newStructTerm = structType.setFieldTerm(newValue2.toTerm)
-            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, newValue2.srcInfo))
+            val newStructTerm = structType.setFieldTerm(actualRhsVal.toTerm)
+            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, actualRhsVal.srcInfo))
             processHeapResult(heapModel.write(baseLHSVal, newStructObj, values, locTerm))
           }
 
@@ -637,8 +650,8 @@ class Symex private (context        : SymexContext,
           val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
           val newTerm = CCTerm.fromTerm(writeADT(
             lhsVal.toTerm.asInstanceOf[IFunApp],
-            newValue.toTerm, context.heap.userADTCtors,
-            context.heap.userADTSels), lhsVal.typ, newValue.srcInfo)
+            newValue.toTerm, context.heap.userHeapConstructors,
+            context.heap.userHeapSelectors), lhsVal.typ, newValue.srcInfo)
           val lhsName = asLValue(arrayBase)
           val oldLhsVal = getValue(lhsName, evalCtx.enclosingFunctionName)
           val innerTerm = lhsVal.toTerm.asInstanceOf[IFunApp].args.head
@@ -918,8 +931,11 @@ class Symex private (context        : SymexContext,
         case _ : AssignAdd =>
           (lhsE.typ, rhsE.typ) match {
             case (arrTyp : CCHeapArrayPointer, _ : CCArithType) =>
-              import arrTyp.heap._
-              addressRangeCtor(nth(lhsE.toTerm, rhsE.toTerm), addrRangeSize(lhsE.toTerm) - rhsE.toTerm)
+              // import arrTyp.heap._
+              // nthAddrRange(addressRangeNth(lhsE.toTerm, rhsE.toTerm), addressRangeSize(lhsE.toTerm) - rhsE.toTerm)
+              // TODO: this is unsafe, need to
+              throw new UnsupportedCFragmentException(
+                "Pointer arithmetic is currently not supported.")
             case _ => lhsE.toTerm + rhsE.toTerm
           }
         case _ : AssignSub =>
@@ -1009,7 +1025,8 @@ class Symex private (context        : SymexContext,
 
         restoreState
         addGuard(cond)
-        pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
+        pushVal(CCTerm.fromFormula(
+          true, intermediatePred.argVars.last.typ, srcInfo))
         outputClause(intermediatePred, srcInfo)
       }
     case exp : Eland =>
@@ -1035,7 +1052,8 @@ class Symex private (context        : SymexContext,
 
         restoreState
         addGuard(~cond)
-        pushVal(CCTerm.fromFormula(false, CCInt, srcInfo))
+        pushVal(CCTerm.fromFormula(
+          false, intermediatePred.argVars.last.typ, srcInfo))
         outputClause(intermediatePred, srcInfo)
       }
     case exp : Ebitor =>
@@ -1124,7 +1142,7 @@ class Symex private (context        : SymexContext,
           topVal.toTerm match {
             case fieldFun: IFunApp
               if !(context.objectGetters contains fieldFun.fun) &&
-                 (context.heap.userADTSels exists(_ contains fieldFun.fun)) => // an ADT
+                 (context.heap.userHeapSelectors exists(_ contains fieldFun.fun)) => // an ADT
               val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
               rootTerm match {
                 case Left(c) =>
@@ -1144,20 +1162,24 @@ class Symex private (context        : SymexContext,
               // todo: below type extraction is not safe!
               val heap = context.heap
               val t = addrTerm match {
-                case IFunApp(heap.nth, args) => // if nthAddrRange(a, i)
+                case IFunApp(heap.addressRangeNth, args) => // if nthAddrRange(a, i)
                   val scala.Seq(arrTerm, indTerm) = args
                   // return the addressRange starting from i
                   import heap._
-                  val newTerm = addressRangeCtor(nth(arrTerm, indTerm),
-                                                 addrRangeSize(arrTerm) - indTerm)
-                  CCTerm.fromTerm(newTerm,
-                         getValue(arrTerm.asInstanceOf[IConstant].c.name,
-                                  evalCtx.enclosingFunctionName).typ, srcInfo
-                         )
+                // TODO: implement this properly by adding an offset to pointers
+//                  val newTerm = nthAddrRange(addressRangeNth(arrTerm, indTerm),
+//                                             addressRangeSize(arrTerm) - indTerm)
+//                  CCTerm.fromTerm(newTerm,
+//                         getValue(arrTerm.asInstanceOf[IConstant].c.name,
+//                                  evalCtx.enclosingFunctionName).typ, srcInfo)
+                  throw new UnsupportedCFragmentException(
+                    "Pointer arithmetic is currently not supported.")
                 case _ =>
-                  CCTerm.fromTerm(addrTerm, CCHeapPointer(context.heap,
-                                                 getValue(addrTerm.asInstanceOf[IConstant].c.name,
-                                                          evalCtx.enclosingFunctionName).typ), srcInfo)
+                  CCTerm.fromTerm(
+                    addrTerm,
+                    CCHeapPointer(context.heap,
+                                  getValue(addrTerm.asInstanceOf[IConstant].c.name,
+                                           evalCtx.enclosingFunctionName).typ), srcInfo)
               }
               popVal
               pushVal(t)
@@ -1233,7 +1255,7 @@ class Symex private (context        : SymexContext,
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "$HEAP_TYPE_DEFAULT" =>
           /** A builtin to access the default object of the heap */
-          pushVal(CCTerm.fromTerm(context.heap._defObj,
+          pushVal(CCTerm.fromTerm(context.heap.defaultObject,
                                   CCHeapObject(context.heap), srcInfo))
         case name =>
           outputClause(srcInfo)
@@ -1541,7 +1563,7 @@ class Symex private (context        : SymexContext,
       name match {
         // TODO: FIX!!
         case "HEAP_TYPE_DEFAULT" =>
-          pushVal(CCTerm.fromTerm(context.heap._defObj,
+          pushVal(CCTerm.fromTerm(context.heap.defaultObject,
                                   CCHeapObject(context.heap), Some(getSourceInfo(exp))))
         case _ =>
           pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {

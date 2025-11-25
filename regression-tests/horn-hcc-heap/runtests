@@ -4,16 +4,30 @@ LAZABS=../../tri
 
 TESTS="list-001.c list-001-fail.c list-002-fail.c mutually-referential-structs.c mutually-referential-structs-fail.c mutually-referential-structs-unsafe.c simple-struct.c simple-struct-2.c simple-struct-fail.c swap-1.c swap-1-fail.c swap-2.c swap-2-fail.c swap-3.c simple-arith.c typecastUnsafe-001.c typecastSafe-001.c illegal-access-001.c illegal-access-002.c postop.c postop-struct.c preop.c preop-struct.c opassign.c opassign-struct.c unsafe-access-001.c stackptr-to-heapptr.c stackptr-to-heapptr-double.c free-1-unsafe.c free-2-nondet-unsafe.c free-3-safe.c free-4-unsafe.c struct-ptrfield-1.c stack-array-1-unsafe.c stack-array-2-unsafe.c stack-array-2-safe.c struct-chained-ptr-field-1-safe.c struct-chained-ptr-field-1-unsafe.c"
 
+VALID_DEREF_TESTS="stack-ptr-bug-1.c sizeof-bug-1-true.c sizeof-bug-2-true.c heap-guard-bug-1.c heap-guard-bug-2.c"
+
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $LAZABS -cex -abstract:off -heapModel:native "$@" $name 2>&1 | grep -v 'at '
 done
 
-VALID_DEREF_TESTS="stack-ptr-bug-1.c sizeof-bug-1-true.c sizeof-bug-2-true.c"
 
 for name in $VALID_DEREF_TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -valid-deref "$@" $name 2>&1 | grep -v 'at '
+    $LAZABS -cex -abstract:off -valid-deref -heapModel:native "$@" $name 2>&1 | grep -v 'at '
 done
+
+#for name in $TESTS; do
+#    echo
+#    echo $name
+#    $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#done
+
+
+#for name in $VALID_DEREF_TESTS; do
+#    echo
+#    echo $name
+#    $LAZABS -cex -abstract:off -valid-deref -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#done

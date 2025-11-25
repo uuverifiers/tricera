@@ -30,7 +30,6 @@
 package tricera.params
 
 import java.io.FileReader
-
 import lazabs.GlobalParameters
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
 import tricera.Main.MainException
@@ -40,6 +39,11 @@ object TriCeraParameters {
   def get : TriCeraParameters = parameters.value
   val parameters =
     new scala.util.DynamicVariable[TriCeraParameters] (new TriCeraParameters)
+
+  /** Heap memory models */
+  sealed trait HeapModel
+  case object NativeHeap extends HeapModel
+  case object ArrayHeap extends HeapModel
 }
 
 class TriCeraParameters extends GlobalParameters {
@@ -104,6 +108,8 @@ class TriCeraParameters extends GlobalParameters {
 
   var useArraysForHeap : Boolean = false
 
+  var heapModel : TriCeraParameters.HeapModel = TriCeraParameters.NativeHeap
+
   var devMode : Boolean = false
   var printDebugMessages : Boolean = false
 
@@ -130,7 +136,9 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  private val version = "0.4.0"
+  solutionReconstruction = GlobalParameters.SolutionReconstruction.WP
+
+  private val version = "0.4"
 
   private val greeting =
     s"""TriCera v$version.
@@ -162,6 +170,12 @@ class TriCeraParameters extends GlobalParameters {
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
 
+    case "-heapModel:native" :: rest =>
+      heapModel = TriCeraParameters.NativeHeap
+      parseArgs(rest)
+    case "-heapModel:array"  :: rest =>
+      heapModel = TriCeraParameters.ArrayHeap
+      parseArgs(rest)
     case "-mathArrays" :: rest => useArraysForHeap = true; parseArgs(rest)
 
     case "-abstract" :: rest => templateBasedInterpolation = true; parseArgs(rest)
@@ -169,6 +183,12 @@ class TriCeraParameters extends GlobalParameters {
       portfolio = GlobalParameters.Portfolio.Template
       parseArgs(rest)
     }
+    case "-solutionReconstruction:wp" :: rest =>
+      solutionReconstruction = GlobalParameters.SolutionReconstruction.WP
+      parseArgs(rest)
+    case "-solutionReconstruction:cegar" :: rest =>
+      solutionReconstruction = GlobalParameters.SolutionReconstruction.CEGAR
+      parseArgs(rest)
     case "-portfolio" :: rest => {
       portfolio = GlobalParameters.Portfolio.General
       parseArgs(rest)
@@ -324,7 +344,6 @@ class TriCeraParameters extends GlobalParameters {
     |-h, --help         Show this information
     |-v, --version      Print version number
     |-arithMode:t       Integer semantics: math (default), ilp32, lp64, llp64
-    |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
     |-t:time            Set timeout (in seconds)
     |-cex               Show textual counterexamples
     |-dotCEX            Output counterexample in dot format
@@ -368,9 +387,15 @@ class TriCeraParameters extends GlobalParameters {
     |                   The printed clauses are the ones after Eldarica's default preprocessor
     |-varLines          Print program variables in clauses together with their line numbers (e.g., x:42)
 
+    |Heap memory model
+    |-heapModel:t       Model heap memory using where t : {native, array}
+    |                     native : theory of heaps (default)
+    |                     array  : theory of arrays (experimental)
+    |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
+    |
     |Horn engine options (Eldarica):
     |-sym               (Experimental) Use symbolic execution with the default engine (bfs)
-    |-sym:x             Use symbolic execution where x : {dfs, bfs}
+    |-sym:t             Use symbolic execution where t : {dfs, bfs}
     |                     dfs: depth-first forward (does not support non-linear clauses)
     |                     bfs: breadth-first forward
     |-symDepth:n        Set a max depth for symbolic execution (underapproximate)
@@ -388,6 +413,10 @@ class TriCeraParameters extends GlobalParameters {
     |-abstractPO        Run with and w/o interpolation abstraction in parallel
     |-splitClauses:n    Aggressiveness when splitting disjunctions in clauses
     |                     (0 <= n <= 2, default: 1)
+    |-solutionReconstruction:t
+    |                   Solution reconstruction method where t : {wp, cegar}
+    |                     wp    : weakest-preconditions-based reconstruction (default)
+    |                     cegar : CEGAR-based reconstruction
     |-pHints            Print initial predicates and abstraction templates
     |-logSimplified     Show clauses after Eldarica preprocessing in Prolog format
     |-logSimplifiedSMT  Show clauses after Eldarica preprocessing in SMT-LIB format

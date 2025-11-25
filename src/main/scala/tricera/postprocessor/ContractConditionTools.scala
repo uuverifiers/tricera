@@ -184,9 +184,11 @@ object TheoryOfHeapFunApp {
       expr: IExpression
   ): Option[(IFunction, Seq[IExpression])] = expr match {
     case IFunApp(
-          function @ Heap.HeapFunExtractor(_),
+          function @ Heap.HeapRelatedFunction(heap),
           args
-        ) =>
+        ) if heap.functions.contains(function) =>
+      //  heap.functions.contains(function) excludes functions allocResHeap
+      //  and allocResAddr, but those should not be appearing in results
       Some((function, args))
 
     case _ => None
