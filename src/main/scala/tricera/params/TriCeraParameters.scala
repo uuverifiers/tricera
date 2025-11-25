@@ -29,8 +29,6 @@
 
 package tricera.params
 
-import ap.parameters.Param
-
 import java.io.FileReader
 import lazabs.GlobalParameters
 import lazabs.horn.abstractions.StaticAbstractionBuilder.AbstractionType
@@ -138,10 +136,9 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  lazabs.GlobalParameters.get.solutionReconstruction =
-    GlobalParameters.SolutionReconstruction.CEGAR
+  solutionReconstruction = GlobalParameters.SolutionReconstruction.WP
 
-  private val version = "0.4.0"
+  private val version = "0.4"
 
   private val greeting =
     s"""TriCera v$version.
@@ -186,6 +183,12 @@ class TriCeraParameters extends GlobalParameters {
       portfolio = GlobalParameters.Portfolio.Template
       parseArgs(rest)
     }
+    case "-solutionReconstruction:wp" :: rest =>
+      solutionReconstruction = GlobalParameters.SolutionReconstruction.WP
+      parseArgs(rest)
+    case "-solutionReconstruction:cegar" :: rest =>
+      solutionReconstruction = GlobalParameters.SolutionReconstruction.CEGAR
+      parseArgs(rest)
     case "-portfolio" :: rest => {
       portfolio = GlobalParameters.Portfolio.General
       parseArgs(rest)
@@ -387,12 +390,12 @@ class TriCeraParameters extends GlobalParameters {
     |Heap memory model
     |-heapModel:t       Model heap memory using where t : {native, array}
     |                     native : theory of heaps (default)
-    |                     array  : theory of arrays
+    |                     array  : theory of arrays (experimental)
     |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
     |
     |Horn engine options (Eldarica):
     |-sym               (Experimental) Use symbolic execution with the default engine (bfs)
-    |-sym:x             Use symbolic execution where x : {dfs, bfs}
+    |-sym:t             Use symbolic execution where t : {dfs, bfs}
     |                     dfs: depth-first forward (does not support non-linear clauses)
     |                     bfs: breadth-first forward
     |-symDepth:n        Set a max depth for symbolic execution (underapproximate)
@@ -410,6 +413,10 @@ class TriCeraParameters extends GlobalParameters {
     |-abstractPO        Run with and w/o interpolation abstraction in parallel
     |-splitClauses:n    Aggressiveness when splitting disjunctions in clauses
     |                     (0 <= n <= 2, default: 1)
+    |-solutionReconstruction:t
+    |                   Solution reconstruction method where t : {wp, cegar}
+    |                     wp    : weakest-preconditions-based reconstruction (default)
+    |                     cegar : CEGAR-based reconstruction
     |-pHints            Print initial predicates and abstraction templates
     |-logSimplified     Show clauses after Eldarica preprocessing in Prolog format
     |-logSimplifiedSMT  Show clauses after Eldarica preprocessing in SMT-LIB format

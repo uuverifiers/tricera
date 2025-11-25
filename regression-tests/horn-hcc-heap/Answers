@@ -318,3 +318,9 @@ SAFE
 
 sizeof-bug-2-true.c
 SAFE
+
+heap-guard-bug-1.c
+SAFE
+
+heap-guard-bug-2.c
+SAFE

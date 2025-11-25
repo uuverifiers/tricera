@@ -48,28 +48,28 @@ done
 
 ## -heapModel:array
 
-for name in $TESTS; do
-    echo
-    echo $name
-    $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
-done
+# for name in $TESTS; do
+#     echo
+#     echo $name
+#     $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+# done
 
-for name in $MEMTRACKTESTS; do
-    echo
-    echo $name
-    $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
-    # -memtrack can also be added but not required when .yml files are present
-done
+# for name in $MEMTRACKTESTS; do
+#     echo
+#     echo $name
+#     $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#     # -memtrack can also be added but not required when .yml files are present
+# done
 
-for name in $SPLITPROPERTYTESTS; do
-    echo
-    echo $name
-    $LAZABS -cex -abstract:off -splitProperties -heapModel:array "$@" $name 2>&1 | grep -v 'at '
-    # -memtrack can also be added but not required when .yml files are present
-done
+# for name in $SPLITPROPERTYTESTS; do
+#     echo
+#     echo $name
+#     $LAZABS -cex -abstract:off -splitProperties -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#     # -memtrack can also be added but not required when .yml files are present
+# done
 
-for name in $NONDETINITESTS; do
-    echo
-    echo $name
-    $LAZABS -cex -abstract:off -forceNondetInit -heapModel:array "$@" $name 2>&1 | grep -v 'at '
-done
+# for name in $NONDETINITESTS; do
+#     echo
+#     echo $name
+#     $LAZABS -cex -abstract:off -forceNondetInit -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+# done

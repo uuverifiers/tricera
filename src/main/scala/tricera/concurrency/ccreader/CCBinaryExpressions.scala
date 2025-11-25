@@ -31,7 +31,7 @@ package tricera.concurrency.ccreader
 import ap.parser.{IExpression, IFormula, ITerm}
 import ap.theories.ModuloArithmetic
 import tricera.concurrency.CCReader._
-import tricera.concurrency.ccreader.CCExceptions.TranslationException
+import tricera.concurrency.ccreader.CCExceptions._
 import IExpression._
 import tricera.Util.getLineString
 
@@ -178,10 +178,8 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       override def getIntRes = (lhs.typ, rhs.typ) match {
         case (arrTyp: CCHeapArrayPointer, _: CCArithType) =>
-          import arrTyp.heap._
-//          addressRangeCtor(nth(lhs.toTerm, rhs.toTerm),
-//                           addrRangeSize(lhs.toTerm) - rhs.toTerm)
-        ???
+          throw new UnsupportedCFragmentException(
+            "Pointer arithmetic is currently not supported.")
         case _ =>
           lhs.toTerm + rhs.toTerm
       }

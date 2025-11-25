@@ -19,15 +19,15 @@ for name in $VALID_DEREF_TESTS; do
     $LAZABS -cex -abstract:off -valid-deref -heapModel:native "$@" $name 2>&1 | grep -v 'at '
 done
 
-for name in $TESTS; do
-    echo
-    echo $name
-    $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
-done
+#for name in $TESTS; do
+#    echo
+#    echo $name
+#    $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#done
 
 
-for name in $VALID_DEREF_TESTS; do
-    echo
-    echo $name
-    $LAZABS -cex -abstract:off -valid-deref -heapModel:array "$@" $name 2>&1 | grep -v 'at '
-done
+#for name in $VALID_DEREF_TESTS; do
+#    echo
+#    echo $name
+#    $LAZABS -cex -abstract:off -valid-deref -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#done

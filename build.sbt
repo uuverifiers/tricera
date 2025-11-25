@@ -9,7 +9,7 @@ import Keys._
 lazy val commonSettings = Seq(
     name                 := "TriCera",
     organization         := "uuverifiers",
-    version              := "0.3.2-DEV",
+    version              := "0.4-DEV",
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
@@ -105,11 +105,7 @@ lazy val root = (project in file("."))
     scalacOptions in Compile ++=
     List("-feature", "-language:implicitConversions,postfixOps,reflectiveCalls",
          "-encoding", "UTF-8"),
-    scalacOptions += (scalaVersion map {
-      case "2.11.12" => "-optimise"
-      case "2.12.18" => "-opt:_"
-      case "2.13.17" => "-opt:_"
-    }).value,
+    scalacOptions += "-opt:_",
     //resolvers += "uuverifiers" at "https://eldarica.org/maven/",
     libraryDependencies ++= Seq(
       "net.jcazevedo" %% "moultingyaml" % "0.4.2",

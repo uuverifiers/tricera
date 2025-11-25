@@ -124,68 +124,16 @@ false :- main18_36_3(s:14, i:18), select(S::data(s:14), i:18) = i:18. (line:19 c
 UNSAFE
 
 pointer-arith-1-safe.c
-SAFE
+UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 pointer-arith-1-unsafe.c
-
-------------------------------------------------------------------------------------------------------------------------------------
-Init:
-                                    main5_3(emptyHeap, nthAddr(0), AddrRange(nthAddr(0), 0), 2)                                     
-------------------------------------------------------------------------------------------------------------------------------------
-                                                                 |                                                                  
-                                                                 |                                                                  
-                                                                 V                                                                  
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
-------------------------------------------------------------------------------------------------------------------------------------
-                                                                 |                                                                  
-                                                                 |                                                                  
-                                                                 V                                                                  
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
-------------------------------------------------------------------------------------------------------------------------------------
-                                                                 |                                                                  
-                                                                 |                                                                  
-                                                                 V                                                                  
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
-------------------------------------------------------------------------------------------------------------------------------------
-Final:
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
-------------------------------------------------------------------------------------------------------------------------------------
-Failed assertion:
-false :- main7_36_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line:6 col:7) (property: valid-deref)
-
-UNSAFE
+UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 pointer-arith-2-safe.c
-SAFE
+UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 pointer-arith-2-unsafe.c
-
-------------------------------------------------------------------------------------------------------------------------------------
-Init:
-                                    main5_3(emptyHeap, nthAddr(0), AddrRange(nthAddr(0), 0), 2)                                     
-------------------------------------------------------------------------------------------------------------------------------------
-                                                                 |                                                                  
-                                                                 |                                                                  
-                                                                 V                                                                  
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(1), 2), 0) 
-------------------------------------------------------------------------------------------------------------------------------------
-                                                                 |                                                                  
-                                                                 |                                                                  
-                                                                 V                                                                  
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 1) 
-------------------------------------------------------------------------------------------------------------------------------------
-                                                                 |                                                                  
-                                                                 |                                                                  
-                                                                 V                                                                  
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
-------------------------------------------------------------------------------------------------------------------------------------
-Final:
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), nthAddr(0), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 2) 
-------------------------------------------------------------------------------------------------------------------------------------
-Failed assertion:
-false :- main7_36_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line:6 col:7) (property: valid-deref)
-
-UNSAFE
+UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 global-struct-array-1.c
 
@@ -260,42 +208,13 @@ SAFE
 
 pointer-arith-3-safe.c
 Splitting properties: {valid-deref,valid-memtrack,valid-free,unreach-call}
-  valid-deref... SAFE
-  valid-memtrack... SAFE
-  valid-free... SAFE
-  unreach-call... SAFE
-SAFE
+  valid-deref... UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
+UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 pointer-arith-3-unsafe.c
 Splitting properties: {valid-deref,valid-memtrack,valid-free,unreach-call}
-  valid-deref... 
-------------------------------------------------------------------------------------------------------------------------
-Init:
-                                    main5_3(emptyHeap, AddrRange(nthAddr(0), 0), 2)                                     
-------------------------------------------------------------------------------------------------------------------------
-                                                           |                                                            
-                                                           |                                                            
-                                                           V                                                            
-                  main(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2)                   
-------------------------------------------------------------------------------------------------------------------------
-                                                           |                                                            
-                                                           |                                                            
-                                                           V                                                            
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(2), 1), 0) 
-------------------------------------------------------------------------------------------------------------------------
-                                                           |                                                            
-                                                           |                                                            
-                                                           V                                                            
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
-------------------------------------------------------------------------------------------------------------------------
-Final:
- main7_36_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 2)), AddrRange(nthAddr(1), 2), 2, AddrRange(nthAddr(0), 0), 1) 
-------------------------------------------------------------------------------------------------------------------------
-Failed assertion:
-false :- main7_36_3(@h, a:1, n:4, p:6, i:7), !is_O_Int(read(@h, nthAddrRange(p:6, 0))). (line:6 col:7) (property: valid-deref)
-
-UNSAFE
-UNSAFE
+  valid-deref... UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
+UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 nondet-global-array-opt-1.c
 
