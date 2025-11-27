@@ -60,6 +60,9 @@ import tricera.concurrency.heap.{HeapModel, HeapModelFactory, HeapTheoryModel}
 /** Implicit conversion so that we can get a Scala-like iterator from a
  * a Java list */
 import scala.jdk.CollectionConverters._
+import ap.util.Debug
+import scala.collection.immutable.HashMap
+import scala.collection.mutable
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -986,8 +989,9 @@ class CCReader private (prog              : Program,
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        override val getStructMap: Map[IFunction, CCStruct] =
-          structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+        override val getStructMap: Map[IFunction, CCStruct] = {
+          structDefs.values.map(struct => (struct.ctor, struct)).toMap
+        }
 
         override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
 
