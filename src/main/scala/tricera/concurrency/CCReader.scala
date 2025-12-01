@@ -83,6 +83,9 @@ object CCReader {
     val (transformedCallsProg, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
 
+    val pp = new PrettyPrinterNonStatic
+    printlnDebug(f"transformed program:\n${pp.print(transformedCallsProg)}")
+  
     var reader : CCReader = null
     while (reader == null)
       try {
@@ -2572,7 +2575,7 @@ class CCReader private (prog              : Program,
             } // todo: heap term for exit predicate?
 
             override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(stm)
@@ -2661,7 +2664,7 @@ class CCReader private (prog              : Program,
               getHeapTerm // todo: heap term for exit predicate?
             
             override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(loop_annot)
