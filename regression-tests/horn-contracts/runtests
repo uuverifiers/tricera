@@ -11,6 +11,7 @@ TESTS="contract1.hcc \
        fib.hcc \
        stackptr.hcc \
        struct-name-bug.hcc \
+       stackptr-func-dec.hcc \
        stackptr-multi-arg.hcc \
        stackptr-nested-calls.hcc \
        stackptr-recursion.hcc \
