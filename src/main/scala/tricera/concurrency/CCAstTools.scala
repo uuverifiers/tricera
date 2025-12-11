@@ -32,7 +32,7 @@ import concurrent_c._
 import concurrent_c.Absyn._
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 
 /**
   * This trait defines a function to set the line number of
@@ -481,4 +481,30 @@ class CCAstEnumNameToEnumVarVistor extends CCAstCopyWithLocation[Unit] {
   override def visit(enum: EnumName, arg: Unit): Enum_specifier = {
     copyLocationInformation(enum, new EnumVar(enum.cident_))
   }
+}
+
+/**
+  * Vistor class to fill the given map with function definitions occurring in the AST.
+  */
+class CCAstFillFuncDef extends AbstractVisitor[Unit, MHashMap[String, Function_def]] {
+  type FuncDefs = MHashMap[String, Function_def]
+
+  private val getName = new CCAstGetNameVistor
+  private val copyAst = new CCAstCopyVisitor
+
+  /* Program */
+  override def visit(progr: Progr,  fdefs: FuncDefs): Unit = {
+    progr.listexternal_declaration_.asScala.foreach(ext => ext.accept(this, fdefs))
+  }
+
+  /* External_declaration */
+  override def visit(ext: Afunc, functionDefinitions: FuncDefs): Unit = {
+    functionDefinitions.put(
+      ext.function_def_.accept(getName, ()),
+      ext.function_def_.accept(copyAst, ()))
+  }
+  
+  override def visit(ext: Athread, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: Global, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: Chan, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
 }

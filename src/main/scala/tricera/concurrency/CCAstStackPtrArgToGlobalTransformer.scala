@@ -530,6 +530,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
 
   private val getName = new CCAstGetNameVistor
   private val copyAst = new CCAstCopyVisitor
+  private val fillFuncDefs = new CCAstFillFuncDef
   private val functionDefinitions = new MHashMap[String, Function_def]
 
   /* Program */
@@ -548,6 +549,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
       case _ => false
     }
 
+    progr.accept(fillFuncDefs, functionDefinitions)
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
 
     if (callSiteTransforms.nonEmpty) {
@@ -559,31 +561,24 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
           .map(d => d.accept(getMaxLineNumber, ()))
           .reduce(math.max)+1)
       val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
+      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.wrapperDeclarations
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
       declarations.addAll(mainDefIndex, additions.wrapperDefinitions
         .map(i => i._2)
         .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
       declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions
         .map(i => i._2)
         .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.wrapperDeclarations
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-
       new Progr(declarations);
     } else {
       progr
     }
   }
-
-  override def visit(func: Afunc, transforms: CallSiteTransforms): External_declaration = {
-    functionDefinitions.put(
-      func.function_def_.accept(getName, ()),
-      func.function_def_.accept(copyAst, ()))
-    super.visit(func, transforms)
-  }
+  
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {
     (callSite.listexp_.asScala.find(CCAstUtils.isStackPtr),
