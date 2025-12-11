@@ -82,9 +82,6 @@ object CCReader {
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
-
-    val pp = new PrettyPrinterNonStatic
-    printlnDebug(f"transformed program:\n${pp.print(transformedCallsProg)}")
   
     var reader : CCReader = null
     while (reader == null)
