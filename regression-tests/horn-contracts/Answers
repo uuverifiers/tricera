@@ -143,6 +143,19 @@ Inferred ACSL annotations
 
 SAFE
 
+stackptr-func-dec.hcc
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f */
+/*@
+  requires \true;
+  ensures \valid(x) && \old(*x) - *x == -1;
+*/
+================================================================================
+
+SAFE
+
 stackptr-multi-arg.hcc
 Warning: no definition of function "non_det_int" available
 
