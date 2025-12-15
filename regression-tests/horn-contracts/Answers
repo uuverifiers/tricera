@@ -245,3 +245,19 @@ Inferred ACSL annotations
 ================================================================================
 
 SAFE
+
+stackptr-ilp32.hcc
+Warning: The following clause has different terms with the same name (term: globalf1_0p:12)
+main10_5(@h, globalf1_0p:12, c:9.\as[signed bv[32]]) :- c:9 >= -2147483648 & 2147483647 >= c:9 & globalf1_0p:12 >= -2147483648 & 2147483647 >= globalf1_0p:12 & @h = emptyHeap & globalf1_0p:12 = 0.\as[signed bv[32]].
+
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f1 */
+/*@
+  requires \valid(p) && 2147483647 >= *p && *p >= -2147483648;
+  ensures \valid(p) && (*p == 0 || \old(*p) >= 2147483648 || -2147483649 >= \old(*p));
+*/
+================================================================================
+
+SAFE
