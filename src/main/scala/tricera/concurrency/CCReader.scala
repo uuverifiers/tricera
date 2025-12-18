@@ -623,12 +623,21 @@ class CCReader private (prog              : Program,
     }).toList
 
   // todo: only add types that exist in the program - should also add machine arithmetic types
-  val predefSignatures =
-    List(("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
-         ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(Sort.Nat))), ObjSort)),
-         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddrSort)), ObjSort)),
-         ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddrRangeSort)), ObjSort))
-    )
+  val predefSignatures = List(
+    ("O_Int", HeapObj.CtorSignature(
+      List(("getInt", HeapObj.OtherSort(CCInt.toSort))), ObjSort)),
+    ("O_UInt", HeapObj.CtorSignature(
+      List(("getUInt", HeapObj.OtherSort(CCUInt.toSort))), ObjSort)),
+    ("O_Addr", HeapObj.CtorSignature(
+      List(("getAddr", HeapObj.AddrSort)), ObjSort)),
+    ("O_AddrRange", HeapObj.CtorSignature(
+      List(("getAddrRange", HeapObj.AddrRangeSort)), ObjSort))
+  )
+  // Make sure that we have one object sort per sort
+  private val ctorObjSorts =
+    predefSignatures.flatMap(s => s._2.arguments.map(_._2))
+  assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
+
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
     predefSignatures ++
@@ -668,7 +677,8 @@ class CCReader private (prog              : Program,
   val structSels = heap.userHeapSelectors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
 
-  val objectSorts : scala.IndexedSeq[Sort] = objectGetters.toIndexedSeq.map(f => f.resSort)
+  val objectSorts : scala.IndexedSeq[Sort] =
+    objectGetters.toIndexedSeq.map(f => f.resSort)
   val sortGetterMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectGetters).toMap
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
