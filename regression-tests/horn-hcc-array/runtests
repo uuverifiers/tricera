@@ -18,6 +18,8 @@ NONDETINITESTS="\
   nondet-global-array-opt-1.c nondet-global-array-opt-2.c nondet-global-array-opt-3.c \
   nondet-static-array-opt-1.c nondet-static-array-opt-2.c nondet-static-array-opt-3.c"
 
+ILP32TESTS="ilp32-bug-1.c"
+
 ## -heapModel:native
 
 for name in $TESTS; do
@@ -44,6 +46,12 @@ for name in $NONDETINITESTS; do
     echo
     echo $name
     $LAZABS -cex -abstract:off -forceNondetInit -heapModel:native "$@" $name 2>&1 | grep -v 'at '
+done
+
+for name in $ILP32TESTS; do
+    echo
+    echo $name
+    $LAZABS -cex -abstract:off -forceNondetInit -heapModel:native -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
 done
 
 ## -heapModel:array

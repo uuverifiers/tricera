@@ -60,6 +60,9 @@ import tricera.concurrency.heap.{HeapModel, HeapModelFactory, HeapTheoryModel}
 /** Implicit conversion so that we can get a Scala-like iterator from a
  * a Java list */
 import scala.jdk.CollectionConverters._
+import ap.util.Debug
+import scala.collection.immutable.HashMap
+import scala.collection.mutable
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -79,7 +82,7 @@ object CCReader {
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
-
+  
     var reader : CCReader = null
     while (reader == null)
       try {
@@ -620,12 +623,21 @@ class CCReader private (prog              : Program,
     }).toList
 
   // todo: only add types that exist in the program - should also add machine arithmetic types
-  val predefSignatures =
-    List(("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
-         ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(Sort.Nat))), ObjSort)),
-         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddrSort)), ObjSort)),
-         ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddrRangeSort)), ObjSort))
-    )
+  val predefSignatures = List(
+    ("O_Int", HeapObj.CtorSignature(
+      List(("getInt", HeapObj.OtherSort(CCInt.toSort))), ObjSort)),
+    ("O_UInt", HeapObj.CtorSignature(
+      List(("getUInt", HeapObj.OtherSort(CCUInt.toSort))), ObjSort)),
+    ("O_Addr", HeapObj.CtorSignature(
+      List(("getAddr", HeapObj.AddrSort)), ObjSort)),
+    ("O_AddrRange", HeapObj.CtorSignature(
+      List(("getAddrRange", HeapObj.AddrRangeSort)), ObjSort))
+  )
+  // Make sure that we have one object sort per sort
+  private val ctorObjSorts =
+    predefSignatures.flatMap(s => s._2.arguments.map(_._2))
+  assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
+
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
     predefSignatures ++
@@ -665,7 +677,8 @@ class CCReader private (prog              : Program,
   val structSels = heap.userHeapSelectors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
 
-  val objectSorts : scala.IndexedSeq[Sort] = objectGetters.toIndexedSeq.map(f => f.resSort)
+  val objectSorts : scala.IndexedSeq[Sort] =
+    objectGetters.toIndexedSeq.map(f => f.resSort)
   val sortGetterMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectGetters).toMap
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
@@ -986,8 +999,9 @@ class CCReader private (prog              : Program,
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        override val getStructMap: Map[IFunction, CCStruct] =
-          structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+        override val getStructMap: Map[IFunction, CCStruct] = {
+          structDefs.values.map(struct => (struct.ctor, struct)).toMap
+        }
 
         override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
 
@@ -2568,7 +2582,7 @@ class CCReader private (prog              : Program,
             } // todo: heap term for exit predicate?
 
             override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(stm)
@@ -2657,7 +2671,7 @@ class CCReader private (prog              : Program,
               getHeapTerm // todo: heap term for exit predicate?
             
             override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(loop_annot)

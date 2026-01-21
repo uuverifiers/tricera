@@ -260,3 +260,6 @@ SAFE
 
 nondet-static-array-opt-3.c
 SAFE
+
+ilp32-bug-1.c
+SAFE

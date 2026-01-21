@@ -1,0 +1,12 @@
+/*@contract@*/
+static void f1(int *p)
+{
+    *p = 0;
+}
+
+void main()
+{
+    int c;
+    f1(&c);
+    assert(c == 0);
+}
