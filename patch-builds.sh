@@ -16,7 +16,7 @@ if [[ -f "$ELDARICA_BUILD" ]]; then
 
     # Insert the line between dependsOn(...) and .settings(...)
     awk '
-      /dependsOn\(ccParser, tplspecParser\)\./ {
+      /dependsOn\(tplspecParser\)\./ {
         print "    dependsOn(ProjectRef(file(\"../princess\"), \"root\"))."
       }
       { print }

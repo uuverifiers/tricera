@@ -143,7 +143,6 @@ commands += Command.command("overrideSettings") { state =>
 
         eldarica / libraryDependencies := (eldarica / libraryDependencies).value.filterNot(_.organization.startsWith("uuverifiers")),
         hornConcurrency / libraryDependencies := (hornConcurrency / libraryDependencies).value.filterNot(_.organization.startsWith("uuverifiers")),
-        princess / libraryDependencies := (princess / libraryDependencies).value.filterNot(_.organization.startsWith("uuverifiers"))
         ),
       state
       )
