@@ -54,8 +54,8 @@ final class HeapTheoryFactory(context : SymexContext,
     CCHeapPointer(context.heap.AddressSort, context.heap.nullAddr(), typ)
   override def makeArrayPointer(elementType: CCType,
                                 arrayLocation: ArrayLocation.Value): CCHeapArrayPointer =
-    CCHeapArrayPointer(context.heap.AddressRangeSort,
-      context.heap.nthAddrRange(0, IIntLit(1)), elementType, arrayLocation)
+    CCHeapArrayPointer(context.heap.RangeSort,
+      context.heap.range(0, IIntLit(1)), elementType, arrayLocation)
 
   private val heapVarName = "@h"
   private val memCleanupVarName = "@v_cleanup"
@@ -96,12 +96,12 @@ class HeapTheoryModel(context           : SymexContext,
   import HeapModel._
 
   override def addressSort      : Sort  = context.heap.AddressSort
-  override def addressRangeSort : Sort  = context.heap.AddressRangeSort
+  override def addressRangeSort : Sort  = context.heap.RangeSort
   override def objectSort       : Sort  = context.heap.ObjectSort
   override def heapSort         : Sort  = context.heap.HeapSort
   override def nullAddr()          : ITerm = context.heap.nullAddr()
   override def zeroInitAddrRange() : ITerm =
-    context.heap.nthAddrRange(0, IIntLit(1))
+    context.heap.range(0, IIntLit(1))
 
   private def updateValue(v : CCVar, newVal : CCTerm, s : scala.Seq[CCTerm]) : scala.Seq[CCTerm] = {
     assert(v == heapVar || memCleanupVar.nonEmpty && v == memCleanupVar.get)
@@ -127,8 +127,7 @@ class HeapTheoryModel(context           : SymexContext,
 
     if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
       val safetyFormula = CCTerm.fromFormula(
-        context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort))
-        &&& context.heap.valid(getValue(heapVar, s).toTerm, p.toTerm),
+        context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort)),
         CCInt, p.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
@@ -144,10 +143,10 @@ class HeapTheoryModel(context           : SymexContext,
 
   override def alloc(o : CCTerm, oType : CCType, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     val newAlloc = context.heap.alloc(getValue(heapVar, s).toTerm, o.toTerm)
-    val newHeapTerm = CCTerm.fromTerm(context.heap.allocResHeap(newAlloc),
+    val newHeapTerm = CCTerm.fromTerm(context.heap.heapAddrPair_1(newAlloc),
                              CCHeap(context.heap),
                              o.srcInfo)
-    val newAddrTerm = CCTerm.fromTerm(context.heap.allocResAddr(newAlloc),
+    val newAddrTerm = CCTerm.fromTerm(context.heap.heapAddrPair_2(newAlloc),
                              makePointer(oType),
                              o.srcInfo)
     var nextState = updateValue(heapVar, newHeapTerm, s)
@@ -196,8 +195,7 @@ class HeapTheoryModel(context           : SymexContext,
       val ptrType = p.typ.asInstanceOf[CCHeapPointer].typ
       val safetyFormula = CCTerm.fromFormula(
         context.heap.hasUserHeapCtor(
-          curO.toTerm, context.sortCtorIdMap(ptrType.toSort)) &&&
-        context.heap.valid(getValue(heapVar, s).toTerm, p.toTerm),
+          curO.toTerm, context.sortCtorIdMap(ptrType.toSort)),
         CCInt, p.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
@@ -264,11 +262,11 @@ class HeapTheoryModel(context           : SymexContext,
                * (or equivalently forall ind. read(h, nth(t, ind)) =/= defObj)
                */
               val ind = scope.getFreshEvalVar(CCInt, p.srcInfo)
-              val readAddr = context.heap.addressRangeNth(p.toTerm, ind.term)
+              val readAddr = context.heap.rangeNth(p.toTerm, ind.term)
               val readObj = context.heap.read(getValue(heapVar, nextState).toTerm, readAddr)
               val assertion = CCTerm.fromFormula(
                 p.toTerm === context.heap.nullAddr() |||
-                (context.heap.addressRangeWithin(p.toTerm, readAddr) ==>
+                (context.heap.rangeWithin(p.toTerm, readAddr) ==>
                  (readObj =/= context.heap.defaultObject)), CCInt, p.srcInfo)
               assertions = (assertion, properties.MemValidFree) :: assertions
             case _ =>
@@ -281,7 +279,7 @@ class HeapTheoryModel(context           : SymexContext,
 
         // This is a side effect: the heap variable is updated with the result of batchWrite.
         val newHeapTerm = CCTerm.fromTerm(
-          context.heap.batchWrite(getValue(heapVar, nextState).toTerm, p.toTerm, context.defObj()),
+          context.heap.writeRange(getValue(heapVar, nextState).toTerm, p.toTerm, context.defObj()),
           heapVar.typ, p.srcInfo)
         nextState = updateValue(heapVar, newHeapTerm, nextState)
 
@@ -295,7 +293,7 @@ class HeapTheoryModel(context           : SymexContext,
           val memCleanupTerm    = getValue(memCleanupVar.get, nextState)
           val newMemCleanupTerm = CCTerm.fromTerm(
             IExpression.ite(
-              memCleanupTerm.toTerm === context.heap.addressRangeNth(p.toTerm, 0),
+              memCleanupTerm.toTerm === context.heap.rangeNth(p.toTerm, 0),
               context.heap.nullAddr(), // then
               memCleanupTerm.toTerm),  // else
             memCleanupTerm.typ, None)
@@ -324,14 +322,14 @@ class HeapTheoryModel(context           : SymexContext,
                           s        : scala.Seq[CCTerm]) : HeapOperationResult = {
     // TODO: remvoe the wrappers from here too!
     val newBatchAlloc =
-      context.heap.batchAlloc(getValue(heapVar, s).toTerm,
+      context.heap.allocRange(getValue(heapVar, s).toTerm,
                               context.sortWrapperMap(o.typ.toSort)(o.toTerm), size)
     val newHeapTerm = CCTerm.fromTerm(
-      context.heap.batchAllocResHeap(newBatchAlloc),
+      context.heap.heapRangePair_1(newBatchAlloc),
       CCHeap(context.heap),
       o.srcInfo)
     val newAddrRange = CCTerm.fromTerm(
-      context.heap.batchAllocResAddr(newBatchAlloc),
+      context.heap.heapRangePair_2(newBatchAlloc),
       makeArrayPointer(o.typ, arrayLoc),
       o.srcInfo)
     var nextState = updateValue(heapVar, newHeapTerm, s)
@@ -346,7 +344,7 @@ class HeapTheoryModel(context           : SymexContext,
       val newProphTerm = CCTerm.fromTerm(
         IExpression.ite(
           nondetTerm === ap.theories.ADT.BoolADT.True & size > 0,
-          context.heap.addressRangeNth(newAddrRange.toTerm, 0),
+          context.heap.rangeNth(newAddrRange.toTerm, 0),
           prophTerm.toTerm), prophTerm.typ, None)
       nextState = updateValue(memCleanupVar.get, newProphTerm, nextState)
     }
@@ -363,7 +361,7 @@ class HeapTheoryModel(context           : SymexContext,
                          loc   : CCTerm) : HeapOperationResult = {
     val arrType = arr.typ.asInstanceOf[CCHeapArrayPointer]
     val readAddress = CCTerm.fromTerm(
-      context.heap.addressRangeNth(arr.toTerm, index.toTerm),
+      context.heap.rangeNth(arr.toTerm, index.toTerm),
       makePointer(arrType.elementType),
       arr.srcInfo)
 
@@ -372,7 +370,7 @@ class HeapTheoryModel(context           : SymexContext,
     val boundsAssertion =
       if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
         val assertion = CCTerm.fromFormula(
-          context.heap.addressRangeWithin(
+          context.heap.rangeWithin(
             arr.toTerm, readAddress.toTerm), CCInt, arr.srcInfo)
         scala.Seq((assertion, properties.MemValidDeref))
       } else {
@@ -395,7 +393,7 @@ class HeapTheoryModel(context           : SymexContext,
                           loc   : CCTerm) : HeapOperationResult = {
     val arrType = arr.typ.asInstanceOf[CCHeapArrayPointer]
     val writeAddress = CCTerm.fromTerm(
-      context.heap.addressRangeNth(arr.toTerm, index.toTerm),
+      context.heap.rangeNth(arr.toTerm, index.toTerm),
       makePointer(arrType.elementType),
       arr.srcInfo)
 
@@ -404,7 +402,7 @@ class HeapTheoryModel(context           : SymexContext,
     val boundsAssertion =
       if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
         val assertion = CCTerm.fromFormula(
-          context.heap.addressRangeWithin(
+          context.heap.rangeWithin(
             arr.toTerm, writeAddress.toTerm), CCInt, index.srcInfo)
         scala.Seq((assertion, properties.MemValidDeref))
       } else {
@@ -450,7 +448,7 @@ class HeapTheoryModel(context           : SymexContext,
       }
       val wrappedValue = context.sortWrapperMap(Sort.sortOf(valueToInit))(valueToInit)
 
-      val addrToWrite = context.heap.addressRangeNth(arrayBasePtr, i)
+      val addrToWrite = context.heap.rangeNth(arrayBasePtr, i)
       val writeResult = write(
         CCTerm.fromTerm(addrToWrite, makePointer(arrayPtr.elementType), None),
         CCTerm.fromTerm(wrappedValue, arrayPtr.elementType, None),
@@ -481,8 +479,8 @@ class HeapTheoryModel(context           : SymexContext,
       case None =>
         SimpleResult(
           returnValue = Some(CCTerm.fromTerm(
-            context.heap.batchAllocResAddr(
-              context.heap.batchAlloc(
+            context.heap.heapRangePair_2(
+              context.heap.allocRange(
                 context.heap.emptyHeap(), context.heap.defaultObject, IIntLit(0))),
             makeArrayPointer(objTerm.typ, loc),
             objTerm.srcInfo)),
