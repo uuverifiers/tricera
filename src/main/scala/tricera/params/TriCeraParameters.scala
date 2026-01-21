@@ -136,7 +136,7 @@ class TriCeraParameters extends GlobalParameters {
   override def withAndWOTemplates : Seq[TriCeraParameters] =
     for (p <- super.withAndWOTemplates) yield p.asInstanceOf[TriCeraParameters]
 
-  solutionReconstruction = GlobalParameters.SolutionReconstruction.WP
+  solutionReconstruction = GlobalParameters.SolutionReconstruction.CEGAR
 
   private val version = "0.4"
 
@@ -396,8 +396,8 @@ class TriCeraParameters extends GlobalParameters {
     |Horn engine options (Eldarica):
     |-sym               (Experimental) Use symbolic execution with the default engine (bfs)
     |-sym:t             Use symbolic execution where t : {dfs, bfs}
-    |                     dfs: depth-first forward (does not support non-linear clauses)
-    |                     bfs: breadth-first forward
+    |                     dfs : depth-first forward (does not support non-linear clauses)
+    |                     bfs : breadth-first forward
     |-symDepth:n        Set a max depth for symbolic execution (underapproximate)
     |                     (currently only supported with bfs)
     |-disj              Use disjunctive interpolation
@@ -414,9 +414,9 @@ class TriCeraParameters extends GlobalParameters {
     |-splitClauses:n    Aggressiveness when splitting disjunctions in clauses
     |                     (0 <= n <= 2, default: 1)
     |-solutionReconstruction:t
-    |                   Solution reconstruction method where t : {wp, cegar}
-    |                     wp    : weakest-preconditions-based reconstruction (default)
-    |                     cegar : CEGAR-based reconstruction
+    |                   Solution reconstruction method where t : {cegar, wp}
+    |                     cegar : CEGAR-based reconstruction (default)
+    |                     wp    : weakest-preconditions-based reconstruction
     |-pHints            Print initial predicates and abstraction templates
     |-logSimplified     Show clauses after Eldarica preprocessing in Prolog format
     |-logSimplifiedSMT  Show clauses after Eldarica preprocessing in SMT-LIB format

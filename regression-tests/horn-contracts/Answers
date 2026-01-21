@@ -193,23 +193,23 @@ SAFE
 
 stackptr-recursion.hcc
 
----------------------------------
+----------------------------------
 Init:
-    main25_5(emptyHeap, 0, 0)    
----------------------------------
-                |                
-                |                
-                V                
- main35_0(emptyHeap, 0, 0, 2, 0) 
----------------------------------
-                |                
-                |                
-                V                
-      main(emptyHeap, 0, 1)      
----------------------------------
+    main25_5(heap.empty, 0, 0)    
+----------------------------------
+                |                 
+                |                 
+                V                 
+ main35_0(heap.empty, 0, 0, 2, 0) 
+----------------------------------
+                |                 
+                |                 
+                V                 
+      main(heap.empty, 0, 1)      
+----------------------------------
 Final:
-      main(emptyHeap, 0, 1)      
----------------------------------
+      main(heap.empty, 0, 1)      
+----------------------------------
 Failed assertion:
 false :- main(@h, globalincr_0t:29, s:24), s:24 != 5. (line:26 col:5) (property: user-assertion)
 
@@ -248,7 +248,7 @@ SAFE
 
 stackptr-ilp32.hcc
 Warning: The following clause has different terms with the same name (term: globalf1_0p:12)
-main10_5(@h, globalf1_0p:12, c:9.\as[signed bv[32]]) :- c:9 >= -2147483648 & 2147483647 >= c:9 & globalf1_0p:12 >= -2147483648 & 2147483647 >= globalf1_0p:12 & @h = emptyHeap & globalf1_0p:12 = 0.\as[signed bv[32]].
+main10_5(@h, globalf1_0p:12, c:9.\as[signed bv[32]]) :- c:9 >= -2147483648 & 2147483647 >= c:9 & globalf1_0p:12 >= -2147483648 & 2147483647 >= globalf1_0p:12 & @h = heap.empty & globalf1_0p:12 = 0.\as[signed bv[32]].
 
 
 Inferred ACSL annotations

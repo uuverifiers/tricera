@@ -4,18 +4,18 @@ SAFE
 
 list-001-fail.c
 
----------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
 Init:
-                         main11_3(emptyHeap)                         
----------------------------------------------------------------------
-                                  |                                  
-                                  |                                  
-                                  V                                  
- main12_3(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
----------------------------------------------------------------------
+                                  main11_3(heap.empty)                                   
+-----------------------------------------------------------------------------------------
+                                            |                                            
+                                            |                                            
+                                            V                                            
+ main12_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_node(node(0)))), heap.addr(1), 0) 
+-----------------------------------------------------------------------------------------
 Final:
- main12_3(newHeap(alloc(emptyHeap, O_node(node(0)))), nthAddr(1), 0) 
----------------------------------------------------------------------
+ main12_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_node(node(0)))), heap.addr(1), 0) 
+-----------------------------------------------------------------------------------------
 Failed assertion:
 false :- main12_3(@h, list:11, y:12), y:12 = 0. (line:13 col:3) (property: user-assertion)
 
@@ -24,18 +24,18 @@ UNSAFE
 list-002-fail.c
 Warning: no definition of function "nondet_bool" available
 
----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------
 Init:
-                                     main14_3(emptyHeap)                                     
----------------------------------------------------------------------------------------------
-                                              |                                              
-                                              |                                              
-                                              V                                              
- main_4(newHeap(alloc(emptyHeap, O_node(node(nullAddr, nullAddr)))), nthAddr(1), nthAddr(1)) 
----------------------------------------------------------------------------------------------
+                                                main14_3(heap.empty)                                                 
+---------------------------------------------------------------------------------------------------------------------
+                                                          |                                                          
+                                                          |                                                          
+                                                          V                                                          
+ main_4(heap.heapAddrPair_1(heap.alloc(heap.empty, O_node(node(heap.null, heap.null)))), heap.addr(1), heap.addr(1)) 
+---------------------------------------------------------------------------------------------------------------------
 Final:
- main_4(newHeap(alloc(emptyHeap, O_node(node(nullAddr, nullAddr)))), nthAddr(1), nthAddr(1)) 
----------------------------------------------------------------------------------------------
+ main_4(heap.heapAddrPair_1(heap.alloc(heap.empty, O_node(node(heap.null, heap.null)))), heap.addr(1), heap.addr(1)) 
+---------------------------------------------------------------------------------------------------------------------
 Failed assertion:
 false :- main_4(@h, list:14, tail:17), list:14 = tail:17. (line:29 col:3) (property: user-assertion)
 
@@ -49,20 +49,20 @@ SAFE
 
 mutually-referential-structs-unsafe.c
 
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
-                                                                              main14_3(emptyHeap)                                                                              
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                       |                                                                                       
-                                                                                       |                                                                                       
-                                                                                       V                                                                                       
- main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nullAddr)))), nthAddr(1)) 
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                            main14_3(heap.empty)                                                                                                            
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                     |                                                                                                                      
+                                                                                                                     |                                                                                                                      
+                                                                                                                     V                                                                                                                      
+ main_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_parent(parent(heap.addr(2), heap.addr(3))))), O_child(child(heap.addr(1))))), O_child(child(heap.null)))), heap.addr(1)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_3(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_parent(parent(nthAddr(2), nthAddr(3))))), O_child(child(nthAddr(1))))), O_child(child(nullAddr)))), nthAddr(1)) 
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ main_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_parent(parent(heap.addr(2), heap.addr(3))))), O_child(child(heap.addr(1))))), O_child(child(heap.null)))), heap.addr(1)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_3(@h, list:14), child::p(getchild(read(@h, parent::child1(getparent(read(@h, list:14)))))) != child::p(getchild(read(@h, parent::child2(getparent(read(@h, list:14)))))). (line:20 col:3) (property: user-assertion)
+false :- main_3(@h, list:14), child::p(getchild(heap.read(@h, parent::child1(getparent(heap.read(@h, list:14)))))) != child::p(getchild(heap.read(@h, parent::child2(getparent(heap.read(@h, list:14)))))). (line:20 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -95,20 +95,20 @@ SAFE
 
 typecastUnsafe-001.c
 
---------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 Init:
-                          main6_3(emptyHeap, nullAddr)                          
---------------------------------------------------------------------------------
-                                       |                                        
-                                       |                                        
-                                       V                                        
- main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nthAddr(1)) 
---------------------------------------------------------------------------------
+                                    main6_3(heap.empty, heap.null)                                     
+-------------------------------------------------------------------------------------------------------
+                                                   |                                                   
+                                                   |                                                   
+                                                   V                                                   
+ main7_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.addr(1)) 
+-------------------------------------------------------------------------------------------------------
 Final:
- main7_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nthAddr(1)) 
---------------------------------------------------------------------------------
+ main7_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.addr(1)) 
+-------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3(@h, @v_cleanup, x:6, y:7), !is_O_S(read(@h, y:7)). (line:7 col:12) (property: valid-deref)
+false :- main7_3(@h, @v_cleanup, x:6, y:7), !is_O_S(heap.read(@h, y:7)). (line:7 col:12) (property: valid-deref)
 
 UNSAFE
 
@@ -145,20 +145,20 @@ SAFE
 
 unsafe-access-001.c
 
-------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 Init:
-                         main2_3(emptyHeap, nullAddr)                         
-------------------------------------------------------------------------------
-                                      |                                       
-                                      |                                       
-                                      V                                       
- main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nullAddr) 
-------------------------------------------------------------------------------
+                                   main2_3(heap.empty, heap.null)                                   
+----------------------------------------------------------------------------------------------------
+                                                 |                                                  
+                                                 |                                                  
+                                                 V                                                  
+ main3_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.null) 
+----------------------------------------------------------------------------------------------------
 Final:
- main3_3(newHeap(alloc(emptyHeap, O_Int(0))), nullAddr, nthAddr(1), nullAddr) 
-------------------------------------------------------------------------------
+ main3_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.null) 
+----------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main3_3(@h, @v_cleanup, x:2, y:3), !is_O_Addr(read(@h, y:3)). (line:3 col:7) (property: valid-deref)
+false :- main3_3(@h, @v_cleanup, x:2, y:3), !is_O_Addr(heap.read(@h, y:3)). (line:3 col:7) (property: valid-deref)
 
 UNSAFE
 
@@ -170,50 +170,50 @@ UNKNOWN (Unsupported C fragment. 6:8 Only limited support for stack pointers)
 
 free-1-unsafe.c
 
-----------------------------------------------------------------------
+-------------------------------------------------------------------------------------------
 Init:
-                     main2_3(emptyHeap, nullAddr)                     
-----------------------------------------------------------------------
-                                  |                                   
-                                  |                                   
-                                  V                                   
- main2_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nullAddr, nthAddr(1)) 
-----------------------------------------------------------------------
-                                  |                                   
-                                  |                                   
-                                  V                                   
-    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
-----------------------------------------------------------------------
+                              main2_3(heap.empty, heap.null)                               
+-------------------------------------------------------------------------------------------
+                                             |                                             
+                                             |                                             
+                                             V                                             
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(9))), heap.null, heap.addr(1)) 
+-------------------------------------------------------------------------------------------
+                                             |                                             
+                                             |                                             
+                                             V                                             
+    main(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1))     
+-------------------------------------------------------------------------------------------
 Final:
-    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
-----------------------------------------------------------------------
+    main(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1))     
+-------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main(@h, @v_cleanup, a:2), !is_O_Int(read(@h, a:2)). (line:2 col:7) (property: valid-deref)
+false :- main(@h, @v_cleanup, a:2), !is_O_Int(heap.read(@h, a:2)). (line:2 col:7) (property: valid-deref)
 
 UNSAFE
 
 free-2-nondet-unsafe.c
 Warning: no definition of function "nondet" available
 
-----------------------------------------------------------------------
+-------------------------------------------------------------------------------------------
 Init:
-                     main4_3(emptyHeap, nullAddr)                     
-----------------------------------------------------------------------
-                                  |                                   
-                                  |                                   
-                                  V                                   
- main5_6_2(newHeap(alloc(emptyHeap, O_Int(9))), nullAddr, nthAddr(1)) 
-----------------------------------------------------------------------
-                                  |                                   
-                                  |                                   
-                                  V                                   
-    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
-----------------------------------------------------------------------
+                              main4_3(heap.empty, heap.null)                               
+-------------------------------------------------------------------------------------------
+                                             |                                             
+                                             |                                             
+                                             V                                             
+ main5_6_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(9))), heap.null, heap.addr(1)) 
+-------------------------------------------------------------------------------------------
+                                             |                                             
+                                             |                                             
+                                             V                                             
+    main(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1))     
+-------------------------------------------------------------------------------------------
 Final:
-    main(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1))     
-----------------------------------------------------------------------
+    main(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1))     
+-------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main(@h, @v_cleanup, a:4), !is_O_Int(read(@h, a:4)). (line:4 col:7) (property: valid-deref)
+false :- main(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, a:4)). (line:4 col:7) (property: valid-deref)
 
 UNSAFE
 
@@ -222,25 +222,25 @@ SAFE
 
 free-4-unsafe.c
 
-------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
 Init:
-                         main4_3(emptyHeap, nullAddr)                         
-------------------------------------------------------------------------------
-                                      |                                       
-                                      |                                       
-                                      V                                       
-     main4_3_1(newHeap(alloc(emptyHeap, O_Int(9))), nullAddr, nthAddr(1))     
-------------------------------------------------------------------------------
-                                      |                                       
-                                      |                                       
-                                      V                                       
- main6_3(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1), nthAddr(1)) 
-------------------------------------------------------------------------------
+                                   main4_3(heap.empty, heap.null)                                    
+-----------------------------------------------------------------------------------------------------
+                                                  |                                                  
+                                                  |                                                  
+                                                  V                                                  
+      main4_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(9))), heap.null, heap.addr(1))      
+-----------------------------------------------------------------------------------------------------
+                                                  |                                                  
+                                                  |                                                  
+                                                  V                                                  
+ main6_3(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1), heap.addr(1)) 
+-----------------------------------------------------------------------------------------------------
 Final:
- main6_3(newHeap(alloc(emptyHeap, defObj)), nullAddr, nthAddr(1), nthAddr(1)) 
-------------------------------------------------------------------------------
+ main6_3(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1), heap.addr(1)) 
+-----------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main6_3(@h, @v_cleanup, a:4, b:6), !is_O_Int(read(@h, b:6)). (line:6 col:7) (property: valid-deref)
+false :- main6_3(@h, @v_cleanup, a:4, b:6), !is_O_Int(heap.read(@h, b:6)). (line:6 col:7) (property: valid-deref)
 
 UNSAFE
 
@@ -255,20 +255,20 @@ SAFE
 
 struct-chained-ptr-field-1-unsafe.c
 
------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
-                                                  main9_3(emptyHeap)                                                   
------------------------------------------------------------------------------------------------------------------------
-                                                           |                                                           
-                                                           |                                                           
-                                                           V                                                           
- main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nullAddr, 0)))), nthAddr(1)) 
------------------------------------------------------------------------------------------------------------------------
+                                                                      main9_3(heap.empty)                                                                      
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                               |                                                                               
+                                                                               |                                                                               
+                                                                               V                                                                               
+ main_4(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Node(Node(heap.addr(2), 3)))), O_Node(Node(heap.null, 0)))), heap.addr(1)) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_4(newHeap(alloc(newHeap(alloc(emptyHeap, O_Node(Node(nthAddr(2), 3)))), O_Node(Node(nullAddr, 0)))), nthAddr(1)) 
------------------------------------------------------------------------------------------------------------------------
+ main_4(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Node(Node(heap.addr(2), 3)))), O_Node(Node(heap.null, 0)))), heap.addr(1)) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_4(@h, head:9), Node::data(getNode(read(@h, head:9))) != 0. (line:13 col:3) (property: user-assertion)
+false :- main_4(@h, head:9), Node::data(getNode(heap.read(@h, head:9))) != 0. (line:13 col:3) (property: user-assertion)
 
 UNSAFE
 
