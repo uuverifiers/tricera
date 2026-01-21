@@ -227,7 +227,7 @@ object CCBinaryExpressions {
       (lhs.typ, rhs.typ) match {
         case (_: CCHeapArrayPointer, _: CCArithType) =>
           throw new TranslationException(
-            "Pointer arithmetic over arrays is only  supported with  addition.")
+            "Pointer arithmetic over arrays is only supported with addition.")
         case _ => // nothing
       }
     }
