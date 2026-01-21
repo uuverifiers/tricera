@@ -66,10 +66,10 @@ final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
     function == heap.alloc
 
   def isNewHeapFun(function: IFunction): Boolean =
-    function == heap.allocResHeap
+    function == heap.heapAddrPair_1
 
   def isNewAddrFun(function: IFunction): Boolean =
-    function == heap.allocResAddr
+    function == heap.heapAddrPair_2
 
   def isHeap(constant: ProgVarProxy): Boolean = heapModel match {
     case m : HeapTheoryModel =>

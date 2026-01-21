@@ -1162,7 +1162,7 @@ class Symex private (context        : SymexContext,
               // todo: below type extraction is not safe!
               val heap = context.heap
               val t = addrTerm match {
-                case IFunApp(heap.addressRangeNth, args) => // if nthAddrRange(a, i)
+                case IFunApp(heap.rangeNth, args) => // if nthAddrRange(a, i)
                   val scala.Seq(arrTerm, indTerm) = args
                   // return the addressRange starting from i
                   import heap._
