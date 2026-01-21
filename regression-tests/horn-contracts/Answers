@@ -158,8 +158,6 @@ SAFE
 
 stackptr-multi-arg.hcc
 Warning: no definition of function "non_det_int" available
-Warning: Timeout while verifying clause:
-inv_main_3(@h_post, savedglobalmod_0_1t2_0_1:36, savedglobalmod_0_1t1_0_1:35, init1:16, init2:17, globalmod_0_1t1_post, globalmod_0_1t2_post) :- inv_main39_0(@h, globalmod_0_1t2:30, globalmod_0_1t1:31, init1:16, init2:17, s1:22, s2:23, t1:33, t2:33, savedglobalmod_0_1t1_0_1:35, savedglobalmod_0_1t2_0_1:36), globalmod_0_1_post(@h, globalmod_0_1t2:30, globalmod_0_1t1:31, @h_post, globalmod_0_1t2_post, globalmod_0_1t1_post).
 
 Inferred ACSL annotations
 ================================================================================
