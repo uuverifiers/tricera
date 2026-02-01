@@ -852,7 +852,7 @@ class Symex private (context        : SymexContext,
       }
       if(canAssumeMemorySafety ||
          !context.propertiesToCheck.contains(properties.MemValidDeref)) {
-        val safetyFormula = context.heap.heapADTs.hasCtor(
+        val safetyFormula = context.heap.hasUserHeapCtor(
           callResult.toTerm, context.sortCtorIdMap(call.resultType.toSort))
         addGuard(safetyFormula)
       }

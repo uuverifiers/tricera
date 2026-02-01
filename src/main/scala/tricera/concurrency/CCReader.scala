@@ -618,7 +618,7 @@ class CCReader private (prog              : Program,
               if (TriCeraParameters.get.invEncoding.nonEmpty)
                 HeapObj.OtherSort(Sort.Integer)
               else
-                Heap.AddressSort
+                HeapObj.AddrSort
             } else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
               case Right(typ) =>
