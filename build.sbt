@@ -114,8 +114,23 @@ settings(
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % "test",
   excludeDependencies ++= Seq(
     // exclude java-cup from transitive dependencies, ccParser includes newer version
-    ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
+    ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup")),
+
+    nativeImageInstalled := false,
+    nativeImageVersion := "21.1.0",
+    nativeImageJvm := "graalvm-java11",
+    // point to GraalVM (recommended via env var)
+    //nativeImageGraalHome := file(sys.env("GRAALVM_HOME")).toPath,
+
+    nativeImageOptions ++= Seq(
+      "--no-fallback",
+      "-H:+ReportExceptionStackTraces",
+      "--allow-incomplete-classpath"
+    ),
+
+    nativeImageAgentMerge := true
   )
+ .enablePlugins(NativeImagePlugin)
 
 // project can also be built by providing dependencies under the lib directory
 // and uncommenting below code to discard clashing transitive dependencies
