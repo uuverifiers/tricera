@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="enum1.hcc \
        enum1-trailing-comma.hcc \
@@ -15,6 +15,6 @@ TESTS="enum1.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 

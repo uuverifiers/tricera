@@ -31,18 +31,19 @@ package tricera.concurrency.ccreader
 
 import ap.parser.IExpression.ConstantTerm
 import ap.parser.{ContainsSymbol, IConstant, IExpression, ITerm}
+import ap.types.SortedConstantTerm
+import ap.util.Seqs.reduceToSize
 import lazabs.horn.abstractions.VerificationHints.VerifHintElement
-import tricera.concurrency.CCReader.modelHeap
-import tricera.concurrency.ccreader.CCExceptions.{NeedsHeapModelException, TranslationException}
 import tricera.params.TriCeraParameters
 import tricera.Literals
 import tricera.Util.SourceInfo
 
-import scala.collection.mutable.{ArrayBuffer, Stack, HashSet => MHashSet}
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, HashSet => MHashSet}
 
 class CCScope {
   val variableHints =
-    new ArrayBuffer[Seq[VerifHintElement]]
+    new ArrayBuffer[scala.Seq[VerifHintElement]]
 
   sealed abstract class CCVars {
     val vars = new ArrayBuffer[CCVar]
@@ -51,22 +52,22 @@ class CCScope {
       size - 1
     }
     def size : Int = vars.size
-    def lastIndexWhere(name : String, enclosingFunction : String) =
+    def lastIndexWhere(name : String, enclosingFunction : String) : Int =
       vars lastIndexWhere(v => v.name == name &&
                                (!v.isStatic || v.enclosingFunctionName.get == enclosingFunction))
-    def lastIndexWhere(v : CCVar) = vars lastIndexWhere(_ == v)
-    def contains (c : ConstantTerm) = vars exists (_.term == c)
-    def iterator = vars.iterator
-    def formalVars = vars.toList
-    def formalVarTerms = vars.map(_.term).toList
-    def formalTypes = vars.map(_.typ).toList
+    def lastIndexWhere(v : CCVar) : Int = vars lastIndexWhere(_ == v)
+    def contains (c : ConstantTerm) : Boolean = vars exists(_.term == c)
+    def iterator : Iterator[CCVar] = vars.toSeq.iterator
+    def formalVars : scala.Seq[CCVar] = vars.toSeq
+    def formalVarTerms : scala.Seq[IConstant] = vars.map(v => IConstant(v.term)).toSeq
+    def formalTypes : scala.Seq[CCType] = vars.map(_.typ).toSeq
   }
 
   object GlobalVars extends CCVars {
     val inits = new ArrayBuffer[CCTerm]
   }
   object LocalVars extends CCVars {
-    val frameStack = new Stack[Int]
+    val frameStack = new mutable.Stack[Int]
 
     override def addVar (v : CCVar) : Int = {
       variableHints += List()
@@ -88,12 +89,12 @@ class CCScope {
       variableHints.remove(n + GlobalVars.size)
       vars.remove(n)
     }
-    def trimEnd(n: Int) = vars trimEnd n
-    def pushFrame = frameStack push size
-    def popFrame = {
+    private def trimEnd(n : Int) = vars dropRightInPlace n
+    def pushFrame : frameStack.type = frameStack push size
+    def popFrame() : Unit = {
       val newSize = frameStack.pop
-      vars reduceToSize newSize
-      variableHints reduceToSize (GlobalVars.size + newSize)
+      reduceToSize(vars, newSize)
+      reduceToSize(variableHints, GlobalVars.size + newSize)
     }
     def getVarsInTopFrame : List[CCVar] =
       (vars takeRight (vars.size - frameStack.last)).toList
@@ -125,21 +126,20 @@ class CCScope {
     lookupVarNoException(actualName, enclosingFunction)
   }
 
-  def allFormalVars : Seq[CCVar] =
+  def allFormalVars : scala.Seq[CCVar] =
     GlobalVars.formalVars ++ LocalVars.formalVars
-  def allFormalVarTerms : Seq[ITerm] =
+  def allFormalVarTerms : scala.Seq[ITerm] =
     GlobalVars.formalVarTerms ++ LocalVars.formalVarTerms
-  def allFormalVarTypes : Seq[CCType] =
+  def allFormalVarTypes : scala.Seq[CCType] =
     GlobalVars.formalTypes ++ LocalVars.formalTypes
 
-  def allFormalCCTerms : Seq[CCTerm] =
+  def allFormalCCTerms : scala.Seq[CCTerm] =
     ((for (v <- GlobalVars.iterator)
       yield CCTerm.fromTerm(v.term, v.typ, v.srcInfo)) ++
      (for (v <- LocalVars.iterator)
        yield CCTerm.fromTerm(v.term, v.typ, v.srcInfo))).toList
-  def allVarInits : Seq[ITerm] =
-    (GlobalVars.inits.toList map (_.toTerm)) ++
-    (LocalVars.formalVarTerms map (IExpression.i(_)))
+  def allVarInits : scala.Seq[ITerm] =
+    (GlobalVars.inits.toList map (_.toTerm)) ++ LocalVars.formalVarTerms
 
   def freeFromGlobal(t : IExpression) : Boolean =
     !ContainsSymbol(t, (s:IExpression) => s match {
@@ -153,7 +153,7 @@ class CCScope {
   }
 
   def updateVarType(name : String, newType : CCType,
-                            enclosingFunction : String) = {
+                    enclosingFunction : String) : Unit = {
     val ind = lookupVar(name, enclosingFunction)
     if (ind < GlobalVars.size) {
       val oldVar = GlobalVars.vars(ind)

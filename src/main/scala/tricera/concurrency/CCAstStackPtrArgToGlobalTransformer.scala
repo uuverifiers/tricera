@@ -31,8 +31,8 @@ package tricera.concurrency
 import concurrent_c._
 import concurrent_c.Absyn._
 
-import scala.collection.mutable.{HashMap => MHashMap, MutableList}
-import scala.collection.JavaConverters._
+import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
+import scala.jdk.CollectionConverters._
 
 private object CCAstUtils {
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
@@ -149,7 +149,7 @@ class CCAstPointerToGlobalVisitor extends CCAstCopyWithLocation[Map[String, CCAs
   * arguments), with global variables.
   */
 object CallSiteTransform {
-  type CallSiteTransforms = MutableList[CallSiteTransform]
+  type CallSiteTransforms = ListBuffer[CallSiteTransform]
   private val copyAst = new CCAstCopyVisitor
   private val getDeclarator = new CCAstGetDeclaratorVistor
   private val getFunctionDeclaration = new CCAstGetFunctionDeclarationVistor
@@ -352,7 +352,7 @@ class CallSiteTransform(
 
     def resultDeclaration(): Option[CCAstDeclaration] = {
       val getType = new CCAstGetTypeVisitor
-      val types = new MutableList[Type_specifier]
+      val types = new ListBuffer[Type_specifier]
       specifiers.asScala.foreach(s => s.accept(getType, types))
       types.contains(new Tvoid) match {
         case true => 
@@ -530,6 +530,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
 
   private val getName = new CCAstGetNameVistor
   private val copyAst = new CCAstCopyVisitor
+  private val fillFuncDefs = new CCAstFillFuncDef
   private val functionDefinitions = new MHashMap[String, Function_def]
 
   /* Program */
@@ -548,6 +549,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
       case _ => false
     }
 
+    progr.accept(fillFuncDefs, functionDefinitions)
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
 
     if (callSiteTransforms.nonEmpty) {
@@ -559,31 +561,24 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
           .map(d => d.accept(getMaxLineNumber, ()))
           .reduce(math.max)+1)
       val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
+      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.wrapperDeclarations
+        .map(i => i._2)
+        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
       declarations.addAll(mainDefIndex, additions.wrapperDefinitions
         .map(i => i._2)
         .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
       declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions
         .map(i => i._2)
         .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.wrapperDeclarations
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-
       new Progr(declarations);
     } else {
       progr
     }
   }
-
-  override def visit(func: Afunc, transforms: CallSiteTransforms): External_declaration = {
-    functionDefinitions.put(
-      func.function_def_.accept(getName, ()),
-      func.function_def_.accept(copyAst, ()))
-    super.visit(func, transforms)
-  }
+  
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {
     (callSite.listexp_.asScala.find(CCAstUtils.isStackPtr),

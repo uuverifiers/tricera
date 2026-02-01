@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="nonlinear2.hcc \
        ../horn-hcc/loop1.hcc \
@@ -11,14 +11,14 @@ TESTS="nonlinear2.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
 done
 
 echo
 echo MonadicInv.hcc
-$LAZABS -arithMode:ilp32 "$@" MonadicInv.hcc 2>&1
+$TRI_CMD -arithMode:ilp32 "$@" MonadicInv.hcc 2>&1
 
 echo
 echo bitwise3.hcc
-$LAZABS -arithMode:ilp32 "$@" bitwise3.hcc 2>&1
+$TRI_CMD -arithMode:ilp32 "$@" bitwise3.hcc 2>&1
 

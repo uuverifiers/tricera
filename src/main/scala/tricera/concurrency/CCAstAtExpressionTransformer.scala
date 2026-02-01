@@ -33,7 +33,7 @@ import concurrent_c._
 import concurrent_c.Absyn._
 import tricera.Literals.atExpressionName
 import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * A two-pass transformer for handling `at(label, expr)` expressions.
@@ -65,7 +65,7 @@ object CCAstAtExpressionTransformer {
    * @param labeledStms A map from label names to the function and statement node.
    */
   private case class AtCallCollectionResult(
-    atCalls     : Seq[AtCallInfo],
+    atCalls     : scala.Seq[AtCallInfo],
     labeledStms : Map[String, (Function_def, SlabelOne)]
   )
 
@@ -125,7 +125,15 @@ object CCAstAtExpressionTransformer {
 
           expressionArg match {
             case typecast: Etypeconv =>
-              val label = labelArg.accept(getName, ())
+              val label = labelArg match {
+                case str : Estring =>
+                  str.string_
+                case _ =>
+                  throw new IllegalArgumentException(
+                    s"${tricera.Util.getLineString(p)}: " +
+                    s"The first argument to $atExpressionName must be a " +
+                    s"string containing a label.")
+              }
               val typeName = typecast.type_name_
               val innerExpr = typecast.exp_
               atCallsBuffer += AtCallInfo(label, typeName, innerExpr, p, currentFunc)
@@ -150,7 +158,7 @@ object CCAstAtExpressionTransformer {
    * Figure out which at calls to replace and what to add to label sites
    */
   private def planTransformations(collection : AtCallCollectionResult) :
-  (Map[Efunkpar, Evar], Map[SlabelOne, Seq[Stm]]) = {
+  (Map[Efunkpar, Evar], Map[SlabelOne, scala.Seq[Stm]]) = {
 
     val replacements = new MHashMap[Efunkpar, Evar]
     val insertions = new MHashMap[SlabelOne, ListBuffer[Stm]]
@@ -210,7 +218,7 @@ object CCAstAtExpressionTransformer {
    */
   private class AtTransformer(
     replacements : Map[Efunkpar, Evar],
-    insertions   : Map[SlabelOne, Seq[Stm]],
+    insertions   : Map[SlabelOne, scala.Seq[Stm]],
     collection   : AtCallCollectionResult
   ) extends CCAstCopyWithLocation[Function_def] {
 

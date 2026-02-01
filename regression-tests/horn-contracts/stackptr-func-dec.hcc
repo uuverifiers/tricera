@@ -1,0 +1,15 @@
+void f(int *x);
+
+void main()
+{
+  int init = _;
+  int x = init;
+  f(&x);
+  assert(x == init+1);
+}
+
+/*@contract@*/
+void f(int *x)
+{
+  *x = *x + 1;
+}

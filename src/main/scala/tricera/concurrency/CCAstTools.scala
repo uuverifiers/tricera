@@ -31,8 +31,8 @@ package tricera.concurrency
 import concurrent_c._
 import concurrent_c.Absyn._
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable.{MutableList}
+import scala.jdk.CollectionConverters._
+import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 
 /**
   * This trait defines a function to set the line number of
@@ -459,12 +459,12 @@ class CCAstParamToAstDeclarationVistor extends AbstractVisitor[CCAstDeclaration,
 /**
   * Vistor to get declared type from a specifier.
   */
-class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, MutableList[Type_specifier]] {
+class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, ListBuffer[Type_specifier]] {
   /* Declaration_specifier */
-  override def visit(spec: Type, types: MutableList[Type_specifier]) = { types += spec.type_specifier_; true }
-  override def visit(spec: Storage, types: MutableList[Type_specifier]) = { false }
-  override def visit(spec: SpecProp, types: MutableList[Type_specifier]) = { false }
-  override def visit(spec: SpecFunc, types: MutableList[Type_specifier]) = { false }
+  override def visit(spec: Type, types: ListBuffer[Type_specifier]) = { types += spec.type_specifier_; true }
+  override def visit(spec: Storage, types: ListBuffer[Type_specifier]) = { false }
+  override def visit(spec: SpecProp, types: ListBuffer[Type_specifier]) = { false }
+  override def visit(spec: SpecFunc, types: ListBuffer[Type_specifier]) = { false }
 }
 
 /**
@@ -481,4 +481,30 @@ class CCAstEnumNameToEnumVarVistor extends CCAstCopyWithLocation[Unit] {
   override def visit(enum: EnumName, arg: Unit): Enum_specifier = {
     copyLocationInformation(enum, new EnumVar(enum.cident_))
   }
+}
+
+/**
+  * Vistor class to fill the given map with function definitions occurring in the AST.
+  */
+class CCAstFillFuncDef extends AbstractVisitor[Unit, MHashMap[String, Function_def]] {
+  type FuncDefs = MHashMap[String, Function_def]
+
+  private val getName = new CCAstGetNameVistor
+  private val copyAst = new CCAstCopyVisitor
+
+  /* Program */
+  override def visit(progr: Progr,  fdefs: FuncDefs): Unit = {
+    progr.listexternal_declaration_.asScala.foreach(ext => ext.accept(this, fdefs))
+  }
+
+  /* External_declaration */
+  override def visit(ext: Afunc, functionDefinitions: FuncDefs): Unit = {
+    functionDefinitions.put(
+      ext.function_def_.accept(getName, ()),
+      ext.function_def_.accept(copyAst, ()))
+  }
+  
+  override def visit(ext: Athread, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: Global, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: Chan, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
 }

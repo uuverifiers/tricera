@@ -38,7 +38,6 @@
 package tricera.postprocessor
 
 import ap.parser._
-import scala.collection.immutable.Stack
 import tricera._
 
 object SafePointerExtractor {
@@ -104,25 +103,25 @@ private object HeapReducer {
       invariantExpression: IExpression,
       heapInfo: HeapInfo
   ): IExpression = {
-    (new HeapReducer(heapInfo)).visit(invariantExpression, Stack[String]())
+    (new HeapReducer(heapInfo)).visit(invariantExpression, List[String]())
   }
 }
 
 private class HeapReducer(heapInfo: HeapInfo)
-    extends CollectingVisitor[Stack[String], IExpression]
+    extends CollectingVisitor[List[String], IExpression]
     with IdGenerator {
 
   override def preVisit(
       t: IExpression,
-      quantifierIds: Stack[String]
+      quantifierIds: List[String]
   ): PreVisitResult = t match {
-    case v: IVariableBinder => UniSubArgs(quantifierIds.push(generateId))
+    case v: IVariableBinder => UniSubArgs(generateId :: quantifierIds)
     case _                  => KeepArg
   }
 
   override def postVisit(
       t: IExpression,
-      quantifierIds: Stack[String],
+      quantifierIds: List[String],
       subres: Seq[IExpression]
   ): IExpression = {
     t update subres match {

@@ -1,11 +1,11 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="ext-univ-1-safe.hcc ext-univ-2-safe.hcc ext-univ-3-nonzero-lo-safe.hcc ext-univ-4-empty-safe.hcc ext-univ-5-cmpN-safe.hcc ext-univ-1-unsafe.hcc"
 
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -mathArrays "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -mathArrays "$@" $name 2>&1 | grep -v 'at '
 done

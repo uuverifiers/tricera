@@ -29,6 +29,21 @@ When using a binary release, one can instead also call
 A full list of options can be obtained by calling ./tri -h.
 In particular, the options `-cex` can be used to show a counterexample when the program is unsafe, and `-log:n` (n in 1..3) can be used to show the solution when the program is safe.
 
+# Native Image
+TriCera can be compiled into a [GraalVM](https://www.graalvm.org/) native image for significantly faster startup times.
+
+To build the native image:
+```bash
+sbt nativeImage
+```
+The binary will be generated at `target/native-image/TriCera`.
+
+Use the `tri-native` helper script:
+```bash
+./tri-native [FILE] [OPTIONS]
+```
+Example: `./tri-native regression-tests/horn-hcc-heap/list-001.c`
+
 # Try it out online
 TriCera has a [web interface](https://eldarica.org/tricera/) where you can try it out, which also contains many examples.
 

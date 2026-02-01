@@ -278,10 +278,6 @@ class CCAstCopyWithLocation[A] extends ComposVisitor[A] with CopyAstLocation {
     copyLocationInformation(p, super.visit(p, arg))
   }
 
-  override def visit(p: Extension, arg: A): Type_qualifier = {
-    copyLocationInformation(p, super.visit(p, arg))
-  }
-
   override def visit(p: Tag, arg: A): Struct_or_union_spec = {
     copyLocationInformation(p, super.visit(p, arg))
   }

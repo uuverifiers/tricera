@@ -63,7 +63,7 @@ abstract sealed class CCType {
         case CCHeapArrayPointer(_, _, _)
           if tricera.params.TriCeraParameters.get.invEncoding.nonEmpty
                                             => Sort.Integer
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -91,7 +91,7 @@ abstract sealed class CCType {
         case CCHeapArrayPointer(_, _, _)
           if tricera.params.TriCeraParameters.get.invEncoding.nonEmpty
                                             => Sort.Integer
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
@@ -117,7 +117,7 @@ abstract sealed class CCType {
         case CCHeapArrayPointer(_, _, _)
           if tricera.params.TriCeraParameters.get.invEncoding.nonEmpty
                                             => Sort.Integer
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -144,13 +144,81 @@ abstract sealed class CCType {
         case CCHeapArrayPointer(_, _, _)
           if tricera.params.TriCeraParameters.get.invEncoding.nonEmpty
                                             => Sort.Integer
-        case CCHeapArrayPointer(heap, _, _) => heap.addressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
         case _                              => Sort.Integer
       }
+  }
+
+  def sizeInBytes: Int = {
+    tricera.params.TriCeraParameters.get.arithMode match {
+      case ArithmeticMode.Mathematical =>
+        this match {
+          case CCBool                                      => 1
+          case CCInt | CCUInt                              => 4
+          case CCLong | CCULong | CCLongLong | CCULongLong => 8
+          case CCFloat                                     => 4
+          case _: CCPointer                                => 8
+          case CCHeapArrayPointer(_, _, _)                 => 8
+          case CCIntEnum(_, _)                             => 4
+          case CCArray(elemTyp, _, Some(n), _, _)          => elemTyp.sizeInBytes * n
+          case s: CCStruct                                 => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in Mathematical mode.")
+        }
+
+      case ArithmeticMode.ILP32 =>
+        this match {
+          case CCBool                             => 1
+          case CCInt | CCUInt | CCLong | CCULong  => 4
+          case CCLongLong | CCULongLong           => 8
+          case CCFloat                            => 4
+          case _: CCPointer                       => 4
+          case CCHeapArrayPointer(_, _, _)        => 4
+          case CCIntEnum(_, _)                    => 4
+          case CCArray(elemTyp, _, Some(n), _, _) => elemTyp.sizeInBytes * n
+          case s: CCStruct                        => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in ILP32 mode.")
+        }
+
+      case ArithmeticMode.LP64 =>
+        this match {
+          case CCBool                                      => 1
+          case CCInt | CCUInt                              => 4
+          case CCLong | CCULong | CCLongLong | CCULongLong => 8
+          case CCFloat                                     => 4
+          case _: CCPointer                                => 8
+          case CCHeapArrayPointer(_, _, _)                 => 8
+          case CCIntEnum(_, _)                             => 4
+          case CCArray(elemTyp, _, Some(n), _, _)          => elemTyp.sizeInBytes * n
+          case s: CCStruct                                 => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in LP64 mode.")
+        }
+
+      case ArithmeticMode.LLP64 =>
+        this match {
+          case CCBool                             => 1
+          case CCInt | CCUInt | CCLong | CCULong  => 4
+          case CCLongLong | CCULongLong           => 8
+          case CCFloat                            => 4
+          case _: CCPointer                       => 8
+          case CCHeapArrayPointer(_, _, _)        => 8
+          case CCIntEnum(_, _)                    => 4
+          case CCArray(elemTyp, _, Some(n), _, _) => elemTyp.sizeInBytes * n
+          case s: CCStruct                        => s.structSizeInBytes
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"sizeof is not supported for the type '$this' in LLP64 mode.")
+        }
+    }
   }
 
   def rangePred(t : ITerm) : IFormula =
@@ -238,9 +306,7 @@ abstract sealed class CCType {
     case CCHeapPointer(_, _) if TriCeraParameters.get.invEncoding.nonEmpty
                                         => IIntLit(0)
     case CCHeapPointer(heap, _)         => heap.nullAddr()
-    case CCHeapArrayPointer(heap, _, _) => // todo: start = null, but
-      // size 0 or 1?
-      heap.addressRangeCtor(heap.nullAddr(), IIntLit(1))
+    case CCHeapArrayPointer(heap, _, _) => heap.nthAddrRange(0, IIntLit(1))
     case CCArray(_, _, _, arrayTheory, _) => arrayTheory.const(0)
     case _                                => IIntLit(0)
   }
@@ -388,7 +454,12 @@ case class CCStruct(ctor : MonoSortedIFunction,
     }
 
   def contains(rawFieldName : String) = getFieldIndex(rawFieldName) != -1
-  def getFieldTerm(t : ITerm, fieldAddress: List[Int]): ITerm = {
+  def getFieldTerm(t : CCTerm, fieldAddress : List[Int]) : CCTerm = {
+    val fieldTerm = getFieldTerm(t.toTerm, fieldAddress)
+    val fieldType = getFieldType(fieldAddress)
+    CCTerm.fromTerm(fieldTerm, fieldType, t.srcInfo)
+  }
+  def getFieldTerm(t : ITerm, fieldAddress : List[Int]): ITerm = {
     val hd :: tl = fieldAddress
     val sel      = getADTSelector(hd)
     getFieldType(hd) match {
@@ -509,6 +580,17 @@ case class CCStruct(ctor : MonoSortedIFunction,
                   .pop()
           }
     ctor(const: _*)
+  }
+
+  def structSizeInBytes : Int = {
+    sels.foldLeft(0) {
+      case (sum, (_, fieldType)) =>
+        val concreteFieldType = fieldType match {
+          case CCStructField(name, structs) => structs(name)
+          case typ => typ
+        }
+        sum + concreteFieldType.sizeInBytes
+    }
   }
 }
 

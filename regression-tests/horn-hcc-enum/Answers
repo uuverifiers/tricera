@@ -60,4 +60,6 @@ SAFE
 
 enum-typedef-pointer2.hcc
 Warning: no definition of function "nondet" available
+Warning: Timeout while verifying clause:
+inv_main_3(Pair(Pair::x(p:19), Pair::x(p:19)), 0) :- inv_main19_3_1(p:19), __eval16:16 != 0.
 SAFE

@@ -34,7 +34,18 @@ import concurrent_c.Absyn._
 /** 
  * Vistor to set the line number of AST nodes. The visitor will
  * bump the line number after every node that contains
- * a ";".
+ * a ";", and also after "{ ... }"
+ * 
+ * It actually bumps line numbers like
+ * 
+ *   ...
+ *   {
+ *     ... ;
+ *     ... ;
+ *   }
+ *   ...
+ * 
+ * Thus it mimics they way the PrettyPrinter prints line breaks.
  * 
  * This is a bit of an abuse of the FoldVisitor. We are actually
  * not folding anything, we are just updating the line number
@@ -56,8 +67,8 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
     result
   }
 
-  override def leaf(x: A): Unit = Unit
-  override def combine(x: Unit, r: Unit, a: A): Unit = Unit
+  override def leaf(x: A): Unit = ()
+  override def combine(x: Unit, r: Unit, a: A): Unit = ()
 
   override def visit(p: Progr, arg: A): Unit = {
     setLineNumber(p, lineNumber)
@@ -133,7 +144,7 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
   override def visit(p: NoDeclarator, arg: A): Unit = {
     bumpLineNumberAfter {
       setLineNumber(p, lineNumber)
-      val r = super.visit(p, arg)
+      super.visit(p, arg)
     }
   }
 
@@ -352,11 +363,6 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
   }
 
   override def visit(p: Restrict2, arg: A): Unit = {
-    setLineNumber(p, lineNumber)
-    super.visit(p, arg)
-  }
-
-  override def visit(p: Extension, arg: A): Unit = {
     setLineNumber(p, lineNumber)
     super.visit(p, arg)
   }
@@ -699,13 +705,21 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
   }
 
   override def visit(p: ScompOne, arg: A): Unit = {
-    setLineNumber(p, lineNumber)
-    super.visit(p, arg)
+    bumpLineNumberAfter {
+      bumpLineNumber
+      setLineNumber(p, lineNumber)
+      bumpLineNumber
+      super.visit(p, arg)
+    }
   }
 
   override def visit(p: ScompTwo, arg: A): Unit = {
-    setLineNumber(p, lineNumber)
-    super.visit(p, arg)
+    bumpLineNumberAfter {
+      bumpLineNumber
+      setLineNumber(p, lineNumber)
+      bumpLineNumber
+      super.visit(p, arg)
+    }
   }
 
   override def visit(p: SexprOne, arg: A): Unit = {

@@ -9,6 +9,7 @@ CMakeFiles
 cc-parser/bin
 cc-parser/target
 cc-parser/tricera
+cc-parser/lib
 acsl-parser/bin
 acsl-parser/target
 acsl-parser/tricera

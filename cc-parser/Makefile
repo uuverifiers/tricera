@@ -23,7 +23,11 @@ JAVA:=java
 JAVA_FLAGS:=
 
 .PHONY: all
-all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class
+all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class update-reflection
+
+.PHONY: update-reflection
+update-reflection:
+	python3 $(PARSER_BASEDIR)/update_reflection_config.py
 
 include $(PARSER_BASEDIR)/download_jars.mk
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="contract1.hcc \
        contract2.hcc \
@@ -11,6 +11,7 @@ TESTS="contract1.hcc \
        fib.hcc \
        stackptr.hcc \
        struct-name-bug.hcc \
+       stackptr-func-dec.hcc \
        stackptr-multi-arg.hcc \
        stackptr-nested-calls.hcc \
        stackptr-recursion.hcc \
@@ -20,7 +21,7 @@ TESTS="contract1.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -acsl "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
 
 TESTS="stackptr-custom-entry.hcc"
@@ -28,5 +29,12 @@ TESTS="stackptr-custom-entry.hcc"
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -acsl -m:entryPoint "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -acsl -m:entryPoint "$@" $name 2>&1 | grep -v 'at '
+done
+
+ILP32TESTS="stackptr-ilp32.hcc"
+for name in $ILP32TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -cex -acsl -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
 done

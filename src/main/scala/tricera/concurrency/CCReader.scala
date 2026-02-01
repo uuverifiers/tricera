@@ -31,8 +31,10 @@ package tricera.concurrency
 
 import ap.basetypes.IdealInt
 import ap.parser._
-import ap.theories.{ADT, ExtArray, Heap}
+import ap.theories.{ADT, ExtArray}
+import ap.theories.heaps._
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate}
+import ap.util.Seqs.reduceToSize
 import concurrent_c._
 import concurrent_c.Absyn._
 import hornconcurrency.ParametricEncoder
@@ -57,7 +59,10 @@ import tricera.concurrency.heap.{HeapModel, HeapModelFactory, HeapTheoryModel}
 
 /** Implicit conversion so that we can get a Scala-like iterator from a
  * a Java list */
-import scala.collection.JavaConversions.{asScalaBuffer, asScalaIterator}
+import scala.jdk.CollectionConverters._
+import ap.util.Debug
+import scala.collection.immutable.HashMap
+import scala.collection.mutable
 
 object CCReader {
   private[concurrency] var useTime = false
@@ -82,7 +87,7 @@ object CCReader {
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
-
+  
     var reader : CCReader = null
     while (reader == null)
       try {
@@ -154,15 +159,15 @@ object CCReader {
   class FunctionContext (val prePred  : CCPredicate,
                          val postPred : CCPredicate,
                          val acslContext : ACSLTranslator.FunctionContext,
-                         val prePredACSLArgNames : Seq[String],
-                         val postPredACSLArgNames : Seq[String],
+                         val prePredACSLArgNames : scala.Seq[String],
+                         val postPredACSLArgNames : scala.Seq[String],
                          val heapModel : Option[HeapModel])
 
   case class FuncDef(body : Compound_stm,
                      decl : Declarator,
                      sourceInfo : SourceInfo,
                      declSpecs : Option[ListDeclaration_specifier] = None,
-                     annotations : Seq[Annotation]) {
+                     annotations : scala.Seq[Annotation]) {
     val name : String = getName(decl)
   }
 
@@ -177,12 +182,12 @@ object CCReader {
         case f : NewFuncInt =>
           FuncDef(f.compound_stm_, f.declarator_,
                   getSourceInfo(f), None,
-                  f.listannotation_)
+                  f.listannotation_.asScala.toSeq)
         case f : AnnotatedFunc =>
           FuncDef(f.compound_stm_, f.declarator_,
                   getSourceInfo(f),
                   Some(f.listdeclaration_specifier_),
-                  f.listannotation_)
+                  f.listannotation_.asScala.toSeq)
       }
     }
   }
@@ -215,7 +220,7 @@ object CCReader {
 class CCReader private (prog              : Program,
                         entryFunction     : String,
                         propertiesToCheck : Set[properties.Property],
-                        inputVarNames     : Seq[String]) {
+                        inputVarNames     : scala.Seq[String]) {
 
   import CCReader._
 
@@ -249,8 +254,8 @@ class CCReader private (prog              : Program,
       CCReader.this.functionDecls
     override def structDefs : MHashMap[String, CCStruct] =
       CCReader.this.structDefs
-    override def structInfos : Seq[StructInfo] =
-      CCReader.this.structInfos
+    override def structInfos : scala.Seq[StructInfo] =
+      CCReader.this.structInfos.toSeq
     override def uninterpPredDecls : MHashMap[String, CCPredicate] =
       CCReader.this.uninterpPredDecls
     override def interpPredDefs : MHashMap[String, CCTerm] =
@@ -265,7 +270,7 @@ class CCReader private (prog              : Program,
       CCReader.this.sortWrapperMap
     override def sortCtorIdMap : Map[Sort, Int] =
       CCReader.this.sortCtorIdMap
-    override def objectGetters : Seq[MonoSortedIFunction] =
+    override def objectGetters : scala.Seq[MonoSortedIFunction] =
       CCReader.this.objectGetters
     override def defObj : IFunction =
       CCReader.this.defObj
@@ -277,13 +282,13 @@ class CCReader private (prog              : Program,
       CCReader.this.output(c, sync)
     override def addAssertion(assertion : CCAssertionClause) : Unit =
       CCReader.this.assertionClauses += assertion
-    override def newPred(extraArgs : Seq[CCVar],
+    override def newPred(extraArgs : scala.Seq[CCVar],
                          srcInfo : Option[SourceInfo]) : CCPredicate =
       CCReader.this.newPred(extraArgs, srcInfo)
-    override def newPred(name : String, args : Seq[CCVar],
+    override def newPred(name : String, args : scala.Seq[CCVar],
                          srcInfo : Option[SourceInfo]) : CCPredicate =
       CCReader.this.newPred(name, args, srcInfo)
-    override def atom(p : CCPredicate, a : Seq[ITerm]): IAtom =
+    override def atom(p : CCPredicate, a : scala.Seq[ITerm]): IAtom =
       CCReader.this.atom(p, a)
     override def atom(p : CCPredicate) : IAtom =
       CCReader.this.atom(p)
@@ -326,7 +331,7 @@ class CCReader private (prog              : Program,
       CCReader.this.getType(tn)
     override def getType(exp : Ebytestype) : CCType =
       CCReader.this.getType(exp)
-    override def getFunctionArgNames(f : Function_def) : Seq[String] =
+    override def getFunctionArgNames(f : Function_def) : scala.Seq[String] =
       CCReader.this.getFunctionArgNames(f)
     override def translateClockValue(expr : CCTerm) : CCTerm =
       CCReader.this.translateClockValue(expr)
@@ -352,10 +357,10 @@ class CCReader private (prog              : Program,
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val warnedFunctionNames = new MHashSet[String]
   private val functionContexts = new MHashMap[String, FunctionContext]
-  private val functionPostOldArgs = new MHashMap[String, Seq[CCVar]]
+  private val functionPostOldArgs = new MHashMap[String, scala.Seq[CCVar]]
   private val functionClauses =
-    new MHashMap[String, Seq[(Clause, ParametricEncoder.Synchronisation)]]
-  private val functionAssertionClauses = new MHashMap[String, Seq[CCAssertionClause]]
+    new MHashMap[String, scala.Seq[(Clause, ParametricEncoder.Synchronisation)]]
+  private val functionAssertionClauses = new MHashMap[String, scala.Seq[CCAssertionClause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
   private val structDefs    = new MHashMap[String, CCStruct]
@@ -430,7 +435,7 @@ class CCReader private (prog              : Program,
       }
     val lastClauses = transitionClauses groupBy (_._1.body.head.pred)
 
-    clauses reduceToSize from
+    reduceToSize(clauses, from)
 
     def chainClauses(currentClause : CCClause,
                      currentSync : ParametricEncoder.Synchronisation,
@@ -507,7 +512,7 @@ class CCReader private (prog              : Program,
   }
 
   def newPred(name : String,
-              args : Seq[CCVar],
+              args : scala.Seq[CCVar],
               srcInfo : Option[SourceInfo]) : CCPredicate = {
     val pred = MonoSortedPredicate(name, args map (_ sort))
     val ccPred = CCPredicate(pred, args, srcInfo)
@@ -515,7 +520,7 @@ class CCReader private (prog              : Program,
     ccPred
   }
 
-  private def newPred(extraArgs : Seq[CCVar],
+  private def newPred(extraArgs : scala.Seq[CCVar],
                       srcInfo : Option[SourceInfo]) : CCPredicate = {
     val predNameSuffix = srcInfo match {
       case Some(SourceInfo(line, col)) => s"${line}_$col"
@@ -543,12 +548,12 @@ class CCReader private (prog              : Program,
         hints
       }
 
-    predicateHints.put(res.pred, allHints)
+    predicateHints.put(res.pred, allHints.toSeq)
     res
   }
 
   private val predicateHints =
-    new MHashMap[Predicate, Seq[VerifHintElement]]
+    new MHashMap[Predicate, scala.Seq[VerifHintElement]]
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -565,7 +570,7 @@ class CCReader private (prog              : Program,
     comp match {
       case        _: ScompOne =>
       case compound: ScompTwo =>
-        val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
+        val stmsIt = ap.util.PeekIterator(compound.liststm_.asScala.iterator)
         while (stmsIt.hasNext) stmsIt.next match {
           case dec: DecS => collectStructDefs(dec.dec_)
           case _ =>
@@ -580,7 +585,7 @@ class CCReader private (prog              : Program,
     str.substring(2, str.length-2) // removes the annotation markers
   }
 
-  for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
+  for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_.asScala)
     decl match {
       case decl: Global => collectStructDefs(decl.dec_)
       case fun: Afunc =>
@@ -597,11 +602,7 @@ class CCReader private (prog              : Program,
 
   import ap.theories.{Heap => HeapObj}
 
-  def defObjCtor(objectCtors : Seq[IFunction],
-                 heapADTs : ADT) : ITerm = {
-    objectCtors.last()
-  }
-
+  def defObjCtor(objectCtors : scala.Seq[IFunction]) : ITerm = objectCtors.last()
   val ObjSort = HeapObj.ADTSort(0)
 
   val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
@@ -609,7 +610,7 @@ class CCReader private (prog              : Program,
       if(struct.fieldInfos isEmpty) warn(
         s"Struct ${struct.name} was declared, but never defined, " +
           "or it has no fields.")
-      val ADTFieldList : Seq[(String, HeapObj.CtorArgSort)] =
+      val ADTFieldList : scala.Seq[(String, HeapObj.CtorArgSort)] =
         for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
               struct.fieldInfos) yield
           (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
@@ -617,12 +618,12 @@ class CCReader private (prog              : Program,
               if (TriCeraParameters.get.invEncoding.nonEmpty)
                 HeapObj.OtherSort(Sort.Integer)
               else
-                Heap.AddressCtor
+                Heap.AddressSort
             } else { fieldType match {
               case Left(ind) => HeapObj.ADTSort(ind + 1)
               case Right(typ) =>
                 typ match {
-                  case _ : CCHeapArrayPointer => HeapObj.AddressRangeCtor
+                  case _ : CCHeapArrayPointer => HeapObj.AddrRangeSort
                   case _ => HeapObj.OtherSort(typ.toSort)
                 }
             }
@@ -632,12 +633,17 @@ class CCReader private (prog              : Program,
 
   // todo: only add types that exist in the program - should also add machine arithmetic types
   val predefSignatures =
-    List(("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(Sort.Integer))), ObjSort)),
-         ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(Sort.Nat))), ObjSort))) ++
+    List(("O_Int", HeapObj.CtorSignature(List(("getInt", HeapObj.OtherSort(CCInt.toSort))), ObjSort)),
+         ("O_UInt", HeapObj.CtorSignature(List(("getUInt", HeapObj.OtherSort(CCUInt.toSort))), ObjSort))) ++
     (if (TriCeraParameters.get.invEncoding.nonEmpty) Nil else List(
-         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddressCtor)), ObjSort)),
-         ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddressRangeCtor)), ObjSort))
+         ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddrSort)), ObjSort)),
+         ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddrRangeSort)), ObjSort))
     ))
+// Make sure that we have one object sort per sort
+private val ctorObjSorts =
+  predefSignatures.flatMap(s => s._2.arguments.map(_._2))
+assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
+
 
   val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
     predefSignatures ++
@@ -648,27 +654,37 @@ class CCReader private (prog              : Program,
 
   // TODO: use ADT/Heap depending on HeapModel, and move heap theory declaration
   //       to HeapModel.
-  val heap = new Heap("Heap", "Addr", ObjSort,
-    List("HeapObject") ++ structCtorSignatures.unzip._1,
-    wrapperSignatures ++ structCtorSignatures ++
-    List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
-                      defObjCtor)
+  val heap = TriCeraParameters.get.heapModel match {
+    case TriCeraParameters.NativeHeap =>
+      new NativeHeap("Heap", "Addr", "AddrRange", ObjSort,
+                     List("HeapObject") ++ structCtorSignatures.unzip._1,
+                     wrapperSignatures ++ structCtorSignatures ++
+                     List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+                     defObjCtor)
+    case TriCeraParameters.ArrayHeap =>
+      new ArrayHeap("Heap", "Addr", "AddrRange", ObjSort,
+                    List("HeapObject") ++ structCtorSignatures.unzip._1,
+                    wrapperSignatures ++ structCtorSignatures ++
+                    List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+                    defObjCtor)
+  }
 
   def getHeapInfo = if (modelHeap) Some(HeapInfo(heap, heapModel.get)) else None
 
   private val structCtorsOffset = predefSignatures.size
-  val defObj = heap.userADTCtors.last
+  val defObj = heap.userHeapConstructors.last
   val structCount = structInfos.size
-  val objectWrappers = heap.userADTCtors.take(structCount+structCtorsOffset)
+  val objectWrappers = heap.userHeapConstructors.take(structCount+structCtorsOffset)
   val objectGetters =
-    for (sels <- heap.userADTSels.take(structCount+structCtorsOffset)
+    for (sels <- heap.userHeapSelectors.take(structCount+structCtorsOffset)
          if sels.nonEmpty) yield sels.head
-  val structCtors = heap.userADTCtors.slice(structCtorsOffset+structCount,
+  val structCtors = heap.userHeapConstructors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
-  val structSels = heap.userADTSels.slice(structCtorsOffset+structCount,
+  val structSels = heap.userHeapSelectors.slice(structCtorsOffset+structCount,
     structCtorsOffset+2*structCount)
 
-  val objectSorts : IndexedSeq[Sort] = objectGetters.toIndexedSeq.map(f => f.resSort)
+  val objectSorts : scala.IndexedSeq[Sort] =
+    objectGetters.toIndexedSeq.map(f => f.resSort)
   val sortGetterMap : Map[Sort, MonoSortedIFunction] =
     objectSorts.zip(objectGetters).toMap
   val sortWrapperMap : Map[Sort, MonoSortedIFunction] =
@@ -703,11 +719,15 @@ class CCReader private (prog              : Program,
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
 
-  private val globalVars : Seq[CCVarDeclaration] = if (inputVarNames.nonEmpty) {
-    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_ if decl.isInstanceOf[Global]) yield
-      collectVarDecls(decl.asInstanceOf[Global].dec_, true)
-  }.flatten.filter(_.isInstanceOf[CCVarDeclaration]).map(_.asInstanceOf[CCVarDeclaration]) else Seq()
-  private val inputVars : Seq[CCVar] = inputVarNames.map { name =>
+  private val globalVars : scala.Seq[CCVarDeclaration] =
+    if (inputVarNames.nonEmpty) {
+      for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_.asScala
+           if decl.isInstanceOf[Global]) yield
+        collectVarDecls(decl.asInstanceOf[Global].dec_, true)
+    }.flatten.filter(_.isInstanceOf[CCVarDeclaration])
+     .map(_.asInstanceOf[CCVarDeclaration]).toSeq
+    else scala.Seq()
+  private val inputVars : scala.Seq[CCVar] = inputVarNames.map { name =>
     globalVars.find(_.name == name) match {
       case Some(v) => new CCVar(v.name, Some(v.srcInfo), v.typ, GlobalStorage)
       case None => throw new TranslationException(
@@ -781,13 +801,13 @@ class CCReader private (prog              : Program,
     /**
      * Collect global variables and their initializers.
      */
-    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
+    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_.asScala)
       decl match {
         case decl : Global =>
           collectVarDecls(decl.dec_, true, values, "", false)
 
         case decl : Chan =>
-          for (name <- decl.chan_def_.asInstanceOf[AChan].listcident_) {
+          for (name <- decl.chan_def_.asInstanceOf[AChan].listcident_.asScala) {
             if (channels contains name)
               throw new TranslationException(
                 "Channel " + name + " is already declared")
@@ -812,7 +832,7 @@ class CCReader private (prog              : Program,
      * Static variables can appear only at the outermost scope of function
      * declarations.
      */
-    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_) {
+    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_.asScala) {
       val funNameAndBody : Option[(String, Compound_stm)] = decl match {
         case decl : Afunc =>
           val funcDef = FuncDef(decl.function_def_)
@@ -831,8 +851,8 @@ class CCReader private (prog              : Program,
           val decs = body match {
             case _ : ScompOne     => Nil
             case stmts : ScompTwo =>
-              stmts.liststm_.filter(_.isInstanceOf[DecS])
-                            .map(_.asInstanceOf[DecS])
+              stmts.liststm_.asScala.filter(_.isInstanceOf[DecS])
+                                    .map(_.asInstanceOf[DecS])
           }
           assert(name nonEmpty, "Empty function name before collecting its static variables.")
           decs.foreach(dec => collectVarDecls(dec.dec_, false, values, name, true))
@@ -865,31 +885,32 @@ class CCReader private (prog              : Program,
     globalPreconditions = globalPreconditions &&& values.getGuard
 
     // todo: what about functions without definitions? replace Afunc type
-    val functionAnnotations : Map[Afunc, Seq[(AnnotationInfo, SourceInfo)]] =
-      prog.asInstanceOf[Progr].listexternal_declaration_.collect {
+    val functionAnnotations : Map[Afunc, scala.Seq[(AnnotationInfo, SourceInfo)]] =
+      prog.asInstanceOf[Progr].listexternal_declaration_.asScala.collect {
         case f : Afunc  =>
-          val annots : Seq[Annotation] = f.function_def_ match {
-            case f: AnnotatedFunc => f.listannotation_.toList
-            case f: NewFuncInt    => f.listannotation_.toList
+          val annots : scala.Seq[Annotation] = f.function_def_ match {
+            case f: AnnotatedFunc => f.listannotation_.asScala.toList
+            case f: NewFuncInt    => f.listannotation_.asScala.toList
             case _: NewFunc       => Nil
           }
           // distribute the same source info to all annotations
           // todo: can we be more fine-grained? e.g., to pinpoint which post-condition is failing
-          implicit def flattenAnnotationInfos(pair: (Seq[AnnotationInfo], SourceInfo)) :
+          implicit def flattenAnnotationInfos(
+            pair: (scala.Seq[AnnotationInfo], SourceInfo)) :
           Iterable[(AnnotationInfo, SourceInfo)] =
             pair._1.map(info => (info, pair._2))
 
           (f, (for (annot <- annots) yield {
             (AnnotationParser(annot), getSourceInfo(annot))
-          }).flatten)
+          }).toSeq.flatten)
       }.toMap
 
     // functions for which contracts should be generated
     // todo: generate contracts for ACSL annotated funs
-    val contractFuns : Seq[Afunc] =
+    val contractFuns : scala.Seq[Afunc] =
       functionAnnotations.filter(_._2.exists(_._1 == ContractGen)).keys.toSeq
 
-    val funsThatMightHaveACSLContracts : Map[Afunc, Seq[(AnnotationInfo, SourceInfo)]] =
+    val funsThatMightHaveACSLContracts : Map[Afunc, scala.Seq[(AnnotationInfo, SourceInfo)]] =
       functionAnnotations.filter(_._2.exists(_._1.isInstanceOf[MaybeACSLAnnotation]))
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
@@ -921,7 +942,7 @@ class CCReader private (prog              : Program,
       val postPredACSLArgNames =
         scope.allFormalVars.map(v => "\\old(" + v.name + ")") ++
         scope.GlobalVars.vars.map(v => v.name) ++
-        (if(postResVar nonEmpty) Seq("\\result") else Nil)
+        (if(postResVar nonEmpty) scala.Seq("\\result") else Nil)
 
       val postOldVarsMap: Map[String, CCVar] =
       (scope.allFormalVars.map(_ name) zip oldVars).toMap
@@ -940,9 +961,10 @@ class CCReader private (prog              : Program,
         def getPostGlobalVar(ident: String): Option[CCVar] =
           postGlobalVarsMap get ident
 
-        def getParams: Seq[CCVar] = functionParams
+        def getParams: scala.Seq[CCVar] = functionParams
 
-        def getGlobals: Seq[CCVar] = scope.GlobalVars.vars -- heapVars.map(_._2)
+        def getGlobals: scala.Seq[CCVar] =
+          scope.GlobalVars.vars.diff(heapVars.values.toSeq).toSeq
 
         def getResultVar: Option[CCVar] = postResVar
 
@@ -989,8 +1011,9 @@ class CCReader private (prog              : Program,
 
         def getCtor(s: Sort): Int = sortCtorIdMap(s)
 
-        override val getStructMap: Map[IFunction, CCStruct] =
-          structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+        override val getStructMap: Map[IFunction, CCStruct] = {
+          structDefs.values.map(struct => (struct.ctor, struct)).toMap
+        }
 
         override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
 
@@ -1064,9 +1087,9 @@ class CCReader private (prog              : Program,
           translator.translateWithReturn(stm, entryPred)
       }
 
-      val globalVarTerms : Seq[ITerm] = scope.GlobalVars.formalVarTerms
-      val postArgs : Seq[ITerm] = (scope.allFormalVarTerms drop prePredArgs.size) ++
-        globalVarTerms ++ resVar.map(v => IConstant(v.term))
+      val globalVarTerms : scala.Seq[ITerm] = scope.GlobalVars.formalVarTerms
+      val postArgs : scala.Seq[ITerm] = (scope.allFormalVarTerms drop prePredArgs.size) ++
+        globalVarTerms ++ resVar.map(v => IConstant(v.term)).toSeq
 
       output(addRichClause(
         postPred(postArgs) :-
@@ -1094,7 +1117,7 @@ class CCReader private (prog              : Program,
     // then translate the threads
     atomicMode = false
 
-    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_)
+    for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_.asScala)
       decl match {
         case decl : Athread =>
           decl.thread_def_ match {
@@ -1161,12 +1184,12 @@ class CCReader private (prog              : Program,
            * return type, the function can still end without reaching a
            * return statement - which is why there can be multiple `finalPreds`.
            */
-          val finalPreds = Seq(globalExitPred) ++ (
+          val finalPreds = scala.Seq(globalExitPred) ++ (
             if (returnType != CCVoid) {
               val exitWithoutReturnPred = translator.translateWithReturn(stm)
-              Seq(exitWithoutReturnPred, exitPred)
+              scala.Seq(exitWithoutReturnPred, exitPred)
             }
-            else Seq(translator.translateNoReturn(stm)))
+            else scala.Seq(translator.translateNoReturn(stm)))
 
           /** The heap model might want to add some final assertions, for
            *  instance assertions related to memory safety. */
@@ -1202,7 +1225,8 @@ class CCReader private (prog              : Program,
   private def collectStructDefs(dec : Dec) : Unit = {
     dec match {
       case decl : Declarators => { // todo: check for multiple type specs
-        val typ = decl.listdeclaration_specifier_.find(_.isInstanceOf[Type]) match {
+        val typ = decl.listdeclaration_specifier_.asScala
+                      .find(_.isInstanceOf[Type]) match {
           case Some(t) => t.asInstanceOf[Type].type_specifier_
           case None => throw new
               TranslationException("Could not determine type for " + decl)
@@ -1211,7 +1235,7 @@ class CCReader private (prog              : Program,
           case structDec : Tstruct =>
             structDec.struct_or_union_spec_ match {
               case _: Unique =>
-                val declarator = decl.listinit_declarator_.head match {
+                val declarator = decl.listinit_declarator_.asScala.head match {
                   case initDecl: OnlyDecl     => initDecl.declarator_
                   case initDecl: HintDecl     => initDecl.declarator_
                   case initDecl: InitDecl     => initDecl.declarator_
@@ -1224,8 +1248,8 @@ class CCReader private (prog              : Program,
         }
       }
       case nodecl : NoDeclarator => {
-        val typ = nodecl.listdeclaration_specifier_(0) match {
-          case spec: Type => spec.type_specifier_
+        val typ = nodecl.listdeclaration_specifier_.asScala.head match {
+          case spec : Type => spec.type_specifier_
           case _ => throw new
               TranslationException("Storage and SpecProp not implemented yet")
         }
@@ -1244,13 +1268,18 @@ class CCReader private (prog              : Program,
     }
   }
 
-  private def isUniqueStruct(listDec : ListDeclaration_specifier) : Boolean = {
-    if (listDec.nonEmpty) {
-      listDec.head.isInstanceOf[Type] &&
-        listDec.head.asInstanceOf[Type].type_specifier_.isInstanceOf[Tstruct] &&
-        listDec.head.asInstanceOf[Type].type_specifier_.asInstanceOf[Tstruct].
-          struct_or_union_spec_.isInstanceOf[Unique]
-    } else false
+  private def isUniqueStruct(listDec : ListDeclaration_specifier)
+  : Boolean = listDec.asScala.headOption match {
+    case Some(t : Type) =>
+      t.type_specifier_ match {
+        case s: Tstruct =>
+          s.struct_or_union_spec_ match {
+            case _ : Unique => true
+            case _         => false
+          }
+        case _ => false
+      }
+    case _ => false
   }
 
   case object InitDeclaratorWrapper {
@@ -1261,18 +1290,18 @@ class CCReader private (prog              : Program,
           initDecl.declarator_, None, Nil, srcInfo)
         case initDecl : HintDecl =>
           InitDeclaratorWrapper(
-            initDecl.declarator_, None, initDecl.listannotation_, srcInfo)
+            initDecl.declarator_, None, initDecl.listannotation_.asScala.toSeq, srcInfo)
         case initDecl : InitDecl => InitDeclaratorWrapper(
           initDecl.declarator_, Some(initDecl.initializer_), Nil, srcInfo)
         case initDecl : HintInitDecl => InitDeclaratorWrapper(
-          initDecl.declarator_, Some(initDecl.initializer_), initDecl.listannotation_,
-          srcInfo)
+          initDecl.declarator_, Some(initDecl.initializer_),
+          initDecl.listannotation_.asScala.toSeq, srcInfo)
       }
     }
   }
   case class InitDeclaratorWrapper(declarator       : Declarator,
                                    maybeInitializer : Option[Initializer],
-                                   hints            : Seq[Annotation],
+                                   hints            : scala.Seq[Annotation],
                                    sourceInfo       : SourceInfo)
 
   /**
@@ -1281,7 +1310,7 @@ class CCReader private (prog              : Program,
    */
   private[concurrency]
   def collectVarDecls(dec      : Dec,
-                      isGlobal : Boolean) : Seq[CCDeclaration] = {
+                      isGlobal : Boolean) : scala.Seq[CCDeclaration] = {
     dec match {
       case decl: Declarators => {
         // S D1, D2, D3, ...
@@ -1290,14 +1319,14 @@ class CCReader private (prog              : Program,
         // example: int x1, *x2, *x3[];
         // first one is an int, second one is an int*, last is an array of int*s
         val specType = getType(decl.listdeclaration_specifier_)
-        val isStatic = decl.listdeclaration_specifier_.exists {
+        val isStatic = decl.listdeclaration_specifier_.asScala.exists {
           case s : Storage =>
             s.storage_class_specifier_.isInstanceOf[LocalProgram]
           case _ => false
         }
 
         // each iteration is for one of the initDecls, above D1, D2, D3
-        for (initDecl <- decl.listinit_declarator_) yield {
+        for (initDecl <- decl.listinit_declarator_.asScala.toSeq) yield {
           val initDeclWrapper = InitDeclaratorWrapper(initDecl)
           val name = getName(initDeclWrapper.declarator)
           val (typeWithPtrs, directDecl) = initDeclWrapper.declarator match {
@@ -1338,7 +1367,7 @@ class CCReader private (prog              : Program,
                     (ArrayLocation.Stack, Some(a.constant_expression_))
                   case _ => (ArrayLocation.Heap, None)
                 }
-                (CCArray(typeWithPtrs, None, None, ExtArray(Seq(CCInt.toSort), typeWithPtrs.toSort), arrayLocation), initArrayExpr)
+                (CCArray(typeWithPtrs, None, None, ExtArray(scala.Seq(CCInt.toSort), typeWithPtrs.toSort), arrayLocation), initArrayExpr)
               }
               // todo: adjust needsHeap below if an array type does not require heap
               // for instance if we model arrays using the theory of arrays or unroll
@@ -1348,7 +1377,7 @@ class CCReader private (prog              : Program,
                 srcInfo = initDeclWrapper.sourceInfo)
             case _ : MathArray =>
               CCVarDeclaration(name, CCArray(typeWithPtrs, None, None,
-                ExtArray(Seq(CCInt.toSort), typeWithPtrs.toSort),
+                ExtArray(scala.Seq(CCInt.toSort), typeWithPtrs.toSort),
                                              if(isGlobal) ArrayLocation.Global else ArrayLocation.Heap),
                 initDeclWrapper.maybeInitializer,
                 initDeclWrapper.hints, isArray = true, isStatic = isStatic,
@@ -1363,11 +1392,11 @@ class CCReader private (prog              : Program,
         }
       }
       case noDecl: NoDeclarator =>
-        Seq(CCNoDeclaration)
+        scala.Seq(CCNoDeclaration)
       case predDecl: PredDeclarator =>
-        Seq(CCPredDeclaration(predDecl.listpred_hint_, getSourceInfo(predDecl)))
+        scala.Seq(CCPredDeclaration(predDecl.listpred_hint_, getSourceInfo(predDecl)))
       case interpPredDecl: InterpPredDeclarator =>
-        Seq(CCInterpPredDeclaration(interpPredDecl.pred_interp_))
+        scala.Seq(CCInterpPredDeclaration(interpPredDecl.pred_interp_))
     }
   }
 
@@ -1377,17 +1406,17 @@ class CCReader private (prog              : Program,
    */
   private def collectArgTypesAndNames(decList : ListParameter_declaration,
                                       declName : String = "") :
-    Seq[(CCType, String)] = {
-    for (ind <- decList.indices) yield {
-      decList(ind) match {
+    scala.Seq[(CCType, String)] = {
+    for (ind <- decList.asScala.indices) yield {
+      decList.asScala(ind) match {
         case t : OnlyType => {
-          if (t.listdeclaration_specifier_.exists(
+          if (t.listdeclaration_specifier_.asScala.exists(
             spec => !spec.isInstanceOf[Type]))
             throw new TranslationException(
               "Only type specifiers are allowed inside predicate declarations.")
           val argType = getType(
-            t.listdeclaration_specifier_.map(_.asInstanceOf[Type]
-                                              .type_specifier_).toIterator)
+            t.listdeclaration_specifier_.asScala.map(_.asInstanceOf[Type]
+                                              .type_specifier_).iterator)
           val argName = declName + "_" + ind
           (argType, argName)
         }
@@ -1604,13 +1633,13 @@ class CCReader private (prog              : Program,
         processHints(varDec.hints)
 
       case predDec : CCPredDeclaration =>
-        for (hint <- predDec.predHints) {
+        for (hint <- predDec.predHints.asScala) {
           hint match {
             case predHint : PredicateHint =>
               // todo: refactor this using other code collecting parameter information
               val decList = predHint.parameter_type_.asInstanceOf[AllSpec]
                 .listparameter_declaration_
-              val argTypesAndNames : Seq[(CCType, String)] =
+              val argTypesAndNames : scala.Seq[(CCType, String)] =
                 collectArgTypesAndNames(decList, predHint.cident_)
               val srcInfo = Some(getSourceInfo(predHint))
               val argCCVars = // needed for adding to predCCPredMap, used in printing
@@ -1625,7 +1654,7 @@ class CCReader private (prog              : Program,
           case predExp : PredicateExp =>
             val decList = predExp.parameter_type_.asInstanceOf[AllSpec].
                                  listparameter_declaration_
-            val argTypesAndNames : Seq[(CCType, String)] =
+            val argTypesAndNames : scala.Seq[(CCType, String)] =
               collectArgTypesAndNames(decList, predExp.cident_)
 
             val ccVars = argTypesAndNames.map{
@@ -1652,8 +1681,10 @@ class CCReader private (prog              : Program,
     }
   }
 
-  private def processHints(hintAnnotations : Seq[Annotation]) : Unit = {
-    val hints : Seq[AbsHintClause] = (for (hint <- hintAnnotations) yield {
+  private def processHints(hintAnnotations : ListAnnotation) : Unit =
+    processHints(hintAnnotations.asScala.toSeq)
+  private def processHints(hintAnnotations : scala.Seq[Annotation]) : Unit = {
+    val hints : scala.Seq[AbsHintClause] = (for (hint <- hintAnnotations) yield {
       AnnotationParser(hint)
     }).flatten.filter(_.isInstanceOf[AbsHintClause]).
       map(_.asInstanceOf[AbsHintClause])
@@ -1699,7 +1730,9 @@ class CCReader private (prog              : Program,
           }
     }
 
-  private def getType(specs : Seq[Declaration_specifier]) : CCType =
+  private def getType(specs : ListDeclaration_specifier) : CCType =
+    getType(specs.asScala.toSeq)
+  private def getType(specs : scala.Seq[Declaration_specifier]) : CCType =
     getType(for (specifier <- specs.iterator;
                  if (specifier.isInstanceOf[Type]))
             yield specifier.asInstanceOf[Type].type_specifier_)
@@ -1718,11 +1751,11 @@ class CCReader private (prog              : Program,
 
   private def getType(name : Type_name) : CCType = name match {
     case name : PlainType =>
-      getType(for (qual <- name.listspec_qual_.iterator;
+      getType(for (qual <- name.listspec_qual_.asScala.iterator;
                    if (qual.isInstanceOf[TypeSpec]))
               yield qual.asInstanceOf[TypeSpec].type_specifier_)
     case name : ExtendedType =>
-      val typ = getType(for (qual <- name.listspec_qual_.iterator;
+      val typ = getType(for (qual <- name.listspec_qual_.asScala.iterator;
                    if (qual.isInstanceOf[TypeSpec]))
         yield qual.asInstanceOf[TypeSpec].type_specifier_)
       name.abstract_declarator_ match {
@@ -1738,14 +1771,14 @@ class CCReader private (prog              : Program,
   // get type of struct field
   private def getType(fields : Struct_dec) : CCType = {
     val specs =
-      (for (qual <- fields.asInstanceOf[Structen].listspec_qual_.iterator;
+      (for (qual <- fields.asInstanceOf[Structen].listspec_qual_.asScala.iterator;
            if (qual.isInstanceOf[TypeSpec]))
         yield qual.asInstanceOf[TypeSpec].type_specifier_).toList
     specs.find(s => s.isInstanceOf[Tenum]) match {
       case Some(enum) => buildEnumType(enum.asInstanceOf[Tenum])
       case None =>
         val (maybeDecl, maybeConstExpr) =
-          fields.asInstanceOf[Structen].liststruct_declarator_.head match {
+          fields.asInstanceOf[Structen].liststruct_declarator_.asScala.head match {
             case f : Decl =>
               (Some(f.declarator_), None)
             case f : Field =>
@@ -1754,7 +1787,7 @@ class CCReader private (prog              : Program,
               (Some(f.declarator_), Some(f.constant_expression_))
           }
 
-        val typ = getType(specs.toIterator)
+        val typ = getType(specs.iterator)
         // todo: unify this with code from collectVarDecl
         val actualTyp = if (maybeDecl isEmpty) {
           typ
@@ -1774,7 +1807,7 @@ class CCReader private (prog              : Program,
               CCHeapArrayPointer(heap, typ, ArrayLocation.Heap)
             case _: Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
               CCArray(typ, None, None,
-                ExtArray(Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap) // todo: only int indexed arrays
+                ExtArray(scala.Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap) // todo: only int indexed arrays
             case initArray: InitArray =>
               val arraySizeSymex = Symex(symexContext, scope, null, heapModel)
               val evalSettings = arraySizeSymex.EvalSettings()
@@ -1790,7 +1823,7 @@ class CCReader private (prog              : Program,
                   "size specified inside struct definition!")
               }
               CCArray(typ, Some(arraySizeExp), Some(arraySize),
-                ExtArray(Seq(arraySizeExp.typ.toSort), typ.toSort),
+                ExtArray(scala.Seq(arraySizeExp.typ.toSort), typ.toSort),
                       ArrayLocation.Heap)
             case _ => typ
           }
@@ -1837,19 +1870,19 @@ class CCReader private (prog              : Program,
         "struct " + structName + " is already defined")
 
     val fields = spec.struct_or_union_spec_ match {
-      case dec: Tag => dec.liststruct_dec_
+      case dec: Tag => dec.liststruct_dec_.asScala.toSeq
       case dec: Unique =>
         uniqueStructs += ((dec, structName))
-        dec.liststruct_dec_
+        dec.liststruct_dec_.asScala.toSeq
       case _ => throw new TranslationException("struct can only be built" +
         "with Unique or Tag types!")
     }
 
-    val fieldList : IndexedSeq[FieldInfo] = (for (field <- fields) yield {
+    val fieldList : scala.IndexedSeq[FieldInfo] = (for (field <- fields) yield {
 
       // ignoring all qual specs such as volatile, const etc.
       val specs : List[Type_specifier] =
-        (for (f <- field.asInstanceOf[Structen].listspec_qual_
+        (for (f <- field.asInstanceOf[Structen].listspec_qual_.asScala.toSeq
              if f.isInstanceOf[TypeSpec])
           yield f.asInstanceOf[TypeSpec].type_specifier_).toList
 
@@ -1883,7 +1916,7 @@ class CCReader private (prog              : Program,
           getType(field)*/
         case _ => Right(getType(field))
       }
-      val declarators = field.asInstanceOf[Structen].liststruct_declarator_
+      val declarators = field.asInstanceOf[Structen].liststruct_declarator_.asScala.toSeq
 
       for (decl <- declarators if !decl.isInstanceOf[Field]) yield {
         val declarator = decl match {
@@ -1941,9 +1974,9 @@ class CCReader private (prog              : Program,
   private def getEnumType(spec: Tenum) : CCType =
     spec.enum_specifier_ match {
       case dec : EnumDec =>
-        buildEnumType(dec.listenumerator_, getAnonEnumName)
+        buildEnumType(dec.listenumerator_.asScala.toSeq, getAnonEnumName)
       case named : EnumName =>
-        buildEnumType(named.listenumerator_, named.cident_)
+        buildEnumType(named.listenumerator_.asScala.toSeq, named.cident_)
       case vared : EnumVar =>
         (enumDefs get vared.cident_) match {
           case Some(t) => t
@@ -1956,14 +1989,14 @@ class CCReader private (prog              : Program,
     private def buildEnumType(spec: Tenum) : CCType = {
     spec.enum_specifier_ match {
       case dec : EnumDec =>
-        buildEnumType(dec.listenumerator_, getAnonEnumName)
+        buildEnumType(dec.listenumerator_.asScala.toSeq, getAnonEnumName)
       case named : EnumName =>
-        buildEnumType(named.listenumerator_, named.cident_)
+        buildEnumType(named.listenumerator_.asScala.toSeq, named.cident_)
       case _ => CCInt
     }
   }
 
-  private def buildEnumType (specs: Seq[Enumerator],
+  private def buildEnumType (specs: scala.Seq[Enumerator],
                              enumName: String) : CCType = {
     if (enumDefs contains enumName)
       throw new TranslationException(
@@ -2037,7 +2070,7 @@ class CCReader private (prog              : Program,
   }*/
 
   private def getType(typespec : Type_specifier) : CCType = {
-    getType(Seq(typespec).iterator)
+    getType(scala.Seq(typespec).iterator)
   }
 
   private def getType(specs : Iterator[Type_specifier]) : CCType = {
@@ -2157,7 +2190,7 @@ class CCReader private (prog              : Program,
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private def atom(ccPred : CCPredicate, args : Seq[ITerm]) : IAtom = {
+  private def atom(ccPred : CCPredicate, args : scala.Seq[ITerm]) : IAtom = {
     if (ccPred.arity != args.size) {
       throw new TranslationException(getLineString(ccPred.srcInfo) +
         s"$ccPred expects ${ccPred.arity} argument(s)" +
@@ -2213,7 +2246,7 @@ class CCReader private (prog              : Program,
         s"Type qualified pointers are currently not supported: $decl")
     }
 
-  private def getFunctionArgNames(functionDef : Function_def) : Seq[String] = {
+  private def getFunctionArgNames(functionDef : Function_def) : scala.Seq[String] = {
     val f = FuncDef(functionDef)
     val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
@@ -2222,7 +2255,7 @@ class CCReader private (prog              : Program,
     decl match {
       case dec : NewFuncDec =>
         val decList = dec.parameter_type_.asInstanceOf[AllSpec]
-          .listparameter_declaration_
+          .listparameter_declaration_.asScala
         val argNames = new ArrayBuffer[String]
         for (ind <- decList.indices)
           decList(ind) match {
@@ -2233,7 +2266,7 @@ class CCReader private (prog              : Program,
             case argDec : TypeHintAndParam =>
               argNames += getName(argDec.declarator_)
           }
-        argNames
+        argNames.toSeq
       case dec : OldFuncDec =>
       // arguments are not specified ...
         Nil
@@ -2251,7 +2284,7 @@ class CCReader private (prog              : Program,
     decl match {
       case dec : NewFuncDec =>
         val decList = dec.parameter_type_.asInstanceOf[AllSpec]
-          .listparameter_declaration_
+          .listparameter_declaration_.asScala
         for (ind <- decList.indices)
           decList(ind) match {
             case _ : OnlyType =>
@@ -2271,7 +2304,7 @@ class CCReader private (prog              : Program,
                     case _ : Incomplete
                       if TriCeraParameters.parameters.value.useArraysForHeap =>
                       CCArray(typ, None, None, ExtArray(
-                        Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap)
+                        scala.Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap)
                     case _ => typ
                   }
                 case _ => typ
@@ -2428,7 +2461,7 @@ class CCReader private (prog              : Program,
 
       val offset = sortedBlocks.head._1
       var concernedClauses = clauses.slice(offset, clauses.size).toList
-      clauses reduceToSize offset
+      reduceToSize(clauses, offset)
 
       var curPos = offset
       for ((bstart, bend) <- sortedBlocks)
@@ -2457,9 +2490,9 @@ class CCReader private (prog              : Program,
     }
 
     private val jumpLocs =
-      new ArrayBuffer[(String, CCPredicate, Seq[ITerm], Int, SourceInfo)]
+      new ArrayBuffer[(String, CCPredicate, scala.Seq[ITerm], Int, SourceInfo)]
     private val labelledLocs =
-      new MHashMap[String, (CCPredicate, Seq[ITerm])]
+      new MHashMap[String, (CCPredicate, scala.Seq[ITerm])]
     private val usedJumpTargets =
       new MHashMap[CCPredicate, String]
     private val atomicBlocks =
@@ -2500,7 +2533,7 @@ class CCReader private (prog              : Program,
     private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
       val annotationInfo = AnnotationParser(annotationStringExtractor(stm))
       annotationInfo match {
-        case Seq(MaybeACSLAnnotation(annot, _)) =>
+        case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
           val stmSymex = Symex(symexContext, scope, entry, heapModel)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
             /**
@@ -2521,7 +2554,7 @@ class CCReader private (prog              : Program,
               }
             }
 
-            override def getGlobals: Seq[CCVar] = scope.GlobalVars.vars
+            override def getGlobals: scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
             override def sortWrapper(s: Sort): Option[IFunction] =
               sortWrapperMap get s
             override def sortGetter(s: Sort): Option[IFunction] =
@@ -2565,7 +2598,7 @@ class CCReader private (prog              : Program,
             } // todo: heap term for exit predicate?
 
             override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(stm)
@@ -2592,7 +2625,7 @@ class CCReader private (prog              : Program,
                           exit       : CCPredicate) : Unit = {
       val annotationInfo = AnnotationParser(annotationStringExtractor(loop_annot))
       annotationInfo match {
-        case Seq(MaybeACSLAnnotation(annot, _)) =>
+        case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
           val stmSymex = Symex(symexContext, scope, entry, heapModel)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
             /**
@@ -2613,7 +2646,7 @@ class CCReader private (prog              : Program,
               }
             }
 
-            override def getGlobals : Seq[CCVar] = scope.GlobalVars.vars
+            override def getGlobals : scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
             override def sortWrapper(s : Sort) : Option[IFunction] =
               sortWrapperMap get s
             override def sortGetter(s : Sort) : Option[IFunction] =
@@ -2654,7 +2687,7 @@ class CCReader private (prog              : Program,
               getHeapTerm // todo: heap term for exit predicate?
             
             override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.toSet.map((struct: CCStruct) => (struct.ctor, struct)).toMap
+              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
               getSourceInfo(loop_annot)
@@ -2715,7 +2748,7 @@ class CCReader private (prog              : Program,
       case compound : ScompTwo => {
         scope.LocalVars pushFrame
 
-        val stmsIt = ap.util.PeekIterator(compound.liststm_.iterator)
+        val stmsIt = ap.util.PeekIterator(compound.liststm_.asScala.toSeq.iterator)
 
         // merge simple side-effect-free declarations with
         // the entry clause
@@ -2739,10 +2772,10 @@ class CCReader private (prog              : Program,
           val inputInitCode =
             if(TriCeraParameters.get.determinizeInput)
               inputVars.map(v => s"${v.name} = _;")
-            else Seq()
+            else scala.Seq()
 
           val heapModelInitCode =
-            if (modelHeap) heapModelFactory.getInitCodeToInject else Seq()
+            if (modelHeap) heapModelFactory.getInitCodeToInject else scala.Seq()
 
           (inputInitCode ++ heapModelInitCode).iterator.map { code =>
             ParseUtil.parseStatement(new java.io.StringReader(code))
@@ -2806,7 +2839,7 @@ class CCReader private (prog              : Program,
       case compound : ScompTwo => {
         scope.LocalVars pushFrame
 
-        val stmsIt = compound.liststm_.iterator
+        val stmsIt = compound.liststm_.asScala.toSeq.iterator
         translateStmSeq(stmsIt, entry, exit)
         scope.LocalVars popFrame
       }
@@ -3025,14 +3058,14 @@ class CCReader private (prog              : Program,
           selectorSymex.restoreState
         }
 
-        defaults match {
-          case Seq() =>
+        defaults.toSeq match {
+          case scala.Seq() =>
             // add an assertion that we never try to jump to a case that
             // does not exist. TODO: add a parameter for this?
             selectorSymex assertProperty(
               or(guards), Some(getSourceInfo(stm)),
               properties.SwitchCaseValidJump)
-          case Seq((_, target)) => {
+          case scala.Seq((_, target)) => {
             selectorSymex.saveState
             selectorSymex addGuard ~or(guards)
             selectorSymex outputClause(target, target.srcInfo)
@@ -3157,7 +3190,7 @@ class CCReader private (prog              : Program,
       processes.head._2 == ParametricEncoder.Singleton
 
     val predHints =
-      (for (p <- ParametricEncoder.allPredicates(processes).iterator;
+      (for (p <- ParametricEncoder.allPredicates(processes.toSeq).iterator;
             maybePreds = predicateHints get p;
             if maybePreds.isDefined;
             if (!maybePreds.get.isEmpty))
@@ -3192,7 +3225,7 @@ class CCReader private (prog              : Program,
                                ParametricEncoder.ContinuousTime(0, 1)
                              else
                                ParametricEncoder.NoTime,
-                             timeInvariants,
+                             timeInvariants.toSeq,
                              (assertionClauses).map(_.clause).toList,
                              VerificationHints(predHints),
                              backgroundAxioms,
@@ -3227,8 +3260,8 @@ class CCReader private (prog              : Program,
       getPred(pred).toString
     def predWithArgNamesAndLineNumbers (pred : Predicate) : String =
       getPred(pred).toStringWithLineNumbers
-    def predArgNames (pred : Predicate) : Seq[String] =
-      getPred(pred).argVars.map(_.toString)
+    def predArgNames (pred : Predicate) : scala.Seq[String] =
+      getPred(pred).argVars.map(_.toString).toSeq
     def predSrcInfo (pred : Predicate) : Option[SourceInfo] =
       getPred(pred).srcInfo
     def isUninterpretedPredicate (predicate : Predicate) : Boolean =

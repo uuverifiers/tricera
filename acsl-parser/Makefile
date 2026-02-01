@@ -23,7 +23,11 @@ JAVA:=java
 JAVA_FLAGS:=
 
 .PHONY: all
-all: download-jars acsl-parser.jar tricera/acsl/Test.class
+all: download-jars acsl-parser.jar tricera/acsl/Test.class update-reflection
+
+.PHONY: update-reflection
+update-reflection:
+	cd ../cc-parser && python3 update_reflection_config.py
 
 include $(PARSER_BASEDIR)/../cc-parser/download_jars.mk
 

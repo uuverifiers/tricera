@@ -51,18 +51,23 @@ class TriCeraPreprocessor(val inputFilePath   : String,
         " base directory")
   }
 
-  private def runPreprocessor(extraArgs : Seq[String],
+  private def runPreprocessor(extraArgs : scala.Seq[String],
                               errorMsg  : String,
                               input     : String,
                               output    : String) : Int = {
-    val cmdLine : Seq[String] = Seq(ppPath, input, "-o", output) ++
-                     (if (quiet) Seq("-q") else Nil) ++ extraArgs ++
-                     Seq("-m", entryFunction, "--", "-xc") ++
-                     (if (displayWarnings) Nil else Seq("-Wno-everything"))
+    val cmdLine : scala.Seq[String] = scala.Seq(ppPath, input, "-o", output) ++
+                     (if (quiet) scala.Seq("-q") else Nil) ++ extraArgs ++
+                     scala.Seq("-m", entryFunction, "--", "-xc") ++
+                     (if (displayWarnings) Nil else scala.Seq("-Wno-everything"))
 
     try { Process(cmdLine) ! } catch {
       case _: Throwable =>
-        throw new Main.MainException(s"$errorMsg\nPreprocessor command: ${cmdLine.mkString(" ")}")
+        throw new Main.MainException("TriCera preprocessor could not" +
+          " be executed. This might be due to TriCera preprocessor binary " +
+          "not being in the current directory. Alternatively, use the " +
+          "-noPP switch to disable the preprocessor.\n" +
+          "Preprocessor command: " + cmdLine
+        )
     }
   }
 
