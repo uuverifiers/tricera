@@ -63,25 +63,26 @@ object Symex {
   // These need to be here for now as we create many Symexes...
   private val locationMap = mutable.Map[SourceInfo, Int]()
   private var locationCounter = 0
+
+  private implicit class toRichTerm(val expr : CCTerm) extends AnyVal {
+    def mapTerm(m : ITerm => ITerm) : CCTerm =
+      // TODO: type promotion when needed
+      CCTerm.fromTerm(expr.typ cast m(expr.toTerm), expr.typ, expr.srcInfo)
+  }
 }
 
 class Symex private (context        : SymexContext,
                      scope          : CCScope,
                      oriInitPred    : CCPredicate,
                      maybeHeapModel : Option[HeapModel]) {
+  import Symex.toRichTerm
+
   private var values : scala.Seq[CCTerm] =
     scope.allFormalVars.map(v => CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
   private var guard : IFormula = true
   private var touchedGlobalState : Boolean = false
   private var assignedToStruct : Boolean = false
   private var calledFunction : Boolean = false
-
-  private implicit def toRichTerm(expr : CCTerm) :
-  Object{def mapTerm(m:ITerm => ITerm) : CCTerm} = new Object {
-    def mapTerm(m : ITerm => ITerm) : CCTerm =
-      // TODO: type promotion when needed
-      CCTerm.fromTerm(expr.typ cast m(expr.toTerm), expr.typ, expr.srcInfo)
-  }
 
   def addGuard(f : IFormula) : Unit = {
     guard = guard &&& f
