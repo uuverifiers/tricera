@@ -84,7 +84,7 @@ object CPreprocessor {
         throw new Main.MainException(
           "The C preprocessor could not be executed. " +
           "This might be due to cpp not being installed in the system.\n" +
-          "Attempted command: " + cmdLine.mkString(" ")
+          "Attempted command: " + (if (cmdLine != null) cmdLine.mkString(" ") else "N/A")
           )
     }
     preprocessedFile.getAbsolutePath
