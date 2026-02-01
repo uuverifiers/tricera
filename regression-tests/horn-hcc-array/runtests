@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-bounds-line4.c \
        dynamic-loop1.c simple-dynamic-array.c simple-global-array.c \
@@ -25,33 +25,33 @@ ILP32TESTS="ilp32-bug-1.c"
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -heapModel:native "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -heapModel:native "$@" $name 2>&1 | grep -v 'at '
 done
 
 for name in $MEMTRACKTESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -heapModel:native "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -heapModel:native "$@" $name 2>&1 | grep -v 'at '
     # -memtrack can also be added but not required when .yml files are present
 done
 
 for name in $SPLITPROPERTYTESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -splitProperties -heapModel:native "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -splitProperties -heapModel:native "$@" $name 2>&1 | grep -v 'at '
     # -memtrack can also be added but not required when .yml files are present
 done
 
 for name in $NONDETINITESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -forceNondetInit -heapModel:native "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -forceNondetInit -heapModel:native "$@" $name 2>&1 | grep -v 'at '
 done
 
 for name in $ILP32TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -forceNondetInit -heapModel:native -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -forceNondetInit -heapModel:native -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
 done
 
 ## -heapModel:array
@@ -59,25 +59,25 @@ done
 # for name in $TESTS; do
 #     echo
 #     echo $name
-#     $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#     $TRI_CMD -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
 # done
 
 # for name in $MEMTRACKTESTS; do
 #     echo
 #     echo $name
-#     $LAZABS -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#     $TRI_CMD -cex -abstract:off -heapModel:array "$@" $name 2>&1 | grep -v 'at '
 #     # -memtrack can also be added but not required when .yml files are present
 # done
 
 # for name in $SPLITPROPERTYTESTS; do
 #     echo
 #     echo $name
-#     $LAZABS -cex -abstract:off -splitProperties -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#     $TRI_CMD -cex -abstract:off -splitProperties -heapModel:array "$@" $name 2>&1 | grep -v 'at '
 #     # -memtrack can also be added but not required when .yml files are present
 # done
 
 # for name in $NONDETINITESTS; do
 #     echo
 #     echo $name
-#     $LAZABS -cex -abstract:off -forceNondetInit -heapModel:array "$@" $name 2>&1 | grep -v 'at '
+#     $TRI_CMD -cex -abstract:off -forceNondetInit -heapModel:array "$@" $name 2>&1 | grep -v 'at '
 # done

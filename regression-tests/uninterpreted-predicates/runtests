@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="pred-hint.c pred-hint-loop.c \
        unint-pred-simple-false.c unint-pred-simple-true.c \
@@ -10,5 +10,5 @@ TESTS="pred-hint.c pred-hint-loop.c \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done

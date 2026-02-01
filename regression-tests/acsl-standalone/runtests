@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="inc_safe.c \
        inc_unsafe.c \
@@ -24,6 +24,6 @@ TESTS="inc_safe.c \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS "$@" $name -memsafety -reachsafety
+    $TRI_CMD "$@" $name -memsafety -reachsafety
 done
 

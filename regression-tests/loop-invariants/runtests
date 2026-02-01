@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="simple-loop.c  \
        simple-loop-annotate.c  \
@@ -10,5 +10,5 @@ TESTS="simple-loop.c  \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD "$@" $name 2>&1 | grep -v 'at '
 done

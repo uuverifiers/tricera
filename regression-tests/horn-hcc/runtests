@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="test1.hcc test2.hcc test3.hcc test4.hcc \
        test-para2.hcc lazy-eval1.hcc \
@@ -22,7 +22,7 @@ TESTS="test1.hcc test2.hcc test3.hcc test4.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
 # Tests that depend on -forceNondetInit option
@@ -31,7 +31,7 @@ TESTS="inits2-opt.hcc inits4-opt.hcc"
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -forceNondetInit "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -forceNondetInit "$@" $name 2>&1 | grep -v 'at '
 done
 
 # disable cex for tests producing unstable output, likely due to different java versions
@@ -40,7 +40,7 @@ TESTS="test2b.hcc test2c.hcc test-para1.hcc atomic4.hcc"
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
 
@@ -50,7 +50,7 @@ TESTS="test4.hcc test5.hcc test6.hcc test7.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract "$@" $name
+    $TRI_CMD -cex -abstract "$@" $name
 done
 
 TESTS="preprocess-1.c preprocess-2-assert.c preprocess-3-assert.c"
@@ -58,5 +58,5 @@ TESTS="preprocess-1.c preprocess-2-assert.c preprocess-3-assert.c"
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cpp "$@" $name
+    $TRI_CMD -cpp "$@" $name
 done
