@@ -21,6 +21,6 @@ jobs:
     - name: Set up sbt
       uses: sbt/setup-sbt@v1
     - name: Build
-      run: sbt assembly
+      run: sbt nativeImage
     - name: Test
-      run: cd regression-tests; export TERM=xterm; ./runalldirs
+      run: cd regression-tests; export TERM=xterm; ./runalldirs -native
