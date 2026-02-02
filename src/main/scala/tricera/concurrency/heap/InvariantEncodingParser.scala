@@ -49,7 +49,7 @@ object InvariantEncodingParser {
     } catch {
       case e: Throwable =>
         throw new TranslationException(s"Failed to parse encoding file for " +
-                                       s"'$encodingName': ${e.getMessage}")
+                                       s"'$encodingName': $e")
     } finally {
       source.close()
     }
