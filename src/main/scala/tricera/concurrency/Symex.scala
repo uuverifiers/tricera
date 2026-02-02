@@ -339,6 +339,18 @@ class Symex private (context        : SymexContext,
       case _ : CCHeapArrayPointer => true
       case _                      => false
     }
+  private def isHeapPointer(exp : Exp, enclosingFunction : String) =
+    getVar(asLValue(exp), enclosingFunction).typ match {
+      case _ : CCHeapPointer      => true
+      case _ : CCHeapArrayPointer => true
+      case _                      => false
+    }
+
+  private def isIndirection(exp : Exp) : Boolean =
+    exp match {
+      case exp : Epreop => exp.unary_operator_.isInstanceOf[Indirection]
+      case _ => false
+    }
 
   private def getPointerType(ind : Int) = {
     getValue(ind, false).typ match {
@@ -530,11 +542,15 @@ class Symex private (context        : SymexContext,
         case CCTerm(_, _: CCStackPointer, srcInfo, _) =>
           throw new UnsupportedCFragmentException(
             getLineStringShort(srcInfo) + " Only limited support for stack pointers")
-        case CCTerm(IIntLit(value), _, _, _) if isHeapPointer(lhsVal) =>
+        case CCTerm(t@IIntLit(value), _, _, _) if isHeapPointer(lhsVal) =>
           if (value.intValue != 0) {
             throw new TranslationException("Pointer assignment only supports 0 (NULL)")
-          } else CCTerm.fromTerm(
-            context.heap.nullAddr(), CCHeapPointer(context.heap, lhsVal.typ), newValue.srcInfo)
+          } else {
+            val rhsVal : ITerm = if(TriCeraParameters.get.invEncoding.isEmpty)
+                                   context.heap.nullAddr()
+                                 else t
+            CCTerm.fromTerm(rhsVal, CCHeapPointer(context.heap, lhsVal.typ), newValue.srcInfo)
+          }
         case _ => newValue
       }
 
@@ -830,6 +846,16 @@ class Symex private (context        : SymexContext,
       Some(callFunction(call.functionName, call.args, call.sourceInfo))
     case call : HeapModel.FunctionCallWithGetter =>
       val callResult = callFunction(call.functionName, call.args, call.sourceInfo)
+      val canAssumeMemorySafety = TriCeraParameters.get.invEncoding match {
+        case Some(enc) => enc contains "-fun-"
+        case None => false
+      }
+      if(canAssumeMemorySafety ||
+         !context.propertiesToCheck.contains(properties.MemValidDeref)) {
+        val safetyFormula = context.heap.hasUserHeapCtor(
+          callResult.toTerm, context.sortCtorIdMap(call.resultType.toSort))
+        addGuard(safetyFormula)
+      }
       Some(CCTerm.fromTerm(call.getter(callResult.toTerm),
                   call.resultType,
                   call.sourceInfo))
@@ -1359,8 +1385,15 @@ class Symex private (context        : SymexContext,
             case "malloc" | "calloc"           => ArrayLocation.Heap
             case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
           }
+
+          val canAssumeMemorySafety = TriCeraParameters.get.invEncoding match {
+            case Some(enc) => enc contains "-fun-"
+            case None => false
+          }
+
           val objectTerm = CCTerm.fromTerm(name match {
                                     case "calloc"                                 => typ.getZeroInit
+                                    case _ if canAssumeMemorySafety               => typ.getZeroInit
                                     case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
                                   }, typ, srcInfo)
 
@@ -1426,9 +1459,14 @@ class Symex private (context        : SymexContext,
           sizeInt match {
             case Some(1) =>
             // use regular heap model, this is not an array
+              val canAssumeMemorySafety = TriCeraParameters.get.invEncoding match {
+                case Some(enc) => enc contains "-fun-"
+                case None => false
+              }
 
               val objectTerm = CCTerm.fromTerm(name match {
                 case "calloc"                                 => typ.getZeroInit
+                case _ if canAssumeMemorySafety               => typ.getZeroInit
                 case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
               }, typ, srcInfo)
 
@@ -1790,14 +1828,22 @@ class Symex private (context        : SymexContext,
         if (t2.toTerm != IIntLit(IdealInt(0)))
           throw new TranslationException("Pointers can only compared with `null` or `0`. " +
                                          getLineString(t2.srcInfo))
-        else
-          (t1, CCTerm.fromTerm(context.heap.nullAddr(), t1.typ, t1.srcInfo)) // 0 to nullAddr()
+        else {
+          val actualT2 = if(TriCeraParameters.get.invEncoding.isEmpty)
+                           context.heap.nullAddr()
+                         else t2.toTerm
+          (t1, CCTerm.fromTerm(actualT2, t1.typ, t1.srcInfo)) // 0 to nullAddr()
+        }
       case (_: CCArithType, _: CCHeapPointer) =>
         if (t1.toTerm != IIntLit(IdealInt(0)))
           throw new TranslationException("Pointers can only compared with `null` or `0`. " +
                                          getLineString(t2.srcInfo))
-        else
-          (CCTerm.fromTerm(context.heap.nullAddr(), t2.typ, t2.srcInfo), t2) // 0 to nullAddr()
+        else {
+          val actualT1 = if(TriCeraParameters.get.invEncoding.isEmpty)
+                           context.heap.nullAddr()
+                         else t1.toTerm
+          (CCTerm.fromTerm(actualT1, t2.typ, t2.srcInfo), t2) // 0 to nullAddr()
+        }
       case _ => (t1, t2)
     }
   }
