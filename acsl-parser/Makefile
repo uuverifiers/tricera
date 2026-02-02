@@ -23,11 +23,10 @@ JAVA:=java
 JAVA_FLAGS:=
 
 .PHONY: all
-all: download-jars acsl-parser.jar tricera/acsl/Test.class update-reflection
+all: download-jars acsl-parser.jar tricera/acsl/Test.class
 
-.PHONY: update-reflection
-update-reflection:
-	cd ../cc-parser && python3 update_reflection_config.py
+ACSL_PARSER_PKG_PREFIX=tricera.acsl
+
 
 include $(PARSER_BASEDIR)/../cc-parser/download_jars.mk
 
@@ -53,6 +52,7 @@ $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.java: acsl.cf
 	bnfc -p tricera --java --jflex -l acsl.cf
 
 $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class: $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.java
+	python3 $(PARSER_BASEDIR)/../cc-parser/add_source_info.py $(PARSER_BASEDIR) $(ACSL_PARSER_PKG_PREFIX)
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/Absyn/*.java
 
 tricera/acsl/Yylex.java: tricera/acsl/Yylex

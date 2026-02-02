@@ -23,11 +23,10 @@ JAVA:=java
 JAVA_FLAGS:=
 
 .PHONY: all
-all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class update-reflection
+all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class
 
-.PHONY: update-reflection
-update-reflection:
-	python3 $(PARSER_BASEDIR)/update_reflection_config.py
+CC_PARSER_PKG_PREFIX=tricera.concurrency
+
 
 include $(PARSER_BASEDIR)/download_jars.mk
 
@@ -54,6 +53,7 @@ $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java: concu
 	bnfc -p tricera.concurrency --java --jflex -l concurrentC.cf
 
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class: $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java
+	python3 $(PARSER_BASEDIR)/add_source_info.py $(PARSER_BASEDIR) $(CC_PARSER_PKG_PREFIX)
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/Absyn/*.java
 
 tricera/concurrency/concurrent_c/Yylex.java: tricera/concurrency/concurrent_c/Yylex

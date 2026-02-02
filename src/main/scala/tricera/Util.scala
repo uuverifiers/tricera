@@ -104,19 +104,12 @@ object Util {
 
   case class SourceInfo (line : Int, col : Int)
 
-  private def getIntegerField(obj: Any, fieldName: String): Int = {
-    val field =obj.getClass.getDeclaredField(fieldName)
-    field.getInt(obj)
+  def getSourceInfo(obj : tricera.concurrency.SourceInfoProvider) : SourceInfo = {
+    SourceInfo(obj.getLineNum, obj.getColNum)
   }
-  def getSourceInfo(obj : Any) : SourceInfo = {
-    try {
-      val line = getIntegerField(obj, "line_num")
-      val col = getIntegerField(obj, "col_num")
-      SourceInfo(line, col)
-    } catch {
-      case _ : Throwable => throw new Exception("Could not extract line number from " +
-        obj.getClass)
-    }
+
+  def getSourceInfo(obj : tricera.acsl.SourceInfoProvider) : SourceInfo = {
+    SourceInfo(obj.getLineNum, obj.getColNum)
   }
 
   // extract the line number of the last statement
@@ -166,12 +159,18 @@ object Util {
       case e : Emod => getLastSourceInfo(e.exp_2)
       case e : Earray => getLastSourceInfo(e.exp_2)
       case e : Efunkpar => getLastSourceInfo(e.listexp_.getLast)
-      case _ => getSourceInfo(obj)
+      case p : tricera.concurrency.SourceInfoProvider => getSourceInfo(p)
+      case p : tricera.acsl.SourceInfoProvider => getSourceInfo(p)
+      case _ => throw new TranslationException("Could not extract line number from " +
+        obj.getClass)
     }
   }
 
   def getLineString(exp: Exp): String = {
-    val sourceInfo = getSourceInfo(exp)
+    val sourceInfo = exp match {
+      case p: tricera.concurrency.SourceInfoProvider => getSourceInfo(p)
+      case _ => throw new TranslationException("Could not extract line number from " + exp.getClass)
+    }
     getLineString(Some(sourceInfo))
   }
 
