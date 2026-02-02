@@ -126,7 +126,8 @@ settings(
       "--no-fallback",
       "-H:+ReportExceptionStackTraces",
       "--allow-incomplete-classpath",
-      "-H:IncludeResources=tricera/headers/.*"
+      "-H:IncludeResources=tricera/headers/.*",
+      "-H:IncludeResources=tricera/heap/encodings/.*"
     ),
 
     nativeImageAgentMerge := true
