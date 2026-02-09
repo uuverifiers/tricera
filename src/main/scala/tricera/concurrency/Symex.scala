@@ -500,11 +500,14 @@ class Symex private (context        : SymexContext,
     /** The original sub-expression that this AssignmentTarget was created from. */
     def originalExp : Exp
 
-    /** Performs the state update for this type of LHS. */
-    def update(newValue : CCTerm)
+    /** Performs the state update for this type of LHS using the passed RHS.
+     *  Since the RHS may change using information from the LHS, it is also
+     *  returned to be put on the stack (to be returned as the result of the
+     *  statement). */
+    def update(rhsVal         : CCTerm)
               (implicit symex : Symex,
                evalSettings   : EvalSettings,
-               evalCtx        : EvalContext) : Unit
+               evalCtx        : EvalContext) : CCTerm
 
     /** Same as update, but writes a non-deterministic value and also returns that value. */
     def updateNonDet(implicit symex : Symex,
@@ -519,14 +522,14 @@ class Symex private (context        : SymexContext,
 
   private case class SimpleVar(exp : Exp) extends AssignmentTarget {
     override def originalExp : Exp = exp
-    override def update(newValue : CCTerm)
+    override def update(rhsVal         : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
-                        evalCtx        : EvalContext) : Unit = {
+                        evalCtx        : EvalContext) : CCTerm = {
       val lhsVal = eval(exp)(evalSettings, evalCtx.withEvaluatingLHS(true))
       val lhsName = asLValue(exp)
 
-      val actualRhsVal = newValue match {
+      val actualRhsVal = rhsVal match {
         case CCTerm(_, _: CCStackPointer, srcInfo, _) =>
           throw new UnsupportedCFragmentException(
             getLineStringShort(srcInfo) + " Only limited support for stack pointers")
@@ -534,13 +537,13 @@ class Symex private (context        : SymexContext,
           if (value.intValue != 0) {
             throw new TranslationException("Pointer assignment only supports 0 (NULL)")
           } else CCTerm.fromTerm(
-            context.heap.nullAddr(), CCHeapPointer(context.heap, lhsVal.typ), newValue.srcInfo)
-        case _ => newValue
+            context.heap.nullAddr(), CCHeapPointer(context.heap, lhsVal.typ), rhsVal.srcInfo)
+        case _ => rhsVal
       }
 
       val actualLhsTerm = getActualAssignedTerm(lhsVal, actualRhsVal)
 
-      newValue.typ match {
+      rhsVal.typ match {
         case arrayPtr1 : CCHeapArrayPointer =>
           lhsVal.typ match {
             case _ : CCHeapPointer =>
@@ -557,19 +560,23 @@ class Symex private (context        : SymexContext,
         case _ =>
       }
       setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
+      actualRhsVal
     }
   }
 
   private case class StructField(baseExp     : Exp,
                                  path        : List[String],
                                  originalExp : Exp) extends AssignmentTarget {
-    override def update(newValue : CCTerm)
+    override def update(rhsVal         : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
-                        evalCtx        : EvalContext) : Unit = {
-      pushVal(newValue)
+                        evalCtx        : EvalContext) : CCTerm = {
+      val pushedRhs = rhsVal.t match {
+        case IIntLit(_) => false // no need to push
+        case _ => pushVal(rhsVal) ; true
+      }
       val baseLHSVal = eval(baseExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
-      val newValue2 = popVal
+      val rhsVal2 = if (pushedRhs) popVal else rhsVal
       val locTerm = getStaticLocationId(originalExp)
       baseLHSVal.typ match {
         case ptr : CCHeapPointer => // p->f
@@ -582,16 +589,19 @@ class Symex private (context        : SymexContext,
 
           val fieldAddress = getFieldAddress(structType, path)
           val fieldTerm = structType.getFieldTerm(baseLHSVal, fieldAddress)
-          val actualRhsVal = newValue match { // must match on newValue, not newValue2
+          val actualRhsVal = rhsVal2 match {
             case CCTerm(_, _: CCStackPointer, srcInfo, _) =>
               throw new UnsupportedCFragmentException(
-                getLineStringShort(srcInfo) + " Only limited support for stack pointers")
+                getLineStringShort(srcInfo) +
+                " Only limited support for stack pointers")
             case CCTerm(IIntLit(value), _, _, _) if isHeapPointer(fieldTerm) =>
               if (value.intValue != 0) {
-                throw new TranslationException("Pointer assignment only supports 0 (NULL)")
+                throw new TranslationException(
+                  "Pointer assignment only supports 0 (NULL)")
               } else CCTerm.fromTerm(
-                context.heap.nullAddr(), CCHeapPointer(context.heap, fieldTerm.typ), newValue.srcInfo)
-            case _ => newValue2
+                context.heap.nullAddr(),
+                CCHeapPointer(context.heap, fieldTerm.typ), rhsVal2.srcInfo)
+            case _ => rhsVal2
           }
 
           if (structType.sels.size > 1 || path.size > 1) {
@@ -600,33 +610,37 @@ class Symex private (context        : SymexContext,
             pushVal(processHeapResult(heapModel.read(baseLHSVal, values, locTerm)).get)
             maybeOutputClause(baseLHSVal.srcInfo)
             val oldStructTerm = popVal.toTerm // the result of the read
-            val newValue3 = popVal     // the rhs value
+            val rhsVal3 = popVal              // the rhs value
             val curBaseLHSVal = popVal        // the address to write
-            val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue3.toTerm, fieldAddress)
-            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, newValue3.srcInfo))
+            val newStructTerm = structType.setFieldTerm(oldStructTerm, rhsVal3.toTerm, fieldAddress)
+            val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, rhsVal3.srcInfo))
             processHeapResult(heapModel.write(curBaseLHSVal, newStructObj, values, locTerm))
+            rhsVal3
           } else { // path.size == 1 && structType.sels.size == 1
             val newStructTerm = structType.setFieldTerm(actualRhsVal.toTerm)
             val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, actualRhsVal.srcInfo))
             processHeapResult(heapModel.write(baseLHSVal, newStructObj, values, locTerm))
+            actualRhsVal
           }
 
         case structType : CCStruct => // s.f
           val varName = asLValue(baseExp)
           val fieldAddress = getFieldAddress(structType, path)
           val oldStructTerm = baseLHSVal.toTerm
-          val newStructTerm = structType.setFieldTerm(oldStructTerm, newValue2.toTerm, fieldAddress)
-          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, newValue2.srcInfo)
+          val newStructTerm = structType.setFieldTerm(oldStructTerm, rhsVal2.toTerm, fieldAddress)
+          val newStructObj = CCTerm.fromTerm(newStructTerm, structType, rhsVal2.srcInfo)
           setValue(varName, newStructObj, evalCtx.enclosingFunctionName)
           assignedToStruct = true
+          rhsVal2
 
         case _ : CCStackPointer => // ps->f
-          pushVal(newValue2)
+          pushVal(rhsVal2)
           val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
-          val newValue3 = popVal
+          val rhsVal3 = popVal
           val lhsName = asLValue(originalExp)
-          val actualLhsTerm = getActualAssignedTerm(lhsVal, newValue3)
+          val actualLhsTerm = getActualAssignedTerm(lhsVal, rhsVal3)
           setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
+          rhsVal3
 
         case _ => throw new TranslationException(
           "Invalid base for a struct field access: " + baseLHSVal)
@@ -637,29 +651,40 @@ class Symex private (context        : SymexContext,
   private case class ArrayElement(arrayBase   : Exp,
                                   index       : Exp,
                                   originalExp : Exp) extends AssignmentTarget {
-    override def update(newValue : CCTerm)
+    override def update(rhsVal         : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
-                        evalCtx        : EvalContext): Unit = {
-      val arrayTerm = eval(arrayBase)(evalSettings, evalCtx.withEvaluatingLHS(true))
+                        evalCtx        : EvalContext) : CCTerm = {
+      val pushedRhs = rhsVal.t match {
+        case IIntLit(_) => false // no need to push
+        case _ => pushVal(rhsVal) ; true
+      }
+      val arrayTerm = eval(arrayBase)(evalSettings,
+                                      evalCtx.withEvaluatingLHS(true))
       val indexTerm = eval(index)
+      val rhsVal2 = if (pushedRhs) popVal else rhsVal
       arrayTerm.typ match {
         case _ : CCHeapArrayPointer =>
           processHeapResult(heapModel.arrayWrite(
-            arrayTerm, indexTerm, wrapAsHeapObject(newValue), values, getStaticLocationId(originalExp)))
+            arrayTerm, indexTerm, wrapAsHeapObject(rhsVal2),
+            values, getStaticLocationId(originalExp)))
+          rhsVal2
         case _ : CCArray =>
-          val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
+          val lhsVal = eval(originalExp)(evalSettings,
+                                         evalCtx.withEvaluatingLHS(true))
           val newTerm = CCTerm.fromTerm(writeADT(
             lhsVal.toTerm.asInstanceOf[IFunApp],
-            newValue.toTerm, context.heap.userHeapConstructors,
-            context.heap.userHeapSelectors), lhsVal.typ, newValue.srcInfo)
+            rhsVal.toTerm, context.heap.userHeapConstructors,
+            context.heap.userHeapSelectors), lhsVal.typ, rhsVal2.srcInfo)
           val lhsName = asLValue(arrayBase)
           val oldLhsVal = getValue(lhsName, evalCtx.enclosingFunctionName)
           val innerTerm = lhsVal.toTerm.asInstanceOf[IFunApp].args.head
           val actualLhsTerm = getActualAssignedTerm(
-            CCTerm.fromTerm(innerTerm, oldLhsVal.typ, newValue.srcInfo), newTerm)
+            CCTerm.fromTerm(innerTerm, oldLhsVal.typ, rhsVal2.srcInfo), newTerm)
           setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
-        case _ => throw new TranslationException("Attempting array access on a non-array type.")
+          rhsVal2
+        case _ => throw new TranslationException(
+          "Attempting array access on a non-array type.")
       }
     }
   }
@@ -668,35 +693,48 @@ class Symex private (context        : SymexContext,
                                       index       : Exp,
                                       path        : List[String],
                                       originalExp : Exp) extends AssignmentTarget {
-    override def update(newValue : CCTerm)
+    override def update(rhsVal         : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
-                        evalCtx        : EvalContext) : Unit = {
+                        evalCtx        : EvalContext) : CCTerm = {
+      val pushedRhs = rhsVal.t match {
+        case IIntLit(_) => false // no need to push
+        case _ => pushVal(rhsVal) ; true
+      }
       val arrayTerm = eval(arrayBase)(evalSettings, evalCtx.withEvaluatingLHS(true))
       val indexTerm = eval(index)
+      val rhsVal2 = if (pushedRhs) popVal else rhsVal
       arrayTerm.typ match {
         case array : CCArray =>
-          val oldStructTerm = array.arrayTheory.select(arrayTerm.toTerm, indexTerm.toTerm)
+          val oldStructTerm =
+            array.arrayTheory.select(arrayTerm.toTerm, indexTerm.toTerm)
           val structType = array.elementType.asInstanceOf[CCStruct]
           val fieldAddress = getFieldAddress(structType, path)
           val newStructInnerTerm = structType.setFieldTerm(
-            oldStructTerm, newValue.toTerm, fieldAddress)
+            oldStructTerm, rhsVal2.toTerm, fieldAddress)
           val newArrayTerm = array.arrayTheory.store(
             arrayTerm.toTerm, indexTerm.toTerm, newStructInnerTerm)
           val arrayVarName = asLValue(arrayBase)
           setValue(arrayVarName, CCTerm.fromTerm(
-            newArrayTerm, arrayTerm.typ, newValue.srcInfo), evalCtx.enclosingFunctionName)
+            newArrayTerm, arrayTerm.typ, rhsVal.srcInfo),
+                   evalCtx.enclosingFunctionName)
+          rhsVal2
 
         case array : CCHeapArrayPointer =>
           val locTerm = getStaticLocationId(originalExp)
-          val readResult = processHeapResult(heapModel.arrayRead(arrayTerm, indexTerm, values, locTerm)).get
+          val readResult = processHeapResult(
+            heapModel.arrayRead(arrayTerm, indexTerm, values, locTerm)).get
           val oldStructTerm = readResult.toTerm
           val structType = array.elementType.asInstanceOf[CCStruct]
           val fieldAddress = getFieldAddress(structType, path)
-          val newStructInnerTerm = structType.setFieldTerm(oldStructTerm, newValue.toTerm, fieldAddress)
-          val newStructObj = CCTerm.fromTerm(newStructInnerTerm, structType, newValue.srcInfo)
+          val newStructInnerTerm =
+            structType.setFieldTerm(oldStructTerm, rhsVal2.toTerm, fieldAddress)
+          val newStructObj = CCTerm.fromTerm(
+            newStructInnerTerm, structType, rhsVal2.srcInfo)
           processHeapResult(heapModel.arrayWrite(
-            arrayTerm, indexTerm, wrapAsHeapObject(newStructObj), values, locTerm))
+            arrayTerm, indexTerm, wrapAsHeapObject(newStructObj),
+            values, locTerm))
+          rhsVal2
 
         case _ => throw new TranslationException(
           "Field access on an element of a non-struct array.")
@@ -706,19 +744,29 @@ class Symex private (context        : SymexContext,
 
   private case class PointerDeref(pointerExp  : Exp,
                                   originalExp : Exp) extends AssignmentTarget {
-    override def update(newValue : CCTerm)
+    override def update(rhsVal         : CCTerm)
                        (implicit symex : Symex,
                         evalSettings   : EvalSettings,
-                        evalCtx        : EvalContext) : Unit = {
-      val pointerVal = eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
+                        evalCtx        : EvalContext) : CCTerm = {
+      val pushedRhs = rhsVal.t match {
+        case IIntLit(_) => false // no need to push
+        case _ => pushVal(rhsVal) ; true
+      }
+      val pointerVal =
+        eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
+      val rhsVal2 = if (pushedRhs) popVal else rhsVal
       if (isHeapPointer(pointerVal)) {
-        processHeapResult(heapModel.write(pointerVal, wrapAsHeapObject(newValue),
-                                          values, getStaticLocationId(originalExp)))
+        processHeapResult(heapModel.write(
+          pointerVal, wrapAsHeapObject(rhsVal2),
+          values, getStaticLocationId(originalExp)))
+        rhsVal2
       } else {
-        val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
+        val lhsVal = eval(originalExp)(evalSettings,
+                                       evalCtx.withEvaluatingLHS(true))
         val lhsName = asLValue(originalExp)
-        val actualLhsTerm = getActualAssignedTerm(lhsVal, newValue)
+        val actualLhsTerm = getActualAssignedTerm(lhsVal, rhsVal2)
         setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
+        rhsVal2
       }
     }
   }
@@ -738,7 +786,8 @@ class Symex private (context        : SymexContext,
         case ArrayStructField(arrayBase, index, path, _) =>
           ArrayStructField(arrayBase, index, path :+ e.cident_, e)
         case _ => throw new TranslationException(
-          "Invalid expression for '.' member access in " + (context.printer print e))
+          "Invalid expression for '.' member access in " +
+          (context.printer print e))
       }
     case e: Epreop if e.unary_operator_.isInstanceOf[Indirection] =>
       PointerDeref(e.exp_, e)
@@ -899,7 +948,7 @@ class Symex private (context        : SymexContext,
         case _ =>
           evalHelp(exp.exp_2)
           maybeOutputClause(Some(getSourceInfo(exp)))
-          getAssignmentTarget(exp.exp_1).update(topVal)
+          pushVal (getAssignmentTarget(exp.exp_1).update(popVal))
       }
 
     case exp : Eassign => // Compound assignment: '+=', '-=', etc.
@@ -962,9 +1011,8 @@ class Symex private (context        : SymexContext,
                                 lhsE.typ cast2Unsigned rhsE.toTerm)
       }), lhsE.typ, lhsE.srcInfo)
 
-      pushVal(valueToAssign)
       implicit val symex: Symex = this
-      getAssignmentTarget(exp.exp_1).update(valueToAssign)
+      pushVal(getAssignmentTarget(exp.exp_1).update(valueToAssign))
 
     case exp : Econdition => // exp_1 ? exp_2 : exp_3
       val srcInfo = Some(getSourceInfo(exp))
@@ -1118,9 +1166,8 @@ class Symex private (context        : SymexContext,
       evalHelp(expToUpdate)
       maybeOutputClause(Some(getSourceInfo(exp)))
       val newValue = popVal mapTerm (_ + op)
-      pushVal(newValue)
       implicit val symex: Symex = this
-      getAssignmentTarget(expToUpdate).update(newValue)
+      pushVal(getAssignmentTarget(expToUpdate).update(newValue))
 
     case _ : Epostinc | _ : Epostdec =>
       val (expToUpdate, op) = exp match {
@@ -1130,10 +1177,12 @@ class Symex private (context        : SymexContext,
 
       evalHelp(expToUpdate)
       maybeOutputClause(Some(getSourceInfo(exp)))
-      val newValue = topVal mapTerm (_ + op)
       implicit val symex: Symex = this
-      getAssignmentTarget(expToUpdate).update(newValue)
-
+      val updatedPostValue = // the pre-update value is already on the stack
+        getAssignmentTarget(expToUpdate).update(topVal mapTerm (_ + op))
+      // The following should never fail as topVal's type always should
+      // always correctly resolve.
+      assert(updatedPostValue.typ == topVal.typ)
 
     case exp : Epreop =>
       val srcInfo = Some(getSourceInfo(exp))
@@ -1163,7 +1212,7 @@ class Symex private (context        : SymexContext,
               // todo: below type extraction is not safe!
               val heap = context.heap
               val t = addrTerm match {
-                case IFunApp(heap.addressRangeNth, args) => // if nthAddrRange(a, i)
+                case IFunApp(heap.rangeNth, args) => // if nthAddrRange(a, i)
                   val scala.Seq(arrTerm, indTerm) = args
                   // return the addressRange starting from i
                   import heap._

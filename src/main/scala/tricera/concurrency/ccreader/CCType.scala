@@ -57,7 +57,7 @@ abstract sealed class CCType {
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.RangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -80,7 +80,7 @@ abstract sealed class CCType {
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
         case CCArray(_, _, _, s, _)         => s.sort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.RangeSort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
@@ -101,7 +101,7 @@ abstract sealed class CCType {
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.RangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -123,7 +123,7 @@ abstract sealed class CCType {
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
         case CCHeapPointer(heap, _)         => heap.AddressSort
-        case CCHeapArrayPointer(heap, _, _) => heap.AddressRangeSort
+        case CCHeapArrayPointer(heap, _, _) => heap.RangeSort
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
@@ -281,7 +281,7 @@ abstract sealed class CCType {
             }
       structType.ctor(const: _*)
     case CCHeapPointer(heap, _)         => heap.nullAddr()
-    case CCHeapArrayPointer(heap, _, _) => heap.nthAddrRange(0, IIntLit(1))
+    case CCHeapArrayPointer(heap, _, _) => heap.range(0, IIntLit(1))
     case CCArray(_, _, _, arrayTheory, _) => arrayTheory.const(0)
     case _                                => IIntLit(0)
   }

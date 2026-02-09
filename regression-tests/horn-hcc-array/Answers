@@ -2,68 +2,68 @@
 out-of-bounds-line1.c
 Warning: no definition of function "nondet" available
 
--------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------
 Init:
-                main9_3(emptyHeap, nullAddr, AddrRange(nullAddr, 0))                 
--------------------------------------------------------------------------------------
-                                          |                                          
-                                          |                                          
-                                          V                                          
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
--------------------------------------------------------------------------------------
+                         main9_3(heap.empty, heap.null, AddrRange(heap.null, 0))                          
+----------------------------------------------------------------------------------------------------------
+                                                    |                                                     
+                                                    |                                                     
+                                                    V                                                     
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(10))), heap.null, AddrRange(heap.addr(1), 1), 1) 
+----------------------------------------------------------------------------------------------------------
 Final:
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
--------------------------------------------------------------------------------------
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(10))), heap.null, AddrRange(heap.addr(1), 1), 1) 
+----------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(read(@h, AddrRangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
 
 UNSAFE
 
 out-of-bounds-line2.c
 
----------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------
 Init:
- main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
----------------------------------------------------------------------------------------------------
+ main7_3_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, AddrRange(heap.addr(1), 42)) 
+--------------------------------------------------------------------------------------------------------------------
 Final:
- main7_3_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
----------------------------------------------------------------------------------------------------
+ main7_3_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, AddrRange(heap.addr(1), 42)) 
+--------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_Int(read(@h, AddrRangeNth(a:4, 42))). (line:4 col:5) (property: valid-deref)
+false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(a:4, 42))). (line:4 col:5) (property: valid-deref)
 
 UNSAFE
 
 out-of-bounds-line3.c
 Warning: no definition of function "nondet" available
 
--------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------
 Init:
-                main9_3(emptyHeap, nullAddr, AddrRange(nullAddr, 0))                 
--------------------------------------------------------------------------------------
-                                          |                                          
-                                          |                                          
-                                          V                                          
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
--------------------------------------------------------------------------------------
+                         main9_3(heap.empty, heap.null, AddrRange(heap.null, 0))                          
+----------------------------------------------------------------------------------------------------------
+                                                    |                                                     
+                                                    |                                                     
+                                                    V                                                     
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(10))), heap.null, AddrRange(heap.addr(1), 1), 1) 
+----------------------------------------------------------------------------------------------------------
 Final:
- main_2(newHeap(alloc(emptyHeap, O_Int(10))), nullAddr, AddrRange(nthAddr(1), 1), 1) 
--------------------------------------------------------------------------------------
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(10))), heap.null, AddrRange(heap.addr(1), 1), 1) 
+----------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(read(@h, AddrRangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
 
 UNSAFE
 
 out-of-bounds-line4.c
 
--------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------
 Init:
- main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
--------------------------------------------------------------------------------------------------
+ main7_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, AddrRange(heap.addr(1), 42)) 
+------------------------------------------------------------------------------------------------------------------
 Final:
- main7_3(newBatchHeap(batchAlloc(emptyHeap, O_Int(0), 42)), nullAddr, AddrRange(nthAddr(1), 42)) 
--------------------------------------------------------------------------------------------------
+ main7_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, AddrRange(heap.addr(1), 42)) 
+------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3(@h, @v_cleanup, a:4), !is_O_Int(read(@h, AddrRangeNth(a:4, -1*1))). (line:4 col:5) (property: valid-deref)
+false :- main7_3(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(a:4, -1*1))). (line:4 col:5) (property: valid-deref)
 
 UNSAFE
 
@@ -137,15 +137,15 @@ UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 global-struct-array-1.c
 
-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------
 Init:
- main8_3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2)) 
-------------------------------------------------------------------------------------------------------
+ main8_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(10)))), O_S(S(20)))), AddrRange(heap.addr(1), 2)) 
+-------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main8_3(newHeap(alloc(newHeap(alloc(emptyHeap, O_S(S(10)))), O_S(S(20)))), AddrRange(nthAddr(1), 2)) 
-------------------------------------------------------------------------------------------------------
+ main8_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(10)))), O_S(S(20)))), AddrRange(heap.addr(1), 2)) 
+-------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main8_3(@h, sArr:5), S::f(getS(read(@h, AddrRangeNth(sArr:5, 0)))) != 0. (line:8 col:3) (property: user-assertion)
+false :- main8_3(@h, sArr:5), S::f(getS(heap.read(@h, heap.rangeNth(sArr:5, 0)))) != 0. (line:8 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -154,15 +154,15 @@ SAFE
 
 nondet-global-array-explicit-1.c
 
--------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
 Init:
- main5_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
--------------------------------------------------------------------------------------
+ main5_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-----------------------------------------------------------------------------------------------------
 Final:
- main5_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
--------------------------------------------------------------------------------------
+ main5_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-----------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main5_5(@h, a:1), getInt(read(@h, AddrRangeNth(a:1, 0))) != 0. (line:5 col:5) (property: user-assertion)
+false :- main5_5(@h, a:1), getInt(heap.read(@h, heap.rangeNth(a:1, 0))) != 0. (line:5 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -174,20 +174,20 @@ SAFE
 
 nondet-static-array-explicit-1.c
 
----------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 Init:
-  main3_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5))  
----------------------------------------------------------------------------------------
-                                           |                                           
-                                           |                                           
-                                           V                                           
- main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
----------------------------------------------------------------------------------------
+  main3_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5))  
+-------------------------------------------------------------------------------------------------------
+                                                   |                                                   
+                                                   |                                                   
+                                                   V                                                   
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-------------------------------------------------------------------------------------------------------
 Final:
- main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
----------------------------------------------------------------------------------------
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main3_5_1(@h, a:3), getInt(read(@h, AddrRangeNth(a:3, 0))) != 0. (line:6 col:5) (property: user-assertion)
+false :- main3_5_1(@h, a:3), getInt(heap.read(@h, heap.rangeNth(a:3, 0))) != 0. (line:6 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -218,15 +218,15 @@ UNKNOWN (Unsupported C fragment. Pointer arithmetic is currently not supported.)
 
 nondet-global-array-opt-1.c
 
--------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
 Init:
- main7_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
--------------------------------------------------------------------------------------
+ main7_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-----------------------------------------------------------------------------------------------------
 Final:
- main7_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
--------------------------------------------------------------------------------------
+ main7_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-----------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_5(@h, a:3), getInt(read(@h, AddrRangeNth(a:3, 1))) != 0. (line:7 col:5) (property: user-assertion)
+false :- main7_5(@h, a:3), getInt(heap.read(@h, heap.rangeNth(a:3, 1))) != 0. (line:7 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -238,20 +238,20 @@ SAFE
 
 nondet-static-array-opt-1.c
 
----------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 Init:
-  main3_5(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5))  
----------------------------------------------------------------------------------------
-                                           |                                           
-                                           |                                           
-                                           V                                           
- main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
----------------------------------------------------------------------------------------
+  main3_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5))  
+-------------------------------------------------------------------------------------------------------
+                                                   |                                                   
+                                                   |                                                   
+                                                   V                                                   
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-------------------------------------------------------------------------------------------------------
 Final:
- main3_5_1(newBatchHeap(batchAlloc(emptyHeap, O_Int(9), 5)), AddrRange(nthAddr(1), 5)) 
----------------------------------------------------------------------------------------
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(9), 5)), AddrRange(heap.addr(1), 5)) 
+-------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main3_5_1(@h, a:3), getInt(read(@h, AddrRangeNth(a:3, 1))) != 0. (line:6 col:5) (property: user-assertion)
+false :- main3_5_1(@h, a:3), getInt(heap.read(@h, heap.rangeNth(a:3, 1))) != 0. (line:6 col:5) (property: user-assertion)
 
 UNSAFE
 

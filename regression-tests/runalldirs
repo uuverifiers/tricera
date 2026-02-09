@@ -29,7 +29,7 @@ run_test ./rundir horn-hcc-2 "" -assert -dev -t:60
 run_test ./rundir horn-hcc-pointer "" -assert -dev -t:60
 run_test ./rundir horn-hcc-struct "" -assert -dev -t:60
 run_test ./rundir horn-hcc-enum "" -assert -dev -t:60
-run_test ./rundir horn-contracts "" -assert -dev -t:60
+run_test ./rundir horn-contracts "" -assert -dev -solutionReconstruction:wp -t:60
 run_test ./rundir acsl-contracts "" -assertNoVerify -t:60
 run_test ./rundir acsl-standalone "" -m:foo -assertNoVerify -cex -t:60
 run_test ./rundir uninterpreted-predicates "" -assert -dev -t:60
@@ -37,7 +37,7 @@ run_test ./rundir math-arrays  "" -assert -dev -t:60
 run_test ./rundir quantifiers "" -assert -dev -t:60
 run_test ./rundir interpreted-predicates "" -assert -dev -t:60
 run_test ./rundir properties "" -assert -dev -t:60
-run_test ./rundir toh-contract-translation "" -dev -t:60
+run_test ./rundir toh-contract-translation "" -dev -solutionReconstruction:wp -t:60
 run_test ./rundir loop-invariants "" -m:foo -inv -acsl -cex -dev -t:60
 run_test ./rundir at-expressions "" -assert -dev -t:60
 #run_test ./rundir ParametricEncoder ""

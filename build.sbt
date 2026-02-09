@@ -3,11 +3,13 @@ import java.nio.file.{Files, Paths}
 import java.nio.file.attribute.PosixFilePermissions
 import scala.language.postfixOps
 import scala.util.Try
+import sbt._
+import Keys._
 
 lazy val commonSettings = Seq(
     name                 := "TriCera",
     organization         := "uuverifiers",
-    version              := "0.4",
+    version              := "0.4-DEV",
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
@@ -90,32 +92,29 @@ ppWithErrorHandling := {
 }
   (compile in Compile) := ((compile in Compile) dependsOn ppWithErrorHandling).value
 
+lazy val princess = ProjectRef(file("princess"), "root")
+lazy val eldarica = ProjectRef(file("eldarica"), "root")
+lazy val hornConcurrency = ProjectRef(file("horn-concurrency"), "root")
+
 // Actual project
-lazy val root = (project in file(".")).
-  aggregate(ccParser).
-  dependsOn(ccParser).
-  aggregate(acslParser).
-  dependsOn(acslParser).
-  settings(commonSettings: _*).
 
-//
-settings(
-  mainClass in Compile := Some("tricera.Main"),
-  //
-  scalacOptions in Compile ++=
-    List("-feature",
-         "-language:implicitConversions,postfixOps,reflectiveCalls"),
-  scalacOptions += "-opt:_",
-  resolvers += "uuverifiers" at "https://eldarica.org/maven/",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.2.1",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2.1",
-  libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
-  libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.19",
-  libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % "test",
-  excludeDependencies ++= Seq(
-    // exclude java-cup from transitive dependencies, ccParser includes newer version
-    ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup")),
-
+lazy val root = (project in file("."))
+  .settings(commonSettings)
+  .settings(
+    mainClass in Compile := Some("tricera.Main"),
+    scalacOptions in Compile ++=
+    List("-feature", "-language:implicitConversions,postfixOps,reflectiveCalls",
+         "-encoding", "UTF-8"),
+    scalacOptions += "-opt:_",
+    //resolvers += "uuverifiers" at "https://eldarica.org/maven/",
+    libraryDependencies ++= Seq(
+      "net.jcazevedo" %% "moultingyaml" % "0.4.2",
+      "org.scalactic" %% "scalactic" % "3.2.19",
+      "org.scalatest" %% "scalatest" % "3.2.19" % Test
+      ),
+    excludeDependencies ++= Seq(
+      ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup")),
+    
     nativeImageInstalled := false,
     nativeImageVersion := "21.1.0",
     nativeImageJvm := "graalvm-java11",
@@ -130,11 +129,48 @@ settings(
 
     nativeImageAgentMerge := true
   )
- .enablePlugins(NativeImagePlugin)
+  .dependsOn(ccParser, acslParser, eldarica, hornConcurrency)
+  .aggregate(ccParser, acslParser)
+  .enablePlugins(NativeImagePlugin)
 
-// project can also be built by providing dependencies under the lib directory
-// and uncommenting below code to discard clashing transitive dependencies
-//assemblyMergeStrategy in assembly := {
-//  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
-//  case x => MergeStrategy.last
-//}
+// Remove java-cup-11a jars from unmanagedJars in subprojects
+ccParser / Compile / unmanagedJars :=
+(ccParser / Compile / unmanagedJars).value.filterNot(
+  _.data.getName.contains("java-cup-11a"))
+
+lazy val settingsAlreadyOverridden = settingKey[Boolean](
+  "Has overrideSettings command already run?")
+settingsAlreadyOverridden := false
+
+commands += Command.command("overrideSettings") { state =>
+  val extracted = Project.extract(state)
+  if (extracted.get(settingsAlreadyOverridden)) state
+  else {
+    Project.extract(state).appendWithSession(
+      Seq(
+        settingsAlreadyOverridden := true,
+        eldarica / organization        := "uuverifiers-dev",
+        eldarica / version             := "0.0.0-dev",
+        hornConcurrency / organization := "uuverifiers-dev",
+        hornConcurrency / version      := "0.0.0-dev",
+        princess / organization        := "uuverifiers-dev",
+        princess / version             := "0.0.0-dev",
+
+        eldarica / libraryDependencies := (eldarica / libraryDependencies).value.filterNot(_.organization.startsWith("uuverifiers")),
+        hornConcurrency / libraryDependencies := (hornConcurrency / libraryDependencies).value.filterNot(_.organization.startsWith("uuverifiers")),
+        ),
+      state
+      )
+  }
+}
+
+onLoad in Global := {
+  ((s: State) => "overrideSettings" :: s) compose (onLoad in Global).value
+}
+
+assembly / assemblyMergeStrategy := {
+  case PathList("java_cup", "runtime", _ @ _*) => MergeStrategy.first
+  case PathList("META-INF", _ @ _*) => MergeStrategy.discard
+  case x => MergeStrategy.first
+}
+
