@@ -34,14 +34,20 @@ import concurrent_c.Absyn._
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 
+class AstToolsException(message: String) extends Exception(message)
+
 /**
   * This trait defines a function to set the line number of
   * an arbitrary kind of node in an AST.
   */
 trait SetLineNumber {
   def setLineNumber[T](item: T, lineNumber: Int): Unit = {
-    val field =  "line_num"
-    item.getClass.getDeclaredField(field).setInt(item, lineNumber)
+    item match {
+      case p: SourceInfoProvider => p.setLineNum(lineNumber)
+      case _ =>
+        throw new AstToolsException(
+          s"Cannot set line number for ${item.getClass}")
+    }
   }
 }
 
@@ -51,8 +57,12 @@ trait SetLineNumber {
   */
 trait GetLineNumber {
   def getLineNumber[T](item: T): Int = {
-    val field =  "line_num"
-    item.getClass.getDeclaredField(field).getInt(item)
+    item match {
+      case p: SourceInfoProvider => p.getLineNum
+      case _ =>
+        throw new AstToolsException(
+          s"Cannot get line number for ${item.getClass}")
+    }
   }
 }
 

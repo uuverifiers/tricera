@@ -1,11 +1,11 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="simple-math-array-1.hcc struct-array.hcc"
 
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off -mathArrays -sol "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -mathArrays -sol "$@" $name 2>&1 | grep -v 'at '
 done

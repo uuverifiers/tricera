@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="atomic3e.hcc atomic3f.hcc \
        clocks1.hcc clocks2.hcc clocks3.hcc clocks4.hcc clocks5.hcc \
@@ -13,7 +13,7 @@ TESTS="atomic3e.hcc atomic3f.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
 TESTS="hints.hcc hints2.hcc hints3.hcc"
@@ -22,7 +22,7 @@ for opt in -abstract -abstract:manual; do
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex $opt "$@" $name
+    $TRI_CMD -cex $opt "$@" $name
 done
 done
 
@@ -31,9 +31,9 @@ TESTS="interval-propagator-bug.hcc"
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract "$@" $name
+    $TRI_CMD -cex -abstract "$@" $name
 done
 
 echo
 echo hints4.hcc
-$LAZABS -log:1 -abstract:off "$@" hints4.hcc 2>&1 | grep 'SAFE\|CEGAR iterations'
+$TRI_CMD -log:1 -abstract:off "$@" hints4.hcc 2>&1 | grep 'SAFE\|CEGAR iterations'

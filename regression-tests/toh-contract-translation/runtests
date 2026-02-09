@@ -1,7 +1,5 @@
 #!/bin/sh
 
-LAZABS=../../tri
-
 TESTS="get-1.c  \
        incdec-1.c  \
        incdec-2.c  \
@@ -16,5 +14,5 @@ TESTS="get-1.c  \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -acsl "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done

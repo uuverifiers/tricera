@@ -28,6 +28,6 @@ jobs:
     - name: Patch build.sbt files of submodules
       run: ./patch-builds.sh
     - name: Build
-      run: sbt assembly
+      run: sbt nativeImage
     - name: Test
-      run: cd regression-tests; export TERM=xterm; ./runalldirs
+      run: cd regression-tests; export TERM=xterm; ./runalldirs -native

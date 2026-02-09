@@ -113,10 +113,25 @@ lazy val root = (project in file("."))
       "org.scalatest" %% "scalatest" % "3.2.19" % Test
       ),
     excludeDependencies ++= Seq(
-      ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
-    )
+      ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup")),
+    
+    nativeImageInstalled := false,
+    nativeImageVersion := "21.1.0",
+    nativeImageJvm := "graalvm-java11",
+    // point to GraalVM (recommended via env var)
+    //nativeImageGraalHome := file(sys.env("GRAALVM_HOME")).toPath,
+
+    nativeImageOptions ++= Seq(
+      "--no-fallback",
+      "-H:+ReportExceptionStackTraces",
+      "--allow-incomplete-classpath"
+    ),
+
+    nativeImageAgentMerge := true
+  )
   .dependsOn(ccParser, acslParser, eldarica, hornConcurrency)
   .aggregate(ccParser, acslParser)
+  .enablePlugins(NativeImagePlugin)
 
 // Remove java-cup-11a jars from unmanagedJars in subprojects
 ccParser / Compile / unmanagedJars :=

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="valid-free-10-true.c  valid-free-3-true.c   valid-free-7-false.c \
        valid-free-11-true.c  valid-free-4-false.c  valid-free-8-false.c \
@@ -19,5 +19,5 @@ TESTS="valid-free-10-true.c  valid-free-3-true.c   valid-free-7-false.c \
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done

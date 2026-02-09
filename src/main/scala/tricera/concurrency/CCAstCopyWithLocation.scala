@@ -32,10 +32,17 @@ import concurrent_c._
 import concurrent_c.Absyn._
 import tricera.Util.printlnDebug
 
+class AstCopyException(message: String) extends Exception(message)
+
 trait CopyAstLocation {
   def copyLocationInformation[T](src: T, dest: T): T = {
-    for (field <- Set[String]("col_num", "line_num", "offset")) {
-      dest.getClass.getDeclaredField(field).setInt(dest, src.getClass().getDeclaredField(field).getInt(src))
+    (src, dest) match {
+      case (s: SourceInfoProvider, d: SourceInfoProvider) =>
+        d.setLineNum(s.getLineNum)
+        d.setColNum(s.getColNum)
+        d.setOffset(s.getOffset)
+      case _ => throw new AstCopyException(
+        s"Cannot copy location information from $src to $dest")
     }
     dest
   }

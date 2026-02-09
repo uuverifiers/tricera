@@ -25,6 +25,9 @@ JAVA_FLAGS:=
 .PHONY: all
 all: download-jars cc-parser.jar tricera/concurrency/concurrent_c/Test.class
 
+CC_PARSER_PKG_PREFIX=tricera.concurrency
+
+
 include $(PARSER_BASEDIR)/download_jars.mk
 
 cc-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/sym.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Yylex.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/parser.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/AllVisitor.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/AbstractVisitor.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/ComposVisitor.class $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/FoldVisitor.class
@@ -50,6 +53,7 @@ $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java: concu
 	bnfc -p tricera.concurrency --java --jflex -l concurrentC.cf
 
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class: $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java
+	python3 $(PARSER_BASEDIR)/add_source_info.py $(PARSER_BASEDIR) $(CC_PARSER_PKG_PREFIX)
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/Absyn/*.java
 
 tricera/concurrency/concurrent_c/Yylex.java: tricera/concurrency/concurrent_c/Yylex
