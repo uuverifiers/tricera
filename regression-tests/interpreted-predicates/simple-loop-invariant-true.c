@@ -4,20 +4,32 @@ P(int x, int i, int n) {
 }
 $*/
 
+extern int nondet_int();
+
 void main() {
   int n = _;
   assume(n > 0);
   int x = 0;
   int i = 0;
   assert(P(x, i, n));
-  while (i < n) {
-    assume(P(x, i, n)); // does not work without this assumption
+  if (nondet_int()) {
+    assume(P(x, i, n));
     x += n;
     i++;
     assert(P(x, i, n));
+    assume(0);
+  } else {
+    x = _;
+    i = _;
+    n = _;
+    assume(P(x, i, n));
+    assume(!(i < n));
   }
-  assume(P(x, i, n));
 
-  
-  assert(x == n*n);
+  // while (i < n) {
+  //   x += n;
+  //   i++;
+  // }
+
+  assert(x == n * n);
 }

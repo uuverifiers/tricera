@@ -3,6 +3,8 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
+JOBS=1
+
 if [ "$1" = "-native" ]; then
     shift
     export TRI_CMD="$ROOT_DIR/tri-native"
@@ -10,37 +12,76 @@ else
     export TRI_CMD="$ROOT_DIR/tri"
 fi
 
+if [ "$1" = "-j" ]; then
+    shift
+    JOBS="$1"
+    shift
+fi
+
 echo "Using TRI_CMD=$TRI_CMD"
 
 ERRORS=0
 
-run_test() {
-    "$@"
-    if [ $? -ne 0 ]; then
-        ERRORS=1
-    fi
+TESTS=$(cat <<EOF
+horn-hcc-heap "" -assertNoVerify -dev -t:60
+horn-hcc-array "" -assertNoVerify -dev -t:60
+horn-bv "" -assert -dev -t:60
+horn-hcc "" -assert -dev -t:60
+horn-hcc-2 "" -assert -dev -t:60
+horn-hcc-pointer "" -assert -dev -t:60
+horn-hcc-struct "" -assert -dev -t:60
+horn-hcc-enum "" -assert -dev -t:60
+horn-contracts "" -assert -dev -t:60
+acsl-contracts "" -assertNoVerify -t:60
+acsl-standalone "" -m:foo -assertNoVerify -cex -t:60
+uninterpreted-predicates "" -assert -dev -t:60
+math-arrays "" -assert -dev -t:60
+quantifiers "" -assert -dev -t:60
+interpreted-predicates "" -assert -dev -t:60
+properties "" -assert -dev -t:60
+toh-contract-translation "" -dev -t:60
+loop-invariants "" -m:foo -inv -acsl -cex -dev -t:60
+at-expressions "" -assert -dev -t:60
+#ParametricEncoder ""
+EOF
+)
+
+active_jobs=0
+
+echo "$TESTS" | {
+    while read -r line; do
+        case "$line" in \#*|"") continue ;; esac
+        
+        eval "set -- $line"
+        
+        if [ "$JOBS" -gt 1 ]; then
+            while [ "$active_jobs" -ge "$JOBS" ]; do
+                wait -n 2>/dev/null || wait
+                active_jobs=$((active_jobs - 1))
+            done
+            
+            (
+                if out=$(./rundir "$@" 2>&1); then
+                    echo "$out"
+                else
+                    status=$?
+                    echo "$out"
+                    touch "$SCRIPT_DIR/tests_failed"
+                fi
+            ) &
+            active_jobs=$((active_jobs + 1))
+        else
+            ./rundir "$@"
+            [ $? -ne 0 ] && touch "$SCRIPT_DIR/tests_failed"
+        fi
+    done
+    wait
 }
 
-run_test ./rundir horn-hcc-heap "" -assertNoVerify -dev -t:60
-run_test ./rundir horn-hcc-array "" -assertNoVerify -dev -t:60
-run_test ./rundir horn-bv "" -assert -dev -t:60
-run_test ./rundir horn-hcc "" -assert -dev -t:60
-run_test ./rundir horn-hcc-2 "" -assert -dev -t:60
-run_test ./rundir horn-hcc-pointer "" -assert -dev -t:60
-run_test ./rundir horn-hcc-struct "" -assert -dev -t:60
-run_test ./rundir horn-hcc-enum "" -assert -dev -t:60
-run_test ./rundir horn-contracts "" -assert -dev -t:60
-run_test ./rundir acsl-contracts "" -assertNoVerify -t:60
-run_test ./rundir acsl-standalone "" -m:foo -assertNoVerify -cex -t:60
-run_test ./rundir uninterpreted-predicates "" -assert -dev -t:60
-run_test ./rundir math-arrays  "" -assert -dev -t:60
-run_test ./rundir quantifiers "" -assert -dev -t:60
-run_test ./rundir interpreted-predicates "" -assert -dev -t:60
-run_test ./rundir properties "" -assert -dev -t:60
-run_test ./rundir toh-contract-translation "" -dev -t:60
-run_test ./rundir loop-invariants "" -m:foo -inv -acsl -cex -dev -t:60
-run_test ./rundir at-expressions "" -assert -dev -t:60
-#run_test ./rundir ParametricEncoder ""
+if [ -f "$SCRIPT_DIR/tests_failed" ]; then
+    ERRORS=1
+    rm "$SCRIPT_DIR/tests_failed"
+fi
 
 if [ $ERRORS -ne 0 ]; then
     exit 1

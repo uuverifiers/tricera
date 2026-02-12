@@ -3,7 +3,8 @@
 
 
 TESTS="simple-invariant-false.c simple-invariant-true.c \
-       simple-invariant-false.c simple-loop-invariant-true.c"
+       simple-invariant-false.c simple-loop-invariant-true.c \
+       simple-loop-invariant-false.c"
 
 for name in $TESTS; do
     echo
