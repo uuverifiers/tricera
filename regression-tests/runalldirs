@@ -24,7 +24,7 @@ horn-hcc-2 "" -assert -dev -t:60
 horn-hcc-pointer "" -assert -dev -t:60
 horn-hcc-struct "" -assert -dev -t:60
 horn-hcc-enum "" -assert -dev -t:60
-horn-contracts "" -assert -dev -t:60
+horn-contracts "" -assert -dev -t:60 -solutionReconstruction:wp
 acsl-contracts "" -assertNoVerify -t:60
 acsl-standalone "" -m:foo -assertNoVerify -cex -t:60
 uninterpreted-predicates "" -assert -dev -t:60
@@ -32,7 +32,7 @@ math-arrays "" -assert -dev -t:60
 quantifiers "" -assert -dev -t:60
 interpreted-predicates "" -assert -dev -t:60
 properties "" -assert -dev -t:60
-toh-contract-translation "" -dev -t:60
+toh-contract-translation "" -dev -t:60 -solutionReconstruction:wp
 loop-invariants "" -m:foo -inv -acsl -cex -dev -t:60
 at-expressions "" -assert -dev -t:60
 #ParametricEncoder ""

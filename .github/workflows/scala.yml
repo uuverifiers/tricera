@@ -20,13 +20,13 @@ jobs:
 
     - name: Set up GraalVM 25 (for native image)
       uses: graalvm/setup-graalvm@v1
-    - name: Set up JDK 17 (for compilation)
-      uses: actions/setup-java@v4
       with:
         java-version: '25'
         distribution: 'graalvm'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         set-java-home: 'false'
+    - name: Set up JDK 17 (for compilation)
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
