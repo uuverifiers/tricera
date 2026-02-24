@@ -45,6 +45,9 @@
       "type": "ap.basetypes.IdealInt[]"
     },
     {
+      "type": "ap.parser.IAtom[]"
+    },
+    {
       "type": "ap.parser.IFormula[]"
     },
     {
@@ -90,7 +93,55 @@
       ]
     },
     {
+      "type": "ap.types.Sort[]"
+    },
+    {
+      "type": "java.lang.ClassValue"
+    },
+    {
+      "type": "java.lang.Object[][]"
+    },
+    {
       "type": "java.lang.String[]"
+    },
+    {
+      "type": "java.lang.invoke.VarHandle",
+      "methods": [
+        {
+          "name": "releaseFence",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.Field[]"
+    },
+    {
+      "type": "java.lang.reflect.Method[]"
+    },
+    {
+      "type": "java.security.MessageDigestSpi"
+    },
+    {
+      "type": "java.security.SecureRandomParameters"
+    },
+    {
+      "type": "java.sql.Date"
+    },
+    {
+      "type": "java.sql.Timestamp"
+    },
+    {
+      "type": "java.util.HashSet",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "lazabs.horn.bottomup.AbstractState[]"
     },
     {
       "type": "ostrich.OstrichStringTheoryBuilder",
@@ -132,7 +183,58 @@
       "type": "scala.Tuple3[]"
     },
     {
+      "type": "scala.Tuple4[]"
+    },
+    {
+      "type": "scala.collection.Seq[]"
+    },
+    {
+      "type": "scala.collection.immutable.List[]"
+    },
+    {
       "type": "scala.collection.mutable.BitSet[]"
+    },
+    {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en_US"
+    },
+    {
+      "type": "tricera.parsers.YAMLParser$BMOption",
+      "allDeclaredFields": true,
+      "allPublicMethods": true
+    },
+    {
+      "type": "tricera.parsers.YAMLParser$BMPropertyFile",
+      "allDeclaredFields": true,
+      "allPublicMethods": true
+    },
+    {
+      "type": "tricera.parsers.YAMLParser$BenchmarkInfo",
+      "allDeclaredFields": true,
+      "allPublicMethods": true
     }
   ],
   "resources": [

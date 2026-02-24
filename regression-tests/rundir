@@ -6,12 +6,7 @@ if [ -z "$TRI_CMD" ]; then
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-    if [ "$1" = "-native" ]; then
-        shift
-        export TRI_CMD="$ROOT_DIR/tri-native"
-    else
-        export TRI_CMD="$ROOT_DIR/tri"
-    fi
+    export TRI_CMD="$ROOT_DIR/tri"
 fi
 
 DIR="$1"

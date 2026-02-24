@@ -46,7 +46,7 @@ lazy val acslParser = (project in file("acsl-parser")).
 
 lazy val pp = taskKey[Unit]("")
 pp := {
-  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.3/tri-pp")
+  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.2.0/tri-pp-ubuntu-22.04")
   f #> file("tri-pp") !
 }
 
@@ -113,18 +113,16 @@ lazy val root = (project in file("."))
       "org.scalatest" %% "scalatest" % "3.2.19" % Test
       ),
     excludeDependencies ++= Seq(
+    // exclude java-cup from transitive dependencies, ccParser includes newer version
       ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup")),
     
-    nativeImageInstalled := false,
-    nativeImageVersion := "21.1.0",
-    nativeImageJvm := "graalvm-java11",
+    nativeImageInstalled := true,
     // point to GraalVM (recommended via env var)
     //nativeImageGraalHome := file(sys.env("GRAALVM_HOME")).toPath,
 
     nativeImageOptions ++= Seq(
       "--no-fallback",
-      "-H:+ReportExceptionStackTraces",
-      "--allow-incomplete-classpath"
+      "-H:+ReportExceptionStackTraces"
     ),
 
     nativeImageAgentMerge := true

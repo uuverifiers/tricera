@@ -10,7 +10,9 @@ TESTS="enum1.hcc \
        enum-typedef.hcc \
        enum-typedef2.hcc \
        enum-typedef-pointer.hcc \
-       enum-typedef-pointer2.hcc"
+       enum-typedef-pointer2.hcc \
+       enum-typedef-bug-1.hcc \
+       enum-typedef-bug-2.hcc"
 
 for name in $TESTS; do
     echo
