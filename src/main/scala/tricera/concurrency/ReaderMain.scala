@@ -258,9 +258,11 @@ object ReaderMain {
       val runTime = Runtime.getRuntime
       var proc = runTime.exec( "dot -Tpng " + "DotOutput" + currentId + ".dot" + " -o graph" + currentId + ".png" )
       proc.waitFor
-      val imageViewer = if (System.getProperty("os.name") == "Mac OS X") "open -a Preview" else "eog"
-      proc = runTime.exec( imageViewer + " graph" + currentId + ".png")
-      proc.waitFor
+      if (!TriCeraParameters.get.pngNo) {
+        val imageViewer = if (System.getProperty("os.name") == "Mac OS X") "open -a Preview" else "eog"
+        proc = runTime.exec( imageViewer + " graph" + currentId + ".png")
+        proc.waitFor
+      }
       currentId = currentId + 1
     }
     if(TriCeraParameters.get.prettyPrintDot) show

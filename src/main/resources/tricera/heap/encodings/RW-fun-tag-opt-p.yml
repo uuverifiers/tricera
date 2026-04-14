@@ -1,0 +1,103 @@
+# Pointer type
+ptr_type: "int"
+
+# Global variables
+global_decls:
+  - { name: "$allocCtr",  type: "int",          initial_value: "0" }
+  - { name: "$cnt",       type: "unsigned int", initial_value: "0" }
+  - { name: "$last_cnt",  type: "unsigned int", initial_value: "0" }
+  - { name: "$last_loc",  type: "int",          initial_value: "0" }
+  - { name: "$last_addr", type: "unsigned int", initial_value: "0" }
+  - { name: "$last_data", type: "HEAP_TYPE",    initial_value: null }
+  - { name: "$p_g",       type: "int",          initial_value: null } # nondet init value
+
+# Uninterpreted predicates
+predicates:
+  - name: "$R"
+    args:
+      - { name: "cnt",       type: "int" }
+      - { name: "last_cnt",  type: "int" }
+      - { name: "read_loc",  type: "int" }
+      - { name: "write_loc", type: "int" }
+      - { name: "ptr",       type: "int" }
+  - name: "$W"
+    args:
+      - { name: "last_cnt",  type: "int" }
+      - { name: "o",         type: "HEAP_TYPE" }
+      - { name: "write_loc", type: "int" }
+      - { name: "ptr",       type: "int" }
+
+# Initialisation code injected to the start of entry function
+init_code:
+  - "$p_g = _;"
+
+# Heap operations
+read_fn:
+  return_type: "HEAP_TYPE"
+  args:
+    - { name: "p",   type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    HEAP_TYPE result;
+    int t;
+    int l;
+    if ($last_addr == p) {
+      result = $last_data;  
+    } else {
+      ++$cnt;
+      if ($p_g == p) {
+        assert($R($cnt, $last_cnt, loc, $last_loc, p));
+        t = $last_cnt;
+        result = HAVOC_HEAP;
+        assume($W(t, result, $last_loc, p));
+      } else {
+        t = HAVOC_INT;
+        l = HAVOC_INT;
+        assume($R($cnt, t, loc, l, p));
+        result = HAVOC_HEAP;
+        assume($W(t, result, l, p));
+      }
+      $last_addr = p;
+      $last_data = result;
+    }
+    return result;
+
+write_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "e", type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    ++$cnt;
+    assert($W($cnt, e, loc, p));
+    $last_addr = p;
+    $last_data = e;
+    if ($p_g == p) {
+      $last_cnt = $cnt;
+      $last_loc = loc;
+    }
+
+alloc_fn:
+  return_type: "PTR_TYPE"
+  args:
+    - { name: "e",   type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    int p = ++$allocCtr;
+    ++$cnt;
+    assert($W($cnt, e, loc, p));
+    $last_addr = p;
+    $last_data = e;
+    if ($p_g == p) {
+      $last_cnt = $cnt;
+      $last_loc = loc;
+    }
+    return p;
+
+free_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: ""

@@ -235,6 +235,51 @@
       "type": "tricera.parsers.YAMLParser$BenchmarkInfo",
       "allDeclaredFields": true,
       "allPublicMethods": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$Declaration",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$Argument",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$Predicate",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$FunctionDef",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$ParsedEncoding",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
     }
   ],
   "resources": [
@@ -243,6 +288,12 @@
     },
     {
       "glob": "ostrich/UnicodeData.txt"
+    },
+    {
+      "pattern": "tricera/headers/.*\\.h"
+    },
+    {
+      "pattern": "tricera/heap/encodings/.*\\.yml"
     }
   ]
 }

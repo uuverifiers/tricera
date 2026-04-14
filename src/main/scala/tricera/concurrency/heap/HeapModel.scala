@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2025-2026 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,6 +30,7 @@
 package tricera.concurrency.heap
 
 import ap.parser._
+import ap.parser.IExpression.Sort
 import ap.types.MonoSortedIFunction
 import tricera.Util.SourceInfo
 import tricera.acsl.ACSLTranslator
@@ -100,13 +101,33 @@ object HeapModel {
   ) extends HeapOperationResult
 
 
-  def factory(mt        : ModelType.Value,
-              context   : SymexContext,
-              scope     : CCScope,
-              inputVars : scala.Seq[CCVar]) : HeapModelFactory =
+  def factory(mt      : ModelType.Value,
+              context : SymexContext,
+              scope   : CCScope) : HeapModelFactory =
     mt match {
       case ModelType.TheoryOfHeaps => new HeapTheoryFactory(context, scope)
-      case ModelType.Invariants    => ??? // new InvariantsHeapFactory(context, scope)
+      case ModelType.Invariants    => new InvariantEncodingsFactory(context, scope)
+    }
+
+  import ap.theories.{Heap => HeapObj}
+
+  /** Sort for pointer fields in the heap ADT. */
+  def pointerFieldCtorSort(mt: ModelType.Value): HeapObj.CtorArgSort =
+    mt match {
+      case ModelType.Invariants    => HeapObj.OtherSort(Sort.Integer)
+      case ModelType.TheoryOfHeaps => HeapObj.AddrSort
+    }
+
+  /** Address wrapper signatures for the heap ADT Empty for invariant encoding because
+   *  its address sort is int, whose wrappers are added by CCReader.. */
+  def addressWrapperSignatures(mt: ModelType.Value, objSort: HeapObj.ADTSort)
+  : List[(String, HeapObj.CtorSignature)] =
+    mt match {
+      case ModelType.Invariants    => Nil
+      case ModelType.TheoryOfHeaps => List(
+        ("O_Addr", HeapObj.CtorSignature(List(("getAddr", HeapObj.AddrSort)), objSort)),
+        ("O_AddrRange", HeapObj.CtorSignature(List(("getAddrRange", HeapObj.AddrRangeSort)), objSort))
+      )
     }
 
 }
@@ -115,20 +136,24 @@ object HeapModel {
 trait HeapModelFactory {
   import HeapModel._
 
+  /** Create pointer/array pointer types matching this model's encoding. */
+  def makePointer(typ: CCType): CCHeapPointer
+  def makeArrayPointer(elementType: CCType,
+                       arrayLocation: ArrayLocation.Value): CCHeapArrayPointer
+
   /** What CCVar declarations this model needs from the caller */
   def requiredVars : scala.Seq[VarSpec]
 
   /** What CCPredicate declarations this model needs from the caller */
-  def requiredPreds : scala.Seq[PredSpec]
+  def requiredPreds(inputVars : scala.Seq[CCVar]) : scala.Seq[PredSpec]
 
   /** Build the concrete model using the resources the caller allocated */
   def apply(resources: Resources): HeapModel
 
-  /** Function definitions provided by the model (name, def) */
-  def getFunctionsToInject : Map[String, Function_def]
-
-  /** Initialization code to be added to the top of the entry method */
-  def getInitCodeToInject: scala.Seq[String]
+  /** Code to inject: function definitions and init code to add to 
+      the top of the entry method */
+  def getCodeToInject(inputVars : scala.Seq[CCVar])
+  : (Map[String, Function_def], scala.Seq[String])
 }
 
 /**
@@ -138,6 +163,19 @@ trait HeapModelFactory {
  */
 trait HeapModel {
   import HeapModel._
+
+  def addressSort         : Sort
+  def addressRangeSort    : Sort
+  def objectSort          : Sort
+  def heapSort            : Sort
+  def nullAddr()          : ITerm
+  def zeroInitAddrRange() : ITerm
+
+  def makePointer(typ : CCType) : CCHeapPointer =
+    CCHeapPointer(addressSort, nullAddr(), typ)
+  def makeArrayPointer(elementType   : CCType,
+                       arrayLocation : ArrayLocation.Value) : CCHeapArrayPointer =
+    CCHeapArrayPointer(addressRangeSort, zeroInitAddrRange(), elementType, arrayLocation)
 
   def read (p : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult
   def write(p : CCTerm, o : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult

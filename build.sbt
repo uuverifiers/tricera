@@ -115,14 +115,31 @@ lazy val root = (project in file("."))
     excludeDependencies ++= Seq(
     // exclude java-cup from transitive dependencies, ccParser includes newer version
       ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup")),
-    
+
+    Compile / resourceGenerators += Def.task {
+      val encodingsDir = (Compile / resourceDirectory).value / "tricera" / "heap" / "encodings"
+      val listFile = (Compile / resourceManaged).value / "tricera" / "heap" / "encodings" / "encodings.list"
+      if (encodingsDir.isDirectory) {
+        val names = encodingsDir.listFiles()
+          .filter(_.getName.endsWith(".yml"))
+          .map(_.getName.stripSuffix(".yml"))
+          .sorted
+          .mkString("\n")
+        IO.write(listFile, names)
+        Seq(listFile)
+      } else Seq.empty
+    }.taskValue,
+
     nativeImageInstalled := true,
     // point to GraalVM (recommended via env var)
     //nativeImageGraalHome := file(sys.env("GRAALVM_HOME")).toPath,
 
     nativeImageOptions ++= Seq(
       "--no-fallback",
-      "-H:+ReportExceptionStackTraces"
+      "-H:+ReportExceptionStackTraces",
+      "-H:IncludeResources=tricera/headers/.*\\.h",
+      "-H:IncludeResources=tricera/heap/encodings/.*\\.yml",
+      "-H:IncludeResources=tricera/heap/encodings/encodings\\.list"
     ),
 
     nativeImageAgentMerge := true

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2026 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -537,7 +537,7 @@ class Symex private (context        : SymexContext,
           if (value.intValue != 0) {
             throw new TranslationException("Pointer assignment only supports 0 (NULL)")
           } else CCTerm.fromTerm(
-            context.heap.nullAddr(), CCHeapPointer(context.heap, lhsVal.typ), rhsVal.srcInfo)
+            heapModel.nullAddr(), heapModel.makePointer(lhsVal.typ), rhsVal.srcInfo)
         case _ => rhsVal
       }
 
@@ -599,8 +599,8 @@ class Symex private (context        : SymexContext,
                 throw new TranslationException(
                   "Pointer assignment only supports 0 (NULL)")
               } else CCTerm.fromTerm(
-                context.heap.nullAddr(),
-                CCHeapPointer(context.heap, fieldTerm.typ), rhsVal2.srcInfo)
+                heapModel.nullAddr(),
+                heapModel.makePointer(fieldTerm.typ), rhsVal2.srcInfo)
             case _ => rhsVal2
           }
 
@@ -614,13 +614,19 @@ class Symex private (context        : SymexContext,
             val curBaseLHSVal = popVal        // the address to write
             val newStructTerm = structType.setFieldTerm(oldStructTerm, rhsVal3.toTerm, fieldAddress)
             val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, rhsVal3.srcInfo))
+            // heapModel.write may emit a clause boundary (e.g., via function
+            // call in the invariant encoding). Push rhsVal3 before the write
+            // and pop it after, so we return the rebound post-clause version.
+            pushVal(rhsVal3)
             processHeapResult(heapModel.write(curBaseLHSVal, newStructObj, values, locTerm))
-            rhsVal3
+            popVal
           } else { // path.size == 1 && structType.sels.size == 1
             val newStructTerm = structType.setFieldTerm(actualRhsVal.toTerm)
             val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(newStructTerm, structType, actualRhsVal.srcInfo))
+            // heapModel.write may emit a clause boundary (see above).
+            pushVal(actualRhsVal)
             processHeapResult(heapModel.write(baseLHSVal, newStructObj, values, locTerm))
-            actualRhsVal
+            popVal
           }
 
         case structType : CCStruct => // s.f
@@ -754,13 +760,18 @@ class Symex private (context        : SymexContext,
       }
       val pointerVal =
         eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
-      val rhsVal2 = if (pushedRhs) popVal else rhsVal
       if (isHeapPointer(pointerVal)) {
+        // heapModel.write may emit a clause boundary (e.g., via function call
+        // in the invariant encoding). Use topVal (= pushed rhsVal) for the
+        // write and popVal after, so the returned value is the rebound
+        // post-clause version.
+        val writeVal = if (pushedRhs) topVal else rhsVal
         processHeapResult(heapModel.write(
-          pointerVal, wrapAsHeapObject(rhsVal2),
+          pointerVal, wrapAsHeapObject(writeVal),
           values, getStaticLocationId(originalExp)))
-        rhsVal2
+        if (pushedRhs) popVal else rhsVal
       } else {
+        val rhsVal2 = if (pushedRhs) popVal else rhsVal
         val lhsVal = eval(originalExp)(evalSettings,
                                        evalCtx.withEvaluatingLHS(true))
         val lhsName = asLValue(originalExp)
@@ -876,9 +887,16 @@ class Symex private (context        : SymexContext,
       assumptions.foreach(a => addGuard(a.toFormula))
       returnValue
     case call : HeapModel.FunctionCall =>
-      Some(callFunction(call.functionName, call.args, call.sourceInfo))
+      val result = callFunction(call.functionName, call.args, call.sourceInfo)
+      if (call.resultType == CCVoid) Some(result)
+      else Some(CCTerm.fromTerm(result.toTerm, call.resultType, call.sourceInfo))
     case call : HeapModel.FunctionCallWithGetter =>
       val callResult = callFunction(call.functionName, call.args, call.sourceInfo)
+      if(!context.propertiesToCheck.contains(properties.MemValidDeref)) {
+        val safetyFormula = context.heap.hasUserHeapCtor(
+          callResult.toTerm, context.sortCtorIdMap(call.resultType.toSort))
+        addGuard(safetyFormula)
+      }
       Some(CCTerm.fromTerm(call.getter(callResult.toTerm),
                   call.resultType,
                   call.sourceInfo))
@@ -1227,7 +1245,7 @@ class Symex private (context        : SymexContext,
                 case _ =>
                   CCTerm.fromTerm(
                     addrTerm,
-                    CCHeapPointer(context.heap,
+                    heapModel.makePointer(
                                   getValue(addrTerm.asInstanceOf[IConstant].c.name,
                                            evalCtx.enclosingFunctionName).typ), srcInfo)
               }
@@ -1409,9 +1427,9 @@ class Symex private (context        : SymexContext,
             case "alloca" | "__builtin_alloca" => ArrayLocation.Stack
           }
           val objectTerm = CCTerm.fromTerm(name match {
-                                    case "calloc"                                 => typ.getZeroInit
-                                    case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
-                                  }, typ, srcInfo)
+            case "calloc"                                 => typ.getZeroInit
+            case "malloc" | "alloca" | "__builtin_alloca" => typ.getNonDet
+          }, typ, srcInfo)
 
           allocSize match {
             case CCTerm(IIntLit(IdealInt(1)), typ, _, _)
@@ -1839,14 +1857,16 @@ class Symex private (context        : SymexContext,
         if (t2.toTerm != IIntLit(IdealInt(0)))
           throw new TranslationException("Pointers can only compared with `null` or `0`. " +
                                          getLineString(t2.srcInfo))
-        else
-          (t1, CCTerm.fromTerm(context.heap.nullAddr(), t1.typ, t1.srcInfo)) // 0 to nullAddr()
+        else {
+          (t1, CCTerm.fromTerm(heapModel.nullAddr(), t1.typ, t1.srcInfo))
+        }
       case (_: CCArithType, _: CCHeapPointer) =>
         if (t1.toTerm != IIntLit(IdealInt(0)))
           throw new TranslationException("Pointers can only compared with `null` or `0`. " +
                                          getLineString(t2.srcInfo))
-        else
-          (CCTerm.fromTerm(context.heap.nullAddr(), t2.typ, t2.srcInfo), t2) // 0 to nullAddr()
+        else {
+          (CCTerm.fromTerm(heapModel.nullAddr(), t2.typ, t2.srcInfo), t2)
+        }
       case _ => (t1, t2)
     }
   }

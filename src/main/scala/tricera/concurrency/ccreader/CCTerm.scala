@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2023-2026 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -34,6 +34,7 @@ import tricera.Util.SourceInfo
 import CCExceptions._
 import ap.parser.IExpression._
 import tricera.concurrency.CCReader
+import tricera.params.TriCeraParameters
 
 case class CCTerm(t               : ITerm,
                   typ             : CCType,
@@ -44,7 +45,7 @@ case class CCTerm(t               : ITerm,
     t match {
       case IIntLit(value) => !value.isZero
       case t if typ.isInstanceOf[CCHeapPointer] =>
-        !IExpression.Eq(t, typ.asInstanceOf[CCHeapPointer].heap.nullAddr())
+        !IExpression.Eq(t, typ.asInstanceOf[CCHeapPointer].nullAddr)
       case t if typ == CCBool => t === ap.theories.ADT.BoolADT.True
       case t => !IExpression.eqZero(t)
     }
@@ -62,15 +63,12 @@ case class CCTerm(t               : ITerm,
           throw NeedsTimeException
         CCTerm.fromTerm(CCReader.GTU.term * toTerm, CCDuration, srcInfo)
       }
-      // newType is actually heap pointer
-      //case (oldType : CCHeapPointer, newType : CCStackPointer) =>
-      //  newType.typ cast t
-      case (_, CCVoid) => this //
+      case (_, CCVoid) => this
       // todo: do not do anything for casts to void?
-      case (oldType: CCArithType, newType: CCHeapPointer) =>
+      case (_: CCArithType, newType: CCHeapPointer) =>
         toTerm match {
           case lit: IIntLit if lit.value.intValue == 0 =>
-            CCTerm.fromTerm(newType.heap.nullAddr(), newType, srcInfo) //newType cast t
+            CCTerm.fromTerm(newType.nullAddr, newType, srcInfo)
           case _ =>
             throw new UnsupportedCastException(
               "pointer arithmetic is not allowed, cannot convert " + this + " to" +

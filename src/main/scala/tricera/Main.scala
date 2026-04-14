@@ -1,5 +1,5 @@
 /**
-  * Copyright (c) 2011-2025 Zafer Esen, Hossein Hojjat, Philipp Ruemmer.
+  * Copyright (c) 2011-2026 Zafer Esen, Philipp Ruemmer.
   * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,7 @@
 package tricera
 
 import java.io.{FileOutputStream, PrintStream}
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Paths, StandardCopyOption}
 import sys.process._
 import ap.parser.IExpression.{ConstantTerm, Predicate}
 import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
@@ -75,6 +75,28 @@ object Main {
     var remainingTimeout : Option[Int] = params.TriCeraParameters.get.timeout
 
     val (propertiesToCheck, propertyToExpected) = collectProperties
+
+    // Resolve default invariant encoding.
+    params.TriCeraParameters.get.invEncoding match {
+      case Some("default") =>
+        params.TriCeraParameters.get.invEncoding = Some("RW-fun-tag-opt-p")
+      case _ => // user-specified encoding or no encoding
+    }
+
+    // Invariant-based heap encoding only supports reachability checking.
+    params.TriCeraParameters.get.invEncoding match {
+      case Some(_) =>
+        val memProps = Set[properties.Property](
+          properties.MemValidTrack, properties.MemValidFree,
+          properties.MemValidDeref, properties.MemValidCleanup
+        ).intersect(propertiesToCheck)
+        if (memProps.nonEmpty)
+          throw new MainException(
+            "Invariant-based heap encoding (currently) does not support memory safety " +
+            "checking. Unsupported properties: " +
+            memProps.mkString(", ") + ".")
+      case None =>
+    }
 
     /**
      * @todo Below implementation can be improved a lot - there is no
@@ -272,8 +294,8 @@ class Main (args: Array[String]) {
 
     // C preprocessor (cpp)
     val cppFileName =
-      if(params.cPreprocessor)
-        CPreprocessor(fileName, includeSystemHeaders = true, params.arithMode)
+      if(params.cPreprocessor || params.cPreprocessorLight)
+        CPreprocessor(fileName, includeSystemHeaders = params.cPreprocessor, params.arithMode)
       else fileName
 
     // TriCera preprocessor (tri-pp)
@@ -295,7 +317,8 @@ class Main (args: Array[String]) {
         preprocessedFile.getAbsolutePath,
         displayWarnings = logPPLevel == 2,
         quiet = logPPLevel == 0,
-        entryFunction = TriCeraParameters.get.funcName)
+        entryFunction = TriCeraParameters.get.funcName,
+        determinize = TriCeraParameters.get.determinizeInput)
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)

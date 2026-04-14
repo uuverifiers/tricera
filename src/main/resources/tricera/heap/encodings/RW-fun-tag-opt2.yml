@@ -1,0 +1,130 @@
+# Pointer type
+ptr_type: "int"
+
+# Global variables
+global_decls:
+  - { name: "$allocCtr",  type: "int",          initial_value: "0" }
+  - { name: "$cnt",       type: "unsigned int", initial_value: "0" }
+  - { name: "$last_cnt",  type: "unsigned int", initial_value: "0" }
+  - { name: "$last_loc",  type: "int",          initial_value: "0" }
+  - { name: "$last_addr", type: "unsigned int", initial_value: "0" }
+  - { name: "$last_data", type: "HEAP_TYPE",    initial_value: null }
+  - { name: "$p_g",       type: "int",          initial_value: null } # nondet init value
+  - { name: "$dirty",   type: "int",          initial_value: "0" }
+  - { name: "$last_wt_loc",  type: "int",          initial_value: "-10" }
+  - { name: "$last_wt_cnt",  type: "int",          initial_value: "0" }
+
+# Uninterpreted predicates
+predicates:
+  - name: "$R"
+    args:
+      - { name: "cnt",       type: "int" }
+      - { name: "last_cnt",  type: "int" }
+      - { name: "read_loc",  type: "int" }
+      - { name: "write_loc", type: "int" }
+  - name: "$W"
+    args:
+      - { name: "last_cnt",  type: "int" }
+      - { name: "o",         type: "HEAP_TYPE" }
+      - { name: "write_loc", type: "int" }
+
+# Initialisation code injected to the start of entry function
+init_code:
+  - "$p_g = _;"
+
+# Heap operations
+read_fn:
+  return_type: "HEAP_TYPE"
+  args:
+    - { name: "p",   type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    HEAP_TYPE result;
+    int t;
+    int l;
+    if ($last_addr == p) {
+      result = $last_data;
+    } else {
+      if($dirty) { // cache is dirty, flush it
+        assert($W($last_wt_cnt, $last_data, $last_wt_loc));
+        if ($p_g == $last_addr) {
+          $last_cnt = $last_wt_cnt;
+          $last_loc = $last_wt_loc;
+        }
+        $dirty = 0;
+      }
+      int t;
+      ++$cnt;
+      if ($p_g == p) {
+        assert($R($cnt, $last_cnt, loc, $last_loc));
+        result = HAVOC_HEAP;
+        assume($W($last_cnt, result, $last_loc));
+      } else {
+        t = HAVOC_INT;
+        l = HAVOC_INT;
+        assume($R($cnt, t, loc, l));
+        result = HAVOC_HEAP;
+        assume($W(t, result, l));
+      }
+      $last_addr = p;
+      $last_data = result;
+    }
+    return result;
+
+write_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "e", type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    if (p == $last_addr) {
+      $last_data = e;
+      ++$cnt;
+      $last_wt_loc = loc;
+      $last_wt_cnt = $cnt;
+      $dirty = 1;
+    } else {
+      if($dirty) { // cache has data, flush it
+        assert($W($last_wt_cnt, $last_data, $last_wt_loc));
+        if ($p_g == $last_addr) {
+          $last_cnt = $last_wt_cnt;
+          $last_loc = $last_wt_loc;
+        }
+      }
+      ++$cnt;
+      $last_addr = p;
+      $last_data = e;
+      $last_wt_loc = loc;
+      $last_wt_cnt = $cnt;
+      $dirty = 1;
+    }
+
+alloc_fn:
+  return_type: "PTR_TYPE"
+  args:
+    - { name: "e",   type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    if($dirty) { // cache has data, flush it
+      assert($W($last_wt_cnt, $last_data, $last_wt_loc));
+      if ($p_g == $last_addr) {
+        $last_cnt = $last_wt_cnt;
+        $last_loc = $last_wt_loc;
+      }
+    }
+    int p = ++$allocCtr;
+    ++$cnt;
+    $last_addr = p;
+    $last_data = e;
+    $last_wt_loc = loc;
+    $last_wt_cnt = $cnt;
+    $dirty = 1;
+    return p;
+
+free_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: ""

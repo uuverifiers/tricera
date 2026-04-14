@@ -1,0 +1,69 @@
+# Pointer type
+ptr_type: "int"
+
+# Global variables
+global_decls:
+  - { name: "$allocCtr",  type: "int",          initial_value: "0" }
+  - { name: "$cnt",       type: "unsigned int", initial_value: "0" }
+  - { name: "$last",      type: "HEAP_TYPE",    initial_value: null }
+  - { name: "$p_g",       type: "int",          initial_value: null } # nondet init value
+
+# Uninterpreted predicates
+predicates:
+  - name: "$R"
+    args:
+      - { name: "cnt",       type: "int" }
+      - { name: "last",      type: "HEAP_TYPE" }
+
+# Initialisation code injected to the start of entry function
+init_code:
+  - "$p_g = _;"
+  - "$last = $HEAP_TYPE_DEFAULT();"
+
+# Heap operations
+read_fn:
+  return_type: "HEAP_TYPE"
+  args:
+    - { name: "p",   type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    HEAP_TYPE result;
+    ++$cnt;
+    if ($p_g == p) {
+      assert($R($cnt, $last));
+      result = $last;
+    } else {
+      result = HAVOC_HEAP;
+      assume($R($cnt, result));
+    }
+    return result;
+
+write_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "e", type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    ++$cnt;
+    if (0 < p && p <= $allocCtr) {
+      if ($p_g == p) { $last = e; }
+    }
+
+alloc_fn:
+  return_type: "PTR_TYPE"
+  args:
+    - { name: "e",   type: "HEAP_TYPE" }
+    - { name: "loc", type: "int" }
+  body: |
+    int p = ++$allocCtr;
+    ++$cnt;
+    if ($p_g == p) { $last = e; }
+    return p;
+
+free_fn:
+  return_type: "void"
+  args:
+    - { name: "p", type: "PTR_TYPE" }
+    - { name: "loc", type: "int" }
+  body: ""

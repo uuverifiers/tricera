@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2025 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2015-2026 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -76,8 +76,13 @@ object CCReader {
             propertiesToCheck : Set[properties.Property] = Set(
               properties.Reachability))
   : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
+    val programText = new java.util.Scanner(input).useDelimiter("\\A").next()
+    input.close() // Close the original reader.
+    val inputVarNames = ParseUtil.parseInputComment(programText) // for the invariant encoding heap model
+    val programReader = new java.io.StringReader(programText)
+
     def entry(parser : concurrent_c.parser) = parser.pProgram
-    val prog = parseWithEntry(input, entry _)
+    val prog = parseWithEntry(programReader, entry _)
     val atCallTransformedProg = CCAstAtExpressionTransformer.transform(prog)
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
@@ -87,7 +92,7 @@ object CCReader {
     while (reader == null)
       try {
         reader = new CCReader(
-          transformedCallsProg, entryFunction, propertiesToCheck, scala.Seq())
+          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -485,6 +490,7 @@ class CCReader private (prog              : Program,
   }
 
   private var atomicMode = false
+  private var evaluatingInjectedCode = false
 
   private def inAtomicMode[A](comp : => A) : A = {
       val oldAtomicMode = atomicMode
@@ -492,6 +498,12 @@ class CCReader private (prog              : Program,
       val res = comp
       atomicMode = oldAtomicMode
       res
+  }
+
+  private def inInjectedCode[A](comp : => A) : A = {
+    val old = evaluatingInjectedCode
+    evaluatingInjectedCode = true
+    try { comp } finally { evaluatingInjectedCode = old }
   }
 
   private var prefix : String = ""
@@ -595,55 +607,56 @@ class CCReader private (prog              : Program,
       case _ =>
     }
 
-  import ap.theories.{Heap => HeapObj}
+  import ap.theories.{Heap => HeapTheoryObject}
 
   def defObjCtor(objectCtors : scala.Seq[IFunction]) : ITerm = objectCtors.last()
-  val ObjSort = HeapObj.ADTSort(0)
+  val ObjSort = HeapTheoryObject.ADTSort(0)
 
-  val structCtorSignatures : List[(String, HeapObj.CtorSignature)] =
+  private val heapModelType : HeapModel.ModelType.Value =
+    if (TriCeraParameters.get.invEncoding.nonEmpty)
+      HeapModel.ModelType.Invariants
+    else
+      HeapModel.ModelType.TheoryOfHeaps
+
+  val structCtorSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
     (for ((struct, i) <- structInfos zipWithIndex) yield {
       if(struct.fieldInfos isEmpty) warn(
         s"Struct ${struct.name} was declared, but never defined, " +
           "or it has no fields.")
-      val ADTFieldList : scala.Seq[(String, HeapObj.CtorArgSort)] =
+      val ADTFieldList : scala.Seq[(String, HeapTheoryObject.CtorArgSort)] =
         for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
               struct.fieldInfos) yield
           (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
-            if (ptrDepth > 0) Heap.AddrSort
-            else { fieldType match {
-              case Left(ind) => HeapObj.ADTSort(ind + 1)
+            if (ptrDepth > 0) {
+              HeapModel.pointerFieldCtorSort(heapModelType)
+            } else { fieldType match {
+              case Left(ind) => HeapTheoryObject.ADTSort(ind + 1)
               case Right(typ) =>
                 typ match {
-                  case _ : CCHeapArrayPointer => HeapObj.AddrRangeSort
-                  case _ => HeapObj.OtherSort(typ.toSort)
+                  case _ : CCHeapArrayPointer => HeapTheoryObject.AddrRangeSort
+                  case _ => HeapTheoryObject.OtherSort(typ.toSort)
                 }
             }
             })
-      (struct.name, HeapObj.CtorSignature(ADTFieldList, HeapObj.ADTSort(i+1)))
+      (struct.name, HeapTheoryObject.CtorSignature(ADTFieldList, HeapTheoryObject.ADTSort(i+1)))
     }).toList
 
   // todo: only add types that exist in the program - should also add machine arithmetic types
-  val predefSignatures = List(
-    ("O_Int", HeapObj.CtorSignature(
-      List(("getInt", HeapObj.OtherSort(CCInt.toSort))), ObjSort)),
-    ("O_UInt", HeapObj.CtorSignature(
-      List(("getUInt", HeapObj.OtherSort(CCUInt.toSort))), ObjSort)),
-    ("O_Addr", HeapObj.CtorSignature(
-      List(("getAddr", HeapObj.AddrSort)), ObjSort)),
-    ("O_AddrRange", HeapObj.CtorSignature(
-      List(("getAddrRange", HeapObj.AddrRangeSort)), ObjSort))
-  )
-  // Make sure that we have one object sort per sort
-  private val ctorObjSorts =
-    predefSignatures.flatMap(s => s._2.arguments.map(_._2))
-  assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
+  val predefSignatures =
+    List(("O_Int", HeapTheoryObject.CtorSignature(List(("getInt", HeapTheoryObject.OtherSort(CCInt.toSort))), ObjSort)),
+         ("O_UInt", HeapTheoryObject.CtorSignature(List(("getUInt", HeapTheoryObject.OtherSort(CCUInt.toSort))), ObjSort))) ++
+    HeapModel.addressWrapperSignatures(heapModelType, ObjSort)
+// Make sure that we have one object sort per sort
+private val ctorObjSorts =
+  predefSignatures.flatMap(s => s._2.arguments.map(_._2))
+assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
 
-  val wrapperSignatures : List[(String, HeapObj.CtorSignature)] =
+  val wrapperSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
     predefSignatures ++
       (for ((name, signature) <- structCtorSignatures) yield {
         ("O_" + name,
-          HeapObj.CtorSignature(List(("get" + name, signature.result)), ObjSort))
+          HeapTheoryObject.CtorSignature(List(("get" + name, signature.result)), ObjSort))
       })
 
   // TODO: use ADT/Heap depending on HeapModel, and move heap theory declaration
@@ -653,13 +666,13 @@ class CCReader private (prog              : Program,
       new NativeHeap("Heap", "Addr", "AddrRange", ObjSort,
                      List("HeapObject") ++ structCtorSignatures.unzip._1,
                      wrapperSignatures ++ structCtorSignatures ++
-                     List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+                     List(("defObj", HeapTheoryObject.CtorSignature(List(), ObjSort))),
                      defObjCtor)
     case TriCeraParameters.ArrayHeap =>
       new ArrayHeap("Heap", "Addr", "AddrRange", ObjSort,
                     List("HeapObject") ++ structCtorSignatures.unzip._1,
                     wrapperSignatures ++ structCtorSignatures ++
-                    List(("defObj", HeapObj.CtorSignature(List(), ObjSort))),
+                    List(("defObj", HeapTheoryObject.CtorSignature(List(), ObjSort))),
                     defObjCtor)
   }
 
@@ -690,6 +703,9 @@ class CCReader private (prog              : Program,
   val sortCtorIdMap : Map[Sort, Int] =
     objectSorts.zip(0 until structCount+structCtorsOffset).toMap
 
+  private val heapModelFactory : HeapModelFactory =
+    HeapModel.factory(heapModelType, symexContext, scope)
+
   for (((ctor, sels), i) <- structCtors zip structSels zipWithIndex) {
     val curStruct = structInfos(i)
     val fieldInfos = curStruct.fieldInfos
@@ -703,11 +719,13 @@ class CCReader private (prog              : Program,
         case Right(typ) =>
           typ match {
             case t : CCHeapArrayPointer => // replace with initialized heap
-              CCHeapArrayPointer(heap, t.elementType, t.arrayLocation) // todo: would fail for arrays of arrays inside structs
+              // todo: would fail for arrays of arrays inside structs
+              heapModelFactory.makeArrayPointer(t.elementType, t.arrayLocation)
             case _ => typ
           }
       }
-      if(fieldInfos(j).ptrDepth > 0) CCHeapPointer(heap, actualType)
+      if(fieldInfos(j).ptrDepth > 0)
+        heapModelFactory.makePointer(actualType)
       else actualType})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
@@ -728,16 +746,18 @@ class CCReader private (prog              : Program,
     }
   }
 
-  private val heapModelFactory : HeapModelFactory =
-    HeapModel.factory(HeapModel.ModelType.TheoryOfHeaps, symexContext, scope, inputVars)
-
-  for ((name, funcDefAst) <- heapModelFactory.getFunctionsToInject if modelHeap) {
-    if (functionDefs.contains(name)) {
-      throw new TranslationException(
-        s"Heap model function '$name' clashes with an existing function.")
-    }
-    functionDefs.put(name, funcDefAst)
-  }
+  private val (injectedFunctionNames, injectedInitCode) : (Set[String], scala.Seq[String]) =
+    if (modelHeap) {
+      val (funcs, initCode) = heapModelFactory.getCodeToInject(inputVars)
+      for ((name, funcDefAst) <- funcs) {
+        if (functionDefs.contains(name)) {
+          throw new TranslationException(
+            s"Heap model function '$name' clashes with an existing function.")
+        }
+        functionDefs.put(name, funcDefAst)
+      }
+      (funcs.keySet, initCode)
+    } else (Set(), scala.Seq())
 
   private val heapVars : Map[String, CCVar] = if (modelHeap) {
     (for (v <- heapModelFactory.requiredVars) yield {
@@ -754,14 +774,14 @@ class CCReader private (prog              : Program,
     }).toMap } else Map.empty
 
   private val heapPreds : Map[String, CCPredicate] = if(modelHeap) {
-    (for (pred <- heapModelFactory.requiredPreds) yield {
+    (for (pred <- heapModelFactory.requiredPreds(inputVars)) yield {
       val newPred   = this.newPred(pred.name, pred.args, None)
       uninterpPredDecls += pred.name -> newPred
       pred.name -> newPred
     }).toMap
   } else Map.empty
 
-  private val heapModel : Option[HeapModel] =
+  private[concurrency] val heapModel : Option[HeapModel] =
     if(modelHeap)
       Some(heapModelFactory(HeapModel.Resources(heapVars, heapPreds)))
     else None
@@ -1338,7 +1358,7 @@ class CCReader private (prog              : Program,
                     (ArrayLocation.Stack, Some(a.constant_expression_))
                   case _ => (ArrayLocation.Heap, None)
                 }
-                (CCHeapArrayPointer(heap, typeWithPtrs, arrayLocation), initArrayExpr)
+                (heapModelFactory.makeArrayPointer(typeWithPtrs, arrayLocation), initArrayExpr)
               }
               // todo: adjust needsHeap below if an array type does not require heap
               // for instance if we model arrays using the theory of arrays or unroll
@@ -1415,7 +1435,7 @@ class CCReader private (prog              : Program,
             case p : BeginPointer => createHeapPointer(p, typ)
             case np : NoPointer   => np.direct_declarator_ match {
               case _ : Incomplete =>
-                //CCHeapArrayPointer(heap, typ, HeapArray)
+                //createHeapArrayPointer(typ, HeapArray)
                 throw new TranslationException(
                   "Arrays inside predicate declarations are not supported.")
               case _ => typ
@@ -1502,7 +1522,7 @@ class CCReader private (prog              : Program,
 
         val (actualLhsVar, initValue, initGuard) =
           varDec.maybeInitializer match {
-            case Some(init : InitExpr) if init.exp_.isInstanceOf[Enondet] => 
+            case Some(init : InitExpr) if init.exp_.isInstanceOf[Enondet] =>
               lhsVar.typ match {
                 case typ : CCHeapArrayPointer =>
                   val resultExpr =
@@ -1524,17 +1544,24 @@ class CCReader private (prog              : Program,
 
                 val evalContext =
                   if (varDec.typ.isInstanceOf[CCHeapArrayPointer])
-                    values.EvalContext().withLhsIsArrayPointer(true)
-                  else values.EvalContext()
+                    values.EvalContext().withLhsIsArrayPointer(true).withFunctionName(enclosingFuncName)
+                  else values.EvalContext().withFunctionName(enclosingFuncName)
                 val res = values.eval(actualInitExp)(
                   values.EvalSettings(), evalContext)
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
-                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
-                    if(res.toTerm.asInstanceOf[IIntLit].value.intValue == 0)
-                      (lhsVar, CCTerm.fromTerm(heap.nullAddr(), varDec.typ, srcInfo))
-                    else throw new TranslationException("Pointer arithmetic is not " +
-                      "allowed, and the only possible initialization value for " +
-                      "pointers is 0 (NULL)")
+                  case hp : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
+                    res.toTerm match {
+                      case IIntLit(v) if v.intValue == 0 =>
+                        (lhsVar, CCTerm.fromTerm(hp.nullAddr, varDec.typ, srcInfo))
+                      case _ if evaluatingInjectedCode =>
+                        // Allow pointer arithmetic inside code injected by the heap model
+                        // (e.g., injected init code or injected function bodies)
+                        (lhsVar, res)
+                      case _ =>
+                        throw new TranslationException("Pointer arithmetic is not " +
+                          "allowed, and the only possible initialization value for " +
+                          "pointers is 0 (NULL)")
+                    }
                   case _ : CCHeapPointer if res.typ.isInstanceOf[CCHeapArrayPointer] =>
                     // lhs is actually a heap array pointer
                     (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ,
@@ -1726,9 +1753,10 @@ class CCReader private (prog              : Program,
 
   private def getPtrType (ptr : Pointer, _typ : CCType) : CCType = {
     ptr match {
-      case _   : Point | _ : PointQual => CCHeapPointer(heap, _typ) // todo; support pointer qualifiers?
+      case _   : Point | _ : PointQual =>
+        heapModelFactory.makePointer(_typ) // todo; support pointer qualifiers?
       case ptr : PointPoint =>
-        getPtrType(ptr.pointer_, CCHeapPointer(heap, _typ))
+        getPtrType(ptr.pointer_, heapModelFactory.makePointer(_typ))
       case _ => throw new TranslationException(
         "Advanced pointer declarations are not yet supported (line " +
           getSourceInfo(ptr).line + ")"
@@ -1791,7 +1819,7 @@ class CCReader private (prog              : Program,
                 " are not supported.")
             case _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
               if (!modelHeap) throw NeedsHeapModelException
-              CCHeapArrayPointer(heap, typ, ArrayLocation.Heap)
+              heapModelFactory.makeArrayPointer(typ, ArrayLocation.Heap)
             case _: Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
               CCArray(typ, None, None,
                 ExtArray(scala.Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap) // todo: only int indexed arrays
@@ -2124,7 +2152,7 @@ class CCReader private (prog              : Program,
         getType(listDeclSpecs)
       case None => CCInt
     }
-    if(f.decl.isInstanceOf[BeginPointer]) CCHeapPointer(heap, typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) heapModelFactory.makePointer(typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
     else typ
   }
 
@@ -2204,30 +2232,33 @@ class CCReader private (prog              : Program,
     // assertion is not necessarily true:
     // assert(entry.arity == scope.allFormalVars.size)
 
+    val isInjected = injectedFunctionNames contains functionName
     val translator = FunctionTranslator(exit, functionName)
     val finalPred =
-      if (isNoReturn) {
-        translator.translateNoReturn(stm, entry)
-        exit
-      } else
-        translator.translateWithReturn(stm, entry)
+      if (isInjected) inInjectedCode {
+        if (isNoReturn) { translator.translateNoReturn(stm, entry); exit }
+        else translator.translateWithReturn(stm, entry)
+      } else {
+        if (isNoReturn) { translator.translateNoReturn(stm, entry); exit }
+        else translator.translateWithReturn(stm, entry)
+      }
     scope.LocalVars popFrame
   }
 
-  private def createHeapPointer(decl : BeginPointer, typ : CCType) :
-  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+  private def createHeapPointer(decl : BeginPointer, typ : CCType) : CCType =
+    createHeapPointerHelper(decl.pointer_, typ)
 
-  private def createHeapPointer(decl : PointerStart, typ : CCType) :
-  CCHeapPointer = createHeapPointerHelper(decl.pointer_, typ)
+  private def createHeapPointer(decl : PointerStart, typ : CCType) : CCType =
+    createHeapPointerHelper(decl.pointer_, typ)
 
-  private def createHeapPointerHelper(decl : Pointer, typ : CCType) :
-  CCHeapPointer = decl match {
+  private def createHeapPointerHelper(decl : Pointer, typ : CCType) : CCType =
+    decl match {
       case pp : PointPoint =>
-        CCHeapPointer(heap, createHeapPointerHelper(pp.pointer_, typ))
-      case p : Point =>
-        CCHeapPointer(heap, typ)
-      case _ => throw new TranslationException("Type qualified pointers are " +
-        "currently not supported: " + decl)
+        heapModelFactory.makePointer(createHeapPointerHelper(pp.pointer_, typ))
+      case p : Point       =>
+        heapModelFactory.makePointer(typ)
+      case _ => throw new TranslationException(
+        s"Type qualified pointers are currently not supported: $decl")
     }
 
   private def getFunctionArgNames(functionDef : Function_def) : scala.Seq[String] = {
@@ -2284,7 +2315,7 @@ class CCReader private (prog              : Program,
                   np.direct_declarator_ match {
                     case _ : Incomplete
                       if !TriCeraParameters.parameters.value.useArraysForHeap =>
-                      CCHeapArrayPointer(heap, typ, ArrayLocation.Heap)
+                      heapModelFactory.makeArrayPointer(typ, ArrayLocation.Heap)
                     case _ : Incomplete
                       if TriCeraParameters.parameters.value.useArraysForHeap =>
                       CCArray(typ, None, None, ExtArray(
@@ -2545,16 +2576,16 @@ class CCReader private (prog              : Program,
               sortGetterMap get s
             override def wrapperSort(wrapper: IFunction): Option[Sort] =
               wrapper match {
-                case w: MonoSortedIFunction => 
+                case w: MonoSortedIFunction =>
                   wrapperSortMap.get(w)
                 case _ => None
               }
             override def getterSort(getter: IFunction): Option[Sort] =
               getter match {
-                case g: MonoSortedIFunction => 
+                case g: MonoSortedIFunction =>
                   getterSortMap.get(g)
                 case _ => None
-              } 
+              }
 
             override def getCtor(s: Sort): Int = sortCtorIdMap(s)
             override def getTypOfPointer(t: CCType): CCType =
@@ -2563,7 +2594,7 @@ class CCReader private (prog              : Program,
                 case t => t
               }
             override def isHeapEnabled: Boolean = modelHeap
-            override def getHeap: HeapObj =
+            override def getHeap: HeapTheoryObject =
               if (modelHeap) heap
               else throw new TranslationException("getHeap called with no heap!")
             override def getHeapTerm: ITerm = {
@@ -2581,7 +2612,7 @@ class CCReader private (prog              : Program,
               else throw new TranslationException("getOldHeapTerm called with no heap!")
             } // todo: heap term for exit predicate?
 
-            override val getStructMap: Map[IFunction, CCStruct] = 
+            override val getStructMap: Map[IFunction, CCStruct] =
               structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =
@@ -2637,16 +2668,16 @@ class CCReader private (prog              : Program,
               sortGetterMap get s
             override def wrapperSort(wrapper: IFunction): Option[Sort] =
               wrapper match {
-                case w: MonoSortedIFunction => 
+                case w: MonoSortedIFunction =>
                   wrapperSortMap.get(w)
                 case _ => None
               }
             override def getterSort(getter: IFunction): Option[Sort] =
               getter match {
-                case g: MonoSortedIFunction => 
+                case g: MonoSortedIFunction =>
                   getterSortMap.get(g)
                 case _ => None
-              } 
+              }
             override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
             override def getTypOfPointer(t : CCType) : CCType =
               t match {
@@ -2654,7 +2685,7 @@ class CCReader private (prog              : Program,
                 case _ => t
               }
             override def isHeapEnabled : Boolean = modelHeap
-            override def getHeap : HeapObj =
+            override def getHeap : HeapTheoryObject =
               if (modelHeap) heap else throw NeedsHeapModelException
             override def getHeapTerm : ITerm = {
               if (modelHeap) {
@@ -2695,7 +2726,7 @@ class CCReader private (prog              : Program,
 
     private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {
       val decSymex = Symex(symexContext, scope, entry, heapModel)
-      collectVarDecls(dec, false, decSymex, "", false)
+      collectVarDecls(dec, false, decSymex, functionName, false)
       val exit = newPred(Nil, Some(getSourceInfo(dec)))
       decSymex outputClause(exit, exit.srcInfo)
       exit
@@ -2744,7 +2775,7 @@ class CCReader private (prog              : Program,
         while (stmsIt.hasNext && isSEFDeclaration(stmsIt.peekNext)) {
           val decSymex = Symex(symexContext, scope, entryPred, heapModel)
           collectVarDecls(stmsIt.next.asInstanceOf[DecS].dec_,
-                          false, decSymex, "", false)
+                          false, decSymex, functionName, false)
           val srcInfo = entryPred.srcInfo // todo: correct srcInfo?
           entryPred = newPred(Nil,
             if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None) // todo: correct?
@@ -2753,17 +2784,27 @@ class CCReader private (prog              : Program,
         output(addRichClause(entryClause, entryPred.srcInfo))
 
         val initStmts : Iterator[Stm] = {
-          val inputInitCode = scala.Seq()
+          val inputInitCode =
+            if(TriCeraParameters.get.determinizeInput)
+              inputVars.map(v => s"${v.name} = _;")
+            else scala.Seq()
 
           val heapModelInitCode =
-            if (modelHeap) heapModelFactory.getInitCodeToInject else scala.Seq()
+            if (modelHeap) injectedInitCode else scala.Seq()
 
           (inputInitCode ++ heapModelInitCode).iterator.map { code =>
             ParseUtil.parseStatement(new java.io.StringReader(code))
           }
         }
 
-        translateStmSeq(ap.util.PeekIterator(initStmts ++ stmsIt), entryPred, exit)
+        val initStmsPeek = ap.util.PeekIterator(initStmts)
+        if (initStmsPeek.hasNext) {
+          val midPred = newPred(Nil, None)
+          inInjectedCode { translateStmSeq(initStmsPeek, entryPred, midPred) }
+          translateStmSeq(ap.util.PeekIterator(stmsIt), midPred, exit)
+        } else {
+          translateStmSeq(ap.util.PeekIterator(stmsIt), entryPred, exit)
+        }
         scope.LocalVars popFrame
       }
     }
