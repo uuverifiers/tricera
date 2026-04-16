@@ -104,6 +104,63 @@ object Util {
 
   case class SourceInfo (line : Int, col : Int)
 
+  /**
+   * Adjusts line numbers from a tri-pp preprocessed file back to the original
+   * file. When tri-pp changes the source (e.g., adds lines via
+   * --make-calls-unique), the line numbers in the preprocessed file no longer
+   * match the original.
+   *
+   * When the files differ, line numbers are suppressed (returned as None)
+   * since we cannot reliably map them back. This is a temporary solution;
+   * ideally tri-pp should preserve or report a line mapping itself.
+   */
+  class PPLineMapping private (val linesShifted : Boolean,
+                                origLines       : scala.Array[String]) {
+    def apply(srcInfo : Option[SourceInfo]) : Option[SourceInfo] = {
+      if (!linesShifted) return srcInfo
+      // Lines have been shifted by tri-pp; we cannot reliably report
+      // preprocessed line numbers, so suppress them.
+      None
+    }
+
+    /**
+     * Looks up the first line in the original file matching a pattern (e.g.,
+     * a function name) and returns a SourceInfo pointing to it.
+     * Useful for function contracts whose function name is still findable.
+     */
+    def findInOriginal(pattern : String) : Option[SourceInfo] = {
+      if (!linesShifted) return None // caller should use the existing srcInfo
+      val idx = origLines.indexWhere(_.contains(pattern))
+      if (idx >= 0) Some(SourceInfo(idx + 1, 1)) else None
+    }
+  }
+
+  object PPLineMapping {
+    val identity = new PPLineMapping(linesShifted = false, scala.Array.empty)
+
+    /**
+     * Compares the original and preprocessed files. If they have different
+     * line counts (indicating tri-pp inserted or removed lines), returns a
+     * mapping that suppresses line numbers but can search the original file
+     * for function names.
+     */
+    def build(originalFile : String, ppFile : String) : PPLineMapping = {
+      val origSource = scala.io.Source.fromFile(originalFile)
+      val ppSource   = scala.io.Source.fromFile(ppFile)
+      try {
+        val origLines = origSource.getLines().toArray
+        val ppLines   = ppSource.getLines().toArray
+        if (origLines.length == ppLines.length)
+          identity
+        else
+          new PPLineMapping(linesShifted = true, origLines)
+      } finally {
+        origSource.close()
+        ppSource.close()
+      }
+    }
+  }
+
   def getSourceInfo(obj : tricera.concurrency.SourceInfoProvider) : SourceInfo = {
     SourceInfo(obj.getLineNum, obj.getColNum)
   }
