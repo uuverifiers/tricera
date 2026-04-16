@@ -95,7 +95,7 @@ Final:
  foo1_1(heap.empty, heap.null, heap.null, heap.empty, heap.null, heap.null) 
 ----------------------------------------------------------------------------
 Failed assertion:
-false :- foo1_1(@h, @v_cleanup, p, @h_old, @v_cleanup_old, p_old), !is_O_Int(heap.read(@h, p)). (line:4 col:9) (property: valid-deref)
+false :- foo1_1(@h, @v_cleanup, p, @h_old, @v_cleanup_old, p_old), !is_O_Int(heap.read(@h, p)). (line:5 col:10) (property: valid-deref)
 
 UNSAFE
 

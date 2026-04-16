@@ -15,7 +15,7 @@ Final:
  main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(10))), heap.null, AddrRange(heap.addr(1), 1), 1) 
 ----------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(a:6, n:9))). (line:12 col:11) (property: valid-deref)
 
 UNSAFE
 
@@ -29,7 +29,7 @@ Final:
  main7_3_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, AddrRange(heap.addr(1), 42)) 
 --------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(a:4, 42))). (line:4 col:5) (property: valid-deref)
+false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(a:4, 42))). (line:7 col:11) (property: valid-deref)
 
 UNSAFE
 
@@ -49,7 +49,7 @@ Final:
  main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(10))), heap.null, AddrRange(heap.addr(1), 1), 1) 
 ----------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(a:6, n:9))). (line:6 col:5) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(a:6, n:9))). (line:12 col:3) (property: valid-deref)
 
 UNSAFE
 
@@ -63,7 +63,7 @@ Final:
  main7_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, AddrRange(heap.addr(1), 42)) 
 ------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(a:4, -1*1))). (line:4 col:5) (property: valid-deref)
+false :- main7_3(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(a:4, -1*1))). (line:7 col:3) (property: valid-deref)
 
 UNSAFE
 
