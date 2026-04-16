@@ -347,6 +347,38 @@ SAFE
 nondet-static-array-explicit-3.c
 SAFE
 
+calloc-2arg-array-safe.c
+SAFE
+
+calloc-2arg-array-unsafe.c
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                    main5_3(heap.empty, arrayPtr(AddrRange(heap.null, 0), 0), 2)                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 |                                                                                  
+                                                                                 |                                                                                  
+                                                                                 V                                                                                  
+ main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 |                                                                                  
+                                                                                 |                                                                                  
+                                                                                 V                                                                                  
+ main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 |                                                                                  
+                                                                                 |                                                                                  
+                                                                                 V                                                                                  
+ main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main7_36_3(@h, a:1, n:4, p:6, i:7), getInt(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))) != 0. (line:8 col:5) (property: user-assertion)
+
+UNSAFE
+
 simple-global-memsafety1.c
 SAFE
 

@@ -12,7 +12,8 @@ TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-
        pointer-arith-subscript-safe.c pointer-arith-subscript-unsafe.c \
        global-struct-array-1.c array-of-ptr-1.c \
        nondet-global-array-explicit-1.c nondet-global-array-explicit-2.c nondet-global-array-explicit-3.c \
-       nondet-static-array-explicit-1.c nondet-static-array-explicit-2.c nondet-static-array-explicit-3.c"
+       nondet-static-array-explicit-1.c nondet-static-array-explicit-2.c nondet-static-array-explicit-3.c \
+       calloc-2arg-array-safe.c calloc-2arg-array-unsafe.c"
 
 MEMTRACKTESTS="simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
 
