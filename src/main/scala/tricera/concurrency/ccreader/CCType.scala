@@ -613,11 +613,28 @@ object ArrayLocation extends Enumeration {
   val Global, Stack, Heap = Value
 }
 import ArrayLocation._
+
+/**
+ * Operations for ArrayPtr ADT <Range, offset>
+ */
+case class ArrayPtrOps(ctor      : MonoSortedIFunction,
+                       rangeSel  : MonoSortedIFunction,
+                       offsetSel : MonoSortedIFunction) {
+  import ap.parser.IExpression.toFunApplier
+  def mkArrayPtr(range : ITerm, offset : ITerm) : ITerm =
+    ctor(range, offset)
+  def getRange(arrayPtr : ITerm) : ITerm =
+    rangeSel(arrayPtr)
+  def getOffset(arrayPtr : ITerm) : ITerm =
+    offsetSel(arrayPtr)
+}
+
 /** Do not construct directly, use [[HeapModelFactory.makeArrayPointer]] instead. */
 case class CCHeapArrayPointer(addressRangeSort: Sort,
                               zeroInitAddrRange: ITerm,
                               elementType:       CCType,
-                              arrayLocation:     ArrayLocation)
+                              arrayLocation:     ArrayLocation,
+                              ptrOps:            ArrayPtrOps)
     extends CCType {
   def shortName = "[]"
 }

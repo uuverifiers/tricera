@@ -968,17 +968,17 @@ class Symex private (context        : SymexContext,
         case _ : AssignAdd =>
           (lhsE.typ, rhsE.typ) match {
             case (arrTyp : CCHeapArrayPointer, _ : CCArithType) =>
-              // import arrTyp.heap._
-              // nthAddrRange(addressRangeNth(lhsE.toTerm, rhsE.toTerm), addressRangeSize(lhsE.toTerm) - rhsE.toTerm)
-              // TODO: this is unsafe, need to
-              throw new UnsupportedCFragmentException(
-                "Pointer arithmetic is currently not supported.")
+              val ops = arrTyp.ptrOps
+              ops.mkArrayPtr(ops.getRange(lhsE.toTerm),
+                             ops.getOffset(lhsE.toTerm) + rhsE.toTerm)
             case _ => lhsE.toTerm + rhsE.toTerm
           }
         case _ : AssignSub =>
           (lhsE.typ, rhsE.typ) match {
-            case (_ : CCHeapArrayPointer, _ : CCArithType) =>
-              throw new TranslationException("Only addition is allowed in array pointer arithmetic.")
+            case (arrTyp : CCHeapArrayPointer, _ : CCArithType) =>
+              val ops = arrTyp.ptrOps
+              ops.mkArrayPtr(ops.getRange(lhsE.toTerm),
+                             ops.getOffset(lhsE.toTerm) - rhsE.toTerm)
             case _ => lhsE.toTerm - rhsE.toTerm
           }
         case _ : AssignLeft =>
@@ -1152,7 +1152,15 @@ class Symex private (context        : SymexContext,
 
       evalHelp(expToUpdate)
       maybeOutputClause(Some(getSourceInfo(exp)))
-      val newValue = popVal mapTerm (_ + op)
+      val oldVal = popVal
+      val newValue = oldVal.typ match {
+        case arrTyp: CCHeapArrayPointer =>
+          val ops = arrTyp.ptrOps
+          oldVal mapTerm { t =>
+            ops.mkArrayPtr(ops.getRange(t), ops.getOffset(t) + op)
+          }
+        case _ => oldVal mapTerm (_ + op)
+      }
       implicit val symex: Symex = this
       pushVal(getAssignmentTarget(expToUpdate).update(newValue))
 
@@ -1165,8 +1173,16 @@ class Symex private (context        : SymexContext,
       evalHelp(expToUpdate)
       maybeOutputClause(Some(getSourceInfo(exp)))
       implicit val symex: Symex = this
+      val incrementedValue = topVal.typ match {
+        case arrTyp: CCHeapArrayPointer =>
+          val ops = arrTyp.ptrOps
+          topVal mapTerm { t =>
+            ops.mkArrayPtr(ops.getRange(t), ops.getOffset(t) + op)
+          }
+        case _ => topVal mapTerm (_ + op)
+      }
       val updatedPostValue = // the pre-update value is already on the stack
-        getAssignmentTarget(expToUpdate).update(topVal mapTerm (_ + op))
+        getAssignmentTarget(expToUpdate).update(incrementedValue)
       // The following should never fail as topVal's type always should
       // always correctly resolve.
       assert(updatedPostValue.typ == topVal.typ)
@@ -1200,17 +1216,15 @@ class Symex private (context        : SymexContext,
               val heap = context.heap
               val t = addrTerm match {
                 case IFunApp(heap.rangeNth, args) => // if nthAddrRange(a, i)
-                  val scala.Seq(arrTerm, indTerm) = args
-                  // return the addressRange starting from i
-                  import heap._
-                // TODO: implement this properly by adding an offset to pointers
-//                  val newTerm = nthAddrRange(addressRangeNth(arrTerm, indTerm),
-//                                             addressRangeSize(arrTerm) - indTerm)
-//                  CCTerm.fromTerm(newTerm,
-//                         getValue(arrTerm.asInstanceOf[IConstant].c.name,
-//                                  evalCtx.enclosingFunctionName).typ, srcInfo)
-                  throw new UnsupportedCFragmentException(
-                    "Pointer arithmetic is currently not supported.")
+                  val scala.Seq(rangeTerm, indexTerm) = args
+                  // Create a new ArrayPtr with the given range and index as offset.
+                  // topVal.typ is the element type (from the object getter).
+                  val arrPtrType = heapModel.makeArrayPointer(
+                    topVal.typ, ArrayLocation.Heap)
+                  val ops = arrPtrType.ptrOps
+                  CCTerm.fromTerm(
+                    ops.mkArrayPtr(rangeTerm, indexTerm),
+                    arrPtrType, srcInfo)
                 case _ =>
                   CCTerm.fromTerm(
                     addrTerm,
