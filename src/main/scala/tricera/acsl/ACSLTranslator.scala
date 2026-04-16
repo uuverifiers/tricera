@@ -857,7 +857,10 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         CCTerm.fromTerm(getObj(readObj), p.typ, array.srcInfo)
       case p : CCHeapArrayPointer =>
         val heap: ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
-        val access: IFunApp = ctx.getHeap.rangeNth(array.toTerm, index.toTerm)
+        val ops = p.ptrOps
+        val rawRange = ops.getRange(array.toTerm)
+        val effectiveIndex = ops.getOffset(array.toTerm) + index.toTerm
+        val access: IFunApp = ctx.getHeap.rangeNth(rawRange, effectiveIndex)
         val readObj: IFunApp = ctx.getHeap.read(heap, access)
         val getObj: IFunction = ctx.sortGetter(p.elementType.toSort).getOrElse(
           throw new ACSLParseException(s"Cannot access $array[$index].", srcInfo)
