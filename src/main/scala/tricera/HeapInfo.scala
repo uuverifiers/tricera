@@ -28,7 +28,7 @@
  */
 package tricera
 
-import ap.theories.Heap
+import ap.theories.heaps.Heap
 import ap.parser.IFunction
 import tricera.concurrency.heap.{HeapModel, HeapTheoryModel}
 

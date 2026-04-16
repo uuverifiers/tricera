@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
 import ap.parser._
 import ap.theories.nia.GroebnerMultiplication._
 import ap.types.{Sort, SortedConstantTerm}
-import ap.theories.Heap
+import ap.theories.heaps.Heap
 import tricera.Util.{SourceInfo, getSourceInfo}
 import tricera.concurrency.ccreader._
 import CCExceptions._

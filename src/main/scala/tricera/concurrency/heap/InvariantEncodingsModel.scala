@@ -244,7 +244,7 @@ class InvariantEncodingsModel(context  : SymexContext,
       args = Seq(p, loc),
       resultType = resultType,
       getter = getter,
-      sourceInfo = p.srcInfo
+      sourceInfo = loc.srcInfo
     )
   }
 
@@ -254,7 +254,7 @@ class InvariantEncodingsModel(context  : SymexContext,
       functionName = writeFnName,
       args = Seq(p, o, loc),
       resultType = CCVoid,
-      sourceInfo = p.srcInfo
+      sourceInfo = loc.srcInfo
     )
   }
 
@@ -263,7 +263,7 @@ class InvariantEncodingsModel(context  : SymexContext,
       functionName = allocFnName,
       args = Seq(o, loc),
       resultType = makePointer(oType),
-      sourceInfo = o.srcInfo
+      sourceInfo = loc.srcInfo
     )
   }
 
@@ -272,7 +272,7 @@ class InvariantEncodingsModel(context  : SymexContext,
       functionName = freeFnName,
       args = Seq(p, loc),
       resultType = CCVoid,
-      sourceInfo = p.srcInfo
+      sourceInfo = loc.srcInfo
     )
   }
 

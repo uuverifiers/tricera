@@ -157,7 +157,7 @@ class HeapTheoryModel(context           : SymexContext,
     if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
       val safetyFormula = CCTerm.fromFormula(
         context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort)),
-        CCInt, p.srcInfo)
+        CCInt, loc.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
       // todo: add tester methods for user ADT sorts?
@@ -225,7 +225,7 @@ class HeapTheoryModel(context           : SymexContext,
       val safetyFormula = CCTerm.fromFormula(
         context.heap.hasUserHeapCtor(
           curO.toTerm, context.sortCtorIdMap(ptrType.toSort)),
-        CCInt, p.srcInfo)
+        CCInt, loc.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
     }
@@ -256,7 +256,7 @@ class HeapTheoryModel(context           : SymexContext,
           val readObj = context.heap.read(getValue(heapVar, s).toTerm, p.toTerm)
           val assertion = CCTerm.fromFormula(
             p.toTerm === context.heap.nullAddr() |||
-            readObj =/= context.heap.defaultObject, CCInt, p.srcInfo)
+            readObj =/= context.heap.defaultObject, CCInt, loc.srcInfo)
           assertions = (assertion, properties.MemValidFree) :: assertions
         }
 
@@ -291,19 +291,19 @@ class HeapTheoryModel(context           : SymexContext,
                * forall ind. t[ind] =/= defObj
                * (or equivalently forall ind. read(h, nth(t, ind)) =/= defObj)
                */
-              val ind = scope.getFreshEvalVar(CCInt, p.srcInfo)
+              val ind = scope.getFreshEvalVar(CCInt, loc.srcInfo)
               val readAddr = context.heap.rangeNth(rawRange, ind.term)
               val readObj = context.heap.read(getValue(heapVar, nextState).toTerm, readAddr)
               val assertion = CCTerm.fromFormula(
                 p.toTerm === zeroInitAddrRange() |||
                 (context.heap.rangeWithin(rawRange, readAddr) ==>
-                 (readObj =/= context.heap.defaultObject)), CCInt, p.srcInfo)
+                 (readObj =/= context.heap.defaultObject)), CCInt, loc.srcInfo)
               assertions = (assertion, properties.MemValidFree) :: assertions
             case _ =>
               /**
                * Freeing non-heap memory is undefined behaviour.
                */
-              assertions = (CCTerm.fromFormula(i(false), CCInt, p.srcInfo), properties.MemValidFree) :: assertions
+              assertions = (CCTerm.fromFormula(i(false), CCInt, loc.srcInfo), properties.MemValidFree) :: assertions
           }
         }
 
@@ -335,7 +335,7 @@ class HeapTheoryModel(context           : SymexContext,
          * Freeing a non-heap pointer.
          */
         if (context.propertiesToCheck.contains(properties.MemValidFree)) {
-          assertions = (CCTerm.fromFormula(i(false), CCInt, p.srcInfo), properties.MemValidFree) :: assertions
+          assertions = (CCTerm.fromFormula(i(false), CCInt, loc.srcInfo), properties.MemValidFree) :: assertions
         }
     }
 
@@ -406,7 +406,7 @@ class HeapTheoryModel(context           : SymexContext,
       if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
         val assertion = CCTerm.fromFormula(
           context.heap.rangeWithin(
-            rawRange, readAddress.toTerm), CCInt, arr.srcInfo)
+            rawRange, readAddress.toTerm), CCInt, loc.srcInfo)
         scala.Seq((assertion, properties.MemValidDeref))
       } else {
         scala.Seq.empty
@@ -440,7 +440,7 @@ class HeapTheoryModel(context           : SymexContext,
       if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
         val assertion = CCTerm.fromFormula(
           context.heap.rangeWithin(
-            rawRange, writeAddress.toTerm), CCInt, index.srcInfo)
+            rawRange, writeAddress.toTerm), CCInt, loc.srcInfo)
         scala.Seq((assertion, properties.MemValidDeref))
       } else {
         scala.Seq.empty

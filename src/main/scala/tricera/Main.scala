@@ -364,6 +364,15 @@ class Main (args: Array[String]) {
     }
     preprocessTimer.stop()
 
+    // build a mapping from preprocessed line numbers to original file line
+    // numbers. tri-pp may shift lines (e.g., when using --make-calls-unique),
+    // so need to adjust reported line numbers to match the original file
+    val ppLineMapping : Util.PPLineMapping =
+      if (noPP || ppFileName == cppFileName)
+        Util.PPLineMapping.identity
+      else
+        Util.PPLineMapping.build(cppFileName, ppFileName)
+
     Console.withOut(outStream){
       println("Checked properties:")
       for (prop <- propertiesToCheck) {
@@ -623,7 +632,25 @@ class Main (args: Array[String]) {
               // todo: print failed assertion for concurrent systems
               violatedRichAssertionClause match {
                 case Some(assertionClause) =>
-                  println("Failed assertion:\n" + assertionClause.toString)
+                  val mappedSrcInfo = assertionClause.property match {
+                    case properties.FunctionPrecondition(funName, _) =>
+                      ppLineMapping(assertionClause.srcInfo)
+                        .orElse(ppLineMapping.findInOriginal(funName))
+                    case properties.FunctionPostcondition(funName, _) =>
+                      ppLineMapping(assertionClause.srcInfo)
+                        .orElse(ppLineMapping.findInOriginal(funName))
+                    case _ =>
+                      ppLineMapping(assertionClause.srcInfo)
+                  }
+                  val srcInfoStr = mappedSrcInfo match {
+                    case Some(SourceInfo(line, col)) =>
+                      s" (line:$line col:$col)"
+                    case None => ""
+                  }
+                  println("Failed assertion:\n" +
+                    assertionClause.clause.toPrologString +
+                    srcInfoStr +
+                    s" (property: ${assertionClause.property})")
                   println
                 case None                  =>
               }
@@ -635,9 +662,10 @@ class Main (args: Array[String]) {
               system.processes.head._2 == ParametricEncoder.Singleton) {
             Util.show(cex._2, "cex",
                       clauseToUnmergedRichClauses.map(c => (c._1 ->
-                                                            c._2.filter(_.srcInfo.nonEmpty).map(_.srcInfo.get))),
+                        c._2.flatMap(rc => ppLineMapping(rc.srcInfo)))),
                       reader.PredPrintContext.predArgNames,
-                      reader.PredPrintContext.predSrcInfo,
+                      (pred : ap.parser.IExpression.Predicate) =>
+                        ppLineMapping(reader.PredPrintContext.predSrcInfo(pred)),
                       reader.PredPrintContext.isUninterpretedPredicate)
           } else {
             println("Cannot display -eogCEX for concurrent processes, try " +

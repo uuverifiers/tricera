@@ -31,7 +31,7 @@ package tricera.concurrency.ccreader
 
 import ap.basetypes.IdealInt
 import ap.parser.{IFormula, IFunction, IIntLit, ITerm}
-import ap.theories.Heap
+import ap.theories.heaps.Heap
 import tricera.concurrency.CCReader._
 import ap.parser.IExpression.{Sort, _}
 import ap.theories.bitvectors.ModuloArithmetic._
