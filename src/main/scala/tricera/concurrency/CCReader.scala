@@ -592,6 +592,14 @@ class CCReader private (prog              : Program,
     str.substring(2, str.length-2) // removes the annotation markers
   }
 
+  def standaloneAnnotationStringExtractor(annot : StandaloneAnnotation)
+  : String = {
+    val str = annot match {
+      case a : StandaloneAnnot1 => a.standaloneannotationstring_
+    }
+    str.substring(2, str.length-2) // removes the annotation markers
+  }
+
   for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_.asScala)
     decl match {
       case decl: Global => collectStructDefs(decl.dec_)
@@ -796,6 +804,58 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   private val globalExitPred = newPred("exit", scope.allFormalVars, None)
 
   //////////////////////////////////////////////////////////////////////////////
+  // `AnnotationContext` used when parsing standalone ACSL annotations
+  private class GlobalGhostContext(annotSrcInfo : SourceInfo)
+    extends ACSLTranslator.StatementAnnotationContext {
+    override def enclosingFunction : Option[String] = None
+    def getTermInScope(name : String) : Option[CCTerm] = {
+      val idx = scope.lookupAnyVarNoException(name, "")
+      if (idx < 0) None
+      else {
+        val v =
+          if (idx < scope.GlobalVars.size) scope.GlobalVars.vars(idx)
+          else scope.LocalVars.vars(idx - scope.GlobalVars.size)
+        Some(CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
+      }
+    }
+    def getGlobals : Seq[CCVar] =
+      scope.GlobalVars.vars.diff(heapVars.values.toSeq).toSeq
+    def sortWrapper(s: Sort): Option[IFunction] =
+      sortWrapperMap.get(s)
+    def sortGetter(s: Sort): Option[IFunction] =
+      sortGetterMap.get(s)
+    def wrapperSort(wrapper: IFunction): Option[Sort] = wrapper match {
+      case w: MonoSortedIFunction => wrapperSortMap.get(w)
+      case _                      => None
+    }
+    def getterSort(getter: IFunction): Option[Sort] = getter match {
+      case g: MonoSortedIFunction => getterSortMap.get(g)
+      case _                      => None
+    }
+    def getCtor(s: Sort): Int = sortCtorIdMap(s)
+    def getTypOfPointer(t: CCType): CCType = t match {
+      case p : CCHeapPointer => p.typ
+      case t                 => t
+    }
+    def isHeapEnabled: Boolean = modelHeap
+    def getHeap: Heap =
+      if (modelHeap) heap
+      else throw new TranslationException(
+        "Heap theory accessed in a global ghost annotation, but no " +
+        "heap model is enabled.")
+    def getHeapTerm : ITerm =
+      throw new TranslationException(
+        "\\valid / heap references are not allowed in global ghost " +
+        "initializers.")
+    def getOldHeapTerm : ITerm =
+      throw new TranslationException(
+        "\\old is not allowed in global ghost initializers.")
+    val getStructMap : Map[IFunction, CCStruct] =
+      structDefs.values.map(struct => (struct.ctor, struct)).toMap
+    val annotationBeginSourceInfo : SourceInfo = annotSrcInfo
+    val annotationNumLines        : Int        = 1
+  }
+
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
     // generous than actual C semantics, where declarations
@@ -830,6 +890,45 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               "Function " + name + " is already declared")
           functionDefs.put(name, decl.function_def_)
         }
+
+        case decl : AnnotExternal =>
+          val content =
+            standaloneAnnotationStringExtractor(decl.standaloneannotation_)
+          val srcInfo = getSourceInfo(decl)
+          val parsed : tricera.acsl.ParsedAnnotation =
+            try {
+              ACSLTranslator.translateACSL(
+                "/*@" + content + "*/",
+                new GlobalGhostContext(srcInfo))
+            } catch {
+              case e : Exception =>
+                throw new TranslationException(
+                  "Could not parse standalone ACSL annotation (line " +
+                  srcInfo.line + "): " + e.getMessage)
+            }
+          parsed match {
+            case block : tricera.acsl.GhostBlock =>
+              for (item <- block.items) item match {
+                case g : tricera.acsl.GhostDeclaration =>
+                  val v = g.ccVar
+                  scope.checkGhostNameClash(v, "")
+                  scope.GlobalVars addVar v
+                  scope.variableHints += List()
+                  val initTerm = g.initOpt.getOrElse(v.typ.getZeroInit)
+                  values addValue CCTerm.fromTerm(initTerm, v.typ,
+                                                  Some(g.srcInfo))
+                  values addGuard (v rangePred)
+                case _ : tricera.acsl.GhostAssignment =>
+                  throw new TranslationException(
+                    "Ghost assignment at line " + srcInfo.line +
+                    " is not allowed at file scope (only ghost " +
+                    "declarations are).")
+              }
+            case other =>
+              warn("Ignoring standalone annotation at line " +
+                   srcInfo.line + ": unsupported form " +
+                   other.getClass.getSimpleName)
+          }
 
         case _ => // nothing
       }
@@ -1621,6 +1720,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
 
         // do not use actualType below, take from lhsVar
+
+        scope.checkGhostNameClash(actualLhsVar, enclosingFuncName)
 
         if (isGlobal || collectOnlyLocalStatic) {
           scope.GlobalVars addVar actualLhsVar
@@ -2543,6 +2644,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
         case stm : AnnotatedIterS =>
           translate(stm.annotation_, stm.iter_stm_, entry, exit)
+        case stm : StandaloneAnnotationS =>
+          // Standalone ghost annotation appearing as a `Stm` outside
+          // a compound block. Ghost assignments work but, declarations 
+          // are scoped to just this single statement.
+          val newExit = translateStandalone(stm.standaloneannotation_, entry)
+          val srcInfo = Some(getSourceInfo(stm))
+          output(addRichClause(Clause(
+            atom(exit, scope.allFormalVarTerms take exit.arity),
+            List(atom(newExit, scope.allFormalVarTerms take newExit.arity)),
+            true), srcInfo))
       }
 
     private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
@@ -2631,6 +2742,137 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case _ => warn("Ignoring annotation: " + annot)
           }
         case _ => warn("Ignoring annotation: " + annotationInfo)
+      }
+    }
+
+    // ghost statement inside a function body
+    private def translateStandalone(annot : StandaloneAnnotation,
+                                    entry : CCPredicate) : CCPredicate = {
+      val content = standaloneAnnotationStringExtractor(annot)
+      val stmSymex = Symex(symexContext, scope, entry, heapModel)
+
+      class GhostLocalContext extends ACSLTranslator.StatementAnnotationContext {
+        override def enclosingFunction : Option[String] = Some(functionName)
+        override def getTermInScope(name : String) : Option[CCTerm] = {
+          entry.argVars.zipWithIndex.find{
+            case (v, i) => v.name == name
+          } match {
+            case Some((v, i)) =>
+              stmSymex.initAtomArgs match {
+                case Some(args) => Some(CCTerm.fromTerm(args(i), v.typ, v.srcInfo))
+                case None       => None
+              }
+            case None         => None
+          }
+        }
+        override def getGlobals : scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
+        override def sortWrapper(s : Sort) : Option[IFunction] = sortWrapperMap.get(s)
+        override def sortGetter(s : Sort) : Option[IFunction] = sortGetterMap.get(s)
+        override def wrapperSort(wrapper : IFunction) : Option[Sort] = wrapper match {
+          case w : MonoSortedIFunction => wrapperSortMap.get(w)
+          case _                       => None
+        }
+        override def getterSort(getter : IFunction) : Option[Sort] = getter match {
+          case g : MonoSortedIFunction => getterSortMap.get(g)
+          case _                       => None
+        }
+        override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
+        override def getTypOfPointer(t : CCType) : CCType = t match {
+          case p : CCHeapPointer => p.typ
+          case t                 => t
+        }
+        override def isHeapEnabled : Boolean = modelHeap
+        override def getHeap : HeapTheoryObject =
+          if (modelHeap) heap
+          else throw new TranslationException("getHeap called with no heap!")
+        override def getHeapTerm : ITerm = {
+          if (modelHeap) {
+            val heapVar = heapModel.get match {
+              case m : HeapTheoryModel => m.heapVar
+              case _                   => throw new TranslationException(
+                "Heap in ACSL only supported using the theory of heaps.")
+            }
+            stmSymex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
+          } else throw new TranslationException("getHeapTerm called with no heap!")
+        }
+        override def getOldHeapTerm : ITerm =
+          if (modelHeap) getHeapTerm
+          else throw new TranslationException("getOldHeapTerm called with no heap!")
+        override val getStructMap : Map[IFunction, CCStruct] =
+          structDefs.values.map((struct : CCStruct) => (struct.ctor, struct)).toMap
+        override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(annot)
+        override val annotationNumLines : Int = 1
+      }
+
+      val parsed : tricera.acsl.ParsedAnnotation =
+        try {
+          ACSLTranslator.translateACSL(
+            "/*@" + content + "*/", new GhostLocalContext)
+        } catch {
+          case e : Exception =>
+            throw new TranslationException(
+              "Could not parse ghost annotation (line " +
+              getSourceInfo(annot).line + "): " + e.getMessage)
+        }
+
+      val srcInfo = Some(getSourceInfo(annot))
+      parsed match {
+        case block : tricera.acsl.GhostBlock =>
+          var prevPred = entry
+          for (item <- block.items) {
+            val itemSrcInfo = Some(item.srcInfo)
+            val itemSymex = Symex(symexContext, scope, prevPred, heapModel)
+            item match {
+              case g : tricera.acsl.GhostDeclaration =>
+                val v = g.ccVar
+                scope.checkGhostNameClash(v, functionName)
+                scope.LocalVars addVar v
+                val initTerm = g.initOpt.getOrElse(v.typ.getZeroInit)
+                itemSymex addValue CCTerm.fromTerm(initTerm, v.typ,
+                                                   Some(g.srcInfo))
+                itemSymex addGuard (v rangePred)
+              case g : tricera.acsl.GhostAssignment =>
+                g.lhs match {
+                  case ident : tricera.acsl.GhostLValIdent =>
+                    val idx = scope.lookupAnyVarNoException(ident.name,
+                                                            functionName)
+                    if (idx < 0) {
+                      throw new TranslationException(
+                        "Ghost assignment references unknown variable `" +
+                        ident.name + "` at line " + g.srcInfo.line + ".")
+                    }
+                    val v = if (idx < scope.GlobalVars.size)
+                              scope.GlobalVars.vars(idx)
+                            else
+                              scope.LocalVars.vars(idx - scope.GlobalVars.size)
+                    if (!v.isGhost) {
+                      throw new TranslationException(
+                        "Ghost assignment targets non-ghost variable `" +
+                        ident.name + "` at line " + g.srcInfo.line +
+                        ". ACSL ghost code may only mutate ghost state.")
+                    }
+                    itemSymex.setGhostValue(
+                      ident.name,
+                      CCTerm.fromTerm(g.rhs, v.typ, Some(g.srcInfo)),
+                      functionName)
+                  case other =>
+                    throw new TranslationException(
+                      "Complex lvalues (arrays, fields, pointer deref) are " +
+                      "not yet supported in ghost assignments (line " +
+                      g.srcInfo.line + "). Use a plain identifier on the " +
+                      "left-hand side.")
+                }
+            }
+            val nextPred = newPred(Nil, itemSrcInfo)
+            // emit one clause per item so state updates compose
+            itemSymex.outputClause(nextPred, itemSrcInfo)
+            prevPred = nextPred
+          }
+          prevPred
+        case other =>
+          warn("Ignoring standalone annotation (unsupported form " +
+               other.getClass.getSimpleName + ")")
+          entry
       }
     }
 
@@ -2876,6 +3118,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           case stm : DecS => {
             val srcInfo = Some(getSourceInfo(stm))
             prevPred = translate(stm.dec_, prevPred)
+            if (!stmsIt.hasNext) {
+              output(addRichClause(Clause(
+                atom(exit, scope.allFormalVarTerms take exit.arity),
+                List(atom(prevPred, scope.allFormalVarTerms take prevPred.arity)),
+                true), srcInfo))
+            }
+          }
+          case stm : StandaloneAnnotationS => {
+            val srcInfo = Some(getSourceInfo(stm))
+            prevPred = translateStandalone(stm.standaloneannotation_, prevPred)
             if (!stmsIt.hasNext) {
               output(addRichClause(Clause(
                 atom(exit, scope.allFormalVarTerms take exit.arity),

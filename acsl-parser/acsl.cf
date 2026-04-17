@@ -1,5 +1,5 @@
 -- Copyright (c) 2021-2022 Pontus Ernstedt
---                    2023 Zafer Esen. All rights reserved.
+--               2023-2026 Zafer Esen. All rights reserved.
 --
 -- Redistribution and use in source and binary forms, with or without
 -- modification, are permitted provided that the following conditions are met:
@@ -27,24 +27,45 @@
 -- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- Parser for (subset of) ACSL.
--- Figure references are to ACSL Manual:
+-- Figure references are to ACSL Manual 1.23:
 -- https://frama-c.com/download/acsl.pdf
 
 -- This grammar merges Predicate and Term into Expr to avoid conflicts.
 
 --- Annotation ---------------------------------------------
-AnnotContract.  Annotation ::= "/*@" FunctionContract "*/";
-AnnotAssertion. Annotation ::= "/*@" Assertion "*/";
-LoopAnnot.      Annotation ::= "/*@" LoopInvariant "*/";
+AnnotContract.   Annotation ::= "/*@" FunctionContract "*/";
+AnnotAssertion.  Annotation ::= "/*@" Assertion "*/";
+LoopAnnot.       Annotation ::= "/*@" LoopInvariant "*/";
+AnnotGhostBlock. Annotation ::= "/*@" GhostBlock "*/";
 
 entrypoints Annotation, FunctionContract, Assertion, LoopInvariant;
+
+---- Ghost (Figure 2.29) ---------------------------------
+AGhostBlock.   GhostBlock ::= "ghost" [GhostItem] ;
+
+GhostItemDecl. GhostItem ::= [CDeclSpec] CDeclarator MaybeGhostInit ";" ;
+GhostItemAsgn. GhostItem ::= GhostLVal "=" Expr ";" ;
+
+separator nonempty GhostItem "" ;
+
+NoGhostInit.   MaybeGhostInit ::= ;
+SomeGhostInit. MaybeGhostInit ::= "=" Expr ;
+
+GhostLValDeref. GhostLVal  ::= "*" GhostLVal ;
+
+GhostLValIdent. GhostLVal2 ::= Id ;
+GhostLValArray. GhostLVal2 ::= GhostLVal2 "[" Expr "]" ;
+GhostLValField. GhostLVal2 ::= GhostLVal2 "." Id ;
+GhostLValArrow. GhostLVal2 ::= GhostLVal2 "->" Id ;
+
+coercions GhostLVal 2 ;
 
 ---- Assertions --------------------------------------------
 RegularAssertion. Assertion ::= AssertionKind Expr ;
 _.                Assertion ::= Assertion ";"  ;
 -- BehaviourAssertion. Assertion ::= for id ... (see Figure 2.9 in the ACSL standard)
 
----- Contracts (2.6) ---------------------------------------
+---- Contracts (Figure 2.6) ---------------------------------------
 Contract. FunctionContract ::= [RequiresClause] MaybeTerminatesClause MaybeDecreasesClause [SimpleClause] [NamedBehavior] [CompletenessClause] ;
 
 Assert.            AssertionKind ::= "assert" ;

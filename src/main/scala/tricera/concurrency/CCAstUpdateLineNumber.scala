@@ -100,6 +100,21 @@ class CCAstUpdtLineNum[A](startLineNumber: Int) extends FoldVisitor[Unit, A] wit
     super.visit(p, arg)
   }
 
+  override def visit(p: AnnotExternal, arg: A): Unit = {
+    setLineNumber(p, lineNumber)
+    super.visit(p, arg)
+  }
+
+  override def visit(p: StandaloneAnnot1, arg: A): Unit = {
+    setLineNumber(p, lineNumber)
+    super.visit(p, arg)
+  }
+
+  override def visit(p: StandaloneAnnotationS, arg: A): Unit = {
+    setLineNumber(p, lineNumber)
+    super.visit(p, arg)
+  }
+
   override def visit(p: ExternKeyword, arg: A): Unit = {
     setLineNumber(p, lineNumber)
     super.visit(p, arg)

@@ -31,15 +31,40 @@ package tricera.parsers
 import java.io.{BufferedReader, BufferedWriter, StringReader, StringWriter}
 import tricera.Literals
 
-// preprocesses ACSL style comments to make life easier for the parser
+// preprocesses ACSL style comments to make life easier for the parser.
+// Content that starts with the `ghost` keyword is wrapped with the
+// standalone marker; everything else gets the hint/contract marker.
+// The two markers are distinct lexer terminals so the C grammar can
+// accept standalone annotations at positions where a hint annotation
+// would conflict with `AnnotatedFunc` / `AnnotatedIterS`.
 object CommentPreprocessor {
-  val annotationMarker = "■■" // ascii 254 times 2
+  val annotationMarker = Literals.annotationMarker
+  val standaloneAnnotationMarker = Literals.standaloneAnnotationMarker
+
+  private val ghostKeyword = "ghost"
+
+  private def startsWithGhost(s: String): Boolean = {
+    var i = 0
+    while (i < s.length && (s.charAt(i) == ' ' || s.charAt(i) == '\t')) i += 1
+    val end = i + ghostKeyword.length
+    if (end > s.length) return false
+    if (s.substring(i, end) != ghostKeyword) return false
+    if (end < s.length) {
+      val c = s.charAt(end)
+      if (c.isLetterOrDigit || c == '_' || c == '$') return false
+    }
+    true
+  }
+
   def apply(reader : BufferedReader, readerBufferSize : Int = 1000) :
   BufferedReader = {
     val stringWriter = new StringWriter(readerBufferSize)
     val writer = new BufferedWriter(stringWriter)
 
     var isInComment = false
+    // Marker used for the currently-open `/*@ ... */` block. Set
+    // when the block opens so that the matching close uses the same marker.
+    var currentMarker = annotationMarker
 
     var line: String = reader.readLine
     val newLine = new scala.collection.mutable.StringBuilder(line.length)
@@ -55,12 +80,21 @@ object CommentPreprocessor {
           case i if i < line.length - 2 => // need at least 2 more chars
             line.substring(i + 1, i + 3) match {
               case "*@" =>
-                newLine ++= line.substring(curInd, i) ++ annotationMarker
+                val marker =
+                  if (startsWithGhost(line.substring(i + 3)))
+                    standaloneAnnotationMarker
+                  else annotationMarker
+                newLine ++= line.substring(curInd, i) ++ marker
                 isInComment = true
+                currentMarker = marker
                 curInd = i + 3
               case "/@" =>
-                newLine ++= line.substring(curInd, i) ++ annotationMarker ++
-                  line.substring(i + 3) ++ annotationMarker
+                val marker =
+                  if (startsWithGhost(line.substring(i + 3)))
+                    standaloneAnnotationMarker
+                  else annotationMarker
+                newLine ++= line.substring(curInd, i) ++ marker ++
+                  line.substring(i + 3) ++ marker
                 curInd = line.length // will move on to next line
               case _ => // found slash but not a comment in our desired format
                 newLine ++= line.substring(curInd, i + 1)
@@ -78,11 +112,11 @@ object CommentPreprocessor {
             curInd = line.length // will move on to next line
           case i if i < line.length - 1 && line.charAt(i + 1) == '/' && // "@*/" found
             i > 0 && line.charAt(i - 1) == '@' =>
-            newLine ++= line.substring(curInd, i - 1) + annotationMarker
+            newLine ++= line.substring(curInd, i - 1) + currentMarker
             curInd = i + 2
             isInComment = false
           case i if i < line.length - 1 && line.charAt(i + 1) == '/' => // "*/" found
-            newLine ++= line.substring(curInd, i) ++ annotationMarker
+            newLine ++= line.substring(curInd, i) ++ currentMarker
             curInd = i + 2
             isInComment = false
           case i => // found a star, but was not for closing the comment

@@ -1,0 +1,32 @@
+#!/bin/sh
+
+
+
+TESTS="ghost_global_safe.c \
+       ghost_block_form_safe.c \
+       ghost_with_init_safe.c \
+       ghost_local_decl_safe.c \
+       ghost_shadowing_unaffected_safe.c \
+       ghost_multi_decl_safe.c \
+       ghost_multi_stmt_safe.c \
+       ghost_interleaved_safe.c \
+       ghost_separate_lines_safe.c \
+       ghost_acsl_assert_safe.c \
+       ghost_c_assert_safe.c \
+       ghost_c_assume_safe.c \
+       ghost_wrong_contract_unsafe.c \
+       ghost_multi_stmt_unsafe.c \
+       ghost_acsl_assert_unsafe.c \
+       ghost_c_assert_unsafe.c \
+       ghost_not_visible_in_c.c \
+       ghost_c_other_expr_rejected.c \
+       ghost_complex_lval_rejected.c \
+       ghost_pointer_decl_rejected.c \
+       ghost_name_clash_global.c \
+       ghost_name_clash_local.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD "$@" $name 2>&1 | grep -v 'at '
+done

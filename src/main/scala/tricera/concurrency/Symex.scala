@@ -276,6 +276,16 @@ class Symex private (context        : SymexContext,
       touchedGlobalState || actualInd < scope.GlobalVars.size || !scope.freeFromGlobal(t)
   }
 
+  def setGhostValue(name : String, t : CCTerm,
+                    enclosingFunction : String) : Unit =
+    setValue(scope.lookupAnyVarNoException(name, enclosingFunction), t)
+
+  private def varLookup(name : String, evalCtx : EvalContext) : Int =
+    if (evalCtx.ghostVisible)
+      scope.lookupAnyVarNoException(name, evalCtx.enclosingFunctionName)
+    else
+      scope.lookupVarNoException(name, evalCtx.enclosingFunctionName)
+
   private def getVar(ind: Int): CCVar = {
     if (ind < scope.GlobalVars.size) scope.GlobalVars.vars(ind)
     else scope.LocalVars.vars(ind - scope.GlobalVars.size)
@@ -806,7 +816,9 @@ class Symex private (context        : SymexContext,
     handlingFunContractArgs : Boolean = false,
     lhsIsArrayPointer       : Boolean = false,
     enclosingFunctionName   : String = "",
-    nestedCallDepth         : Int = 0) {
+    nestedCallDepth         : Int = 0,
+    // for making ghost vars visible, for example to assert & assume statements
+    ghostVisible            : Boolean = false) {
     def withLhsIsArrayPointer(set : Boolean) : EvalContext =
       copy(lhsIsArrayPointer = set)
     def withEvaluatingLHS(set : Boolean) : EvalContext =
@@ -815,6 +827,8 @@ class Symex private (context        : SymexContext,
       copy(handlingFunContractArgs = set)
     def withFunctionName(name : String) : EvalContext =
       copy(enclosingFunctionName = name)
+    def withGhostVisible(set : Boolean) : EvalContext =
+      copy(ghostVisible = set)
     def incrementCallDepth : EvalContext =
       copy(nestedCallDepth = nestedCallDepth + 1)
   }
@@ -1351,10 +1365,11 @@ class Symex private (context        : SymexContext,
       val srcInfo = Some(getSourceInfo(exp))
       GetId.orString(exp) match {
         case "assert" | "static_assert" if exp.listexp_.size == 1 =>
+          val specCtx = evalCtx.withGhostVisible(true)
           val property = exp.listexp_.asScala.head match {
             case a : Efunkpar
               if context.uninterpPredDecls contains(GetId.orString(a)) =>
-              val args = a.listexp_.asScala.map(exp => atomicEval(exp, evalCtx))
+              val args = a.listexp_.asScala.map(exp => atomicEval(exp, specCtx))
               if(args.exists(a => a.typ.isInstanceOf[CCStackPointer])) {
                 throw new TranslationException(
                   getLineStringShort(srcInfo) + " Unsupported operation: " +
@@ -1365,13 +1380,13 @@ class Symex private (context        : SymexContext,
             case interpPred : Efunkpar
               if context.interpPredDefs contains(GetId.orString(interpPred)) =>
               val args    = interpPred.listexp_.asScala.map(
-                exp => atomicEval(exp, evalCtx)).map(_.toTerm)
+                exp => atomicEval(exp, specCtx)).map(_.toTerm)
               val formula = context.interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.toFormula, (args.toList, 0))
             case _ =>
-              atomicEvalFormula(exp.listexp_. asScala.head, evalCtx).toFormula
+              atomicEvalFormula(exp.listexp_. asScala.head, specCtx).toFormula
           }
           assertProperty(property, srcInfo, properties.UserAssertion)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
@@ -1379,23 +1394,24 @@ class Symex private (context        : SymexContext,
           addGuard(IBoolLit(false))
           pushVal(CCTerm.fromFormula(false, CCInt, srcInfo))
         case "assume" if exp.listexp_.size == 1 =>
+          val specCtx = evalCtx.withGhostVisible(true)
           val property = exp.listexp_.asScala.head match {
             case a : Efunkpar
               if context.uninterpPredDecls contains(GetId.orString(a)) =>
-              val args = a.listexp_.asScala.map(exp => atomicEval(exp, evalCtx))
+              val args = a.listexp_.asScala.map(exp => atomicEval(exp, specCtx))
                           .map(_.toTerm).toSeq
               val pred = context.uninterpPredDecls(GetId.orString(a))
               context.atom(pred, args)
             case interpPred : Efunkpar
               if context.interpPredDefs contains (GetId.orString(interpPred)) =>
               val args = interpPred.listexp_.asScala.map(
-                exp => atomicEval(exp, evalCtx)).map(_.toTerm)
+                exp => atomicEval(exp, specCtx)).map(_.toTerm)
               val formula = context.interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.toFormula, (args.toList, 0))
             case _ =>
-              atomicEvalFormula(exp.listexp_.asScala.head, evalCtx).toFormula
+              atomicEvalFormula(exp.listexp_.asScala.head, specCtx).toFormula
           }
           addGuard(property)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
@@ -1613,7 +1629,7 @@ class Symex private (context        : SymexContext,
           pushVal(CCTerm.fromTerm(context.heap.defaultObject,
                                   CCHeapObject(context.heap), Some(getSourceInfo(exp))))
         case _ =>
-          pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+          pushVal(varLookup(name, evalCtx) match {
                     case -1 =>
                       (context.enumeratorDefs get name) match {
                         case Some(e) => e
@@ -1629,7 +1645,7 @@ class Symex private (context        : SymexContext,
     case exp : EvarWithType =>
       // todo: Unify with Evar, they should always be treated the same.
       val name = exp.cident_
-      pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+      pushVal(varLookup(name, evalCtx) match {
                 case -1 =>
                   (context.enumeratorDefs get name) match {
                     case Some(e) => e
