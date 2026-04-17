@@ -69,13 +69,28 @@ ghost_control_flow_if_unsafe.c
 UNSAFE
 
 ghost_not_visible_in_c.c
-Horn Translation Error: At (7:10)): Symbol v is not declared
+Horn Translation Error: At (5:10)): Symbol v is not declared
 
 ghost_c_other_expr_rejected.c
-Horn Translation Error: At (6:11)): Symbol v is not declared
+Horn Translation Error: At (4:11)): Symbol v is not declared
 
 ghost_name_clash_global.c
-Horn Translation Error: Ghost variable `v` (line 3) clashes with a regular C variable of the same name (line 4). ACSL requires ghost and real names to be disjoint.
+Horn Translation Error: Ghost variable `v` (line 1) clashes with a regular C variable of the same name (line 2). ACSL requires ghost and real names to be disjoint.
 
 ghost_name_clash_local.c
 Horn Translation Error: Ghost variable `v` (line 3) clashes with a regular C variable of the same name (line 6). ACSL requires ghost and real names to be disjoint.
+
+ghost_integer_type_safe.c
+SAFE
+
+ghost_boolean_type_safe.c
+SAFE
+
+ghost_writes_non_ghost_rejected.c
+Horn Translation Error: Ghost code cannot modify non-ghost variable `r`.
+
+ghost_writes_non_ghost_field_rejected.c
+Horn Translation Error: Ghost code cannot modify non-ghost variable `s`.
+
+ghost_identifier_integer_outside_safe.c
+SAFE

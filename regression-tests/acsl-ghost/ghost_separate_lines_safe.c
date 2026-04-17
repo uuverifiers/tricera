@@ -1,4 +1,3 @@
-// Sequential `//@ ghost` lines: a later line references earlier ones.
 //@ ghost int x = 0;
 //@ ghost int y = x + 1;
 

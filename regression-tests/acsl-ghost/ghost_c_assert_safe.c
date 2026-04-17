@@ -1,9 +1,7 @@
-// Regular C `assert()` sees ghost variables (specification-like
-// primitive in Tricera's extended C).
 //@ ghost int v;
 
 int main() {
   //@ ghost v = 5;
-  assert(v == 5);
+  assert(v == 5); // regular assert()` sees ghost variables
   return 0;
 }

@@ -1,5 +1,3 @@
-// Multiple ghost statements in a single block: the second statement
-// sees the state left by the first.
 //@ ghost int x;
 
 int main() {

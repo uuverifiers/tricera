@@ -1,5 +1,3 @@
-// Same as ghost_multi_stmt_safe.c but the assertion is deliberately
-// wrong to exercise the UNSAFE path.
 //@ ghost int x;
 
 int main() {

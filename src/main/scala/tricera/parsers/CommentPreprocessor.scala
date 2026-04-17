@@ -139,7 +139,24 @@ object CommentPreprocessor {
 
 //    println("comment-preprocessed input:\n\n" + stringWriter.getBuffer.toString)
 
-    new BufferedReader(new StringReader(stringWriter.getBuffer.toString))
+    new BufferedReader(new StringReader(
+      rewriteGhostLogicTypes(stringWriter.getBuffer.toString)))
     // todo: benchmark this with files, >1 MB, benchmark this whole class
   }
+
+  // ACSL treats `integer` and `boolean` as logic-type keywords
+  // inside annotations. Regular C code may still use them as plain
+  // identifiers. Rewrite them to internal (`$MathInt`, `_Bool`)
+  private val ghostSpanRegex =
+    new scala.util.matching.Regex(
+      java.util.regex.Pattern.quote(ghostOpenMarker) + "(.*?)" +
+      java.util.regex.Pattern.quote(ghostCloseMarker), "body")
+  private def rewriteGhostLogicTypes(s : String) : String =
+    ghostSpanRegex.replaceAllIn(s, m => {
+      val body = m.group("body")
+        .replaceAll("\\binteger\\b", "\\$MathInt")
+        .replaceAll("\\bboolean\\b", "_Bool")
+      java.util.regex.Matcher.quoteReplacement(
+        ghostOpenMarker + body + ghostCloseMarker)
+    })
 }

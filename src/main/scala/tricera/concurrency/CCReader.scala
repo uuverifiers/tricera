@@ -1572,6 +1572,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                     else values.EvalContext()
                   base.withFunctionName(enclosingFuncName)
                       .withGhostVisible(isGhost)
+                      .withGhostMode(isGhost)
                 }
                 val res = values.eval(actualInitExp)(
                   values.EvalSettings(), evalContext)
@@ -2165,6 +2166,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 throw NeedsHeapModelException
               typ = CCHeapObject(heap)
             }
+            case _ : Tmathint =>
+              typ = CCMathInt
+            case _ : Tbool =>
+              typ = CCBool
             case x => {
               warn("type " + (printer print x) +
                    " not supported, assuming int")
@@ -2403,6 +2408,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           implicit val evalContext = exprSymex.EvalContext()
                                               .withFunctionName(functionName)
                                               .withGhostVisible(inGhostMode)
+                                              .withGhostMode(inGhostMode)
           Some(exprSymex eval stm.exp_)
       }
       (exprSymex, res)
@@ -3027,6 +3033,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
                                             .withGhostVisible(inGhostMode)
+                                            .withGhostMode(inGhostMode)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, first, exit, entry.srcInfo)
         withinLoop(entry, exit) {
@@ -3052,6 +3059,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalContext  = condSymex.EvalContext()
                                              .withFunctionName(functionName)
                                              .withGhostVisible(inGhostMode)
+                                             .withGhostMode(inGhostMode)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, entry, exit, srcInfo)
       }
@@ -3096,6 +3104,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             val evalContext = incSymex.EvalContext()
                                                .withFunctionName(functionName)
                                                .withGhostVisible(inGhostMode)
+                                               .withGhostMode(inGhostMode)
             incSymex.eval(stm.exp_)(incSymex.EvalSettings(), evalContext)
             incSymex outputClause (first, srcInfo)
           }
@@ -3112,6 +3121,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
                                             .withGhostVisible(inGhostMode)
+                                            .withGhostMode(inGhostMode)
         val (cond, srcInfo1, srcInfo2) = stm match {
           case stm : SselOne =>
             ((condSymex eval stm.exp_).toFormula,
@@ -3147,6 +3157,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalContext  = selectorSymex.EvalContext()
                                                  .withFunctionName(functionName)
                                                  .withGhostVisible(inGhostMode)
+                                                 .withGhostMode(inGhostMode)
         val selector = (selectorSymex eval stm.exp_).toTerm
 
         val newEntry = newPred(Nil, Some(getSourceInfo(stm)))
@@ -3228,6 +3239,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           implicit val evalContext  = symex.EvalContext()
                                            .withFunctionName(functionName)
                                            .withGhostVisible(inGhostMode)
+                                           .withGhostMode(inGhostMode)
           val retValue = symex eval jump.exp_
           if (retValue.typ.isInstanceOf[CCStackPointer]) {
             throw new UnsupportedCFragmentException(
@@ -3274,6 +3286,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             implicit val evalContext  = condSymex.EvalContext()
                                                  .withFunctionName(functionName)
                                                  .withGhostVisible(inGhostMode)
+                                                 .withGhostMode(inGhostMode)
             condSymex.saveState
             val cond = (condSymex eval stm.exp_).toFormula
             if (!condSymex.atomValuesUnchanged)

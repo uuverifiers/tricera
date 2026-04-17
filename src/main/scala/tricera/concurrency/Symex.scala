@@ -264,8 +264,14 @@ class Symex private (context        : SymexContext,
         structType.getFieldTerm(structVal, ptrType.fieldAddress)
     }
 
-  private def setValue(name : String, t : CCTerm, enclosingFunction : String) : Unit =
-    setValue(scope.lookupAnyVarNoException(name, enclosingFunction), t)
+  private def setValue(name : String, t : CCTerm, enclosingFunction : String)
+                      (implicit evalCtx : EvalContext) : Unit = {
+    val idx = scope.lookupAnyVarNoException(name, enclosingFunction)
+    if (evalCtx.ghostMode && idx >= 0 && !getVar(idx).isGhost)
+      throw new TranslationException(
+        s"Ghost code cannot modify non-ghost variable `$name`.")
+    setValue(idx, t)
+  }
   private def setValue(ind: Int, t : CCTerm) : Unit = {
     val actualInd = getValue(ind, false).typ match {
       case stackPtr: CCStackPointer => stackPtr.targetInd
@@ -755,6 +761,14 @@ class Symex private (context        : SymexContext,
       val pointerVal =
         eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
       if (isHeapPointer(pointerVal)) {
+        if (evalCtx.ghostMode) {
+          val ptrName = asLValue(pointerExp)
+          val ptrIdx = scope.lookupAnyVarNoException(
+            ptrName, evalCtx.enclosingFunctionName)
+          if (ptrIdx >= 0 && !getVar(ptrIdx).isGhost)
+            throw new TranslationException(
+              s"Ghost code cannot write through non-ghost pointer `$ptrName`.")
+        }
         processHeapResult(heapModel.write(
           pointerVal, wrapAsHeapObject(topVal),
           values, getStaticLocationId(originalExp)))
@@ -825,7 +839,9 @@ class Symex private (context        : SymexContext,
     enclosingFunctionName   : String = "",
     nestedCallDepth         : Int = 0,
     // for making ghost vars visible, for example to assert & assume statements
-    ghostVisible            : Boolean = false) {
+    ghostVisible            : Boolean = false,
+    // inside a ghost body: writes to non-ghost state are rejected
+    ghostMode               : Boolean = false) {
     def withLhsIsArrayPointer(set : Boolean) : EvalContext =
       copy(lhsIsArrayPointer = set)
     def withEvaluatingLHS(set : Boolean) : EvalContext =
@@ -836,6 +852,8 @@ class Symex private (context        : SymexContext,
       copy(enclosingFunctionName = name)
     def withGhostVisible(set : Boolean) : EvalContext =
       copy(ghostVisible = set)
+    def withGhostMode(set : Boolean) : EvalContext =
+      copy(ghostMode = set)
     def incrementCallDepth : EvalContext =
       copy(nestedCallDepth = nestedCallDepth + 1)
   }

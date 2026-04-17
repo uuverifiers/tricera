@@ -1,4 +1,3 @@
-// ACSL `//@ assert` over a ghost variable with a false predicate.
 //@ ghost int v;
 
 int main() {

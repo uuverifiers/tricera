@@ -28,7 +28,12 @@ TESTS="ghost_global_safe.c \
        ghost_not_visible_in_c.c \
        ghost_c_other_expr_rejected.c \
        ghost_name_clash_global.c \
-       ghost_name_clash_local.c"
+       ghost_name_clash_local.c \
+       ghost_integer_type_safe.c \
+       ghost_boolean_type_safe.c \
+       ghost_writes_non_ghost_rejected.c \
+       ghost_writes_non_ghost_field_rejected.c \
+       ghost_identifier_integer_outside_safe.c"
 
 for name in $TESTS; do
     echo
