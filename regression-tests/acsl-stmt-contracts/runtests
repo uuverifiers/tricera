@@ -1,0 +1,33 @@
+#!/bin/sh
+
+
+
+TESTS="stmt_contract_block_safe.c \
+       stmt_contract_block_unsafe.c \
+       stmt_contract_single_stm_safe.c \
+       stmt_contract_old_safe.c \
+       stmt_contract_pre_violated_unsafe.c \
+       stmt_contract_assigns_unsafe.c \
+       stmt_contract_nested_safe.c \
+       stmt_contract_heap_old_safe.c \
+       stmt_contract_heap_ensures_unsafe.c \
+       stmt_contract_heap_assigns_safe.c \
+       stmt_contract_heap_assigns_unsafe.c \
+       stmt_contract_full_safe.c \
+       stmt_contract_early_return_known_limitation.c \
+       stmt_contract_trailing_warns.c \
+       stmt_contract_old_struct_safe.c \
+       stmt_contract_old_struct_unsafe.c \
+       stmt_contract_ensures_only_safe.c \
+       stmt_contract_requires_only_safe.c \
+       stmt_contract_adjacent_rejected.c \
+       stmt_contract_ghost_inside_safe.c \
+       stmt_contract_old_array_safe.c \
+       stmt_contract_old_array_unsafe.c \
+       stmt_contract_old_global_safe.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD "$@" $name 2>&1 | grep -v 'at '
+done

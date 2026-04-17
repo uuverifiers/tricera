@@ -2682,6 +2682,151 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       }
     }
 
+    private def isStatementContract(annotStm : Annotation) : Boolean = {
+      val annotationInfo = AnnotationParser(annotationStringExtractor(annotStm))
+      annotationInfo match {
+        case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
+          try ACSLTranslator.parseAnnotationAst("/*@" + annot + "*/")
+                .isInstanceOf[tricera.acsl.Absyn.AnnotContract]
+          catch { case _ : Throwable => false }
+        case _ => false
+      }
+    }
+
+    private class StmtContractContext(annotStm  : Annotation,
+                                      liveVars  : List[CCVar],
+                                      oldVars   : List[CCVar],
+                                      oldHeap   : Option[CCVar])
+        extends ACSLTranslator.FunctionContext {
+      private val oldMap : Map[String, CCVar] =
+        (liveVars.map(_.name) zip oldVars).toMap
+
+      def getOldVar(ident : String) : Option[CCVar] = oldMap.get(ident)
+      def getPostGlobalVar(ident : String) : Option[CCVar] =
+        liveVars.find(_.name == ident)
+      def getParams : scala.Seq[CCVar] = Nil
+      def getGlobals : scala.Seq[CCVar] = liveVars
+      def getResultVar : Option[CCVar] = None
+      def isHeapEnabled : Boolean = modelHeap
+      def getHeap : HeapTheoryObject =
+        if (modelHeap) heap else throw NeedsHeapModelException
+      def getHeapTerm : ITerm = {
+        if (modelHeap) {
+          val heapVar = heapModel.get match {
+            case m : HeapTheoryModel => m.heapVar
+            case _ => throw new TranslationException(
+              "Heap in ACSL only supported using the theory of heaps.")
+          }
+          IConstant(heapVar.term)
+        } else throw NeedsHeapModelException
+      }
+      def getOldHeapTerm : ITerm = oldHeap match {
+        case Some(h) => IConstant(h.term)
+        case None    => getHeapTerm
+      }
+      def sortWrapper(s : Sort) : Option[IFunction] = sortWrapperMap get s
+      def sortGetter(s : Sort) : Option[IFunction] = sortGetterMap get s
+      def wrapperSort(w : IFunction) : Option[Sort] = w match {
+        case w : MonoSortedIFunction => wrapperSortMap.get(w)
+        case _ => None
+      }
+      def getterSort(g : IFunction) : Option[Sort] = g match {
+        case g : MonoSortedIFunction => getterSortMap.get(g)
+        case _ => None
+      }
+      def getCtor(s : Sort) : Int = sortCtorIdMap(s)
+      def getTypOfPointer(t : CCType) : CCType = t match {
+        case p : CCHeapPointer => p.typ
+        case _ => t
+      }
+      val getStructMap : Map[IFunction, CCStruct] =
+        structDefs.values.map(s => (s.ctor, s)).toMap
+      val annotationBeginSourceInfo : SourceInfo = getSourceInfo(annotStm)
+      val annotationNumLines : Int = 1
+    }
+
+    private def translateContractedStm(annotStm : Annotation,
+                                       bodyStm  : Stm,
+                                       entry    : CCPredicate,
+                                       exit     : CCPredicate) : Unit = {
+      import HornClauses._
+
+      val annotationInfo =
+        AnnotationParser(annotationStringExtractor(annotStm))
+      val wrapped : String = annotationInfo match {
+        case scala.Seq(MaybeACSLAnnotation(a, _)) => "/*@" + a + "*/"
+        case _ => throw new TranslationException(
+          "Expected a statement contract annotation.")
+      }
+
+      val outerVars = scope.allFormalVars.toList
+      val heapVarSet : Set[CCVar] =
+        if (modelHeap) heapVars.values.toSet else Set.empty
+      val liveVars    = outerVars.filterNot(heapVarSet.contains)
+      val liveHeap    = outerVars.filter(heapVarSet.contains)
+
+      scope.LocalVars.pushFrame
+      val oldVars = liveVars.map(v =>
+        new CCVar(v.name + Literals.preExecSuffix,
+                  v.srcInfo, v.typ, AutoStorage))
+      val oldHeapVars = liveHeap.map(v =>
+        new CCVar(v.name + Literals.preExecSuffix,
+                  v.srcInfo, v.typ, AutoStorage))
+      for (v <- oldVars) scope.LocalVars.addVar(v)
+      for (v <- oldHeapVars) scope.LocalVars.addVar(v)
+
+      val contract : FunctionContract =
+        try ACSLTranslator.translateACSL(
+              wrapped,
+              new StmtContractContext(annotStm, liveVars,
+                                      oldVars, oldHeapVars.headOption))
+            .asInstanceOf[FunctionContract]
+        catch {
+          case e : Throwable =>
+            scope.LocalVars.popFrame
+            throw e
+        }
+
+      val annotSrc = Some(getSourceInfo(annotStm))
+
+      val oldToLive : Map[ConstantTerm, ITerm] =
+        (oldVars.zip(liveVars) ++ oldHeapVars.zip(liveHeap)).map {
+          case (o, v) => (o.term.asInstanceOf[ConstantTerm], IConstant(v.term))
+        }.toMap
+      val preAtEntry : IFormula =
+        ConstantSubstVisitor(contract.pre, oldToLive)
+
+      val preSymex = Symex(symexContext, scope, entry, heapModel)
+      preSymex.assertProperty(preAtEntry, annotSrc, properties.Reachability)
+
+      val bodyEntry = newPred(Nil, annotSrc)
+      val bodyExit  = newPred(Nil, Some(getSourceInfo(bodyStm)))
+
+      val snapshotEq : IFormula =
+        (oldVars.zip(liveVars) ++ oldHeapVars.zip(liveHeap))
+          .foldLeft(IBoolLit(true) : IFormula) {
+            case (f, (o, v)) => f &&& (IConstant(o.term) === IConstant(v.term))
+          }
+      output(addRichClause(Clause(
+        atom(bodyEntry, scope.allFormalVarTerms take bodyEntry.arity),
+        List(atom(entry, scope.allFormalVarTerms take entry.arity)),
+        snapshotEq), annotSrc))
+
+      translate(bodyStm, bodyEntry, bodyExit)
+
+      val postSymex = Symex(symexContext, scope, bodyExit, heapModel)
+      postSymex.assertProperty(
+        contract.post &&& contract.assignsAssert,
+        Some(contract.postSrcInfo), properties.Reachability)
+
+      output(addRichClause(Clause(
+        atom(exit, scope.allFormalVarTerms take exit.arity),
+        List(atom(bodyExit, scope.allFormalVarTerms take bodyExit.arity)),
+        true), annotSrc))
+
+      scope.LocalVars.popFrame
+    }
+
     // Ghost block inside a function body
     private def translateGhostStmBlock(stms    : scala.Seq[Stm],
                                        entry   : CCPredicate,
@@ -2971,6 +3116,24 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 true), srcInfo))
             }
           }
+          case annotStm : AnnotationS if isStatementContract(annotStm.annotation_) =>
+            if (!stmsIt.hasNext) {
+              warn("Statement contract has no following statement; ignored.")
+            } else {
+              val contracted = stmsIt.next
+              val immediatelyFollowedByContract = contracted match {
+                case a : AnnotationS => isStatementContract(a.annotation_)
+                case _ => false
+              }
+              if (immediatelyFollowedByContract)
+                throw new TranslationException(
+                  "Statement contract must be followed by a statement, " +
+                  "not another contract.")
+              val nextPred = if (stmsIt.hasNext) newPred(Nil, None) else exit
+              translateContractedStm(annotStm.annotation_,
+                                     contracted, prevPred, nextPred)
+              prevPred = nextPred
+            }
           case stm => {
             val srcInfo = Some(getSourceInfo(stm))
             val nextPred = if (stmsIt.hasNext) newPred(Nil, None) // todo: line no?

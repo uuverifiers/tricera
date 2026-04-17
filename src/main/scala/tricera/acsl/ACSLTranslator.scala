@@ -84,13 +84,17 @@ object ACSLTranslator {
                col    = srcInfo.col)
   }
 
+  def parseAnnotationAst(annot : String) : AST.Annotation = {
+    val l : Yylex  = new Yylex(new java.io.StringReader(preprocess(annot)))
+    val p : parser = new parser(l, l.getSymbolFactory())
+    p.pAnnotation()
+  }
+
   @throws[ACSLException]("if not called with the right context")
   @throws[ACSLParseException]("if parsing or translation fails")
   def translateACSL(annot : String,
                     ctx   : AnnotationContext) : ParsedAnnotation = {
-    val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
-    val p : parser = new parser(l, l.getSymbolFactory())
-    val ast : AST.Annotation = p.pAnnotation()
+    val ast : AST.Annotation = parseAnnotationAst(annot)
     val translator = new ACSLTranslator(ctx)
 
     ast match {
