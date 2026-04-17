@@ -33,32 +33,11 @@
 -- This grammar merges Predicate and Term into Expr to avoid conflicts.
 
 --- Annotation ---------------------------------------------
-AnnotContract.   Annotation ::= "/*@" FunctionContract "*/";
-AnnotAssertion.  Annotation ::= "/*@" Assertion "*/";
-LoopAnnot.       Annotation ::= "/*@" LoopInvariant "*/";
-AnnotGhostBlock. Annotation ::= "/*@" GhostBlock "*/";
+AnnotContract.  Annotation ::= "/*@" FunctionContract "*/";
+AnnotAssertion. Annotation ::= "/*@" Assertion "*/";
+LoopAnnot.      Annotation ::= "/*@" LoopInvariant "*/";
 
 entrypoints Annotation, FunctionContract, Assertion, LoopInvariant;
-
----- Ghost (Figure 2.29) ---------------------------------
-AGhostBlock.   GhostBlock ::= "ghost" [GhostItem] ;
-
-GhostItemDecl. GhostItem ::= [CDeclSpec] CDeclarator MaybeGhostInit ";" ;
-GhostItemAsgn. GhostItem ::= GhostLVal "=" Expr ";" ;
-
-separator nonempty GhostItem "" ;
-
-NoGhostInit.   MaybeGhostInit ::= ;
-SomeGhostInit. MaybeGhostInit ::= "=" Expr ;
-
-GhostLValDeref. GhostLVal  ::= "*" GhostLVal ;
-
-GhostLValIdent. GhostLVal2 ::= Id ;
-GhostLValArray. GhostLVal2 ::= GhostLVal2 "[" Expr "]" ;
-GhostLValField. GhostLVal2 ::= GhostLVal2 "." Id ;
-GhostLValArrow. GhostLVal2 ::= GhostLVal2 "->" Id ;
-
-coercions GhostLVal 2 ;
 
 ---- Assertions --------------------------------------------
 RegularAssertion. Assertion ::= AssertionKind Expr ;

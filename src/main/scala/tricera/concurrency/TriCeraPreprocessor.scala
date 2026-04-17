@@ -39,7 +39,8 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                           val entryFunction   : String,
                           val displayWarnings : Boolean,
                           val quiet           : Boolean,
-                          val determinize     : Boolean) {
+                          val determinize     : Boolean,
+                          val noDeclSlice     : Boolean = false) {
   val ppPath : String = sys.env.get("TRI_PP_PATH") match {
     case Some(path) => path + "/tri-pp"
     case _ =>
@@ -72,7 +73,9 @@ class TriCeraPreprocessor(val inputFilePath   : String,
   }
 
   private val initialReturnCode = runPreprocessor(
-    Nil, "TriCera preprocessor could not be executed.", inputFilePath, outputFilePath)
+    if (noDeclSlice) Seq("--no-decl-slice") else Nil,
+    "TriCera preprocessor could not be executed.",
+    inputFilePath, outputFilePath)
   val hasError : Boolean = initialReturnCode != 0
 
   if (determinize) {

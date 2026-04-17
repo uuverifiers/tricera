@@ -77,15 +77,11 @@ class CCAstCopyWithLocation[A] extends ComposVisitor[A] with CopyAstLocation {
     copyLocationInformation(p, super.visit(p, arg))
   }
 
-  override def visit(p: AnnotExternal, arg: A): External_declaration = {
+  override def visit(p: GhostExternal, arg: A): External_declaration = {
     copyLocationInformation(p, super.visit(p, arg))
   }
 
-  override def visit(p: StandaloneAnnot1, arg: A): StandaloneAnnotation = {
-    copyLocationInformation(p, super.visit(p, arg))
-  }
-
-  override def visit(p: StandaloneAnnotationS, arg: A): Stm = {
+  override def visit(p: GhostStm, arg: A): Stm = {
     copyLocationInformation(p, super.visit(p, arg))
   }
 

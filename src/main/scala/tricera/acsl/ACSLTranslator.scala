@@ -61,7 +61,6 @@ object ACSLTranslator {
     val getStructMap: Map[IFunction, CCStruct]
     val annotationBeginSourceInfo : SourceInfo
     val annotationNumLines : Int
-    def enclosingFunction : Option[String] = None
   }
 
   trait FunctionContext extends AnnotationContext {
@@ -116,8 +115,6 @@ object ACSLTranslator {
           case _ => throw new ACSLException("A statement context is " +
                                             "needed to parse a loop invariant annotation.")
         }
-      case ac : AST.AnnotGhostBlock =>
-        translator.translateGhostBlock(ac.ghostblock_)
       case _ => throw new ACSLException("Not a contract or " +
                                         "statement annotation.")
     }
@@ -174,89 +171,6 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         LoopAnnotation(f.toFormula)
     }
   }
-
-  // ---- Ghost blocks, declarations, statements -------------
-  // Parses a `/*@ ghost <items> */` block
-  def translateGhostBlock(block : AST.GhostBlock) : GhostBlock = {
-    val srcInfo = getSourceInfo(block)
-    block match {
-      case b : AST.AGhostBlock =>
-        val items = b.listghostitem_.asScala.toList.map { item =>
-          val translated = translateGhostItem(item)
-          translated match {
-            case decl : GhostDeclaration =>
-              vars = vars + (decl.ccVar.name -> decl.ccVar)
-            case _ =>
-          }
-          translated
-        }
-        GhostBlock(items, srcInfo)
-    }
-  }
-
-  private def translateGhostItem(item : AST.GhostItem) : GhostItem =
-    item match {
-      case decl : AST.GhostItemDecl =>
-        val srcInfo     = getSourceInfo(decl)
-        val baseTyp     = ghostBaseType(decl.listcdeclspec_)
-        val (name, typ) = ghostDeclarator(decl.cdeclarator_, baseTyp)
-        val ccVar = new tricera.concurrency.ccreader.CCVar(
-          name, Some(srcInfo), typ,
-          tricera.concurrency.ccreader.GhostStorage(ctx.enclosingFunction))
-        val initOpt = decl.maybeghostinit_ match {
-          case _ : AST.NoGhostInit   => None
-          case e : AST.SomeGhostInit => Some(translate(e.expr_).toTerm)
-        }
-        GhostDeclaration(ccVar, initOpt, srcInfo)
-      case asgn : AST.GhostItemAsgn =>
-        val srcInfo = getSourceInfo(asgn)
-        val lhs     = translateGhostLVal(asgn.ghostlval_)
-        val rhs     = translate(asgn.expr_).toTerm
-        GhostAssignment(lhs, rhs, srcInfo)
-    }
-
-  private def translateGhostLVal(lv : AST.GhostLVal) : GhostLValue = lv match {
-    case l : AST.GhostLValIdent => GhostLValIdent(l.id_)
-    case l : AST.GhostLValArray =>
-      GhostLValArray(translateGhostLVal(l.ghostlval_),
-                     translate(l.expr_).toTerm)
-    case l : AST.GhostLValField =>
-      GhostLValField(translateGhostLVal(l.ghostlval_), l.id_)
-    case l : AST.GhostLValArrow =>
-      GhostLValArrow(translateGhostLVal(l.ghostlval_), l.id_)
-    case l : AST.GhostLValDeref =>
-      GhostLValDeref(translateGhostLVal(l.ghostlval_))
-  }
-
-  private def ghostBaseType(declSpecs : AST.ListCDeclSpec) : CCType = {
-    val specs = declSpecs.asScala.toList
-    getType(for (specifier <- specs.iterator;
-                 if specifier.isInstanceOf[AST.CType])
-            yield specifier.asInstanceOf[AST.CType].ctypespec_)
-  }
-
-  private def ghostDeclarator(d   : AST.CDeclarator,
-                              typ : CCType) : (String, CCType) = d match {
-    case np : AST.NoPointer =>
-      ghostDirectDeclarator(np.cdirectdeclarator_, typ)
-    case bp : AST.BeginPointer =>
-      throw new ACSLParseException(
-        "Pointer types in ghost declarations are not yet supported. " +
-        "Only plain identifier declarators are accepted for now.",
-        getSourceInfo(bp))
-  }
-
-  private def ghostDirectDeclarator(d   : AST.CDirectDeclarator,
-                                    typ : CCType) : (String, CCType) =
-    d match {
-      case n : AST.Name => (n.id_, typ)
-      case other =>
-        throw new ACSLParseException(
-          "Only plain identifier declarators are supported in ghost " +
-          "declarations (arrays, parenthesised, function declarators " +
-          "are deferred): " + (printer print other),
-          getSourceInfo(other))
-    }
 
   // ---- Contracts ------------------------------------------
   def translate(contract : AST.FunctionContract) : FunctionContract = contract match {

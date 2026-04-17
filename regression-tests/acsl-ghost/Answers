@@ -35,6 +35,18 @@ SAFE
 ghost_c_assume_safe.c
 SAFE
 
+ghost_pointer_assign_safe.c
+SAFE
+
+ghost_struct_field_safe.c
+SAFE
+
+ghost_control_flow_if_safe.c
+SAFE
+
+ghost_while_loop_safe.c
+SAFE
+
 ghost_wrong_contract_unsafe.c
 UNSAFE
 
@@ -47,22 +59,23 @@ UNSAFE
 ghost_c_assert_unsafe.c
 UNSAFE
 
+ghost_pointer_assign_unsafe.c
+UNSAFE
+
+ghost_struct_field_unsafe.c
+UNSAFE
+
+ghost_control_flow_if_unsafe.c
+UNSAFE
+
 ghost_not_visible_in_c.c
-(error "Undeclared identifier in expression: v, line: 7 col:10")
-Other Error: Undeclared identifier in expression: v, line: 7 col:10
+Horn Translation Error: At (7:10)): Symbol v is not declared
 
 ghost_c_other_expr_rejected.c
-(error "Undeclared identifier in expression: v, line: 6 col:11")
-Other Error: Undeclared identifier in expression: v, line: 6 col:11
-
-ghost_complex_lval_rejected.c
-Horn Translation Error: Complex lvalues (arrays, fields, pointer deref) are not yet supported in ghost assignments (line 1). Use a plain identifier on the left-hand side.
-
-ghost_pointer_decl_rejected.c
-Horn Translation Error: Could not parse standalone ACSL annotation (line 3): Pointer types in ghost declarations are not yet supported. Only plain identifier declarators are accepted for now.
+Horn Translation Error: At (6:11)): Symbol v is not declared
 
 ghost_name_clash_global.c
-Horn Translation Error: Ghost variable `v` (line 1) clashes with a regular C variable of the same name (line 4). ACSL requires ghost and real names to be disjoint.
+Horn Translation Error: Ghost variable `v` (line 3) clashes with a regular C variable of the same name (line 4). ACSL requires ghost and real names to be disjoint.
 
 ghost_name_clash_local.c
-Horn Translation Error: Ghost variable `v` (line 1) clashes with a regular C variable of the same name (line 6). ACSL requires ghost and real names to be disjoint.
+Horn Translation Error: Ghost variable `v` (line 3) clashes with a regular C variable of the same name (line 6). ACSL requires ghost and real names to be disjoint.

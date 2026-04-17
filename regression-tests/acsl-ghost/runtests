@@ -14,14 +14,19 @@ TESTS="ghost_global_safe.c \
        ghost_acsl_assert_safe.c \
        ghost_c_assert_safe.c \
        ghost_c_assume_safe.c \
+       ghost_pointer_assign_safe.c \
+       ghost_struct_field_safe.c \
+       ghost_control_flow_if_safe.c \
+       ghost_while_loop_safe.c \
        ghost_wrong_contract_unsafe.c \
        ghost_multi_stmt_unsafe.c \
        ghost_acsl_assert_unsafe.c \
        ghost_c_assert_unsafe.c \
+       ghost_pointer_assign_unsafe.c \
+       ghost_struct_field_unsafe.c \
+       ghost_control_flow_if_unsafe.c \
        ghost_not_visible_in_c.c \
        ghost_c_other_expr_rejected.c \
-       ghost_complex_lval_rejected.c \
-       ghost_pointer_decl_rejected.c \
        ghost_name_clash_global.c \
        ghost_name_clash_local.c"
 

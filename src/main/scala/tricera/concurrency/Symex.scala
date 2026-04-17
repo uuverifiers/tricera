@@ -265,7 +265,7 @@ class Symex private (context        : SymexContext,
     }
 
   private def setValue(name : String, t : CCTerm, enclosingFunction : String) : Unit =
-    setValue(scope.lookupVar(name, enclosingFunction), t)
+    setValue(scope.lookupAnyVarNoException(name, enclosingFunction), t)
   private def setValue(ind: Int, t : CCTerm) : Unit = {
     val actualInd = getValue(ind, false).typ match {
       case stackPtr: CCStackPointer => stackPtr.targetInd
@@ -317,12 +317,19 @@ class Symex private (context        : SymexContext,
         (context.printer print exp))
   }
 
+  private def lookupTypeOf(name              : String,
+                           enclosingFunction : String) : Option[CCType] = {
+    val idx = scope.lookupAnyVarNoException(name, enclosingFunction)
+    if (idx < 0) None
+    else Some(getValue(idx, false).typ)
+  }
+
   private def isClockVariable(exp : Exp, enclosingFunction : String)
   : Boolean = exp match {
-    case exp : Evar => getValue(exp.cident_,
-                                enclosingFunction).typ == CCClock
-    case exp : EvarWithType => getValue(exp.cident_,
-                                        enclosingFunction).typ == CCClock
+    case exp : Evar =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCClock)
+    case exp : EvarWithType =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCClock)
     case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
     case exp =>
       throw new TranslationException(getLineString(exp) +
@@ -332,10 +339,10 @@ class Symex private (context        : SymexContext,
 
   private def isDurationVariable(exp : Exp, enclosingFunction : String)
   : Boolean = exp match {
-    case exp : Evar => getValue(exp.cident_,
-                                enclosingFunction).typ == CCDuration
-    case exp : EvarWithType => getValue(exp.cident_,
-                                        enclosingFunction).typ == CCDuration
+    case exp : Evar =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCDuration)
+    case exp : EvarWithType =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCDuration)
     case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
     case exp =>
       throw new TranslationException(getLineString(exp) +

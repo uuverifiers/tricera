@@ -17,11 +17,12 @@ object Literals {
   val predPostSuffix = "_post"
   val predPreSuffix = "_pre"
 
-  // Used for indicating that an annotation is ACSL related. Two
-  // markers so the C grammar can tell hint/contract annotations apart
-  // from standalone ones (ghost declarations/statements).
+  // Used for indicating that an annotation is ACSL related.
   val annotationMarker = "■■"
-  val standaloneAnnotationMarker = "●●"
+
+  // Bracket markers emitted by `CommentPreprocessor` around ghost comments
+  val ghostOpenMarker  = "⟦"
+  val ghostCloseMarker = "⟧"
 
   val atExpressionName = "$at"
 

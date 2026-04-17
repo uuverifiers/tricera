@@ -30,9 +30,8 @@
 
 package tricera.acsl
 
-import ap.parser.{IFormula, ITerm}
+import ap.parser.IFormula
 import tricera.Util.SourceInfo
-import tricera.concurrency.ccreader.{CCType, CCVar}
 
 trait ParsedAnnotation
 
@@ -57,26 +56,3 @@ case class StatementAnnotation(f        : IFormula,
                                isAssert : Boolean) extends ParsedAnnotation
 
 case class LoopAnnotation(invariant : IFormula) extends ParsedAnnotation
-
-case class GhostBlock(items   : scala.Seq[GhostItem],
-                      srcInfo : SourceInfo) extends ParsedAnnotation
-
-sealed trait GhostItem { def srcInfo : SourceInfo }
-
-case class GhostDeclaration(ccVar   : CCVar,
-                            initOpt : Option[ITerm],
-                            srcInfo : SourceInfo) extends GhostItem
-
-case class GhostAssignment(lhs     : GhostLValue,
-                           rhs     : ITerm,
-                           srcInfo : SourceInfo) extends GhostItem
-
-sealed trait GhostLValue
-case class GhostLValIdent(name : String) extends GhostLValue
-case class GhostLValArray(inner : GhostLValue, idx : ITerm)
-  extends GhostLValue
-case class GhostLValField(inner : GhostLValue, field : String)
-  extends GhostLValue
-case class GhostLValArrow(inner : GhostLValue, field : String)
-  extends GhostLValue
-case class GhostLValDeref(inner : GhostLValue) extends GhostLValue

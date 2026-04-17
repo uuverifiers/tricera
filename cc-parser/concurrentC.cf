@@ -13,12 +13,12 @@ entrypoints Program, Stm, Exp ;
 
 Progr.  Program ::= [External_declaration] ;
 
-Afunc.  External_declaration ::= Function_def ;
-Athread.External_declaration ::= Thread_def ;
-Global. External_declaration ::= Dec ;
-Chan.   External_declaration ::= Chan_def ;
-Ignored.External_declaration ::= IgnoredDecl;
-AnnotExternal. External_declaration ::= StandaloneAnnotation ;
+Afunc.         External_declaration ::= Function_def ;
+Athread.       External_declaration ::= Thread_def ;
+Global.        External_declaration ::= Dec ;
+Chan.          External_declaration ::= Chan_def ;
+Ignored.       External_declaration ::= IgnoredDecl;
+GhostExternal. External_declaration ::= "⟦" [External_declaration] "⟧" ;
 
 -- following can be left in source after preprocessing, simply ignore them.
 ExternKeyword. IgnoredDecl ::= "__extension__" ;
@@ -35,8 +35,6 @@ NewFunc.     Function_def ::= [Declaration_specifier] Declarator Compound_stm ;
 Annot1. Annotation ::= AnnotationString;
 
 separator nonempty Annotation "";
-
-StandaloneAnnot1. StandaloneAnnotation ::= StandaloneAnnotationString;
 
 SingleThread. Thread_def ::= "thread" CIdent Compound_stm ;
 ParaThread.   Thread_def ::= "thread" "[" CIdent "]" CIdent Compound_stm ;
@@ -242,7 +240,7 @@ DecS.           Stm ::= Dec ; -- beyond ANSI-C
 AtomicS.        Stm ::= Atomic_stm ;
 AnnotationS.    Stm ::= Annotation ;
 AnnotatedIterS. Stm ::= Annotation Iter_stm ;
-StandaloneAnnotationS. Stm ::= StandaloneAnnotation ;
+GhostStm.       Stm ::= "⟦" [Stm] "⟧" ;
 
 SlabelOne.   Labeled_stm ::= CIdent ":" Stm ;
 SlabelTwo.   Labeled_stm ::= "case" Constant_expression ":" Stm ;
@@ -279,11 +277,7 @@ separator nonempty Stm "";
 
 token CIdent (letter | '_' | '$' | '\\') (letter | digit | '_' | '$')*;
 
--- ACSL-comment wrapper tokens injected by `CommentPreprocessor`. The two
--- markers distinguish "hint/contract attached to a declaration" from
--- "standalone annotation" (e.g. ghost declarations) to avoid ambiguity
-token AnnotationString           {"■■"} (char - ["■●"])* {"■■"};
-token StandaloneAnnotationString {"●●"} (char - ["■●"])* {"●●"};
+token AnnotationString {"■■"} (char - ["■"])* {"■■"};
 
 token UnboundedInteger ["123456789"] digit *;
 
