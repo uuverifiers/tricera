@@ -66,13 +66,15 @@ NoDecreasesClause.   MaybeDecreasesClause ::= ;
 SomeDecreasesClause. MaybeDecreasesClause ::= DecreasesClause ;
 ADecreasesClause. DecreasesClause ::= "decreases" Expr ";" ; -- Term -- TODO: ("for" ident)? 
 
-SimpleClauseAssigns. SimpleClause ::= AssignsClause ;
-SimpleClauseEnsures. SimpleClause ::= EnsuresClause ;
--- FIXME: AllocationClause and AbruptClause are referenced but not defined in
---        the BNF of 2.6 (but later on). Skipping for now.
+SimpleClauseAssigns.    SimpleClause ::= AssignsClause ;
+SimpleClauseEnsures.    SimpleClause ::= EnsuresClause ;
+SimpleClauseAbruptStmt. SimpleClause ::= AbruptClauseStmt ;
+-- FIXME: AllocationClause is referenced but not yet defined
 -- SimpleClauseAllocation. SimpleClause ::= AllocationClause ;
--- SimpleClauseAbrupt.     SimpleClause ::= AbruptClause ;
 separator SimpleClause "" ;
+
+-- FIXME: breaks, continues, exits are also AbruptClauseStmt (Figure 2.25 in the standard)
+AbruptClauseStmtReturns. AbruptClauseStmt ::= ReturnsClause ;
 
 AnAssignsClause. AssignsClause ::= "assigns" Locations ";" ;
 
@@ -83,6 +85,7 @@ ALocation. Location ::= TSet ;
 separator nonempty Location "," ;
 
 AnEnsuresClause. EnsuresClause ::= MaybeClauseKind "ensures" Expr ";" ;
+AReturnsClause.  ReturnsClause ::= MaybeClauseKind "returns" Expr ";" ;
 
 ANamedBehavior. NamedBehavior ::= "behavior" Id ":" BehaviorBody ;
 terminator NamedBehavior "" ;

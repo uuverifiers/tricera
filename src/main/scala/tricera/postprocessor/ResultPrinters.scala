@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB
+ *               2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -102,7 +103,8 @@ object ResultPrinters {
     }
   }
 
-  def printACSL(result: ACSLResult) = {
+  def printACSL(stmtContractSrcs : Map[String, Util.SourceInfo])
+               (result: ACSLResult) : Unit = {
     def print(loopInv: ACSLLinearisedLoopInvariant): Unit = {
       println(f"/* loop invariant for the loop on line ${loopInv.srcInfo.line} */")
       println( "/*@")
@@ -110,15 +112,31 @@ object ResultPrinters {
       println("*/")
     }
 
+    def header(contract : ACSLLinearisedContract) : String =
+      stmtContractSrcs.get(contract.funcName) match {
+        case Some(info) =>
+          f"/* statement contract at ${info.line}:${info.col} */"
+        case None =>
+          f"/* contract for ${contract.funcName} */"
+      }
+
     if (!result.isEmpty) {
       println("\nInferred ACSL annotations")
       println("=" * 80)
-      
-      for (contract <- result.contracts.sortBy(_.funcName)) {
-        println(f"/* contract for ${contract.funcName} */")
+
+      val contractsByName =
+        result.contracts.map(c => c.funcName -> c).toMap
+      val retSuffix = "_ret"
+      val topLevel = result.contracts.filterNot(_.funcName.endsWith(retSuffix))
+
+      for (contract <- topLevel.sortBy(_.funcName)) {
+        println(header(contract))
         println( "/*@")
         println(f"  requires ${contract.preCondition};")
         println(f"  ensures ${contract.postCondition};")
+        contractsByName.get(contract.funcName + retSuffix).foreach { ret =>
+          println(f"  returns ${ret.postCondition};")
+        }
         println("*/")
         contract.loopInvariants.foreach(print)
       }

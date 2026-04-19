@@ -33,7 +33,7 @@ import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ADT, ExtArray}
 import ap.theories.heaps._
-import ap.types.{MonoSortedIFunction, MonoSortedPredicate}
+import ap.types.{MonoSortedIFunction, MonoSortedPredicate, SortedConstantTerm}
 import ap.util.Seqs.reduceToSize
 import concurrent_c._
 import concurrent_c.Absyn._
@@ -220,13 +220,14 @@ object CCReader {
 class CCReader private (prog              : Program,
                         entryFunction     : String,
                         propertiesToCheck : Set[properties.Property],
-                        inputVarNames     : scala.Seq[String]) {
+                        inputVarNames     : scala.Seq[String])
+    extends TranslationContext {
 
   import CCReader._
 
   private val printer = new PrettyPrinterNonStatic
 
-  private val scope = new CCScope()
+  val scope = new CCScope()
 
   private val symexContext : SymexContext = new SymexContext {
     // --- Configuration & Global State ---
@@ -357,13 +358,14 @@ class CCReader private (prog              : Program,
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
   private val warnedFunctionNames = new MHashSet[String]
   private val functionContexts = new MHashMap[String, FunctionContext]
-  private val functionPostOldArgs = new MHashMap[String, scala.Seq[CCVar]]
-  private val functionClauses =
+  val functionPostOldArgs = new MHashMap[String, scala.Seq[CCVar]]
+  val functionClauses =
     new MHashMap[String, scala.Seq[(Clause, ParametricEncoder.Synchronisation)]]
-  private val functionAssertionClauses = new MHashMap[String, scala.Seq[CCAssertionClause]]
+  val functionAssertionClauses =
+    new MHashMap[String, scala.Seq[CCAssertionClause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
-  private val structDefs    = new MHashMap[String, CCStruct]
+  val structDefs            = new MHashMap[String, CCStruct]
   private val enumDefs      = new MHashMap[String, CCType]
   private val enumeratorDefs= new MHashMap[String, CCTerm]
 
@@ -375,19 +377,91 @@ class CCReader private (prog              : Program,
   def getLoopInvariants = loopInvariants.toMap
   def getFunctionContexts = functionContexts.toMap
 
+  def getStatementContractPreds
+    : scala.Seq[(String, CCPredicate, CCPredicate, SourceInfo)] =
+    contracts.toSeq.collect {
+      case (name, r)
+        if r.kind == ContractKind.Statement && r.srcInfo.isDefined =>
+        (name, r.prePred, r.postPred, r.srcInfo.get)
+    }
+
   // NOTE: Used by ACSL encoder.
   var hasACSLEntryFunction : Boolean = false
-  val funToPreAtom  : MHashMap[String, IAtom] = new MHashMap()
-  val funToPostAtom : MHashMap[String, IAtom] = new MHashMap()
-  val funToContract : MHashMap[String, FunctionContract] = new MHashMap()
-  val funsWithAnnot : MHashSet[String] = new MHashSet()
-  val prePredsToReplace : MHashSet[Predicate] = new MHashSet()
-  val postPredsToReplace : MHashSet[Predicate] = new MHashSet()
+
+  // both function and stmt contracts
+  val contracts : MHashMap[String, ContractRegistration] = new MHashMap()
+
+  def statementContractSrcInfos : Map[String, SourceInfo] =
+    contracts.iterator.collect {
+      case (n, r)
+        if r.kind == ContractKind.Statement && r.srcInfo.isDefined =>
+        n -> r.srcInfo.get
+    }.toMap
+
+  def funToPreAtom  : Map[String, IAtom] =
+    contracts.iterator.map { case (n, r) => n -> atom(r.prePred) }.toMap
+  def funToPostAtom : Map[String, IAtom] =
+    contracts.iterator.flatMap { case (n, r) =>
+      Iterator(n -> atom(r.postPred)) ++
+        r.returnVariant.iterator.map(rv => rv.name -> atom(rv.postPred))
+    }.toMap
+  def funToContract : Map[String, FunctionContract] =
+    contracts.iterator.flatMap { case (n, r) =>
+      r.contract.iterator.map(c => n -> c) ++
+        (for {
+          rv <- r.returnVariant.iterator
+          c  <- rv.contract.iterator
+        } yield rv.name -> c)
+    }.toMap
+  def funsWithAnnot : Set[String] =
+    contracts.iterator.collect { case (n, r) if r.isUserAnnotated => n }.toSet
+
+  def prePredsToReplace : Set[Predicate] =
+    contracts.iterator
+      .filter { case (_, r) => r.contract.isDefined }
+      .map { case (_, r) => r.prePred.pred }.toSet
+
+  def postPredsToReplace : Set[Predicate] =
+    contracts.iterator
+      .filter { case (_, r) => r.contract.isDefined }
+      .flatMap { case (_, r) =>
+        Iterator(r.postPred.pred) ++
+          r.returnVariant.iterator.map(_.postPred.pred)
+      }.toSet
+
+  def registerFunctionContract(name            : String,
+                               prePred         : CCPredicate,
+                               postPred        : CCPredicate,
+                               contract        : Option[FunctionContract],
+                               isUserAnnotated : Boolean,
+                               srcInfo         : Option[SourceInfo])
+      : ContractRegistration = {
+    val reg = ContractRegistration(
+      name, ContractKind.Function, prePred, postPred, contract,
+      isUserAnnotated, returnVariant = None, srcInfo = srcInfo)
+    contracts.put(name, reg)
+    reg
+  }
+
+  def registerStatementContract(name            : String,
+                                prePred         : CCPredicate,
+                                postPred        : CCPredicate,
+                                contract        : Option[FunctionContract],
+                                isUserAnnotated : Boolean,
+                                returnVariant   : Option[ContractRegistration],
+                                srcInfo         : Option[SourceInfo])
+      : ContractRegistration = {
+    val reg = ContractRegistration(
+      name, ContractKind.Statement, prePred, postPred, contract,
+      isUserAnnotated, returnVariant, srcInfo)
+    contracts.put(name, reg)
+    reg
+  }
+
   val clauseToRichClause : MHashMap[Clause, CCClause] = new MHashMap()
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private[tricera]
   def addRichClause(clause  : Clause,
                     srcInfo : Option[SourceInfo]) : CCClause = {
     val richClause = new CCClause(clause, srcInfo)
@@ -395,7 +469,6 @@ class CCReader private (prog              : Program,
     richClause
   }
 
-  private[tricera]
   def mkRichAssertionClause(clause       : Clause,
                             srcInfo      : Option[SourceInfo],
                             propertyType : properties.Property)
@@ -410,15 +483,15 @@ class CCReader private (prog              : Program,
   private val processes =
     new ArrayBuffer[(ParametricEncoder.Process, ParametricEncoder.Replication)]
 
-  private val assertionClauses = new ArrayBuffer[CCAssertionClause]
+  val assertionClauses = new ArrayBuffer[CCAssertionClause]
   private val timeInvariants = new ArrayBuffer[Clause]
 
-  private val clauses =
+  val clauses =
     new ArrayBuffer[(Clause, ParametricEncoder.Synchronisation)]
 
-  private def output(c : CCClause,
-                     sync : ParametricEncoder.Synchronisation =
-                       ParametricEncoder.NoSync) : Unit = {
+  def output(c : CCClause,
+             sync : ParametricEncoder.Synchronisation =
+               ParametricEncoder.NoSync) : Unit = {
     clauses += ((c.clause, sync))
   }
 
@@ -527,8 +600,8 @@ class CCReader private (prog              : Program,
     ccPred
   }
 
-  private def newPred(extraArgs : scala.Seq[CCVar],
-                      srcInfo : Option[SourceInfo]) : CCPredicate = {
+  def newPred(extraArgs : scala.Seq[CCVar],
+              srcInfo : Option[SourceInfo]) : CCPredicate = {
     val predNameSuffix = srcInfo match {
       case Some(SourceInfo(line, col)) => s"${line}_$col"
       case None => ""
@@ -769,7 +842,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       (funcs.keySet, initCode)
     } else (Set(), scala.Seq())
 
-  private val heapVars : Map[String, CCVar] = if (modelHeap) {
+  val heapVars : Map[String, CCVar] = if (modelHeap) {
     (for (v <- heapModelFactory.requiredVars) yield {
       val newVar =
         new CCVar(v.name, None, v.typ, if (v.isGlobal) GlobalStorage else AutoStorage)
@@ -791,10 +864,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     }).toMap
   } else Map.empty
 
-  private[concurrency] val heapModel : Option[HeapModel] =
+  val heapModel : Option[HeapModel] =
     if(modelHeap)
       Some(heapModelFactory(HeapModel.Resources(heapVars, heapPreds)))
     else None
+
+  def modelHeap : Boolean = CCReader.modelHeap
 
   /**
    * It is important that globalExitPred has arguments for any variables
@@ -948,7 +1023,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       val functionParams = scope.LocalVars getVarsInTopFrame
 
       val oldVars = scope.allFormalVars map (v =>
-        new CCVar(v.name + Literals.preExecSuffix, v.srcInfo, v.typ, v.storage))
+        new CCVar(v.name + Literals.preExecSuffix, v.srcInfo, v.typ,
+                  ContractOldStorage(funDef.name, v.name)))
       // the pre-condition: f_pre(preOldVars)
       val prePred = newPred(funDef.name + Literals.predPreSuffix, oldVars,
         Some(getSourceInfo(fun)))
@@ -982,78 +1058,18 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
       scope.LocalVars.popFrame
 
-      class ReaderFunctionContext extends ACSLTranslator.FunctionContext {
-        def getOldVar(ident: String): Option[CCVar] =
-          postOldVarsMap get ident
-
-        def getPostGlobalVar(ident: String): Option[CCVar] =
-          postGlobalVarsMap get ident
-
-        def getParams: scala.Seq[CCVar] = functionParams
-
-        def getGlobals: scala.Seq[CCVar] =
-          scope.GlobalVars.vars.diff(heapVars.values.toSeq).toSeq
-
-        def getResultVar: Option[CCVar] = postResVar
-
-        def isHeapEnabled: Boolean = modelHeap
-
-        def getHeap: Heap =
-          if (modelHeap) heap else throw NeedsHeapModelException
-
-        private def getHeapModel: HeapModel =
-          if (modelHeap) functionContexts(funDef.name).heapModel.get
-          else throw NeedsHeapModelException
-
-        // TODO: these need to be adapted for the new heap model interface
-        def getHeapTerm: ITerm =
-          if (modelHeap) getHeapModel.getACSLPostStateHeapTerm(this)
-          else throw NeedsHeapModelException
-
-        def getOldHeapTerm: ITerm =
-          if (modelHeap) getHeapModel.getACSLPreStateHeapTerm(this)
-          else throw NeedsHeapModelException
-
-        def sortWrapper(s: Sort): Option[MonoSortedIFunction] =
-          sortWrapperMap.get(s)
-
-        def sortGetter(s: Sort): Option[MonoSortedIFunction] =
-          sortGetterMap.get(s)
-
-        def wrapperSort(wrapper: IFunction): Option[Sort] = wrapper match {
-          case w: MonoSortedIFunction =>
-            wrapperSortMap.get(w)
-          case _ => None
-        }
-
-        def getterSort(getter: IFunction): Option[Sort] = getter match {
-          case g: MonoSortedIFunction =>
-            getterSortMap.get(g)
-          case _ => None
-        }
-
-        def getTypOfPointer(t: CCType): CCType = t match {
-          case p : CCHeapPointer => p.typ
-          case t => t
-        }
-
-        def getCtor(s: Sort): Int = sortCtorIdMap(s)
-
-        override val getStructMap: Map[IFunction, CCStruct] = {
-          structDefs.values.map(struct => (struct.ctor, struct)).toMap
-        }
-
-        override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
-
-        override val annotationNumLines : Int = // todo: this is currently incorrect - to be fixed!
-          functionAnnotations(fun).head._1 match {
-            case inv : MaybeACSLAnnotation => inv.annot.count(_ == '\n')+1
-            case _ => 1
-          }
-      }
+      val nonHeapGlobals = scope.GlobalVars.vars.diff(heapVars.values.toSeq).toSeq
+      val acslContext = new RegionAnnotationContext(
+        tctx       = this,
+        oldLookup  = postOldVarsMap,
+        postLookup = postGlobalVarsMap,
+        params     = functionParams,
+        globals    = nonHeapGlobals,
+        result     = postResVar,
+        srcInfo    = getSourceInfo(fun))
 
       val funContext = new FunctionContext(prePred, postPred,
-        new ReaderFunctionContext, prePredArgACSLNames, postPredACSLArgNames, heapModel)
+        acslContext, prePredArgACSLNames, postPredACSLArgNames, heapModel)
       functionContexts += ((funDef.name, funContext))
     }
 
@@ -1068,13 +1084,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val contract = ACSLTranslator.translateACSL(
           "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
 
-        prePredsToReplace.add(funContext.prePred.pred)
-        postPredsToReplace.add(funContext.postPred.pred)
-        funToPreAtom.put(name, atom(funContext.prePred))
-        funToPostAtom.put(name, atom(funContext.postPred))
-        funsWithAnnot.add(name)
         val funContract = contract.asInstanceOf[FunctionContract]
-        funToContract.put(name, funContract)
+        registerFunctionContract(
+          name            = name,
+          prePred         = funContext.prePred,
+          postPred        = funContext.postPred,
+          contract        = Some(funContract),
+          isUserAnnotated = true,
+          srcInfo         = Some(getSourceInfo(fun)))
 
         (fun, funContract)
       }
@@ -2239,7 +2256,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private def atom(ccPred : CCPredicate, args : scala.Seq[ITerm]) : IAtom = {
+  def atom(ccPred : CCPredicate, args : scala.Seq[ITerm]) : IAtom = {
     if (ccPred.arity != args.size) {
       throw new TranslationException(getLineString(ccPred.srcInfo) +
         s"$ccPred expects ${ccPred.arity} argument(s)" +
@@ -2247,7 +2264,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     }
     IAtom(ccPred.pred, args)
   }
-  private def atom(ccPred : CCPredicate) : IAtom =
+  def atom(ccPred : CCPredicate) : IAtom =
     atom(ccPred, ccPred.argVars.map(_.term))
 
   //////////////////////////////////////////////////////////////////////////////
@@ -2395,8 +2412,33 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   }
 
   private class FunctionTranslator private (returnPred   : Option[CCPredicate],
-                                            functionName : String) {
+                                            functionName : String)
+      extends ContractBodyContext {
     private var inGhostMode : Boolean = false
+
+    private case class ContractFrame(
+      bodyReturn : Option[CCPredicate],
+      loopCont   : CCPredicate,
+      loopExit   : CCPredicate)
+
+    private var contractStack : List[ContractFrame] = Nil
+
+    private def insideContractBody : Boolean = contractStack.nonEmpty
+    def contractBodyReturn : Option[CCPredicate] =
+      contractStack.headOption.flatMap(_.bodyReturn)
+    private def contractOuterLoopCont : CCPredicate =
+      contractStack.headOption.map(_.loopCont).orNull
+    private def contractOuterLoopExit : CCPredicate =
+      contractStack.headOption.map(_.loopExit).orNull
+
+    def withinContractedBody[A](bodyReturn : Option[CCPredicate])
+                               (body : => A) : A = {
+      val frame = ContractFrame(bodyReturn, innermostLoopCont, innermostLoopExit)
+      contractStack = frame :: contractStack
+      try body finally {
+        contractStack = contractStack.tail
+      }
+    }
 
     private def symexFor(initPred : CCPredicate,
                          stm : Expression_stm) : (Symex, Option[CCTerm]) = {
@@ -2541,11 +2583,11 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             "which was eliminated due to atomic blocks")
     }
 
-    private val jumpLocs =
+    val jumpLocs =
       new ArrayBuffer[(String, CCPredicate, scala.Seq[ITerm], Int, SourceInfo)]
-    private val labelledLocs =
+    val labelledLocs =
       new MHashMap[String, (CCPredicate, scala.Seq[ITerm])]
-    private val usedJumpTargets =
+    val usedJumpTargets =
       new MHashMap[CCPredicate, String]
     private val atomicBlocks =
       new ArrayBuffer[(Int, Int)]
@@ -2572,12 +2614,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
         case stm: AnnotationS => // todo: move this into a separate translate method
-          try{translate(stm.annotation_, entry)}
-          catch {
-            case e : Exception =>
-              warn("Ignoring ACSL annotation (possibly " +
-                "an error or an unsupported fragment):\n" + e.getMessage)
-          }
+          translate(stm.annotation_, entry)
         case stm : AnnotatedIterS =>
           translate(stm.annotation_, stm.iter_stm_, entry, exit)
         case stm : GhostStm =>
@@ -2680,151 +2717,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
         case _ => warn("Ignoring annotation: " + annotationInfo)
       }
-    }
-
-    private def isStatementContract(annotStm : Annotation) : Boolean = {
-      val annotationInfo = AnnotationParser(annotationStringExtractor(annotStm))
-      annotationInfo match {
-        case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
-          try ACSLTranslator.parseAnnotationAst("/*@" + annot + "*/")
-                .isInstanceOf[tricera.acsl.Absyn.AnnotContract]
-          catch { case _ : Throwable => false }
-        case _ => false
-      }
-    }
-
-    private class StmtContractContext(annotStm  : Annotation,
-                                      liveVars  : List[CCVar],
-                                      oldVars   : List[CCVar],
-                                      oldHeap   : Option[CCVar])
-        extends ACSLTranslator.FunctionContext {
-      private val oldMap : Map[String, CCVar] =
-        (liveVars.map(_.name) zip oldVars).toMap
-
-      def getOldVar(ident : String) : Option[CCVar] = oldMap.get(ident)
-      def getPostGlobalVar(ident : String) : Option[CCVar] =
-        liveVars.find(_.name == ident)
-      def getParams : scala.Seq[CCVar] = Nil
-      def getGlobals : scala.Seq[CCVar] = liveVars
-      def getResultVar : Option[CCVar] = None
-      def isHeapEnabled : Boolean = modelHeap
-      def getHeap : HeapTheoryObject =
-        if (modelHeap) heap else throw NeedsHeapModelException
-      def getHeapTerm : ITerm = {
-        if (modelHeap) {
-          val heapVar = heapModel.get match {
-            case m : HeapTheoryModel => m.heapVar
-            case _ => throw new TranslationException(
-              "Heap in ACSL only supported using the theory of heaps.")
-          }
-          IConstant(heapVar.term)
-        } else throw NeedsHeapModelException
-      }
-      def getOldHeapTerm : ITerm = oldHeap match {
-        case Some(h) => IConstant(h.term)
-        case None    => getHeapTerm
-      }
-      def sortWrapper(s : Sort) : Option[IFunction] = sortWrapperMap get s
-      def sortGetter(s : Sort) : Option[IFunction] = sortGetterMap get s
-      def wrapperSort(w : IFunction) : Option[Sort] = w match {
-        case w : MonoSortedIFunction => wrapperSortMap.get(w)
-        case _ => None
-      }
-      def getterSort(g : IFunction) : Option[Sort] = g match {
-        case g : MonoSortedIFunction => getterSortMap.get(g)
-        case _ => None
-      }
-      def getCtor(s : Sort) : Int = sortCtorIdMap(s)
-      def getTypOfPointer(t : CCType) : CCType = t match {
-        case p : CCHeapPointer => p.typ
-        case _ => t
-      }
-      val getStructMap : Map[IFunction, CCStruct] =
-        structDefs.values.map(s => (s.ctor, s)).toMap
-      val annotationBeginSourceInfo : SourceInfo = getSourceInfo(annotStm)
-      val annotationNumLines : Int = 1
-    }
-
-    private def translateContractedStm(annotStm : Annotation,
-                                       bodyStm  : Stm,
-                                       entry    : CCPredicate,
-                                       exit     : CCPredicate) : Unit = {
-      import HornClauses._
-
-      val annotationInfo =
-        AnnotationParser(annotationStringExtractor(annotStm))
-      val wrapped : String = annotationInfo match {
-        case scala.Seq(MaybeACSLAnnotation(a, _)) => "/*@" + a + "*/"
-        case _ => throw new TranslationException(
-          "Expected a statement contract annotation.")
-      }
-
-      val outerVars = scope.allFormalVars.toList
-      val heapVarSet : Set[CCVar] =
-        if (modelHeap) heapVars.values.toSet else Set.empty
-      val liveVars    = outerVars.filterNot(heapVarSet.contains)
-      val liveHeap    = outerVars.filter(heapVarSet.contains)
-
-      scope.LocalVars.pushFrame
-      val oldVars = liveVars.map(v =>
-        new CCVar(v.name + Literals.preExecSuffix,
-                  v.srcInfo, v.typ, AutoStorage))
-      val oldHeapVars = liveHeap.map(v =>
-        new CCVar(v.name + Literals.preExecSuffix,
-                  v.srcInfo, v.typ, AutoStorage))
-      for (v <- oldVars) scope.LocalVars.addVar(v)
-      for (v <- oldHeapVars) scope.LocalVars.addVar(v)
-
-      val contract : FunctionContract =
-        try ACSLTranslator.translateACSL(
-              wrapped,
-              new StmtContractContext(annotStm, liveVars,
-                                      oldVars, oldHeapVars.headOption))
-            .asInstanceOf[FunctionContract]
-        catch {
-          case e : Throwable =>
-            scope.LocalVars.popFrame
-            throw e
-        }
-
-      val annotSrc = Some(getSourceInfo(annotStm))
-
-      val oldToLive : Map[ConstantTerm, ITerm] =
-        (oldVars.zip(liveVars) ++ oldHeapVars.zip(liveHeap)).map {
-          case (o, v) => (o.term.asInstanceOf[ConstantTerm], IConstant(v.term))
-        }.toMap
-      val preAtEntry : IFormula =
-        ConstantSubstVisitor(contract.pre, oldToLive)
-
-      val preSymex = Symex(symexContext, scope, entry, heapModel)
-      preSymex.assertProperty(preAtEntry, annotSrc, properties.Reachability)
-
-      val bodyEntry = newPred(Nil, annotSrc)
-      val bodyExit  = newPred(Nil, Some(getSourceInfo(bodyStm)))
-
-      val snapshotEq : IFormula =
-        (oldVars.zip(liveVars) ++ oldHeapVars.zip(liveHeap))
-          .foldLeft(IBoolLit(true) : IFormula) {
-            case (f, (o, v)) => f &&& (IConstant(o.term) === IConstant(v.term))
-          }
-      output(addRichClause(Clause(
-        atom(bodyEntry, scope.allFormalVarTerms take bodyEntry.arity),
-        List(atom(entry, scope.allFormalVarTerms take entry.arity)),
-        snapshotEq), annotSrc))
-
-      translate(bodyStm, bodyEntry, bodyExit)
-
-      val postSymex = Symex(symexContext, scope, bodyExit, heapModel)
-      postSymex.assertProperty(
-        contract.post &&& contract.assignsAssert,
-        Some(contract.postSrcInfo), properties.Reachability)
-
-      output(addRichClause(Clause(
-        atom(exit, scope.allFormalVarTerms take exit.arity),
-        List(atom(bodyExit, scope.allFormalVarTerms take bodyExit.arity)),
-        true), annotSrc))
-
-      scope.LocalVars.popFrame
     }
 
     // Ghost block inside a function body
@@ -3116,13 +3008,15 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 true), srcInfo))
             }
           }
-          case annotStm : AnnotationS if isStatementContract(annotStm.annotation_) =>
+          case annotStm : AnnotationS
+            if StatementContracts.isStatementContract(annotStm.annotation_) =>
             if (!stmsIt.hasNext) {
               warn("Statement contract has no following statement; ignored.")
             } else {
               val contracted = stmsIt.next
               val immediatelyFollowedByContract = contracted match {
-                case a : AnnotationS => isStatementContract(a.annotation_)
+                case a : AnnotationS =>
+                  StatementContracts.isStatementContract(a.annotation_)
                 case _ => false
               }
               if (immediatelyFollowedByContract)
@@ -3130,8 +3024,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                   "Statement contract must be followed by a statement, " +
                   "not another contract.")
               val nextPred = if (stmsIt.hasNext) newPred(Nil, None) else exit
-              translateContractedStm(annotStm.annotation_,
-                                     contracted, prevPred, nextPred)
+              StatementContracts.translate(
+                tctx         = CCReader.this,
+                fctx         = this,
+                bodyTrans    = (s, e, x) => translate(s, e, x),
+                functionName = functionName,
+                returnPred   = returnPred,
+                annotStm     = annotStm.annotation_,
+                bodyStm      = contracted,
+                entry        = prevPred,
+                exit         = nextPred)
               prevPred = nextPred
             }
           case stm => {
@@ -3375,28 +3277,41 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           if (innermostLoopCont == null)
             throw new TranslationException(
               "\"continue\" can only be used within loops")
+          if (insideContractBody &&
+              innermostLoopCont == contractOuterLoopCont)
+            throw new TranslationException(
+              "\"continue\" targeting a loop outside the statement contract " +
+              "body is not yet supported.")
           Symex(symexContext, scope, entry, heapModel).outputClause(innermostLoopCont, srcInfo)
         }
         case jump : SjumpThree => { // break
           if (innermostLoopExit == null)
             throw new TranslationException(
               "\"break\" can only be used within loops")
+          if (insideContractBody &&
+              innermostLoopExit == contractOuterLoopExit)
+            throw new TranslationException(
+              "\"break\" targeting a loop outside the statement contract " +
+              "body is not yet supported.")
           Symex(symexContext, scope, entry, heapModel).outputClause(innermostLoopExit, srcInfo)
         }
         case jump : SjumpFour  => // return
-          returnPred match {
-            case Some(rp) => {
-              var nextPred = entry
-              val args     = scope.allFormalVarTerms take rp.arity
-              output(addRichClause(Clause(atom(rp, args),
-                                          List(atom(nextPred, scope.allFormalVarTerms take nextPred.arity)),
-                                          true), srcInfo))
-            }
-            case None     =>
-              throw new TranslationException(
-                "\"return\" can only be used within functions")
-          }
+          if (insideContractBody && contractBodyReturn.isEmpty)
+            throw new TranslationException(
+              "\"return\" inside this statement-contract body is not " +
+              "supported (enclosing function has its own ACSL contract).")
+          val target = contractBodyReturn.getOrElse(
+            returnPred.getOrElse(throw new TranslationException(
+              "\"return\" can only be used within functions")))
+          val args = scope.allFormalVarTerms take target.arity
+          output(addRichClause(Clause(atom(target, args),
+                                      List(atom(entry, scope.allFormalVarTerms take entry.arity)),
+                                      true), srcInfo))
         case jump : SjumpFive  => { // return exp
+          if (insideContractBody && contractBodyReturn.isEmpty)
+            throw new TranslationException(
+              "\"return\" inside this statement-contract body is not " +
+              "supported (enclosing function has its own ACSL contract).")
           val symex = Symex(symexContext, scope, entry, heapModel)
           implicit val evalSettings = symex.EvalSettings()
           implicit val evalContext  = symex.EvalContext()
@@ -3408,15 +3323,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             throw new UnsupportedCFragmentException(
               "Returning stack pointers from functions is not yet supported.")
           }
-          returnPred match {
-            case Some(rp) =>
-              val args = (symex.getValuesAsTerms take(rp.arity - 1)) ++
-                         List(retValue.toTerm)
-              symex outputClause(atom(rp, args), srcInfo)
-            case None     =>
-              throw new TranslationException(
-                "\"return\" can only be used within functions")
-          }
+          val target = contractBodyReturn.getOrElse(
+            returnPred.getOrElse(throw new TranslationException(
+              "\"return\" can only be used within functions")))
+          val args = (symex.getValuesAsTerms take (target.arity - 1)) ++
+                     List(retValue.toTerm)
+          symex outputClause(atom(target, args), srcInfo)
         }
       }
     }

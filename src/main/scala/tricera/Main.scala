@@ -599,7 +599,8 @@ class Main (args: Array[String]) {
               .through(AddValidPointerPredicates.apply)
               .through(FormulaSimplifier.apply)
               .through(ACSLLineariser.apply)
-              .through(ResultPrinters.printACSL) 
+              .through(ResultPrinters.printACSL(
+                reader.statementContractSrcInfos))
             ).ignore
         }
         Safe

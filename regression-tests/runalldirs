@@ -27,7 +27,7 @@ horn-hcc-enum "" -assert -dev -t:60
 horn-contracts "" -assert -dev -t:60 -solutionReconstruction:wp
 acsl-contracts "" -assertNoVerify -t:60
 acsl-ghost "" -assertNoVerify -t:60
-acsl-stmt-contracts "" -assertNoVerify -t:60
+acsl-stmt-contracts "" -assertNoVerify -t:60 -acsl
 acsl-standalone "" -m:foo -assertNoVerify -cex -t:60
 uninterpreted-predicates "" -assert -dev -t:60
 math-arrays "" -assert -dev -t:60

@@ -35,9 +35,6 @@ UNSAFE
 stmt_contract_full_safe.c
 SAFE
 
-stmt_contract_early_return_known_limitation.c
-SAFE
-
 stmt_contract_trailing_warns.c
 Warning: Statement contract has no following statement; ignored.
 SAFE
@@ -60,11 +57,224 @@ Horn Translation Error: Statement contract must be followed by a statement, not 
 stmt_contract_ghost_inside_safe.c
 SAFE
 
-stmt_contract_old_array_safe.c
-SAFE
-
-stmt_contract_old_array_unsafe.c
-UNSAFE
-
 stmt_contract_old_global_safe.c
 SAFE
+
+stmt_contract_early_return_safe.c
+SAFE
+
+stmt_contract_early_return_unsafe.c
+UNSAFE
+
+stmt_contract_break_out_rejected.c
+Horn Translation Error: "break" targeting a loop outside the statement contract body is not yet supported.
+
+stmt_contract_function_contract_outer_safe.c
+SAFE
+
+stmt_contract_goto_inside_safe.c
+SAFE
+
+stmt_contract_goto_out_rejected.c
+Horn Translation Error: goto "outside" (7:10) leaves the statement contract body, which is not yet supported.
+
+stmt_contract_inferred_safe.c
+
+Inferred ACSL annotations
+================================================================================
+/*@
+  requires x == 5;
+  ensures x == 6 && \old(x) == 5;
+*/
+================================================================================
+
+SAFE
+
+stmt_contract_bare_decl_rejected.c
+Horn Translation Error: A statement contract's body must not be a bare declaration; wrap it in a compound statement.
+
+stmt_contract_nested_in_body_safe.c
+SAFE
+
+stmt_contract_inner_local_safe.c
+SAFE
+
+stmt_contract_assigns_nothing_safe.c
+SAFE
+
+stmt_contract_if_body_safe.c
+SAFE
+
+stmt_contract_break_inside_safe.c
+SAFE
+
+stmt_contract_continue_inside_safe.c
+SAFE
+
+stmt_contract_empty_body_safe.c
+SAFE
+
+stmt_contract_void_return_safe.c
+SAFE
+
+stmt_contract_void_return_unsafe.c
+UNSAFE
+
+stmt_contract_return_value_in_body_safe.c
+SAFE
+
+stmt_contract_multi_return_paths_safe.c
+SAFE
+
+stmt_contract_nested_call_safe.c
+SAFE
+
+stmt_contract_mixed_kinds_safe.c
+SAFE
+
+stmt_contract_void_no_return_safe.c
+SAFE
+
+stmt_contract_assigns_nothing_unsafe.c
+UNSAFE
+
+stmt_contract_empty_body_unsafe.c
+UNSAFE
+
+stmt_contract_function_contract_outer_unsafe.c
+UNSAFE
+
+stmt_contract_mixed_kinds_unsafe.c
+UNSAFE
+
+stmt_contract_multi_return_paths_unsafe.c
+UNSAFE
+
+stmt_contract_nested_in_body_unsafe.c
+UNSAFE
+
+stmt_contract_return_value_in_body_unsafe.c
+UNSAFE
+
+stmt_contract_void_no_return_unsafe.c
+UNSAFE
+
+stmt_contract_if_body_unsafe.c
+UNSAFE
+
+stmt_contract_inferred_unsafe.c
+UNSAFE
+
+stmt_contract_inferred_multi_var_safe.c
+
+Inferred ACSL annotations
+================================================================================
+/*@
+  requires b == 2 && a == 1;
+  ensures b == 4 && a == 3 && \old(b) == 2 && \old(a) == 1;
+*/
+================================================================================
+
+SAFE
+
+stmt_contract_inferred_in_function_safe.c
+
+Inferred ACSL annotations
+================================================================================
+/*@
+  requires r == 7 && x == 7;
+  ensures r == 14 && x == 7 && \old(r) == 7 && \old(x) == 7;
+*/
+================================================================================
+
+SAFE
+
+stmt_contract_missing_returns_rejected.c
+Horn Translation Error: A statement contract's body contains a `return`; the contract must include a `returns:` clause.
+
+stmt_contract_returns_only_safe.c
+SAFE
+
+stmt_contract_returns_only_unsafe.c
+UNSAFE
+
+stmt_contract_returns_and_ensures_safe.c
+SAFE
+
+stmt_contract_returns_and_ensures_unsafe.c
+UNSAFE
+
+stmt_contract_modular_safe.c
+SAFE
+
+stmt_contract_modular_unsafe.c
+UNSAFE
+
+stmt_contract_returns_true_safe.c
+SAFE
+
+stmt_contract_returns_true_unsafe.c
+UNSAFE
+
+stmt_contract_no_return_with_returns_clause_safe.c
+SAFE
+
+stmt_contract_no_return_with_returns_clause_unsafe.c
+UNSAFE
+
+stmt_contract_modular_heap_safe.c
+SAFE
+
+stmt_contract_modular_heap_unsafe.c
+UNSAFE
+
+stmt_contract_inferred_heap_safe.c
+
+Inferred ACSL annotations
+================================================================================
+/*@
+  requires \true;
+  ensures p == \old(p) && \valid(p);
+*/
+================================================================================
+
+SAFE
+
+stmt_contract_inferred_heap_unsafe.c
+UNSAFE
+
+stmt_contract_modular_struct_safe.c
+SAFE
+
+stmt_contract_modular_struct_unsafe.c
+UNSAFE
+
+stmt_contract_inferred_struct_safe.c
+
+Inferred ACSL annotations
+================================================================================
+/*@
+  requires \true;
+  ensures s.f == 6 || \old(s).f != 5;
+*/
+================================================================================
+
+SAFE
+
+stmt_contract_inferred_struct_unsafe.c
+UNSAFE
+
+stmt_contract_inferred_array_safe.c
+
+Inferred ACSL annotations
+================================================================================
+/*@
+  requires \true;
+  ensures \true;
+*/
+================================================================================
+
+SAFE
+
+stmt_contract_inferred_array_unsafe.c
+UNSAFE

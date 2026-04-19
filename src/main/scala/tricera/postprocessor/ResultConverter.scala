@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB
+ *               2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -127,7 +128,7 @@ object ResultConverter {
       ctx: CCReader.FunctionContext,
       solution: SolutionProcessor.Solution,
       loopInvs: Map[String,(CCPredicate, SourceInfo)],
-      annotatedFuncs: HashSet[String])
+      annotatedFuncs: Set[String])
       = {
       val paramNames = ctx.acslContext.getParams.map(v => v.name)
       FunctionInvariants(
@@ -163,18 +164,43 @@ object ResultConverter {
             // The solution to the horn system does not contain _pre/_post predicates
             // for the entry function. However the entry function may have a function
             // context if it is annotated with a contract or marked for contract inference.
-            {case (funcId, ctx) => 
+            {case (funcId, ctx) =>
               (solution.get(ctx.prePred.pred).isDefined && solution.get(ctx.postPred.pred).isDefined)})
           .map(
             {case (funcId, ctx) =>
               toFunctionInvariants(funcId, heapInfo, ctx, solution, loopInvs, annotatedFuncs)})
           .toSeq
 
+        val stmtInvs =
+          reader.getStatementContractPreds.collect {
+            case (name, prePred, postPred, _)
+              if solution.get(prePred.pred).isDefined &&
+                 solution.get(postPred.pred).isDefined =>
+              FunctionInvariants(
+                name,
+                annotatedFuncs(name),
+                PreCondition(Invariant(
+                  replacePredVarWithFunctionParam(
+                    solution(prePred.pred),
+                    prePred.argVars,
+                    prePred.argVars.map(_.name)),
+                  heapInfo,
+                  prePred.srcInfo)),
+                PostCondition(Invariant(
+                  replacePredVarWithFunctionParam(
+                    solution(postPred.pred),
+                    postPred.argVars,
+                    postPred.argVars.map(_.name)),
+                  heapInfo,
+                  postPred.srcInfo)),
+                Nil)
+          }
+
         val disassociatedLoopInvs = loopInvs
           .withFilter(lInv => !funcInvs.exists(fInv => lInv._1.startsWith(fInv.id)))
           .map(i => toLoopInvariant(i._2, solution, heapInfo, Seq())).toSeq
 
-        Solution(funcInvs, disassociatedLoopInvs)
+        Solution(funcInvs ++ stmtInvs, disassociatedLoopInvs)
       case Left(None) => Empty()
       case Right(cex) => CounterExample(cex)
     }

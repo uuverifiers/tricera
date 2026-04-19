@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2021-2022 Pontus Ernstedt
- *               2022-2023 Zafer Esen. All rights reserved.
+ *               2022-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -182,22 +182,33 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       val rcs = c.listrequiresclause_.asScala.toList
       val scs = c.listsimpleclause_.asScala.toList
 
-      val nils : (List[AST.SimpleClauseEnsures], List[AST.SimpleClauseAssigns])
-        = (Nil, Nil)
-      val (ecs, acs) =
+      val nils : (List[AST.SimpleClauseEnsures],
+                  List[AST.ReturnsClause],
+                  List[AST.SimpleClauseAssigns])
+        = (Nil, Nil, Nil)
+      val (ecs, rts, acs) =
         scs.foldRight(nils) {
-          case (ec : AST.SimpleClauseEnsures, (ecs, acs)) => (ec :: ecs, acs)
-          case (ac : AST.SimpleClauseAssigns, (ecs, acs)) => (ecs, ac :: acs)
+          case (ec : AST.SimpleClauseEnsures, (ecs, rts, acs)) =>
+            (ec :: ecs, rts, acs)
+          case (ab : AST.SimpleClauseAbruptStmt, (ecs, rts, acs)) =>
+            ab.abruptclausestmt_ match {
+              case rt : AST.AbruptClauseStmtReturns =>
+                (ecs, rt.returnsclause_ :: rts, acs)
+            }
+          case (ac : AST.SimpleClauseAssigns, (ecs, rts, acs)) =>
+            (ecs, rts, ac :: acs)
           case _ => throw new ACSLParseException("Unsupported simple clause.",
                                                  getSourceInfo(c))
         }
 
       // TODO: do not use "and" and "toFormula" below,losing source information!
-      // NOTE: `pre` and `post` defaults to true given usage of `and`.
       useOldHeap = true
       val pre  : IFormula = IExpression.and(rcs.map(f => translate(f).toFormula))
       useOldHeap = false
       val post : IFormula = IExpression.and(ecs.map(f => translate(f).toFormula))
+      val returns : Option[IFormula] =
+        if (rts.isEmpty) None
+        else Some(IExpression.and(rts.map(f => translate(f).toFormula)))
 
       // FIXME: Refactor and break out in functions!
       val assigns : (IFormula, IFormula) = acs match {
@@ -308,7 +319,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       // todo: have separate line numbers for ecs
       new FunctionContract(pre, post, assigns._1, assigns._2,
                            getSourceInfo(c),
-                           getActualSourceInfo(ctx, postSrcInfo))
+                           getActualSourceInfo(ctx, postSrcInfo),
+                           returns)
 
     case _ => throwNotImpl(contract)
   }
@@ -350,11 +362,14 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   // FIXME: Type is specified already.
 
   /**
-   * Translates assigns / ensures clauses.
+   * Translates assigns / ensures / returns clauses.
    */
   def translate(clause : AST.SimpleClause) : CCTerm = clause match {
     case ac : AST.SimpleClauseAssigns => throwNotImpl(ac)
     case ec : AST.SimpleClauseEnsures => translate(ec.ensuresclause_)
+    case ab : AST.SimpleClauseAbruptStmt => ab.abruptclausestmt_ match {
+      case rt : AST.AbruptClauseStmtReturns => translate(rt.returnsclause_)
+    }
   }
 
   def translate(clause : AST.EnsuresClause) : CCTerm = {
@@ -363,6 +378,16 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
     val res = translatePred(clause.asInstanceOf[AST.AnEnsuresClause].expr_)
+    inPostCond = false
+    res
+  }
+
+  def translate(clause : AST.ReturnsClause) : CCTerm = {
+    val funCtx = ctx.asInstanceOf[FunctionContext]
+    inPostCond = true
+    vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
+        ++ ctx.getGlobals.map(v => (v.name, v))).toMap
+    val res = translatePred(clause.asInstanceOf[AST.AReturnsClause].expr_)
     inPostCond = false
     res
   }

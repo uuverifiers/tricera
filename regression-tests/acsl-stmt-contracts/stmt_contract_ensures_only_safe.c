@@ -1,7 +1,7 @@
 int main() {
-  int x = 0;
-  /*@ ensures x == 1; */
-  { x = x + 1; }
-  //@ assert x == 1;
+  int x = 42;
+  /*@ ensures x == 0; */
+  { x = 0; }
+  //@ assert x == 0;
   return 0;
 }

@@ -2,8 +2,8 @@
 
 int main() {
   int x = 0;
-  /*@ requires x == 0;
-      ensures  x == 1;
+  /*@ requires x == 0 && g == 0;
+      ensures  x == 1 && g == \old(g) + 1;
   */
   {
     //@ ghost g = g + 1;

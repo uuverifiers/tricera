@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2024 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2024-2026 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -39,6 +39,9 @@ case object GlobalStorage extends VariableStorage
 case object AutoStorage   extends VariableStorage
 case class  StaticStorage(enclosingFunctionName : String) extends VariableStorage
 case class  GhostStorage(enclosingFunctionName : Option[String]) extends VariableStorage
+// for nested contracts
+case class  ContractOldStorage(contractName : String,
+                               originalName : String) extends VariableStorage
 
 object CCVar {
   val lineNumberPrefix = ":"
@@ -49,13 +52,15 @@ class CCVar(val name    : String,
             val typ     : CCType,
             val storage : VariableStorage) {
   import CCVar._
-  val isStatic = storage.isInstanceOf[StaticStorage]
-  val isGhost  = storage.isInstanceOf[GhostStorage]
+  val isStatic      = storage.isInstanceOf[StaticStorage]
+  val isGhost       = storage.isInstanceOf[GhostStorage]
+  val isContractOld = storage.isInstanceOf[ContractOldStorage]
   val enclosingFunctionName : Option[String] = storage match {
-    case GlobalStorage     => None
-    case AutoStorage       => None // We could provide the enclosing function, but it is not needed.
-    case s : StaticStorage => Some(s.enclosingFunctionName)
-    case g : GhostStorage  => g.enclosingFunctionName
+    case GlobalStorage          => None
+    case AutoStorage            => None
+    case s : StaticStorage      => Some(s.enclosingFunctionName)
+    case g : GhostStorage       => g.enclosingFunctionName
+    case _ : ContractOldStorage => None
   }
   val nameWithLineNumber = name +
     (srcInfo match {

@@ -1,7 +1,5 @@
-/*@ requires x >= 0;
-    ensures  \result == x + 2;
-*/
-int bump(int x) {
+int main() {
+  int x = 3;
   /*@ requires x >= 0;
       ensures  x == \old(x) + 1;
   */
@@ -10,11 +8,6 @@ int bump(int x) {
       ensures  x == \old(x) + 1;
   */
   { x = x + 1; }
-  return x;
-}
-
-int main() {
-  int r = bump(3);
-  //@ assert r == 5;
+  //@ assert x == 5;
   return 0;
 }

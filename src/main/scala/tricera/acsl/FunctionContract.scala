@@ -30,7 +30,7 @@
 
 package tricera.acsl
 
-import ap.parser.IFormula
+import ap.parser.{IBoolLit, IFormula}
 import tricera.Util.SourceInfo
 
 trait ParsedAnnotation
@@ -42,11 +42,16 @@ class FunctionContract(
   val assignsAssert : IFormula,
   val assignsAssume : IFormula,
   val srcInfo       : SourceInfo,
-  val postSrcInfo   : SourceInfo) extends ParsedAnnotation {
+  val postSrcInfo   : SourceInfo,
+  val returns       : Option[IFormula] = None) extends ParsedAnnotation {
   override def toString : String = {
+    val returnsLine = returns match {
+      case Some(f) => s"returns  ${ap.SimpleAPI.pp(f)}\n"
+      case None    => ""
+    }
     s"""|requires ${ap.SimpleAPI.pp(pre)}
         |ensures  ${ap.SimpleAPI.pp(post)}
-        |assigns (in asserts) ${ap.SimpleAPI.pp(assignsAssert)}
+        |${returnsLine}assigns (in asserts) ${ap.SimpleAPI.pp(assignsAssert)}
         |assigns (in assumes) ${ap.SimpleAPI.pp(assignsAssume)}
         |""".stripMargin
   }

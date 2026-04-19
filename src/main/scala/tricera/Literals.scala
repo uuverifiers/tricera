@@ -17,6 +17,8 @@ object Literals {
   val predPostSuffix = "_post"
   val predPreSuffix = "_pre"
 
+  val stmtContractPrefix = "stmt_contract_"
+
   // Used for indicating that an annotation is ACSL related.
   val annotationMarker = "■■"
 
