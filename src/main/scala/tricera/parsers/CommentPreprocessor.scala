@@ -149,7 +149,7 @@ object CommentPreprocessor {
   // identifiers. Rewrite them to internal (`$MathInt`, `_Bool`)
   private val ghostSpanRegex =
     new scala.util.matching.Regex(
-      java.util.regex.Pattern.quote(ghostOpenMarker) + "(.*?)" +
+      "(?s)" + java.util.regex.Pattern.quote(ghostOpenMarker) + "(.*?)" +
       java.util.regex.Pattern.quote(ghostCloseMarker), "body")
   private def rewriteGhostLogicTypes(s : String) : String =
     ghostSpanRegex.replaceAllIn(s, m => {

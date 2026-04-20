@@ -86,6 +86,9 @@ SAFE
 ghost_boolean_type_safe.c
 SAFE
 
+ghost_multi_line_integer_safe.c
+SAFE
+
 ghost_writes_non_ghost_rejected.c
 Horn Translation Error: Ghost code cannot modify non-ghost variable `r`.
 
