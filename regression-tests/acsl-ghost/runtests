@@ -31,6 +31,7 @@ TESTS="ghost_global_safe.c \
        ghost_name_clash_local.c \
        ghost_integer_type_safe.c \
        ghost_boolean_type_safe.c \
+       ghost_multi_line_integer_safe.c \
        ghost_writes_non_ghost_rejected.c \
        ghost_writes_non_ghost_field_rejected.c \
        ghost_identifier_integer_outside_safe.c"
