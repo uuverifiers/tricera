@@ -60,6 +60,10 @@ object StatementContracts {
     str.substring(2, str.length - 2)
   }
 
+  private val returnsClauseRegex = """(?m)(^|\s)returns\b""".r
+  private def mentionsReturnsClause(annotationText : String) : Boolean =
+    returnsClauseRegex.findFirstIn(annotationText).isDefined
+
   def isStatementContract(annotStm : Annotation) : Boolean =
     AnnotationParser(annotationString(annotStm)) match {
       case scala.Seq(ContractGen) => true
@@ -123,10 +127,9 @@ object StatementContracts {
     val outerOldTerms = outerOld.map(v => IConstant(v.term))
     for (v <- outerOld) scope.LocalVars.addVar(v)
 
-    val encHasContract       = functionPostOldArgs.contains(functionName)
     val nestedInsideContract = fctx.contractBodyReturn.isDefined
     val canForwardReturn =
-      returnPred.isDefined && !encHasContract && !nestedInsideContract
+      returnPred.isDefined && !nestedInsideContract
 
     val encReturn : Option[EnclosingReturn] =
       if (canForwardReturn)
@@ -149,6 +152,13 @@ object StatementContracts {
       srcInfo    = getSourceInfo(annotStm))
     val contract : Option[FunctionContract] = annotationText match {
       case Some(text) =>
+        if (!canForwardReturn && mentionsReturnsClause(text)) {
+          scope.LocalVars.popFrame()
+          throw new TranslationException(
+            "`returns` clause using \\result inside a statement contract " +
+            "is not supported when the contract is nested inside another " +
+            "statement contract.")
+        }
         try Some(ACSLTranslator.translateACSL(text, ctx)
                  .asInstanceOf[FunctionContract])
         catch {

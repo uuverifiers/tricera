@@ -39,5 +39,5 @@ TESTS="ghost_global_safe.c \
 for name in $TESTS; do
     echo
     echo $name
-    $TRI_CMD "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD "$@" $name 2>&1 | grep -v 'at ' | grep -v 'Warning: no `assigns`'
 done

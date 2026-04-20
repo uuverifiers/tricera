@@ -37,7 +37,7 @@ import ap.parser._
 import ap.theories.nia.GroebnerMultiplication._
 import ap.types.{Sort, SortedConstantTerm}
 import ap.theories.heaps.Heap
-import tricera.Util.{SourceInfo, getSourceInfo}
+import tricera.Util.{SourceInfo, getSourceInfo, warn}
 import tricera.concurrency.ccreader._
 import CCExceptions._
 
@@ -212,7 +212,13 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 
       // FIXME: Refactor and break out in functions!
       val assigns : (IFormula, IFormula) = acs match {
-        case Nil => (IBoolLit(true), IBoolLit(true))
+        case Nil =>
+          val src = ctx.annotationBeginSourceInfo
+          warn(s"no `assigns` clause in contract at ${src.line}:${src.col}; " +
+               "defaulting to `assigns \\everything`. Post-state variables " +
+               "are unconstrained, which may make implications in " +
+               "`ensures`/`returns` vacuously true for unintended paths.")
+          (IBoolLit(true), IBoolLit(true))
         case acs =>
           val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) =
             acs.foldLeft(Set[CCTerm](), Set[CCTerm]()) ({(sets, clause) =>

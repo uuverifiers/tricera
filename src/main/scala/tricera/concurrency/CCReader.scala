@@ -3299,7 +3299,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           if (insideContractBody && contractBodyReturn.isEmpty)
             throw new TranslationException(
               "\"return\" inside this statement-contract body is not " +
-              "supported (enclosing function has its own ACSL contract).")
+              "supported (cannot forward through a nested statement " +
+              "contract yet).")
           val target = contractBodyReturn.getOrElse(
             returnPred.getOrElse(throw new TranslationException(
               "\"return\" can only be used within functions")))
@@ -3311,7 +3312,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           if (insideContractBody && contractBodyReturn.isEmpty)
             throw new TranslationException(
               "\"return\" inside this statement-contract body is not " +
-              "supported (enclosing function has its own ACSL contract).")
+              "supported (cannot forward through a nested statement " +
+              "contract yet).")
           val symex = Symex(symexContext, scope, entry, heapModel)
           implicit val evalSettings = symex.EvalSettings()
           implicit val evalContext  = symex.EvalContext()
