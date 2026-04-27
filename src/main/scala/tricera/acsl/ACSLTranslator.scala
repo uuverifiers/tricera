@@ -40,6 +40,7 @@ import ap.theories.Heap
 import tricera.Util.{SourceInfo, getSourceInfo}
 import tricera.concurrency.ccreader._
 import CCExceptions._
+import tricera.acsl.Absyn.AbruptClause
 
 class ACSLException(msg : String) extends Exception(msg)
 class ACSLParseException(msg : String, srcInfo : SourceInfo) extends Exception(msg)
@@ -178,12 +179,13 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       val rcs = c.listrequiresclause_.asScala.toList
       val scs = c.listsimpleclause_.asScala.toList
 
-      val nils : (List[AST.SimpleClauseEnsures], List[AST.SimpleClauseAssigns])
-        = (Nil, Nil)
-      val (ecs, acs) =
+      val nils : (List[AST.SimpleClauseEnsures], List[AST.SimpleClauseAssigns], List[AST.SimpleClauseAbrupt])
+        = (Nil, Nil, Nil)
+      val (ecs, acs, abcs) =
         scs.foldRight(nils) {
-          case (ec : AST.SimpleClauseEnsures, (ecs, acs)) => (ec :: ecs, acs)
-          case (ac : AST.SimpleClauseAssigns, (ecs, acs)) => (ecs, ac :: acs)
+          case (ec : AST.SimpleClauseEnsures, (ecs, acs, abcs)) => (ec :: ecs, acs, abcs)
+          case (ac : AST.SimpleClauseAssigns, (ecs, acs, abcs)) => (ecs, ac :: acs, abcs)
+          case (abc : AST.SimpleClauseAbrupt, (ecs, acs, abcs)) => (ecs, acs, abc :: abcs)
           case _ => throw new ACSLParseException("Unsupported simple clause.",
                                                  getSourceInfo(c))
         }
@@ -194,6 +196,13 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       val pre  : IFormula = IExpression.and(rcs.map(f => translate(f).toFormula))
       useOldHeap = false
       val post : IFormula = IExpression.and(ecs.map(f => translate(f).toFormula))
+
+      val tcs : List[AST.ThrowsClause] = abcs.flatMap(c => c.abruptclause_ match {
+        case t: AST.AbruptClauseThrows => Some(t.throwsclause_)
+        case _ => None
+      })
+
+      val newPost : IFormula = IExpression.and(tcs.map(f => constructPost(f, post)))
 
       // FIXME: Refactor and break out in functions!
       val assigns : (IFormula, IFormula) = acs match {
@@ -306,7 +315,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       }
 
       // todo: have separate line numbers for ecs
-      new FunctionContract(pre, post, assigns._1, assigns._2,
+      new FunctionContract(pre, newPost, assigns._1, assigns._2,
                            getSourceInfo(c),
                            getActualSourceInfo(ctx, postSrcInfo))
 
@@ -346,6 +355,21 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
+  def constructPost(clause: AST.ThrowsClause, post: IFormula): IFormula = clause match {
+    case empty: AST.ThrowsClauseEmpty => constructPost(empty, post)
+    case types: AST.ThrowsClauseTypes => ???
+  }
+
+  def constructPost(clause: AST.ThrowsClauseEmpty, post: IFormula) : IFormula = {
+    val exceptionFlag : ITerm = ctx.getGlobals.find(g => 
+      g.name == "__exception_flag"
+    ).getOrElse(throw new ACSLException("Exception flag global variable not found")).term
+    val pred = translate(clause.expr_).toFormula
+    val one : ITerm = 1
+
+    (exceptionFlag === 0 ==> post) &&& (exceptionFlag =/= 0 ==> pred)
+  }
+
 
   // FIXME: Type is specified already.
 
@@ -355,6 +379,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   def translate(clause : AST.SimpleClause) : CCTerm = clause match {
     case ac : AST.SimpleClauseAssigns => throwNotImpl(ac)
     case ec : AST.SimpleClauseEnsures => translate(ec.ensuresclause_)
+    case abc : AST.SimpleClauseAbrupt => ???
   }
 
   def translate(clause : AST.EnsuresClause) : CCTerm = {
