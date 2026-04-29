@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
- *               2025 Zafer Esen. All rights reserved.
+ *               2025-2026 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,7 +40,6 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.Eq
 import tricera._
 
 object ToVariableForm extends ResultProcessor {
@@ -105,16 +104,6 @@ class EqualitySwapper(swapMap : Map[IExpression, ITerm])
 
   override def preVisit(t               : IExpression,
                         quantifierDepth : Int) : PreVisitResult = t match {
-    // Do not swap if the result will be something like x = x
-    case Eq(left, right) =>
-      val rewrittenRight = swapMap.getOrElse(right, right)
-      if (left == rewrittenRight)
-        return ShortCutResult(t)
-      val rewrittenLeft = swapMap.getOrElse(left, left)
-      if (rewrittenLeft == right || rewrittenLeft == rewrittenRight)
-        return ShortCutResult(t)
-      KeepArg
-    case IIntFormula(IIntRelation.EqZero, _) => ShortCutResult(t)
     case _ : IVariableBinder => UniSubArgs(quantifierDepth + 1)
     case _                   => KeepArg
   }
@@ -124,13 +113,10 @@ class EqualitySwapper(swapMap : Map[IExpression, ITerm])
                          subres          : Seq[IExpression]) : IExpression = {
     val updated = t update subres
     (updated, swapMap.getOrElse(updated, updated)) match {
-      case (ConstantAsProgVarProxy(upd), ConstantAsProgVarProxy(swp))
-        if upd.isPostExec && swp.isPreExec =>
-        // Keep using the post var, this can only happen in a postconditon,
-        // Reasoning is that we (probably) do not want to replace a post-var\
-        // with a pre-var.
-        upd
-      case _                               => updated
+      case (IFunApp(_, Seq()), swapped: IConstant) =>
+        swapped
+      case _ =>
+        updated
     }
   }
 }
