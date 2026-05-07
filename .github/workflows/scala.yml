@@ -12,7 +12,12 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository (with submodules)
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+        fetch-depth: 0
+
     - name: Set up GraalVM 25 (for native image)
       uses: graalvm/setup-graalvm@v1
       with:
@@ -28,6 +33,8 @@ jobs:
         cache: 'sbt'
     - name: Set up sbt
       uses: sbt/setup-sbt@v1
+    - name: Patch build.sbt files of submodules
+      run: ./patch-builds.sh
     - name: Build
       run: sbt nativeImage
     - name: Test

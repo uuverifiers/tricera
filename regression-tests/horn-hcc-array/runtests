@@ -6,6 +6,10 @@ TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-
        dynamic-loop1.c simple-dynamic-array.c simple-global-array.c \
        array-single-alloc.c array-inside-struct-1.c \
        pointer-arith-1-safe.c pointer-arith-1-unsafe.c  pointer-arith-2-safe.c  pointer-arith-2-unsafe.c \
+       pointer-arith-backward-safe.c pointer-arith-backward-unsafe.c \
+       pointer-arith-incr-safe.c pointer-arith-incr-unsafe.c \
+       pointer-arith-decr-safe.c pointer-arith-decr-unsafe.c \
+       pointer-arith-subscript-safe.c pointer-arith-subscript-unsafe.c \
        global-struct-array-1.c array-of-ptr-1.c \
        nondet-global-array-explicit-1.c nondet-global-array-explicit-2.c nondet-global-array-explicit-3.c \
        nondet-static-array-explicit-1.c nondet-static-array-explicit-2.c nondet-static-array-explicit-3.c"

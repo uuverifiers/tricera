@@ -36,7 +36,7 @@ package tricera.postprocessor
 
 import ap.parser._
 import IExpression.{Conj, Disj, i}
-import ap.theories.Heap
+import ap.theories.heaps.Heap
 import ap.theories.ADT
 
 trait ExpressionUtils {
