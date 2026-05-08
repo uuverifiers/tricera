@@ -143,12 +143,19 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
 
   private val printer = new tricera.acsl.PrettyPrinterNonStatic
 
-  val exceptionFlag : ITerm = ctx.getGlobals.find(g => 
-    g.name == "__exception_flag"
-  ).getOrElse(throw new ACSLException("Exception flag global variable not found")).term
-  val exceptionType : ITerm = ctx.getGlobals.find(g => 
-    g.name == "__exception_type"
-  ).getOrElse(throw new ACSLException("Exception type global variable not found")).term
+  val (exceptionFlag, exceptionFlagPost) : (ITerm, ITerm) = {
+    val flagVar = ctx.getGlobals.find(g => 
+      g.name == "__exception_flag"
+    ).getOrElse(throw new ACSLException("Exception flag global variable not found"))
+    (flagVar.term, ctx.asInstanceOf[FunctionContext].getPostGlobalVar(flagVar.name).get.term)
+  }
+
+  val (exceptionType, exceptionTypePost) : (ITerm, ITerm) = {
+    val typeVar = ctx.getGlobals.find(g =>
+      g.name == "__exception_type"
+    ).getOrElse(throw new ACSLException("Exception type global variable not found"))
+    (typeVar.term, ctx.asInstanceOf[FunctionContext].getPostGlobalVar(typeVar.name).get.term)
+  }
 
   val locals = new MHashMap[String, CCTerm]
   var vars: Map[String, CCVar] = Map()
@@ -216,7 +223,6 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
       ).getOrElse(throw new ACSLException("Exception flag global variable not found")).term
 
       val newPre = pre &&& (exceptionFlag === 0)
-
       val defaultThrow = new AST.ThrowsClauseEmpty(new AST.ELit(new AST.LitTrue))
 
       val newPost: IFormula = if (tcs.size > 0) {
@@ -231,7 +237,10 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
       listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_value"))))
       val exceptionAssigns = new AST.SimpleClauseAssigns(new AST.AnAssignsClause(new AST.LocationsSome(listLocation)))
 
-      val newAcs = exceptionAssigns :: acs
+      val newAcs =  acs match {
+        case Nil => acs
+        case _ => exceptionAssigns :: acs
+      }
 
       // FIXME: Refactor and break out in functions!
       val assigns : (IFormula, IFormula) = newAcs match {
@@ -392,8 +401,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
   def constructPost(clause: AST.ThrowsClauseEmpty, post: IFormula) : IFormula = {
     val pred = translate(clause.expr_).toFormula
 
-    (exceptionFlag === 0 ==> post) &&& 
-    (exceptionFlag =/= 0 ==> (IExpression.or(exceptionTypeMap.map(x => exceptionType === x._2)) &&& pred))
+    (exceptionFlagPost === 0 ==> post) &&&
+    (exceptionFlagPost =/= 0 ==> (IExpression.or(exceptionTypeMap.map(x => exceptionTypePost === x._2)) &&& pred))
   }
 
   def constructPost(clause: AST.ThrowsClauseTypes, post: IFormula) : IFormula = {
@@ -408,8 +417,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
       }
     })
 
-    (exceptionFlag === 0 ==> post) &&& 
-    (exceptionFlag =/= 0 ==> (IExpression.or(enumTypeVariants.map(x => exceptionType === x)) &&& pred))
+    (exceptionFlagPost === 0 ==> post) &&&
+    (exceptionFlagPost =/= 0 ==> (IExpression.or(enumTypeVariants.map(x => exceptionTypePost === x)) &&& pred))
   }
 
   def exceptionTypeToString(exceptionType: AST.ExceptionType): String = exceptionType match {
