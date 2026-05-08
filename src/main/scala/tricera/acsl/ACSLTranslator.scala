@@ -41,6 +41,7 @@ import tricera.Util.{SourceInfo, getSourceInfo}
 import tricera.concurrency.ccreader._
 import CCExceptions._
 import tricera.acsl.Absyn.AbruptClause
+import ap.basetypes.IdealInt
 
 class ACSLException(msg : String) extends Exception(msg)
 class ACSLParseException(msg : String, srcInfo : SourceInfo) extends Exception(msg)
@@ -88,11 +89,12 @@ object ACSLTranslator {
   @throws[ACSLException]("if not called with the right context")
   @throws[ACSLParseException]("if parsing or translation fails")
   def translateACSL(annot : String,
-                    ctx   : AnnotationContext) : ParsedAnnotation = {
+                    ctx   : AnnotationContext,
+                    exceptionTypes: Map[String, IdealInt]) : ParsedAnnotation = {
     val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
     val p : parser = new parser(l, l.getSymbolFactory())
     val ast : AST.Annotation = p.pAnnotation()
-    val translator = new ACSLTranslator(ctx)
+    val translator = new ACSLTranslator(ctx, exceptionTypes)
 
     ast match {
       case ac : AST.AnnotContract =>
@@ -135,11 +137,18 @@ object ACSLTranslator {
  * @param ctx Context providing information about the parsed program where
  *            the ACSL annotation appears in.
  */
-class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
+class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: Map[String, IdealInt]) {
   import scala.collection.mutable.{HashMap => MHashMap}
   import ACSLTranslator._
 
   private val printer = new tricera.acsl.PrettyPrinterNonStatic
+
+  val exceptionFlag : ITerm = ctx.getGlobals.find(g => 
+    g.name == "__exception_flag"
+  ).getOrElse(throw new ACSLException("Exception flag global variable not found")).term
+  val exceptionType : ITerm = ctx.getGlobals.find(g => 
+    g.name == "__exception_type"
+  ).getOrElse(throw new ACSLException("Exception type global variable not found")).term
 
   val locals = new MHashMap[String, CCTerm]
   var vars: Map[String, CCVar] = Map()
@@ -202,10 +211,30 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         case _ => None
       })
 
-      val newPost : IFormula = IExpression.and(tcs.map(f => constructPost(f, post)))
+      val exceptionFlag : ITerm = ctx.getGlobals.find(g => 
+        g.name == "__exception_flag"
+      ).getOrElse(throw new ACSLException("Exception flag global variable not found")).term
+
+      val newPre = pre &&& (exceptionFlag === 0)
+
+      val defaultThrow = new AST.ThrowsClauseEmpty(new AST.ELit(new AST.LitTrue))
+
+      val newPost: IFormula = if (tcs.size > 0) {
+        IExpression.and(tcs.map(f => constructPost(f, post)))
+      } else {
+        constructPost(defaultThrow, post)
+      }
+
+      val listLocation = new AST.ListLocation
+      listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_flag"))))
+      listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_type"))))
+      listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_value"))))
+      val exceptionAssigns = new AST.SimpleClauseAssigns(new AST.AnAssignsClause(new AST.LocationsSome(listLocation)))
+
+      val newAcs = exceptionAssigns :: acs
 
       // FIXME: Refactor and break out in functions!
-      val assigns : (IFormula, IFormula) = acs match {
+      val assigns : (IFormula, IFormula) = newAcs match {
         case Nil => (IBoolLit(true), IBoolLit(true))
         case acs =>
           val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) =
@@ -315,7 +344,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       }
 
       // todo: have separate line numbers for ecs
-      new FunctionContract(pre, newPost, assigns._1, assigns._2,
+      new FunctionContract(newPre, newPost, assigns._1, assigns._2,
                            getSourceInfo(c),
                            getActualSourceInfo(ctx, postSrcInfo))
 
@@ -357,17 +386,68 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 
   def constructPost(clause: AST.ThrowsClause, post: IFormula): IFormula = clause match {
     case empty: AST.ThrowsClauseEmpty => constructPost(empty, post)
-    case types: AST.ThrowsClauseTypes => ???
+    case types: AST.ThrowsClauseTypes => constructPost(types, post)
   }
 
   def constructPost(clause: AST.ThrowsClauseEmpty, post: IFormula) : IFormula = {
-    val exceptionFlag : ITerm = ctx.getGlobals.find(g => 
-      g.name == "__exception_flag"
-    ).getOrElse(throw new ACSLException("Exception flag global variable not found")).term
     val pred = translate(clause.expr_).toFormula
-    val one : ITerm = 1
 
-    (exceptionFlag === 0 ==> post) &&& (exceptionFlag =/= 0 ==> pred)
+    (exceptionFlag === 0 ==> post) &&& 
+    (exceptionFlag =/= 0 ==> (IExpression.or(exceptionTypeMap.map(x => exceptionType === x._2)) &&& pred))
+  }
+
+  def constructPost(clause: AST.ThrowsClauseTypes, post: IFormula) : IFormula = {
+    val pred = translate(clause.expr_).toFormula
+    val exceptionTypes = clause.listexceptiontype_.asScala
+
+    val enumTypeVariants = exceptionTypes.map(t => {
+      val typeString = exceptionTypeToString(t).toUpperCase()
+      exceptionTypeMap.get(typeString) match {
+        case Some(enumVariant) => enumVariant
+        case None => throw new ACSLParseException("Exception type not found in enum declaration", getSourceInfo(t))
+      }
+    })
+
+    (exceptionFlag === 0 ==> post) &&& 
+    (exceptionFlag =/= 0 ==> (IExpression.or(enumTypeVariants.map(x => exceptionType === x)) &&& pred))
+  }
+
+  def exceptionTypeToString(exceptionType: AST.ExceptionType): String = exceptionType match {
+    case et: AST.AnExceptionType => et.ctypename_ match {
+      case t: AST.ACTypeName => {
+        // Ignore type qualifiers
+        val typeSpecList: List[AST.CTypeSpec] = t.listcdeclspec_.asScala.flatMap(declSpec => declSpec match {
+          case ct: AST.CType => Some(ct.ctypespec_)
+          case _: AST.CSpecProp => None
+        }).toList
+
+        val str = new StringBuilder
+        var joiner = ""
+        for (t <- typeSpecList) {
+          str.append(joiner)
+          joiner = "_"
+          str.append(typeSpecToString(t))
+        }
+        str.toString()
+      }
+    }
+  }
+
+  private def typeSpecToString(typeSpec: AST.CTypeSpec): String = {
+    typeSpec match {
+      case t: AST.Tvoid => "void"
+      case t: AST.Tchar => "char"
+      case t: AST.Tshort => "short"
+      case t: AST.Tint => "int"
+      case t: AST.Tlong => "long"
+      case t: AST.Tsigned => "signed"
+      case t: AST.Tunsigned => "unsigned"
+      case t: AST.Tcollection => t.ccollection_ match {
+        case struct: AST.CStruct => "struct" + "_" + t.id_
+        case enum: AST.CEnum => "enum" + "_" + t.id_
+        case _: AST.CUnion => ???
+      }
+    }
   }
 
 

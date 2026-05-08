@@ -1050,9 +1050,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val name = getName(fun.function_def_)
         val funContext = functionContexts(name)
         val possibleACSLAnnotation = annot.asInstanceOf[MaybeACSLAnnotation]
+
+        val exceptionTypes: Map[String, IdealInt] = enumDefs.get("ExceptionType").get.asInstanceOf[CCIntEnum].enumerators.toMap
+
         // todo: try / catch and print msg?
         val contract = ACSLTranslator.translateACSL(
-          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
+          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext, exceptionTypes)
 
         prePredsToReplace.add(funContext.prePred.pred)
         postPredsToReplace.add(funContext.postPred.pred)
@@ -2627,7 +2630,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             override val annotationNumLines : Int = 1
           }
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
+            "/*@" + annot + "*/", new LocalContext(), Map()) match {
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
@@ -2716,7 +2719,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             override val annotationNumLines : Int = 1
           }
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
+            "/*@" + annot + "*/", new LocalContext(), Map()) match {
             case res : tricera.acsl.LoopAnnotation =>
                 ???
             case _ =>
