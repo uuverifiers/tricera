@@ -1,0 +1,14 @@
+int x;
+
+/*@
+  assigns x;
+  ensures x == 0;
+*/
+void f() {
+  x = 0;
+}
+
+int main() {
+  f();
+  assert(x == 0);
+}

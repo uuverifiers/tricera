@@ -530,8 +530,8 @@ class CCReader private (prog              : Program,
   private def newPred(extraArgs : scala.Seq[CCVar],
                       srcInfo : Option[SourceInfo]) : CCPredicate = {
     val predNameSuffix = srcInfo match {
-      case Some(SourceInfo(line, col)) => s"${line}_$col"
-      case None => ""
+      case Some(SourceInfo(line, col)) if line >= 0 => s"${line}_$col"
+      case _ => ""
     }
     val predName =
       if (predicateHints.exists(_._1.name == prefix + predNameSuffix)) {
