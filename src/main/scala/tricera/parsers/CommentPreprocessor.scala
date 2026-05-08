@@ -31,15 +31,34 @@ package tricera.parsers
 import java.io.{BufferedReader, BufferedWriter, StringReader, StringWriter}
 import tricera.Literals
 
-// preprocesses ACSL style comments to make life easier for the parser
+// preprocesses ACSL style comments to make life easier for the parser.
 object CommentPreprocessor {
-  val annotationMarker = "■■" // ascii 254 times 2
+  val annotationMarker   = Literals.annotationMarker
+  val ghostOpenMarker    = Literals.ghostOpenMarker
+  val ghostCloseMarker   = Literals.ghostCloseMarker
+
+  private val ghostKeyword = "ghost"
+
+  private def ghostKeywordEnd(s : String) : Int = {
+    var i = 0
+    while (i < s.length && (s.charAt(i) == ' ' || s.charAt(i) == '\t')) i += 1
+    val end = i + ghostKeyword.length
+    if (end > s.length) return -1
+    if (s.substring(i, end) != ghostKeyword) return -1
+    if (end < s.length) {
+      val c = s.charAt(end)
+      if (c.isLetterOrDigit || c == '_' || c == '$') return -1
+    }
+    end
+  }
+
   def apply(reader : BufferedReader, readerBufferSize : Int = 1000) :
   BufferedReader = {
     val stringWriter = new StringWriter(readerBufferSize)
     val writer = new BufferedWriter(stringWriter)
 
     var isInComment = false
+    var currentClose = annotationMarker
 
     var line: String = reader.readLine
     val newLine = new scala.collection.mutable.StringBuilder(line.length)
@@ -55,12 +74,30 @@ object CommentPreprocessor {
           case i if i < line.length - 2 => // need at least 2 more chars
             line.substring(i + 1, i + 3) match {
               case "*@" =>
-                newLine ++= line.substring(curInd, i) ++ annotationMarker
-                isInComment = true
-                curInd = i + 3
+                val gEnd = ghostKeywordEnd(line.substring(i + 3))
+                if (gEnd >= 0) {
+                  // /*@ ghost <body> */
+                  newLine ++= line.substring(curInd, i) ++ ghostOpenMarker
+                  isInComment = true
+                  currentClose = ghostCloseMarker
+                  curInd = i + 3 + gEnd
+                } else {
+                  // Ordinary hint/contract annotation.
+                  newLine ++= line.substring(curInd, i) ++ annotationMarker
+                  isInComment = true
+                  currentClose = annotationMarker
+                  curInd = i + 3
+                }
               case "/@" =>
-                newLine ++= line.substring(curInd, i) ++ annotationMarker ++
-                  line.substring(i + 3) ++ annotationMarker
+                val gEnd = ghostKeywordEnd(line.substring(i + 3))
+                if (gEnd >= 0) {
+                  // //@ ghost <body>
+                  newLine ++= line.substring(curInd, i) ++ ghostOpenMarker ++
+                    line.substring(i + 3 + gEnd) ++ ghostCloseMarker
+                } else {
+                  newLine ++= line.substring(curInd, i) ++ annotationMarker ++
+                    line.substring(i + 3) ++ annotationMarker
+                }
                 curInd = line.length // will move on to next line
               case _ => // found slash but not a comment in our desired format
                 newLine ++= line.substring(curInd, i + 1)
@@ -78,11 +115,11 @@ object CommentPreprocessor {
             curInd = line.length // will move on to next line
           case i if i < line.length - 1 && line.charAt(i + 1) == '/' && // "@*/" found
             i > 0 && line.charAt(i - 1) == '@' =>
-            newLine ++= line.substring(curInd, i - 1) + annotationMarker
+            newLine ++= line.substring(curInd, i - 1) + currentClose
             curInd = i + 2
             isInComment = false
           case i if i < line.length - 1 && line.charAt(i + 1) == '/' => // "*/" found
-            newLine ++= line.substring(curInd, i) ++ annotationMarker
+            newLine ++= line.substring(curInd, i) ++ currentClose
             curInd = i + 2
             isInComment = false
           case i => // found a star, but was not for closing the comment
@@ -102,7 +139,24 @@ object CommentPreprocessor {
 
 //    println("comment-preprocessed input:\n\n" + stringWriter.getBuffer.toString)
 
-    new BufferedReader(new StringReader(stringWriter.getBuffer.toString))
+    new BufferedReader(new StringReader(
+      rewriteGhostLogicTypes(stringWriter.getBuffer.toString)))
     // todo: benchmark this with files, >1 MB, benchmark this whole class
   }
+
+  // ACSL treats `integer` and `boolean` as logic-type keywords
+  // inside annotations. Regular C code may still use them as plain
+  // identifiers. Rewrite them to internal (`$MathInt`, `_Bool`)
+  private val ghostSpanRegex =
+    new scala.util.matching.Regex(
+      "(?s)" + java.util.regex.Pattern.quote(ghostOpenMarker) + "(.*?)" +
+      java.util.regex.Pattern.quote(ghostCloseMarker), "body")
+  private def rewriteGhostLogicTypes(s : String) : String =
+    ghostSpanRegex.replaceAllIn(s, m => {
+      val body = m.group("body")
+        .replaceAll("\\binteger\\b", "\\$MathInt")
+        .replaceAll("\\bboolean\\b", "_Bool")
+      java.util.regex.Matcher.quoteReplacement(
+        ghostOpenMarker + body + ghostCloseMarker)
+    })
 }

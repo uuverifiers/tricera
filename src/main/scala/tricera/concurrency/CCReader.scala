@@ -579,7 +579,12 @@ class CCReader private (prog              : Program,
       case compound: ScompTwo =>
         val stmsIt = ap.util.PeekIterator(compound.liststm_.asScala.iterator)
         while (stmsIt.hasNext) stmsIt.next match {
-          case dec: DecS => collectStructDefs(dec.dec_)
+          case dec : DecS     => collectStructDefs(dec.dec_)
+          case g   : GhostStm =>
+            for (s <- g.liststm_.asScala) s match {
+              case dec : DecS => collectStructDefs(dec.dec_)
+              case _          =>
+            }
           case _ =>
         }
     }
@@ -604,6 +609,11 @@ class CCReader private (prog              : Program,
           case t : ParaThread => t.compound_stm_
         }
         collectStructDefsFromComp(comp)
+      case g : GhostExternal =>
+        for (inner <- g.listexternal_declaration_.asScala) inner match {
+          case d : Global => collectStructDefs(d.dec_)
+          case _          =>
+        }
       case _ =>
     }
 
@@ -795,7 +805,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
    */
   private val globalExitPred = newPred("exit", scope.allFormalVars, None)
 
-  //////////////////////////////////////////////////////////////////////////////
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
     // generous than actual C semantics, where declarations
@@ -830,6 +839,17 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               "Function " + name + " is already declared")
           functionDefs.put(name, decl.function_def_)
         }
+
+        case decl : GhostExternal =>
+          for (inner <- decl.listexternal_declaration_.asScala) inner match {
+            case g : Global =>
+              collectVarDecls(g.dec_, isGlobal = true, values, "",
+                              collectOnlyLocalStatic = false,
+                              isGhost = true)
+            case other =>
+              warn("Unsupported construct inside ghost block at file scope: " +
+                   other.getClass.getSimpleName)
+          }
 
         case _ => // nothing
       }
@@ -1484,7 +1504,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                               isGlobal               : Boolean,
                               values                 : Symex,
                               enclosingFuncName      : String = "",
-                              collectOnlyLocalStatic : Boolean) : Unit = {
+                              collectOnlyLocalStatic : Boolean,
+                              isGhost                : Boolean = false) : Unit = {
     if(collectOnlyLocalStatic)
       assert(enclosingFuncName nonEmpty)
     val decls = collectVarDecls(dec, isGlobal || collectOnlyLocalStatic)
@@ -1511,7 +1532,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           throw NeedsHeapModelException
 
         val storage = {
-          if (isGlobal) GlobalStorage // ignore static in globals
+          if (isGhost)
+            GhostStorage(if (isGlobal) None else Some(enclosingFuncName))
+          else if (isGlobal) GlobalStorage // ignore static in globals
           else if (varDec.isStatic) StaticStorage(enclosingFuncName)
           else AutoStorage
         }
@@ -1542,10 +1565,15 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                   case _ => init.exp_
                 }
 
-                val evalContext =
-                  if (varDec.typ.isInstanceOf[CCHeapArrayPointer])
-                    values.EvalContext().withLhsIsArrayPointer(true).withFunctionName(enclosingFuncName)
-                  else values.EvalContext().withFunctionName(enclosingFuncName)
+                val evalContext = {
+                  val base =
+                    if (varDec.typ.isInstanceOf[CCHeapArrayPointer])
+                      values.EvalContext().withLhsIsArrayPointer(true)
+                    else values.EvalContext()
+                  base.withFunctionName(enclosingFuncName)
+                      .withGhostVisible(isGhost)
+                      .withGhostMode(isGhost)
+                }
                 val res = values.eval(actualInitExp)(
                   values.EvalSettings(), evalContext)
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
@@ -1621,6 +1649,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
 
         // do not use actualType below, take from lhsVar
+
+        scope.checkGhostNameClash(actualLhsVar, enclosingFuncName)
 
         if (isGlobal || collectOnlyLocalStatic) {
           scope.GlobalVars addVar actualLhsVar
@@ -2136,6 +2166,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 throw NeedsHeapModelException
               typ = CCHeapObject(heap)
             }
+            case _ : Tmathint =>
+              typ = CCMathInt
+            case _ : Tbool =>
+              typ = CCBool
             case x => {
               warn("type " + (printer print x) +
                    " not supported, assuming int")
@@ -2362,6 +2396,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   private class FunctionTranslator private (returnPred   : Option[CCPredicate],
                                             functionName : String) {
+    private var inGhostMode : Boolean = false
 
     private def symexFor(initPred : CCPredicate,
                          stm : Expression_stm) : (Symex, Option[CCTerm]) = {
@@ -2372,6 +2407,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           implicit val evalSettings = exprSymex.EvalSettings()
           implicit val evalContext = exprSymex.EvalContext()
                                               .withFunctionName(functionName)
+                                              .withGhostVisible(inGhostMode)
+                                              .withGhostMode(inGhostMode)
           Some(exprSymex eval stm.exp_)
       }
       (exprSymex, res)
@@ -2543,6 +2580,17 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
         case stm : AnnotatedIterS =>
           translate(stm.annotation_, stm.iter_stm_, entry, exit)
+        case stm : GhostStm =>
+          // Standalone ghost annotation appearing as a `Stm` outside
+          // a compound block. Ghost assignments work but, declarations 
+          // are scoped to just this single statement.
+          val newExit = translateGhostStmBlock(stm.liststm_.asScala.toSeq,
+                                               entry, getSourceInfo(stm))
+          val srcInfo = Some(getSourceInfo(stm))
+          output(addRichClause(Clause(
+            atom(exit, scope.allFormalVarTerms take exit.arity),
+            List(atom(newExit, scope.allFormalVarTerms take newExit.arity)),
+            true), srcInfo))
       }
 
     private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
@@ -2631,6 +2679,31 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case _ => warn("Ignoring annotation: " + annot)
           }
         case _ => warn("Ignoring annotation: " + annotationInfo)
+      }
+    }
+
+    // Ghost block inside a function body
+    private def translateGhostStmBlock(stms    : scala.Seq[Stm],
+                                       entry   : CCPredicate,
+                                       srcInfo : SourceInfo) : CCPredicate = {
+      val wasInGhost = inGhostMode
+      inGhostMode = true
+      try {
+        var prevPred = entry
+        for (stm <- stms) stm match {
+          case d : DecS =>
+            prevPred = translate(d.dec_, prevPred, isGhost = true)
+          case g : GhostStm =>
+            prevPred = translateGhostStmBlock(
+              g.liststm_.asScala.toSeq, prevPred, getSourceInfo(g))
+          case s =>
+            val nextPred = newPred(Nil, Some(getSourceInfo(s)))
+            translate(s, prevPred, nextPred)
+            prevPred = nextPred
+        }
+        prevPred
+      } finally {
+        inGhostMode = wasInGhost
       }
     }
 
@@ -2724,9 +2797,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     }
 
 
-    private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {
+    private def translate(dec     : Dec,
+                          entry   : CCPredicate,
+                          isGhost : Boolean = false) : CCPredicate = {
       val decSymex = Symex(symexContext, scope, entry, heapModel)
-      collectVarDecls(dec, false, decSymex, functionName, false)
+      collectVarDecls(dec, isGlobal = false, decSymex, functionName,
+                      collectOnlyLocalStatic = false, isGhost = isGhost)
       val exit = newPred(Nil, Some(getSourceInfo(dec)))
       decSymex outputClause(exit, exit.srcInfo)
       exit
@@ -2875,7 +2951,19 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         stmsIt.next match {
           case stm : DecS => {
             val srcInfo = Some(getSourceInfo(stm))
-            prevPred = translate(stm.dec_, prevPred)
+            prevPred = translate(stm.dec_, prevPred, isGhost = inGhostMode)
+            if (!stmsIt.hasNext) {
+              output(addRichClause(Clause(
+                atom(exit, scope.allFormalVarTerms take exit.arity),
+                List(atom(prevPred, scope.allFormalVarTerms take prevPred.arity)),
+                true), srcInfo))
+            }
+          }
+          case stm : GhostStm => {
+            val srcInfo = Some(getSourceInfo(stm))
+            prevPred = translateGhostStmBlock(stm.liststm_.asScala.toSeq,
+                                              prevPred,
+                                              getSourceInfo(stm))
             if (!stmsIt.hasNext) {
               output(addRichClause(Clause(
                 atom(exit, scope.allFormalVarTerms take exit.arity),
@@ -2944,6 +3032,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
+                                            .withGhostVisible(inGhostMode)
+                                            .withGhostMode(inGhostMode)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, first, exit, entry.srcInfo)
         withinLoop(entry, exit) {
@@ -2968,6 +3058,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext  = condSymex.EvalContext()
                                              .withFunctionName(functionName)
+                                             .withGhostVisible(inGhostMode)
+                                             .withGhostMode(inGhostMode)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, entry, exit, srcInfo)
       }
@@ -3011,6 +3103,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             val incSymex = Symex(symexContext, scope, third, heapModel)
             val evalContext = incSymex.EvalContext()
                                                .withFunctionName(functionName)
+                                               .withGhostVisible(inGhostMode)
+                                               .withGhostMode(inGhostMode)
             incSymex.eval(stm.exp_)(incSymex.EvalSettings(), evalContext)
             incSymex outputClause (first, srcInfo)
           }
@@ -3026,6 +3120,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
+                                            .withGhostVisible(inGhostMode)
+                                            .withGhostMode(inGhostMode)
         val (cond, srcInfo1, srcInfo2) = stm match {
           case stm : SselOne =>
             ((condSymex eval stm.exp_).toFormula,
@@ -3060,6 +3156,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = selectorSymex.EvalSettings()
         implicit val evalContext  = selectorSymex.EvalContext()
                                                  .withFunctionName(functionName)
+                                                 .withGhostVisible(inGhostMode)
+                                                 .withGhostMode(inGhostMode)
         val selector = (selectorSymex eval stm.exp_).toTerm
 
         val newEntry = newPred(Nil, Some(getSourceInfo(stm)))
@@ -3140,6 +3238,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           implicit val evalSettings = symex.EvalSettings()
           implicit val evalContext  = symex.EvalContext()
                                            .withFunctionName(functionName)
+                                           .withGhostVisible(inGhostMode)
+                                           .withGhostMode(inGhostMode)
           val retValue = symex eval jump.exp_
           if (retValue.typ.isInstanceOf[CCStackPointer]) {
             throw new UnsupportedCFragmentException(
@@ -3185,6 +3285,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             implicit val evalSettings = condSymex.EvalSettings()
             implicit val evalContext  = condSymex.EvalContext()
                                                  .withFunctionName(functionName)
+                                                 .withGhostVisible(inGhostMode)
+                                                 .withGhostMode(inGhostMode)
             condSymex.saveState
             val cond = (condSymex eval stm.exp_).toFormula
             if (!condSymex.atomValuesUnchanged)

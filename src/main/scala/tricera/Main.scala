@@ -232,6 +232,16 @@ object Main {
     else
       println("(error \"" + message.replace("\"", "\"\"\"") + "\")")
 
+  // Used to decide whether to disable tri-pp's declaration slicer
+  // tri-pp does not know about ghost code usages
+  private val ghostCommentPattern =
+    ("""(/\*@|//@)\s*ghost\b""").r
+  private def containsGhostAnnotation(filePath : String) : Boolean = {
+    val src = scala.io.Source.fromFile(filePath)
+    try ghostCommentPattern.findFirstIn(src.mkString).nonEmpty
+    finally src.close()
+  }
+
 }
 
 class Main (args: Array[String]) {
@@ -313,12 +323,15 @@ class Main (args: Array[String]) {
           println("=" * 80 + "\nTriCera's preprocessor (tri-pp) warnings and errors\n")
         }
 
+      val hasGhost = containsGhostAnnotation(cppFileName)
+
       val pp = new TriCeraPreprocessor(cppFileName,
         preprocessedFile.getAbsolutePath,
         displayWarnings = logPPLevel == 2,
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName,
-        determinize = TriCeraParameters.get.determinizeInput)
+        determinize = TriCeraParameters.get.determinizeInput,
+        noDeclSlice = hasGhost)
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)

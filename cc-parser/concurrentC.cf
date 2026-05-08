@@ -13,11 +13,12 @@ entrypoints Program, Stm, Exp ;
 
 Progr.  Program ::= [External_declaration] ;
 
-Afunc.  External_declaration ::= Function_def ;
-Athread.External_declaration ::= Thread_def ;
-Global. External_declaration ::= Dec ;
-Chan.   External_declaration ::= Chan_def ;
-Ignored.External_declaration ::= IgnoredDecl;
+Afunc.         External_declaration ::= Function_def ;
+Athread.       External_declaration ::= Thread_def ;
+Global.        External_declaration ::= Dec ;
+Chan.          External_declaration ::= Chan_def ;
+Ignored.       External_declaration ::= IgnoredDecl;
+GhostExternal. External_declaration ::= "⟦" [External_declaration] "⟧" ;
 
 -- following can be left in source after preprocessing, simply ignore them.
 ExternKeyword. IgnoredDecl ::= "__extension__" ;
@@ -110,6 +111,7 @@ Tenum.        Type_specifier ::= Enum_specifier;
 Tclock.       Type_specifier ::= "clock";
 Tduration.    Type_specifier ::= "duration";
 THeapObject.  Type_specifier ::= "$HeapObject";
+Tmathint.     Type_specifier ::= "$MathInt";
 
 
 -- MyType.         Storage_class_specifier ::= "typedef"; -- handled by the preprocessor
@@ -239,6 +241,7 @@ DecS.           Stm ::= Dec ; -- beyond ANSI-C
 AtomicS.        Stm ::= Atomic_stm ;
 AnnotationS.    Stm ::= Annotation ;
 AnnotatedIterS. Stm ::= Annotation Iter_stm ;
+GhostStm.       Stm ::= "⟦" [Stm] "⟧" ;
 
 SlabelOne.   Labeled_stm ::= CIdent ":" Stm ;
 SlabelTwo.   Labeled_stm ::= "case" Constant_expression ":" Stm ;
@@ -275,7 +278,7 @@ separator nonempty Stm "";
 
 token CIdent (letter | '_' | '$' | '\\') (letter | digit | '_' | '$')*;
 
-token AnnotationString   {"■■"} (char - ["■"])* {"■■"};
+token AnnotationString {"■■"} (char - ["■"])* {"■■"};
 
 token UnboundedInteger ["123456789"] digit *;
 
