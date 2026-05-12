@@ -1,0 +1,15 @@
+#!/bin/sh
+
+TESTS="simple-contract-safe.cpp \
+       simple-contract-unsafe.cpp \
+       simple-contract-type-safe.cpp \
+       simple-contract-type-pred-safe.cpp \
+       simple-contract-type-pred-safe-2.cpp \
+       simple-contract-type-pred-unsafe-contract.cpp \
+       multi-func-call-safe.cpp"
+
+for name in $TESTS; do
+  echo
+  echo $name
+  $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done

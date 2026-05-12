@@ -218,10 +218,6 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
         case _ => None
       })
 
-      val exceptionFlag : ITerm = ctx.getGlobals.find(g => 
-        g.name == "__exception_flag"
-      ).getOrElse(throw new ACSLException("Exception flag global variable not found")).term
-
       val newPre = pre &&& (exceptionFlag === 0)
       val defaultThrow = new AST.ThrowsClauseEmpty(new AST.ELit(new AST.LitTrue))
 
