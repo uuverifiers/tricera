@@ -19,3 +19,6 @@ UNSAFE
 
 multi-func-call-safe.cpp
 SAFE
+
+multiple-clauses-with-types-safe.cpp
+SAFE

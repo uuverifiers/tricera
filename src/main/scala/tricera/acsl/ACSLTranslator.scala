@@ -222,9 +222,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
       val defaultThrow = new AST.ThrowsClauseEmpty(new AST.ELit(new AST.LitTrue))
 
       val newPost: IFormula = if (tcs.size > 0) {
-        IExpression.and(tcs.map(f => constructPost(f, post)))
+        constructPost(tcs, post)
       } else {
-        constructPost(defaultThrow, post)
+        constructPost(List(defaultThrow), post)
       }
 
       val listLocation = new AST.ListLocation
@@ -389,19 +389,22 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
     }
   }
 
-  def constructPost(clause: AST.ThrowsClause, post: IFormula): IFormula = clause match {
-    case empty: AST.ThrowsClauseEmpty => constructPost(empty, post)
-    case types: AST.ThrowsClauseTypes => constructPost(types, post)
+  def constructPost(throwsClauses: List[AST.ThrowsClause], post: IFormula) : IFormula = {
+    (exceptionFlagPost === 0 ==> post) &&& 
+    (exceptionFlagPost =/= 0 ==> IExpression.or(throwsClauses.map(clause => exceptionTypeCheckFormula(clause))))
   }
 
-  def constructPost(clause: AST.ThrowsClauseEmpty, post: IFormula) : IFormula = {
+  def exceptionTypeCheckFormula(clause: AST.ThrowsClause) : IFormula = clause match {
+    case clauseEmpty: AST.ThrowsClauseEmpty => exceptionTypeCheckFormula(clauseEmpty)
+    case clauseTypes: AST.ThrowsClauseTypes => exceptionTypeCheckFormula(clauseTypes)
+  }
+
+  def exceptionTypeCheckFormula(clause: AST.ThrowsClauseEmpty) : IFormula = {
     val pred = translate(clause.expr_).toFormula
-
-    (exceptionFlagPost === 0 ==> post) &&&
-    (exceptionFlagPost =/= 0 ==> (IExpression.or(exceptionTypeMap.map(x => exceptionTypePost === x._2)) &&& pred))
+    exceptionTypeCheckFormula(exceptionTypeMap.map(x => x._2).toList, pred)
   }
 
-  def constructPost(clause: AST.ThrowsClauseTypes, post: IFormula) : IFormula = {
+  def exceptionTypeCheckFormula(clause: AST.ThrowsClauseTypes) : IFormula = {
     val pred = translate(clause.expr_).toFormula
     val exceptionTypes = clause.listexceptiontype_.asScala
 
@@ -413,8 +416,11 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
       }
     })
 
-    (exceptionFlagPost === 0 ==> post) &&&
-    (exceptionFlagPost =/= 0 ==> (IExpression.or(enumTypeVariants.map(x => exceptionTypePost === x)) &&& pred))
+    exceptionTypeCheckFormula(enumTypeVariants.toList, pred)
+  }
+
+  def exceptionTypeCheckFormula(types: List[IdealInt], pred: IFormula) : IFormula = {
+    IExpression.or(types.map(x => exceptionTypePost === x)) &&& pred
   }
 
   def exceptionTypeToString(exceptionType: AST.ExceptionType): String = exceptionType match {
