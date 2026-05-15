@@ -108,6 +108,7 @@ Tstruct.      Type_specifier ::= Struct_or_union_spec;
 Tenum.        Type_specifier ::= Enum_specifier;
 -- Tname.        Type_specifier ::= "Typedef_name";
 Tclock.       Type_specifier ::= "clock";
+Tsignal.      Type_specifier ::= "signal";
 Tduration.    Type_specifier ::= "duration";
 THeapObject.  Type_specifier ::= "$HeapObject";
 
@@ -237,6 +238,7 @@ IterS.          Stm ::= Iter_stm ;
 JumpS.          Stm ::= Jump_stm ;
 DecS.           Stm ::= Dec ; -- beyond ANSI-C
 AtomicS.        Stm ::= Atomic_stm ;
+ProgressS.      Stm ::= Progress_stm ;
 AnnotationS.    Stm ::= Annotation ;
 AnnotatedIterS. Stm ::= Annotation Iter_stm ;
 
@@ -269,6 +271,8 @@ SjumpFive.  Jump_stm ::= "return" Exp ";" ;
 
 SatomicOne. Atomic_stm ::= "atomic" Stm;
 SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
+
+SprogressOne.Progress_stm ::= "progress" "(" Exp ")" Stm;
 
 
 separator nonempty Stm "";
