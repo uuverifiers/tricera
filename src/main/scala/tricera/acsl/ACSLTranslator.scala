@@ -390,37 +390,45 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
   }
 
   def constructPost(throwsClauses: List[AST.ThrowsClause], post: IFormula) : IFormula = {
-    (exceptionFlagPost === 0 ==> post) &&& 
-    (exceptionFlagPost =/= 0 ==> IExpression.or(throwsClauses.map(clause => exceptionTypeCheckFormula(clause))))
-  }
-
-  def exceptionTypeCheckFormula(clause: AST.ThrowsClause) : IFormula = clause match {
-    case clauseEmpty: AST.ThrowsClauseEmpty => exceptionTypeCheckFormula(clauseEmpty)
-    case clauseTypes: AST.ThrowsClauseTypes => exceptionTypeCheckFormula(clauseTypes)
-  }
-
-  def exceptionTypeCheckFormula(clause: AST.ThrowsClauseEmpty) : IFormula = {
-    val pred = translate(clause.expr_).toFormula
-    exceptionTypeCheckFormula(exceptionTypeMap.map(x => x._2).toList, pred)
-  }
-
-  def exceptionTypeCheckFormula(clause: AST.ThrowsClauseTypes) : IFormula = {
-    val pred = translate(clause.expr_).toFormula
-    val exceptionTypes = clause.listexceptiontype_.asScala
-
-    val enumTypeVariants = exceptionTypes.map(t => {
-      val typeString = exceptionTypeToString(t).toUpperCase()
-      exceptionTypeMap.get(typeString) match {
-        case Some(enumVariant) => enumVariant
-        case None => throw new ACSLParseException("Exception type not found in enum declaration", getSourceInfo(t))
-      }
+    val emptyThrowsClauses = throwsClauses.flatMap(c => c match {
+      case empty: AST.ThrowsClauseEmpty => Some(empty)
+      case _ => None
     })
+    val typedThrowsClauses = throwsClauses.flatMap(c => c match {
+      case types: AST.ThrowsClauseTypes => Some(types)
+      case _ => None
+    }) 
 
-    exceptionTypeCheckFormula(enumTypeVariants.toList, pred)
+    (exceptionFlagPost === 0 ==> post) &&&
+    (exceptionFlagPost =/= 0 ==> (
+      throwsClausesEmptyFormula(emptyThrowsClauses) &&&
+      throwsClausesTypesFormula(typedThrowsClauses)
+      )
+    )
   }
 
-  def exceptionTypeCheckFormula(types: List[IdealInt], pred: IFormula) : IFormula = {
-    IExpression.or(types.map(x => exceptionTypePost === x)) &&& pred
+  def throwsClausesEmptyFormula(clauses: List[AST.ThrowsClauseEmpty]) : IFormula = {
+    val exceptionTypeInts = exceptionTypeMap.map(x => x._2).toList
+
+    IExpression.and(clauses.map(clause => translate(clause.expr_).toFormula)) &&&
+    IExpression.or(exceptionTypeInts.map(t => exceptionTypePost === t))
+  }
+
+  def throwsClausesTypesFormula(clauses: List[AST.ThrowsClauseTypes]) : IFormula = {
+    IExpression.and(clauses.map(clause => {
+      val pred = translate(clause.expr_).toFormula
+      val exceptionTypes = clause.listexceptiontype_.asScala
+
+      val exceptionTypeInts = exceptionTypes.map(t => {
+        val typeString = exceptionTypeToString(t).toUpperCase()
+        exceptionTypeMap.get(typeString) match {
+          case Some(enumVariant) => enumVariant
+          case None => throw new ACSLParseException("Exception type not found in enum declaration", getSourceInfo(t))
+        }
+      })
+
+      IExpression.or(exceptionTypeInts.map(t => exceptionTypePost === t)) ==> pred
+    }))
   }
 
   def exceptionTypeToString(exceptionType: AST.ExceptionType): String = exceptionType match {

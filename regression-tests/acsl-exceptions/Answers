@@ -22,3 +22,9 @@ SAFE
 
 multiple-clauses-with-types-safe.cpp
 SAFE
+
+overlapping-types-safe.cpp
+SAFE
+
+overlapping-types-unsafe.cpp
+UNSAFE

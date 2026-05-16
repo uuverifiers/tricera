@@ -7,7 +7,9 @@ TESTS="simple-contract-safe.cpp \
        simple-contract-type-pred-safe-2.cpp \
        simple-contract-type-pred-unsafe-contract.cpp \
        multi-func-call-safe.cpp \
-       multiple-clauses-with-types-safe.cpp"
+       multiple-clauses-with-types-safe.cpp \
+       overlapping-types-safe.cpp \
+       overlapping-types-unsafe.cpp"
 
 for name in $TESTS; do
   echo
