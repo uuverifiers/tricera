@@ -35,5 +35,6 @@ object CCExceptions {
   class UnsupportedCastException(msg : String) extends Exception(msg)
   class UnsupportedCFragmentException(msg : String) extends Exception(msg)
   object NeedsTimeException extends Exception
+  object NeedsSignalException extends Exception
   object NeedsHeapModelException extends Exception
 }

@@ -32,6 +32,7 @@ package tricera.concurrency.ccreader
 import ap.basetypes.IdealInt
 import ap.parser.{IFormula, IFunction, IIntLit, ITerm}
 import ap.theories.Heap
+import ap.theories.rationals.Rationals
 import tricera.concurrency.CCReader._
 import ap.parser.IExpression.{Sort, _}
 import ap.theories.bitvectors.ModuloArithmetic._
@@ -54,7 +55,7 @@ abstract sealed class CCType {
         case CCBool                         => Sort.Bool
         case CCMathInt                      => Sort.Integer
         case typ: CCArithType if typ.isUnsigned => Sort.Nat
-        case CCDuration                     => Sort.Nat
+        case CCDuration                     => Rationals.dom
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -64,6 +65,8 @@ abstract sealed class CCType {
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
+        case CCSignal                       => Sort.Bool
+        case CCClock                        => Rationals.dom
         case _                              => Sort.Integer
       }
     case ArithmeticMode.ILP32 =>
@@ -76,7 +79,7 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(32)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
-        case CCDuration                     => Sort.Nat
+        case CCDuration                     => Rationals.dom
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -86,6 +89,8 @@ abstract sealed class CCType {
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
+        case CCSignal                       => Sort.Bool
+        case CCClock                        => Rationals.dom
         case _                              => Sort.Integer
       }
     case ArithmeticMode.LP64 =>
@@ -98,7 +103,7 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(64)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
-        case CCDuration                     => Sort.Nat
+        case CCDuration                     => Rationals.dom
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -108,6 +113,8 @@ abstract sealed class CCType {
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
+        case CCSignal                       => Sort.Bool
+        case CCClock                        => Rationals.dom
         case _                              => Sort.Integer
       }
     case ArithmeticMode.LLP64 =>
@@ -120,7 +127,7 @@ abstract sealed class CCType {
         case CCULong                        => UnsignedBVSort(32)
         case CCLongLong                     => SignedBVSort(64)
         case CCULongLong                    => UnsignedBVSort(64)
-        case CCDuration                     => Sort.Nat
+        case CCDuration                     => Rationals.dom
         case CCHeap(heap)                   => heap.HeapSort
         case CCHeapObject(heap)             => heap.ObjectSort
         case CCStackPointer(_, _, _)        => Sort.Integer
@@ -130,6 +137,8 @@ abstract sealed class CCType {
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
         case CCIntEnum(_, _)                => Sort.Integer
+        case CCSignal                       => Sort.Bool
+        case CCClock                        => Rationals.dom
         case _                              => Sort.Integer
       }
   }
@@ -645,4 +654,11 @@ case object CCClock extends CCType {
 case object CCDuration extends CCType {
   override def toString: String = "duration"
   def shortName = "duration"
+  override def rangePred(t : ITerm) : IFormula =
+    Rationals.geq(t, Rationals.zero)
+}
+
+case object CCSignal extends CCType {
+  override def toString: String = "signal"
+  def shortName = "signal"
 }

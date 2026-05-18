@@ -17,6 +17,7 @@ Afunc.  External_declaration ::= Function_def ;
 Athread.External_declaration ::= Thread_def ;
 Global. External_declaration ::= Dec ;
 Chan.   External_declaration ::= Chan_def ;
+Sigs.   External_declaration ::= Sigs_def ;
 Ignored.External_declaration ::= IgnoredDecl;
 
 -- following can be left in source after preprocessing, simply ignore them.
@@ -55,6 +56,8 @@ PredicateExp. Pred_interp ::= CIdent "(" Parameter_type ")" "{" Exp "}" ;
 
 
 AChan. Chan_def ::= "chan" [CIdent] ";" ;
+
+ASig.  Sigs_def ::= "signal" [CIdent] ";" ;
 
 Type.     Declaration_specifier ::= Type_specifier ;
 Storage.  Declaration_specifier ::= Storage_class_specifier ;
@@ -108,7 +111,6 @@ Tstruct.      Type_specifier ::= Struct_or_union_spec;
 Tenum.        Type_specifier ::= Enum_specifier;
 -- Tname.        Type_specifier ::= "Typedef_name";
 Tclock.       Type_specifier ::= "clock";
-Tsignal.      Type_specifier ::= "signal";
 Tduration.    Type_specifier ::= "duration";
 THeapObject.  Type_specifier ::= "$HeapObject";
 

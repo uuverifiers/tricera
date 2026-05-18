@@ -33,6 +33,7 @@ import ap.parser.{IBoolLit, IExpression, IFormula, IIntLit, ITerm, SymbolCollect
 import tricera.Util.SourceInfo
 import CCExceptions._
 import ap.parser.IExpression._
+import ap.theories.rationals.Rationals
 import tricera.concurrency.CCReader
 import tricera.params.TriCeraParameters
 
@@ -47,6 +48,7 @@ case class CCTerm(t               : ITerm,
       case t if typ.isInstanceOf[CCHeapPointer] =>
         !IExpression.Eq(t, typ.asInstanceOf[CCHeapPointer].nullAddr)
       case t if typ == CCBool => t === ap.theories.ADT.BoolADT.True
+      case t if typ == CCSignal => t === ap.theories.ADT.BoolADT.True
       case t => !IExpression.eqZero(t)
     }
   }
@@ -61,7 +63,7 @@ case class CCTerm(t               : ITerm,
       case (_: CCArithType, CCDuration) => {
         if (!CCReader.useTime)
           throw NeedsTimeException
-        CCTerm.fromTerm(CCReader.GTU.term * toTerm, CCDuration, srcInfo)
+        CCTerm.fromTerm(Rationals.int2ring(toTerm), CCDuration, srcInfo)
       }
       case (_, CCVoid) => this
       // todo: do not do anything for casts to void?

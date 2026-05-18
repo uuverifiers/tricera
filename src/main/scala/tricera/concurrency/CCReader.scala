@@ -33,12 +33,13 @@ import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ADT, ExtArray}
 import ap.theories.heaps._
+import ap.theories.rationals.Rationals
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate}
 import ap.util.Seqs.reduceToSize
 import concurrent_c._
 import concurrent_c.Absyn._
 import hornconcurrency.{ParametricEncoder, System, TimedSystem,
-                        SystemTransformations}
+                        SystemTransformations, SignalSystem}
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints._
 import lazabs.horn.bottomup.HornClauses
@@ -67,11 +68,11 @@ import scala.collection.mutable
 
 object CCReader {
   private[concurrency] var useTime = false
+  private[concurrency] var useSignals = false
   private[concurrency] var modelHeap = false
 
-  // Reserve two variables for time
+  // Reserve a variable for global time
   private[concurrency] val GT  = new CCVar("_GT", None, CCClock, GlobalStorage)
-  private[concurrency] val GTU = new CCVar("_GTU", None, CCInt, GlobalStorage)
 
   def apply(input : java.io.Reader, entryFunction : String,
             propertiesToCheck : Set[properties.Property] = Set(
@@ -98,6 +99,11 @@ object CCReader {
         case NeedsTimeException => {
           warn("enabling time")
           useTime = true
+        }
+        case NeedsSignalException => {
+          warn("enabling Boolean signals and time")
+          useTime = true
+          useSignals = true
         }
         case NeedsHeapModelException => {
           modelHeap = true
@@ -353,6 +359,7 @@ class CCReader private (prog              : Program,
   //////////////////////////////////////////////////////////////////////////////
 
   private val channels = new MHashMap[String, System.CommChannel]
+  private val signals  = new MHashMap[String, Int]
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
@@ -568,9 +575,6 @@ class CCReader private (prog              : Program,
   if (useTime) {
     scope.GlobalVars addVar GT
     scope.GlobalVars.inits += CCTerm.fromTerm(GT.term, CCClock, None)
-    scope.GlobalVars addVar GTU
-    scope.GlobalVars.inits += CCTerm.fromTerm(GTU.term, CCInt, None)
-    scope.variableHints += List()
     scope.variableHints += List()
   }
 
@@ -823,6 +827,21 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             channels.put(name, new System.CommChannel(name))
           }
 
+        case decl : Sigs =>
+          for (name <- decl.sigs_def_.asInstanceOf[ASig].listcident_.asScala) {
+            if (!useSignals)
+              throw NeedsSignalException
+            if (signals contains name)
+              throw new TranslationException(
+                "Signal " + name + " is already declared")
+            val idx = scope.GlobalVars.vars.size
+            signals.put(name, idx)
+            val sigVar = new CCVar(name, None, CCSignal, GlobalStorage)
+            scope.GlobalVars addVar sigVar
+            scope.GlobalVars.inits += CCTerm.fromTerm(sigVar.term, CCClock, None)
+            scope.variableHints += List()
+          }
+
         case decl : Afunc => {
           val name = getName(decl.function_def_)
 
@@ -871,12 +890,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
     assert(scope.GlobalVars.vars.drop(globalsSize).forall(v => v.isStatic),
            "Non-static variables added while looking for static variables!")
-
+println(scope.GlobalVars)
     // prevent time variables, heap variable, and global ghost variables
     // from being initialised twice
     // TODO: This is very brittle and unintuitive - come up with a better solution.
     scope.GlobalVars.inits ++= (values.getValues drop
-      heapVars.size + (if (useTime) 2 else 0))
+      heapVars.size + (if (useTime) 1 else 0))
     // if while adding glboal variables we have changed the heap variables,
     // they need to be reinitialised as well.
     // Happens with global array allocations for instance.
@@ -2163,11 +2182,13 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       throw NeedsTimeException
     expr.toTerm match {
       case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm.fromTerm(GT.term + GTU.term*(-v), CCClock, expr.srcInfo)
+        CCTerm.fromTerm(Rationals.minus(GT.term, Rationals.int2ring(v)),
+                        CCClock, expr.srcInfo)
       case t if (expr.typ == CCClock) =>
         CCTerm.fromTerm(t, CCClock, expr.srcInfo)
       case t if (expr.typ == CCDuration) =>
-        CCTerm.fromTerm(GT.term - t, CCClock, expr.srcInfo)
+        CCTerm.fromTerm(Rationals.minus(GT.term, t),
+                        CCClock, expr.srcInfo)
       case t =>
         throw new TranslationException(
           "clocks can only be set to or compared with integers")
@@ -2182,7 +2203,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       case _ if (expr.typ == CCDuration) =>
         expr
       case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm.fromTerm(GTU.term*v, CCDuration, expr.srcInfo)
+        CCTerm.fromTerm(v, CCDuration, expr.srcInfo)
       case t =>
         throw new TranslationException(
           "duration variable cannot be set or compared to " + t)
@@ -3237,11 +3258,21 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         System.SomeBackgroundAxioms(backgroundPreds,
                                                backgroundClauses)
 
-    if (useTime) {
+    if (useSignals) {
+      SignalSystem(processes.toList,
+                   scope.GlobalVars.size,
+                   (assertionClauses).map(_.clause).toList,
+                   System.RationalTime(0),
+                   signals.values.toSet,
+                   for (p <- processes.toList) yield List(), // TODO
+                   None,
+                   VerificationHints(predHints),
+                   backgroundAxioms)
+    } else if (useTime) {
       TimedSystem(processes.toList,
-                  if (singleThreaded) 2 else scope.GlobalVars.size,
+                  if (singleThreaded) 1 else scope.GlobalVars.size,
                   (assertionClauses).map(_.clause).toList,
-                  System.ContinuousTime(0, 1),
+                  System.RationalTime(0),
                   timeInvariants.toSeq,
                   None,
                   VerificationHints(predHints),

@@ -30,6 +30,7 @@ package tricera.concurrency.ccreader
 
 import ap.parser.{IExpression, IFormula, ITerm}
 import ap.theories.ModuloArithmetic
+import ap.theories.rationals.Rationals
 import tricera.concurrency.CCReader._
 import tricera.concurrency.ccreader.CCExceptions._
 import IExpression._
@@ -76,6 +77,15 @@ object CCBinaryExpressions {
             CCTerm.fromFormula(f, CCInt, lhs.srcInfo)
         }
       }
+
+      protected def isRatComparison : Boolean =
+        (lhs.typ, rhs.typ) match {
+          case (CCClock, _)    => true
+          case (_, CCClock)    => true
+          case (CCDuration, _) => true
+          case (_, CCDuration) => true
+          case _               => false
+        }
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -144,7 +154,11 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntRes   = lhsTerm < rhsTerm
+      override def getIntRes   = 
+        if (isRatComparison)
+          Rationals.lt(lhsTerm, rhsTerm)
+        else
+          lhsTerm < rhsTerm
       override def getFloatRes = ???
     }
 
@@ -152,7 +166,11 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntRes   = lhsTerm > rhsTerm
+      override def getIntRes   =
+        if (isRatComparison)
+          Rationals.gt(lhsTerm, rhsTerm)
+        else
+          lhsTerm > rhsTerm
       override def getFloatRes = ???
     }
 
@@ -160,7 +178,11 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntRes   = lhsTerm <= rhsTerm
+      override def getIntRes   =
+        if (isRatComparison)
+          Rationals.leq(lhsTerm, rhsTerm)
+        else
+          lhsTerm <= rhsTerm
       override def getFloatRes = ???
     }
 
@@ -168,7 +190,11 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntRes   = lhsTerm >= rhsTerm
+      override def getIntRes   =
+        if (isRatComparison)
+          Rationals.geq(lhsTerm, rhsTerm)
+        else
+          lhsTerm >= rhsTerm
       override def getFloatRes = ???
     }
 
@@ -236,21 +262,21 @@ object CCBinaryExpressions {
                                             rhs: CCTerm): (ITerm, ITerm) = {
       (lhs.typ, rhs.typ) match {
         case (CCClock, _: CCArithType) =>
-          (GT.term - lhs.toTerm, GTU.term * rhs.toTerm)
+          (Rationals.minus(GT.term, lhs.toTerm), Rationals.int2ring(rhs.toTerm))
         case (_: CCArithType, CCClock) =>
-          (GTU.term * lhs.toTerm, GT.term - rhs.toTerm)
+          (Rationals.int2ring(lhs.toTerm), Rationals.minus(GT.term, rhs.toTerm))
         case (CCClock, CCClock) =>
-          (-lhs.toTerm, -rhs.toTerm)
+          (Rationals.minus(lhs.toTerm), Rationals.minus(rhs.toTerm))
         case (CCDuration, _: CCArithType) =>
-          (lhs.toTerm, GTU.term * rhs.toTerm)
+          (lhs.toTerm, Rationals.int2ring(rhs.toTerm))
         case (_: CCArithType, CCDuration) =>
-          (GTU.term * lhs.toTerm, rhs.toTerm)
+          (Rationals.int2ring(lhs.toTerm), rhs.toTerm)
         case (CCDuration, CCDuration) =>
           (lhs.toTerm, rhs.toTerm)
         case (CCClock, CCDuration) =>
-          (GT.term - lhs.toTerm, rhs.toTerm)
+          (Rationals.minus(GT.term, lhs.toTerm), rhs.toTerm)
         case (CCDuration, CCClock) =>
-          (lhs.toTerm, GT.term - rhs.toTerm)
+          (lhs.toTerm, Rationals.minus(GT.term, rhs.toTerm))
         case _ =>
           (lhs.toTerm, rhs.toTerm)
       }

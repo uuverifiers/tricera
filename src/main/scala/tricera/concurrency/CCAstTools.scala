@@ -171,6 +171,7 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(ext: Athread, arg: Unit): String = { ext.thread_def_.accept(this, arg) }
     override def visit(ext: Global, arg: Unit): String = { ext.dec_.accept(this, arg) }
     override def visit(ext: Chan, arg: Unit): String = { ext.chan_def_.accept(this, arg) }
+    override def visit(ext: Sigs, arg: Unit): String = { ext.sigs_def_.accept(this, arg) }
 
     /* Function_def */
     override def visit(defn: AnnotatedFunc, arg: Unit): String = { defn.declarator_.accept(this, arg); }
@@ -517,4 +518,5 @@ class CCAstFillFuncDef extends AbstractVisitor[Unit, MHashMap[String, Function_d
   override def visit(ext: Athread, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Global, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Chan, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: Sigs, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
 }
