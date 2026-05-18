@@ -108,7 +108,7 @@ settings(
   scalacOptions += "-opt:_",
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.2.1",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2.1",
+//  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2.1",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
   libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.19",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % "test",

@@ -33,7 +33,7 @@ import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ExtArray, ModuloArithmetic}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
-import hornconcurrency.ParametricEncoder
+import hornconcurrency.System
 import lazabs.horn.abstractions.VerificationHints.VerifHintInitPred
 import lazabs.horn.bottomup.HornClauses
 import tricera.Util._
@@ -190,8 +190,8 @@ class Symex private (context        : SymexContext,
 
   def outputClause(pred : CCPredicate,
                    srcInfo : Option[SourceInfo],
-                   sync : ParametricEncoder.Synchronisation =
-                   ParametricEncoder.NoSync) : Unit = {
+                   sync : System.Synchronisation =
+                   System.NoSync) : Unit = {
     val c = genClause(pred, srcInfo)
     if (!c.clause.hasUnsatConstraint)
       context.output(c, sync)
@@ -1340,8 +1340,8 @@ class Symex private (context        : SymexContext,
           (context.channels get name) match {
             case Some(chan) => {
               val sync = cmd match {
-                case "chan_send"    => ParametricEncoder.Send(chan)
-                case "chan_receive" => ParametricEncoder.Receive(chan)
+                case "chan_send"    => System.Send(chan)
+                case "chan_receive" => System.Receive(chan)
               }
               outputClause(context.newPred(Nil, srcInfo), srcInfo, sync)
               pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))

@@ -34,7 +34,8 @@ import IExpression.Predicate
 import lazabs.horn.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
-import hornconcurrency.{ParametricEncoder, VerificationLoop}
+import hornconcurrency.{VerificationLoop, TimedSystem,
+                        System, SystemTransformations}
 import tricera.Util.SourceInfo
 import tricera.params.TriCeraParameters
 
@@ -52,7 +53,7 @@ object ReaderMain {
     def predArgNames (pred : Predicate) : scala.Seq[String]
   }
 
-  def printClauses(system : ParametricEncoder.System,
+  def printClauses(system : System,
                    printContext : PredPrintContext,
                    clauseToSrcInfo : Map[Clause, Option[SourceInfo]]) = {
     def getClauseLine (c : Clause) : String = {
@@ -77,35 +78,39 @@ object ReaderMain {
     println("System transitions:")
     for ((p, r) <- system.processes) {
       r match {
-        case ParametricEncoder.Singleton =>
+        case System.Singleton =>
           println("  Singleton thread:")
-        case ParametricEncoder.Infinite =>
+        case System.Infinite =>
           println("  Replicated thread:")
       }
       for ((c, sync) <- p) {
         val prefix = "    " + c.toPrologString
         print(prefix + (" " * ((50 - prefix.size) max 2)))
         sync match {
-          case ParametricEncoder.Send(chan) =>
+          case System.Send(chan) =>
             println("chan_send(" + chan + ")")
-          case ParametricEncoder.Receive(chan) =>
+          case System.Receive(chan) =>
             println("chan_receive(" + chan + ")")
-          case ParametricEncoder.NoSync =>
+          case System.NoSync =>
             println
           case _ =>
         }
       }
     }
 
-    if (!system.timeInvariants.isEmpty) {
-      println
-      println("Time invariants:")
-      for (c <- system.timeInvariants)
-        println("  " + c.toPrologString)
+    system match {
+      case system : TimedSystem if !system.timeInvariants.isEmpty => {
+        println
+        println("Time invariants:")
+        for (c <- system.timeInvariants)
+          println("  " + c.toPrologString)
+      }
+      case _ =>
+        // nothing
     }
 
     system.backgroundAxioms match {
-      case ParametricEncoder.SomeBackgroundAxioms(preds, clauses) => {
+      case System.SomeBackgroundAxioms(preds, clauses) => {
         println
           println("Background predicates:")
           println("  " + (
@@ -157,7 +162,7 @@ object ReaderMain {
       val systemClauses : List[Clause] =
         (for (p <- system.processes.head._1) yield p._1).toList
       val bgClauses : List[Clause] = (system.backgroundAxioms match {
-        case ParametricEncoder.SomeBackgroundAxioms(_, clauses) => clauses
+        case System.SomeBackgroundAxioms(_, clauses) => clauses
         case _ => Nil
       }).toList
 
@@ -259,7 +264,7 @@ object ReaderMain {
       var proc = runTime.exec( "dot -Tpng " + "DotOutput" + currentId + ".dot" + " -o graph" + currentId + ".png" )
       proc.waitFor
       if (!TriCeraParameters.get.pngNo) {
-        val imageViewer = if (System.getProperty("os.name") == "Mac OS X") "open -a Preview" else "eog"
+        val imageViewer = if (java.lang.System.getProperty("os.name") == "Mac OS X") "open -a Preview" else "eog"
         proc = runTime.exec( imageViewer + " graph" + currentId + ".png")
         proc.waitFor
       }
@@ -268,10 +273,13 @@ object ReaderMain {
     if(TriCeraParameters.get.prettyPrintDot) show
   }
 
-  def printSMTClauses(system : ParametricEncoder.System) : Unit = {
+  def printSMTClauses(system : System) : Unit = {
     val processes = system.processes.unzip._1
     val clauses = processes.flatten.unzip._1
-    val timeInvariantClauses = system.timeInvariants
+    val timeInvariantClauses = system match {
+      case system : TimedSystem => system.timeInvariants
+      case _ => List()
+    }
     val assertions = system.assertions
     val bgAxiomClauses = system.backgroundAxioms.clauses
 
@@ -291,7 +299,7 @@ object ReaderMain {
                    new java.io.FileReader(new java.io.File (name))),
                  "main")._1.system
 
-      val smallSystem = system.mergeLocalTransitions
+      val smallSystem = SystemTransformations.mergeLocalTransitions(system)
       // printClauses(smallSystem, ...)
 
       println

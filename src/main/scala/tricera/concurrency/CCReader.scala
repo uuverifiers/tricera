@@ -37,7 +37,8 @@ import ap.types.{MonoSortedIFunction, MonoSortedPredicate}
 import ap.util.Seqs.reduceToSize
 import concurrent_c._
 import concurrent_c.Absyn._
-import hornconcurrency.ParametricEncoder
+import hornconcurrency.{ParametricEncoder, System, TimedSystem,
+                        SystemTransformations}
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints._
 import lazabs.horn.bottomup.HornClauses
@@ -260,7 +261,7 @@ class CCReader private (prog              : Program,
       CCReader.this.uninterpPredDecls
     override def interpPredDefs : MHashMap[String, CCTerm] =
       CCReader.this.interpPredDefs
-    override def channels : MHashMap[String, ParametricEncoder.CommChannel] =
+    override def channels : MHashMap[String, System.CommChannel] =
       CCReader.this.channels
     override def enumeratorDefs : MHashMap[String, CCTerm] =
       CCReader.this.enumeratorDefs
@@ -277,8 +278,8 @@ class CCReader private (prog              : Program,
 
     // --- Clause & Predicate Generation ---
     override def output(c : CCClause,
-                        sync : ParametricEncoder.Synchronisation
-                          = ParametricEncoder.NoSync) : Unit =
+                        sync : System.Synchronisation
+                          = System.NoSync) : Unit =
       CCReader.this.output(c, sync)
     override def addAssertion(assertion : CCAssertionClause) : Unit =
       CCReader.this.assertionClauses += assertion
@@ -351,7 +352,7 @@ class CCReader private (prog              : Program,
 
   //////////////////////////////////////////////////////////////////////////////
 
-  private val channels = new MHashMap[String, ParametricEncoder.CommChannel]
+  private val channels = new MHashMap[String, System.CommChannel]
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
@@ -359,7 +360,7 @@ class CCReader private (prog              : Program,
   private val functionContexts = new MHashMap[String, FunctionContext]
   private val functionPostOldArgs = new MHashMap[String, scala.Seq[CCVar]]
   private val functionClauses =
-    new MHashMap[String, scala.Seq[(Clause, ParametricEncoder.Synchronisation)]]
+    new MHashMap[String, scala.Seq[(Clause, System.Synchronisation)]]
   private val functionAssertionClauses = new MHashMap[String, scala.Seq[CCAssertionClause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
@@ -408,21 +409,21 @@ class CCReader private (prog              : Program,
   //////////////////////////////////////////////////////////////////////////////
 
   private val processes =
-    new ArrayBuffer[(ParametricEncoder.Process, ParametricEncoder.Replication)]
+    new ArrayBuffer[(System.Process, System.Replication)]
 
   private val assertionClauses = new ArrayBuffer[CCAssertionClause]
   private val timeInvariants = new ArrayBuffer[Clause]
 
   private val clauses =
-    new ArrayBuffer[(Clause, ParametricEncoder.Synchronisation)]
+    new ArrayBuffer[(Clause, System.Synchronisation)]
 
   private def output(c : CCClause,
-                     sync : ParametricEncoder.Synchronisation =
-                       ParametricEncoder.NoSync) : Unit = {
+                     sync : System.Synchronisation =
+                       System.NoSync) : Unit = {
     clauses += ((c.clause, sync))
   }
 
-  import ParametricEncoder.merge
+  import SystemTransformations.merge
 
   private def mergeClauses(from : Int) : Unit = if (from < clauses.size - 1) {
     val concernedClauses = clauses.slice(from, clauses.size)
@@ -438,7 +439,7 @@ class CCReader private (prog              : Program,
     reduceToSize(clauses, from)
 
     def chainClauses(currentClause : CCClause,
-                     currentSync : ParametricEncoder.Synchronisation,
+                     currentSync : System.Synchronisation,
                      seenPreds : Set[Predicate]) : Unit =
       if (!currentClause.clause.hasUnsatConstraint) {
         val headPred = currentClause.clause.head.pred
@@ -453,11 +454,11 @@ class CCReader private (prog              : Program,
                 "time invariants in atomic blocks are not supported")
 
             for ((c, sync) <- cls)
-              if (currentSync == ParametricEncoder.NoSync)
+              if (currentSync == System.NoSync)
                 chainClauses(addRichClause( // todo: use currentClause srcInfo?
                   merge(c, currentClause.clause), currentClause.srcInfo), sync,
                              seenPreds + headPred)
-              else if (sync == ParametricEncoder.NoSync)
+              else if (sync == System.NoSync)
                 chainClauses(addRichClause(
                   merge(c, currentClause.clause), currentClause.srcInfo), currentSync,
                              seenPreds + headPred)
@@ -470,7 +471,7 @@ class CCReader private (prog              : Program,
             // states disappear
             for (c <- assertionClauses.toList)
               if (c.clause.bodyPredicates contains headPred) {
-                if (currentSync != ParametricEncoder.NoSync)
+                if (currentSync != System.NoSync)
                   throw new TranslationException(
                     "Cannot execute " + currentSync + " and an assertion" +
                     " in one step")
@@ -819,7 +820,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             if (channels contains name)
               throw new TranslationException(
                 "Channel " + name + " is already declared")
-            channels.put(name, new ParametricEncoder.CommChannel(name))
+            channels.put(name, new System.CommChannel(name))
           }
 
         case decl : Afunc => {
@@ -1108,7 +1109,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       if (timeInvariants nonEmpty)
         throw new TranslationException(
           "Contracts cannot be used for functions with time invariants")
-      if (clauses exists (_._2 != ParametricEncoder.NoSync))
+      if (clauses exists (_._2 != System.NoSync))
         throw new TranslationException(
           "Contracts cannot be used for functions using communication channels")
 
@@ -1133,7 +1134,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               setPrefix(thread.cident_)
               val translator = FunctionTranslator.apply(thread.cident_)
               val finalPred = translator translateNoReturn(thread.compound_stm_)
-              processes += ((clauses.toList, ParametricEncoder.Singleton))
+              processes += ((clauses.toList, System.Singleton))
               clauses.clear
             }
             case thread : ParaThread => {
@@ -1144,7 +1145,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               scope.LocalVars addVar threadVar
               val translator = FunctionTranslator.apply(thread.cident_2)
               val finalPred = translator translateNoReturn(thread.compound_stm_)
-              processes += ((clauses.toList, ParametricEncoder.Infinite))
+              processes += ((clauses.toList, System.Infinite))
               clauses.clear
               scope.LocalVars popFrame
             }
@@ -1158,7 +1159,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       hasACSLEntryFunction = true
       // do not encode entry function clauses if they are already generated
       processes +=
-        ((functionClauses(entryFunction), ParametricEncoder.Singleton))
+        ((functionClauses(entryFunction), System.Singleton))
       assertionClauses ++= functionAssertionClauses(entryFunction)
       functionClauses remove entryFunction
       functionAssertionClauses remove entryFunction
@@ -1204,7 +1205,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           if(modelHeap)
             heapModel.get.getExitAssertions(finalPreds).foreach(assertionClauses +=)
 
-          processes += ((clauses.toList, ParametricEncoder.Singleton))
+          processes += ((clauses.toList, System.Singleton))
           clauses.clear
 
           scope.LocalVars popFrame
@@ -2462,7 +2463,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                    true)
             addRichClause(newClause, Some(srcInfo))
             clauses(position) = (newClause,
-                                 ParametricEncoder.NoSync)
+                                 System.NoSync)
             usedJumpTargets.put(targetPred, label)
           }
           case None =>
@@ -3204,15 +3205,15 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   //////////////////////////////////////////////////////////////////////////////
 
-  val system : ParametricEncoder.System = {
+  val system : System = {
     translateProgram
 
     val singleThreaded =
       processes.size == 1 &&
-      processes.head._2 == ParametricEncoder.Singleton
+      processes.head._2 == System.Singleton
 
     val predHints =
-      (for (p <- ParametricEncoder.allPredicates(processes.toSeq).iterator;
+      (for (p <- System.allPredicates(processes.toSeq).iterator;
             maybePreds = predicateHints get p;
             if maybePreds.isDefined;
             if (!maybePreds.get.isEmpty))
@@ -3231,12 +3232,31 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
     val backgroundAxioms =
       if (backgroundPreds.isEmpty && backgroundClauses.isEmpty)
-        ParametricEncoder.NoBackgroundAxioms
+        System.NoBackgroundAxioms
       else
-        ParametricEncoder.SomeBackgroundAxioms(backgroundPreds,
+        System.SomeBackgroundAxioms(backgroundPreds,
                                                backgroundClauses)
 
-    ParametricEncoder.System(processes.toList,
+    if (useTime) {
+      TimedSystem(processes.toList,
+                  if (singleThreaded) 2 else scope.GlobalVars.size,
+                  (assertionClauses).map(_.clause).toList,
+                  System.ContinuousTime(0, 1),
+                  timeInvariants.toSeq,
+                  None,
+                  VerificationHints(predHints),
+                  backgroundAxioms)
+    } else {
+      System     (processes.toList,
+                  if (singleThreaded) 0 else scope.GlobalVars.size,
+                  (assertionClauses).map(_.clause).toList,
+                  None,
+                  VerificationHints(predHints),
+                  backgroundAxioms)
+    }
+
+/*
+    System.System(processes.toList,
                              if (singleThreaded) {
                                if (useTime) 2 else 0 // todo : anything for heap here? why only 2 if useTime?
                              } else {
@@ -3244,15 +3264,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                              },
                              None,
                              if (useTime)
-                               ParametricEncoder.ContinuousTime(0, 1)
+                               System.ContinuousTime(0, 1)
                              else
-                               ParametricEncoder.NoTime,
+                               System.NoTime,
                              timeInvariants.toSeq,
                              (assertionClauses).map(_.clause).toList,
                              VerificationHints(predHints),
                              backgroundAxioms,
                              otherPredsToKeep =
                                loopInvariants.map(_._2._1.pred).toList)
+ */
   }
 
   def getRichClause(clause : Clause) : Option[CCClause] = {

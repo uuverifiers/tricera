@@ -35,8 +35,7 @@ import ap.parser.CollectingVisitor
 import ap.parser.{IAtom, IFormula, ITerm}
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.bottomup.HornClauses.FALSE
-import hornconcurrency.ParametricEncoder.System
-import hornconcurrency.ParametricEncoder
+import hornconcurrency.{System, ParametricEncoder, TimedSystem}
 import tricera.Util.SourceInfo
 
 import scala.collection.{Map, Set}
@@ -68,7 +67,7 @@ class Encoder(reader : CCReader) {
   val hasACSLEntryFunction : Boolean = reader.hasACSLEntryFunction
 
   def encode : System = {
-    import ParametricEncoder._
+    import System._
     // NOTE: Order of encoding matters.
     val asserts = encodeAssertions
     val backAxi = encodeBackgroundAxioms
@@ -78,16 +77,17 @@ class Encoder(reader : CCReader) {
     asserts.foreach(cc => reader.mkRichAssertionClause(
       cc.clause, cc.srcInfo, cc.property))
 
-    system.copy(
-      assertions = asserts.map(_.clause),
-      backgroundAxioms = backAxi match {
-        case (Nil, Nil) =>
-          ParametricEncoder.NoBackgroundAxioms
-        case (preds, clauses) =>
-          ParametricEncoder.SomeBackgroundAxioms(preds, clauses.map(_.clause))
-      },
-      processes = processes
-    )
+    // TODO: TimedSystem
+    assert(!system.isInstanceOf[TimedSystem])
+    System(processes,
+           system.globalVarNum,
+           asserts.map(_.clause),
+           _backgroundAxioms = backAxi match {
+             case (Nil, Nil) =>
+               System.NoBackgroundAxioms
+             case (preds, clauses) =>
+               System.SomeBackgroundAxioms(preds, clauses.map(_.clause))
+           })
   }
   /**
    *
@@ -114,7 +114,7 @@ class Encoder(reader : CCReader) {
    * @return background axioms and a backmapping from these to the original clauses
    */
   private def encodeBackgroundAxioms : (Seq[IExpression.Predicate], Seq[CCClause]) = {
-    import ParametricEncoder.{NoBackgroundAxioms, SomeBackgroundAxioms}
+    import System.{NoBackgroundAxioms, SomeBackgroundAxioms}
     val backmapping = new collection.mutable.HashMap[Clause, Option[Clause]]
     system.backgroundAxioms match {
       case SomeBackgroundAxioms(preds, clauses) => {
@@ -146,7 +146,7 @@ class Encoder(reader : CCReader) {
     }
   }
 
-  private def encodeProcessesEntry : ParametricEncoder.ProcessSet = {
+  private def encodeProcessesEntry : System.ProcessSet = {
     system.processes.map({
       case (p, r) =>
         val updated = p.collect({
@@ -172,7 +172,7 @@ class Encoder(reader : CCReader) {
     })
   }
 
-  private def encodeProcesses : ParametricEncoder.ProcessSet = {
+  private def encodeProcesses : System.ProcessSet = {
     system.processes.map({
       case (p, r) =>
         val (clauses, syncs) = p.unzip
@@ -220,7 +220,7 @@ class Encoder(reader : CCReader) {
   // post-condition and generates assertion clauses (to be moved into
   // system.assertions).
   private def buildPostAsserts : Seq[CCAssertionClause] = {
-    import ParametricEncoder.{NoBackgroundAxioms, SomeBackgroundAxioms}
+    import System.{NoBackgroundAxioms, SomeBackgroundAxioms}
     val clauses1 : Seq[CCClause] =
       system.processes.flatMap({
         case (p, r) => p.map(p => reader.getRichClause(p._1).get)

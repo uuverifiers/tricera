@@ -35,7 +35,7 @@ import java.nio.file.{Files, Paths, StandardCopyOption}
 import sys.process._
 import ap.parser.IExpression.{ConstantTerm, Predicate}
 import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
-import hornconcurrency.ParametricEncoder
+import hornconcurrency.{System, SystemTransformations}
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.Util.NullStream
 import lazabs.prover._
@@ -465,7 +465,8 @@ class Main (args: Array[String]) {
       tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext, clauseToSrcInfo)
     }
 
-    val (smallSystem, mergedToOriginal) = system.mergeLocalTransitionsWithBackMapping
+    val (smallSystem, mergedToOriginal) = 
+      SystemTransformations.mergeLocalTransitionsWithBackMapping(system)
 
 //    mergedToOriginal.foreach{
 //      case (c, cs) =>
@@ -628,7 +629,7 @@ class Main (args: Array[String]) {
             println
             hornconcurrency.VerificationLoop.prettyPrint(cex)
             if (system.processes.size == 1 &&
-                system.processes.head._2 == ParametricEncoder.Singleton) { //
+                system.processes.head._2 == System.Singleton) { //
               // todo: print failed assertion for concurrent systems
               violatedRichAssertionClause match {
                 case Some(assertionClause) =>
@@ -659,7 +660,7 @@ class Main (args: Array[String]) {
         }
         if (!pngNo) { // dotCEX and maybe eogCEX
           if (system.processes.size == 1 &&
-              system.processes.head._2 == ParametricEncoder.Singleton) {
+              system.processes.head._2 == System.Singleton) {
             Util.show(cex._2, "cex",
                       clauseToUnmergedRichClauses.map(c => (c._1 ->
                         c._2.flatMap(rc => ppLineMapping(rc.srcInfo)))),

@@ -33,7 +33,7 @@ import ap.parser._
 import IExpression.{ConstantTerm, Predicate, Sort}
 import ap.theories.Heap
 import ap.types.MonoSortedIFunction
-import hornconcurrency.ParametricEncoder
+import hornconcurrency.System
 import lazabs.horn.bottomup.HornClauses.Clause
 import tricera.Util.SourceInfo
 import tricera.concurrency.CCReader._
@@ -62,7 +62,7 @@ trait SymexContext {
   def structInfos       : scala.Seq[StructInfo]
   def uninterpPredDecls : MHashMap[String, CCPredicate]
   def interpPredDefs    : MHashMap[String, CCTerm]
-  def channels          : MHashMap[String, ParametricEncoder.CommChannel]
+  def channels          : MHashMap[String, System.CommChannel]
   def enumeratorDefs    : MHashMap[String, CCTerm]
   def sortGetterMap     : Map[Sort, MonoSortedIFunction]
   def sortWrapperMap    : Map[Sort, MonoSortedIFunction]
@@ -72,7 +72,7 @@ trait SymexContext {
 
   // --- Clause & Predicate Generation ---
   def output(c    : CCClause,
-             sync : ParametricEncoder.Synchronisation = ParametricEncoder.NoSync) : Unit
+             sync : System.Synchronisation = System.NoSync) : Unit
   def addAssertion(assertion : CCAssertionClause) : Unit
   def newPred(extraArgs : scala.Seq[CCVar],
               srcInfo   : Option[SourceInfo]) : CCPredicate
