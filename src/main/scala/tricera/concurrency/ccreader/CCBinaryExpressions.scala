@@ -172,18 +172,29 @@ object CCBinaryExpressions {
       override def getFloatRes = ???
     }
 
+    private def shiftArrayPtr(arrPtr   : CCTerm,
+                              arrTyp   : CCHeapArrayPointer,
+                              offset   : ITerm) : CCTerm = {
+      val ops = arrTyp.ptrOps
+      CCTerm.fromTerm(
+        ops.mkArrayPtr(ops.getRange(arrPtr.toTerm),
+                       ops.getOffset(arrPtr.toTerm) + offset),
+        arrTyp, arrPtr.srcInfo)
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Binary functions
     case class Plus(_lhs: CCTerm, _rhs: CCTerm)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntRes = (lhs.typ, rhs.typ) match {
-        case (arrTyp: CCHeapArrayPointer, _: CCArithType) =>
-          throw new UnsupportedCFragmentException(
-            "Pointer arithmetic is currently not supported.")
-        case _ =>
-          lhs.toTerm + rhs.toTerm
-      }
+      override def getIntRes = lhs.toTerm + rhs.toTerm
       override def getFloatRes = ???
+      override def term : CCTerm = (lhs.typ, rhs.typ) match {
+        case (arrTyp: CCHeapArrayPointer, _: CCArithType) =>
+          shiftArrayPtr(lhs, arrTyp, rhs.toTerm)
+        case (_: CCArithType, arrTyp: CCHeapArrayPointer) =>
+          shiftArrayPtr(rhs, arrTyp, lhs.toTerm)
+        case _ => super.term
+      }
     }
 
     case class Minus(_lhs: CCTerm, _rhs: CCTerm)
@@ -193,6 +204,11 @@ object CCBinaryExpressions {
         lhs.toTerm - rhs.toTerm
       }
       override def getFloatRes = ???
+      override def term : CCTerm = (lhs.typ, rhs.typ) match {
+        case (arrTyp: CCHeapArrayPointer, _: CCArithType) =>
+          shiftArrayPtr(lhs, arrTyp, -rhs.toTerm)
+        case _ => super.term
+      }
     }
 
     case class Times(_lhs: CCTerm, _rhs: CCTerm)
@@ -225,9 +241,9 @@ object CCBinaryExpressions {
     private def throwErrorIfPointerArithmetic(lhs: CCTerm,
                                               rhs: CCTerm): Unit = {
       (lhs.typ, rhs.typ) match {
-        case (_: CCHeapArrayPointer, _: CCArithType) =>
+        case (_: CCHeapArrayPointer, _) =>
           throw new TranslationException(
-            "Pointer arithmetic over arrays is only  supported with  addition.")
+            "This operation is not supported for array pointers.")
         case _ => // nothing
       }
     }
