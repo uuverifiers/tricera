@@ -421,6 +421,8 @@ class CCReader private (prog              : Program,
   private val assertionClauses = new ArrayBuffer[CCAssertionClause]
   private val timeInvariants = new ArrayBuffer[Clause]
 
+  private val progressBlocks = new ArrayBuffer[Seq[SignalSystem.ProgressBlock]]
+
   private val clauses =
     new ArrayBuffer[(Clause, System.Synchronisation)]
 
@@ -890,7 +892,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
     assert(scope.GlobalVars.vars.drop(globalsSize).forall(v => v.isStatic),
            "Non-static variables added while looking for static variables!")
-println(scope.GlobalVars)
+
     // prevent time variables, heap variable, and global ghost variables
     // from being initialised twice
     // TODO: This is very brittle and unintuitive - come up with a better solution.
@@ -1154,6 +1156,7 @@ println(scope.GlobalVars)
               val translator = FunctionTranslator.apply(thread.cident_)
               val finalPred = translator translateNoReturn(thread.compound_stm_)
               processes += ((clauses.toList, System.Singleton))
+              progressBlocks += translator.finalProgressBlocks.toSeq
               clauses.clear
             }
             case thread : ParaThread => {
@@ -1165,6 +1168,7 @@ println(scope.GlobalVars)
               val translator = FunctionTranslator.apply(thread.cident_2)
               val finalPred = translator translateNoReturn(thread.compound_stm_)
               processes += ((clauses.toList, System.Infinite))
+              progressBlocks += translator.finalProgressBlocks.toSeq
               clauses.clear
               scope.LocalVars popFrame
             }
@@ -1179,6 +1183,8 @@ println(scope.GlobalVars)
       // do not encode entry function clauses if they are already generated
       processes +=
         ((functionClauses(entryFunction), System.Singleton))
+      progressBlocks +=
+        Seq() // TODO
       assertionClauses ++= functionAssertionClauses(entryFunction)
       functionClauses remove entryFunction
       functionAssertionClauses remove entryFunction
@@ -2463,6 +2469,7 @@ println(scope.GlobalVars)
     private def postProcessClauses : Unit = {
       connectJumps
       mergeAtomicBlocks
+      prepareProgressBlocks
     }
 
     private def connectJumps : Unit =
@@ -2526,6 +2533,22 @@ println(scope.GlobalVars)
             "which was eliminated due to atomic blocks")
     }
 
+    private def prepareProgressBlocks : Unit =
+      if (!localProgressBlocks.isEmpty) {
+        val allPreds =
+          (for ((c, _) <- clauses.iterator; p <- c.predicates.iterator)
+           yield p).toSet
+
+        val blocks =
+          for (invs <- localProgressBlocks) yield {
+            val invs2 =
+              invs.filter { clause => clause.bodyPredicates.subsetOf(allPreds) }
+            SignalSystem.ProgressBlock(invs2)
+          }
+
+        finalProgressBlocks ++= blocks
+      }
+
     private val jumpLocs =
       new ArrayBuffer[(String, CCPredicate, scala.Seq[ITerm], Int, SourceInfo)]
     private val labelledLocs =
@@ -2534,6 +2557,11 @@ println(scope.GlobalVars)
       new MHashMap[CCPredicate, String]
     private val atomicBlocks =
       new ArrayBuffer[(Int, Int)]
+    private val localProgressBlocks =
+      new ArrayBuffer[Seq[Clause]]
+
+    val finalProgressBlocks =
+      new ArrayBuffer[SignalSystem.ProgressBlock]
 
     ////////////////////////////////////////////////////////////////////////////
 
@@ -2556,6 +2584,8 @@ println(scope.GlobalVars)
           translate(stm.jump_stm_, entry, exit)
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
+        case stm: ProgressS =>
+          translate(stm.progress_stm_, entry, exit)
         case stm: AnnotationS => // todo: move this into a separate translate method
           try{translate(stm.annotation_, entry)}
           catch {
@@ -3222,6 +3252,57 @@ println(scope.GlobalVars)
         }
       }
     }
+
+    private def translate(aStm : Progress_stm,
+                          entry : CCPredicate,
+                          exit : CCPredicate) : Unit = {
+      val srcInfo = Some(getSourceInfo(aStm))
+      aStm match {
+        case stm : SprogressOne => {
+          if (!useSignals)
+            throw NeedsSignalException
+
+          // add further states inside the block, to correctly
+          // distinguish between loops within the block, and a loop
+          // around the block
+          val first = newPred(Nil, srcInfo)
+          val last = newPred(Nil, srcInfo)
+
+          val condSymex = Symex(symexContext, scope, entry, heapModel)
+          implicit val evalSettings = condSymex.EvalSettings()
+          implicit val evalContext  = condSymex.EvalContext()
+                                               .withFunctionName(functionName)
+          condSymex.saveState
+          val cond = (condSymex eval stm.exp_).toFormula
+          if (!condSymex.atomValuesUnchanged)
+            throw new TranslationException(
+              "expressions with side-effects are not supported in \"progress\"")
+
+          condSymex outputClause(first, srcInfo)
+
+          val currentClauseNum = clauses.size
+          translate(stm.stm_, first, last)
+
+          // TODO: how to remove background predicates?
+          val preds =
+            (for ((c, _) <- clauses.iterator.drop(currentClauseNum);
+                  p <- c.predicates.iterator)
+             yield p).toSeq.distinct
+
+          // TODO: how to handle predicates with further local arguments?
+          import HornClauses._
+          val progInvariants =
+            for (pred <- preds) yield {
+              (cond :- IAtom(pred, scope.allFormalVarTerms take pred.arity))
+            }
+
+          val exitSymex = Symex(symexContext, scope, last, heapModel)
+          exitSymex outputClause(exit, srcInfo)
+
+          localProgressBlocks += progInvariants
+        }
+      }
+    }
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -3264,7 +3345,7 @@ println(scope.GlobalVars)
                    (assertionClauses).map(_.clause).toList,
                    System.RationalTime(0),
                    signals.values.toSet,
-                   for (p <- processes.toList) yield List(), // TODO
+                   progressBlocks.toSeq,
                    None,
                    VerificationHints(predHints),
                    backgroundAxioms)

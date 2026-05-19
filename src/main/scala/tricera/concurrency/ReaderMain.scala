@@ -34,7 +34,7 @@ import IExpression.Predicate
 import lazabs.horn.HornTranslator
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.viewer.HornSMTPrinter
-import hornconcurrency.{VerificationLoop, TimedSystem,
+import hornconcurrency.{VerificationLoop, TimedSystem, SignalSystem,
                         System, SystemTransformations}
 import tricera.Util.SourceInfo
 import tricera.params.TriCeraParameters
@@ -76,7 +76,7 @@ object ReaderMain {
     println
 
     println("System transitions:")
-    for ((p, r) <- system.processes) {
+    for (((p, r), n) <- system.processes.zipWithIndex) {
       r match {
         case System.Singleton =>
           println("  Singleton thread:")
@@ -95,6 +95,21 @@ object ReaderMain {
             println
           case _ =>
         }
+      }
+
+      system match {
+        case system : SignalSystem => {
+          println
+          println("Progress blocks:")
+          for ((SignalSystem.ProgressBlock(b), k) <-
+               system.progressBlocks(n).zipWithIndex) {
+            println(s"  Block #$k:")
+            for (c <- b)
+              println("    " + c.toPrologString)
+          }
+        }
+        case _ =>
+          // nothing
       }
     }
 

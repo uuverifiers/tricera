@@ -35,7 +35,8 @@ import java.nio.file.{Files, Paths, StandardCopyOption}
 import sys.process._
 import ap.parser.IExpression.{ConstantTerm, Predicate}
 import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
-import hornconcurrency.{System, SystemTransformations}
+import hornconcurrency.{System, SystemTransformations, SignalSystem,
+                        SignalEncoder}
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.Util.NullStream
 import lazabs.prover._
@@ -465,8 +466,14 @@ class Main (args: Array[String]) {
       tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext, clauseToSrcInfo)
     }
 
-    val (smallSystem, mergedToOriginal) = 
-      SystemTransformations.mergeLocalTransitionsWithBackMapping(system)
+    val (smallSystem, mergedToOriginal) = {
+      val system2 =
+        system match {
+          case system : SignalSystem => (new SignalEncoder(system)).result
+          case system                => system
+        }
+      SystemTransformations.mergeLocalTransitionsWithBackMapping(system2)
+    }
 
 //    mergedToOriginal.foreach{
 //      case (c, cs) =>
