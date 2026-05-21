@@ -9,5 +9,5 @@ thread A {
   }
 
   assume(c == 5);
-  assert(x == 1); // SAFE
+  assert(x < 0); // UNSAFE
 }

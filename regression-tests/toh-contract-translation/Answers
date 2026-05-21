@@ -63,7 +63,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires b == y && a == x && \separated(x, y) && \valid(y) && \valid(x);
-  ensures b == \old(y) && a == \old(x) && \old(b_init) == b_init && \old(a_init) == a_init && \old(r) == r && \old(b) == \old(y) && \old(a) == \old(x) && \separated(x, y) && \valid(y) && \valid(x) && ((b_init == \result && \result - a_init >= 1) || (\result == a_init && a_init >= b_init));
+  ensures b == \old(y) && a == \old(x) && \old(b_init) == b_init && \old(a_init) == a_init && \old(r) == r && \old(b) == \old(y) && \old(a) == \old(x) && \separated(x, y) && \valid(y) && \valid(x) && ((\result == b_init && b_init - a_init >= 1) || (\result == a_init && a_init >= b_init));
 */
 ================================================================================
 
@@ -78,7 +78,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires b == y && a == x && r == max && \separated(y, max) && \separated(x, y) && \separated(x, max) && \valid(y) && \valid(x) && \valid(max);
-  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(max) == r && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && \old(r) == r && \separated(b, r) && \separated(a, b) && \separated(a, r) && \valid(b) && \valid(a) && \valid(r);
+  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(max) == r && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && \old(r) == r && \separated(b, r) && \separated(a, b) && \separated(a, r) && \valid(b) && \valid(a) && \valid(r) && (\old(a_init) >= \old(b_init) || (\old(b_init) - \old(a_init) >= 1 && *r == \old(b_init))) && (*r == \old(a_init) || (\old(b_init) - \old(a_init) >= 1 && *r == \old(b_init)));
 */
 ================================================================================
 
@@ -106,18 +106,18 @@ SAFE
 
 truck-2.c
 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
-                                                             main21_1(emptyHeap, 0, 0, 0, emptyHeap, 0, 0, 0)                                                              
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                     |                                                                                     
-                                                                                     |                                                                                     
-                                                                                     V                                                                                     
- main46_22(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Truck(Truck(5, nthAddr(3))))), O_Human(Human(2)))), O_Human(Human(3)))), 2, 3, 5, emptyHeap, 0, 0, 0, 1) 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                        main21_1(heap.empty, 0, 0, 0, heap.empty, 0, 0, 0)                                                                                        
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                |                                                                                                                 
+                                                                                                                |                                                                                                                 
+                                                                                                                V                                                                                                                 
+ main46_22(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Truck(Truck(5, heap.addr(3))))), O_Human(Human(2)))), O_Human(Human(3)))), 2, 3, 5, heap.empty, 0, 0, 0, 1) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main46_22(newHeap(alloc(newHeap(alloc(newHeap(alloc(emptyHeap, O_Truck(Truck(5, nthAddr(3))))), O_Human(Human(2)))), O_Human(Human(3)))), 2, 3, 5, emptyHeap, 0, 0, 0, 1) 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ main46_22(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Truck(Truck(5, heap.addr(3))))), O_Human(Human(2)))), O_Human(Human(3)))), 2, 3, 5, heap.empty, 0, 0, 0, 1) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
 
 UNSAFE

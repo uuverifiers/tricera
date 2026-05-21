@@ -43,6 +43,7 @@ import hornconcurrency.{ParametricEncoder, System, TimedSystem,
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints._
 import lazabs.horn.bottomup.HornClauses
+import lazabs.horn.bottomup.HornPredAbs.predArgumentSorts
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
 import scala.collection.mutable.{ArrayBuffer, Stack, HashMap => MHashMap,
@@ -3289,11 +3290,17 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                   p <- c.predicates.iterator)
              yield p).toSeq.distinct
 
-          // TODO: how to handle predicates with further local arguments?
           import HornClauses._
           val progInvariants =
             for (pred <- preds) yield {
-              (cond :- IAtom(pred, scope.allFormalVarTerms take pred.arity))
+              val extraArgTerms =
+                predArgumentSorts(pred)
+                  .drop(scope.allFormalVarTerms.size)
+                  .map(_.newConstant("X"))
+                  .map(IConstant(_))
+              val allArgTerms =
+                scope.allFormalVarTerms.take(pred.arity) ++ extraArgTerms
+              (cond :- IAtom(pred, allArgTerms))
             }
 
           val exitSymex = Symex(symexContext, scope, last, heapModel)
@@ -3401,20 +3408,29 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   object PredPrintContext extends ReaderMain.PredPrintContext {
     private def getPred (pred : Predicate) : CCPredicate = {
+      maybeGetPred(pred) match {
+        case Some(p) => p
+        case None =>
+          throw new TranslationException("Could not find pred: " + pred)
+      }
+    }
+    private def maybeGetPred (pred : Predicate) : Option[CCPredicate] = {
       predCCPredMap get pred match {
-        case Some(ccPred) => ccPred
+        case Some(ccPred) => Some(ccPred)
         case None => predCCPredMap find
           (p => Literals.invPrefix + p._1.name == pred.name) match {
-          case Some(v) => v._2
-          case None => throw new TranslationException("Could not find pred: " +
-            pred)
+          case Some(v) => Some(v._2)
+          case None => None
         }
       }
     }
     def predWithArgNames (pred : Predicate) : String =
       getPred(pred).toString
     def predWithArgNamesAndLineNumbers (pred : Predicate) : String =
-      getPred(pred).toStringWithLineNumbers
+      maybeGetPred(pred) match {
+        case Some(p) => p.toStringWithLineNumbers
+        case None => pred.name
+      }
     def predArgNames (pred : Predicate) : scala.Seq[String] =
       getPred(pred).argVars.map(_.toString).toSeq
     def predSrcInfo (pred : Predicate) : Option[SourceInfo] =

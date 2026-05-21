@@ -466,13 +466,24 @@ class Main (args: Array[String]) {
       tricera.concurrency.ReaderMain.printClauses(system, reader.PredPrintContext, clauseToSrcInfo)
     }
 
-    val (smallSystem, mergedToOriginal) = {
-      val system2 =
+    val ((smallSystem, mergedToOriginal), initialInvs) = {
+      val (system2, invs) =
         system match {
-          case system : SignalSystem => (new SignalEncoder(system)).result
-          case system                => system
+          case system : SignalSystem => {
+            val encoded = (new SignalEncoder(system)).result
+            // It is useful to initially always consider one thread in
+            // combination with the environment thread
+            val N = encoded.processes.size
+            val invs =
+              for (n <- 0 until (N-1))
+              yield List.tabulate(N)(x => 0).updated(n, 1).updated(N-1, 1)
+            (encoded, invs)
+          }
+          case system =>
+            (system, null)
         }
-      SystemTransformations.mergeLocalTransitionsWithBackMapping(system2)
+      (SystemTransformations.mergeLocalTransitionsWithBackMapping(system2),
+       invs)
     }
 
 //    mergedToOriginal.foreach{
@@ -526,7 +537,7 @@ class Main (args: Array[String]) {
         Console.withOut(outStream) {
           new hornconcurrency.VerificationLoop(
             system = smallSystem,
-            initialInvariants = null,
+            initialInvariants = initialInvs,
             dumpIntermediateClauses = printIntermediateClauseSets,
             dumpSimplifiedClauses = dumpSimplifiedClauses,
             fileName = smtFileName,

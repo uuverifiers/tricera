@@ -225,6 +225,11 @@ class InvariantEncodingsModel(context  : SymexContext,
     throw new TranslationException(
       "Modelling arrays using the invariant encoding for heaps is not yet " +
       "supported, please use the theory of heaps or -mathArrays.")
+  override def makeArrayPointer(elementType   : CCType,
+                                arrayLocation : ArrayLocation.Value) : CCHeapArrayPointer =
+    throw new TranslationException(
+      "Modelling arrays using the invariant encoding for heaps is not yet " +
+      "supported, please use the theory of heaps or -mathArrays.")
 
   private val readFnName  = "$read"
   private val writeFnName = "$write"

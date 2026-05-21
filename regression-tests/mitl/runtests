@@ -1,0 +1,14 @@
+#!/bin/sh
+
+TESTS="signals1.c \
+       progress1.c \
+       progress2.c \
+       progress3.c \
+       progress4.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done
+
