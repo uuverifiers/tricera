@@ -3,6 +3,7 @@
 TESTS="signals1.c \
        signals2.c \
        signals3.c \
+       signals4.c \
        progress1.c \
        progress2.c \
        progress3.c \

@@ -841,7 +841,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             signals.put(name, idx)
             val sigVar = new CCVar(name, None, CCSignal, GlobalStorage)
             scope.GlobalVars addVar sigVar
-            scope.GlobalVars.inits += CCTerm.fromTerm(sigVar.term, CCClock, None)
+            values.addValue(CCTerm.fromTerm(sigVar.term, CCSignal, None))
             scope.variableHints += List()
           }
 

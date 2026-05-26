@@ -28,6 +28,24 @@ Warning: no definition of function "nondet" available
 Warning: entry function "main" not found
 SAFE
 
+signals4.c
+Warning: enabling Boolean signals and time
+Warning: entry function "main" not found
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+    Observer9_3(Rat_fromRing(0), 0, 0, false, false, Rat_fromRing(1), Rat_fromRing(1))             Env0(Rat_fromRing(0), 0, 0, false, false, Rat_fromRing(1), Rat_fromRing(1))        
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                             |                                             
+                                             |                                             
+                                             V                                             
+ Observer9_3_0(Rat_fromRing(0), 0, 0, false, false, Rat_fromRing(1), Rat_fromRing(1), -42) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ Observer9_3_0(Rat_fromRing(0), 0, 0, false, false, Rat_fromRing(1), Rat_fromRing(1), -42)         Env0(Rat_fromRing(0), 0, 0, false, false, Rat_fromRing(1), Rat_fromRing(1))        
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+UNSAFE
+
 progress1.c
 Warning: enabling time
 Warning: enabling Boolean signals and time
