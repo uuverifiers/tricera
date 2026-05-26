@@ -3274,7 +3274,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           implicit val evalContext  = condSymex.EvalContext()
                                                .withFunctionName(functionName)
           condSymex.saveState
-          val cond = (condSymex eval stm.exp_).toFormula
+          val cond = inAtomicMode(condSymex eval stm.exp_).toFormula
           if (!condSymex.atomValuesUnchanged)
             throw new TranslationException(
               "expressions with side-effects are not supported in \"progress\"")

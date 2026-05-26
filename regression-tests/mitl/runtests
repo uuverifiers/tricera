@@ -6,7 +6,9 @@ TESTS="signals1.c \
        progress1.c \
        progress2.c \
        progress3.c \
-       progress4.c"
+       progress4.c \
+       progress5.c \
+       progress6.c"
 
 for name in $TESTS; do
     echo

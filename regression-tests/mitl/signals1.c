@@ -4,6 +4,6 @@ signal q;
 
 thread A {
   assume(p && q);
-  assert(p);
+  assert(p); // SAFE
   assert(q);
 }
