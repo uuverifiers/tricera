@@ -3286,9 +3286,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
           // TODO: how to remove background predicates?
           val preds =
-            (for ((c, _) <- clauses.iterator.drop(currentClauseNum);
+            (Iterator(first.pred) ++
+             (for ((c, _) <- clauses.iterator.drop(currentClauseNum);
                   p <- c.predicates.iterator)
-             yield p).toSeq.distinct
+              yield p)).toSeq.distinct
 
           import HornClauses._
           val progInvariants =

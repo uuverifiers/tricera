@@ -77,6 +77,7 @@ object ReaderMain {
 
     println("System transitions:")
     for (((p, r), n) <- system.processes.zipWithIndex) {
+      println
       r match {
         case System.Singleton =>
           println("  Singleton thread:")
@@ -100,7 +101,7 @@ object ReaderMain {
       system match {
         case system : SignalSystem => {
           println
-          println("Progress blocks:")
+          println("  Progress blocks:")
           for ((SignalSystem.ProgressBlock(b), k) <-
                system.progressBlocks(n).zipWithIndex) {
             println(s"  Block #$k:")

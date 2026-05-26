@@ -138,7 +138,11 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntRes   = lhsTerm === rhsTerm
+      override def getIntRes   =
+        if (_lhs.typ == CCSignal || _rhs.typ == CCSignal)
+          _lhs.toFormula <=> _rhs.toFormula
+        else
+          lhsTerm === rhsTerm
       override def getFloatRes = ???
     }
 
@@ -146,7 +150,11 @@ object CCBinaryExpressions {
         extends BinaryOperation(_lhs, _rhs) {
       val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
 
-      override def getIntRes   = lhsTerm =/= rhsTerm
+      override def getIntRes   =
+        if (_lhs.typ == CCSignal || _rhs.typ == CCSignal)
+          _lhs.toFormula </> _rhs.toFormula
+        else
+          lhsTerm =/= rhsTerm
       override def getFloatRes = ???
     }
 
