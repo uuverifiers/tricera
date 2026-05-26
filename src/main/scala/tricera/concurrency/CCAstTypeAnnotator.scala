@@ -182,6 +182,21 @@ class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotati
   }
 
   /**
+    Add an entry in the symbol table for each defined signal.
+  */
+  override def visit(sig: ASig, symTab: CCAstTypeAnnotationData): Sigs_def = {
+    for (name_ <- sig.listcident_.asScala) {
+      val decSpecifiers = new ListDeclaration_specifier
+      val extraSpecifiers = new ListExtra_specifier
+      val initDec = new OnlyDecl(new NoPointer(new Name(name_)))
+      val name = getScopedName(name_)
+
+      symTab.put(name, CCAstDeclaration(decSpecifiers, initDec, extraSpecifiers))
+    }
+    super.visit(sig, symTab)
+  }
+
+  /**
     Begin new symbol table scope for each thread.
     Parse the thread body in thread name scope.
   */

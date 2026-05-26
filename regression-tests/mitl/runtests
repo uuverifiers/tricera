@@ -1,6 +1,8 @@
 #!/bin/sh
 
 TESTS="signals1.c \
+       signals2.c \
+       signals3.c \
        progress1.c \
        progress2.c \
        progress3.c \
@@ -9,6 +11,6 @@ TESTS="signals1.c \
 for name in $TESTS; do
     echo
     echo $name
-    $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -noPP -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 

@@ -2,7 +2,7 @@
 signal p;
 signal q;
 
-int main() {
+thread A {
   assume(p || q);
   assert(p);
   assert(q);
