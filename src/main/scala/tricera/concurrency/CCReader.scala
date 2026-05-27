@@ -2188,6 +2188,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     if (!useTime)
       throw NeedsTimeException
     expr.toTerm match {
+      case IIntLit(IdealInt.ZERO) if (expr.typ.isInstanceOf[CCArithType]) =>
+        CCTerm.fromTerm(GT.term, CCClock, expr.srcInfo)
       case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
         CCTerm.fromTerm(Rationals.minus(GT.term, Rationals.int2ring(v)),
                         CCClock, expr.srcInfo)
@@ -3254,6 +3256,21 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       }
     }
 
+    private def isEmptyStm(stm : Stm) = stm match {
+      case stm : CompS =>
+        stm.compound_stm_ match {
+          case _ : ScompOne => true
+          case _ => false
+        }
+      case stm : ExprS =>
+        stm.expression_stm_ match {
+          case _ : SexprOne => true
+          case _ => false
+        }
+      case _ =>
+        false
+    }
+
     private def translate(aStm : Progress_stm,
                           entry : CCPredicate,
                           exit : CCPredicate) : Unit = {
@@ -3281,19 +3298,35 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
           condSymex outputClause(first, srcInfo)
 
-          val currentClauseNum = clauses.size
-          translate(stm.stm_, first, last)
+          val progressPreds =
+            if (isEmptyStm(stm.stm_)) {
+              // a progress block with empty body, it is enough to have one
+              // control location
 
-          // TODO: how to remove background predicates?
-          val preds =
-            (Iterator(first.pred) ++
-             (for ((c, _) <- clauses.iterator.drop(currentClauseNum);
-                  p <- c.predicates.iterator)
-              yield p)).toSeq.distinct
+              val exitSymex = Symex(symexContext, scope, first, heapModel)
+              exitSymex outputClause(exit, srcInfo)
+
+              List(first.pred)
+            } else {
+              val currentClauseNum = clauses.size
+              translate(stm.stm_, first, last)
+
+              // TODO: how to remove background predicates?
+              val preds =
+                (Iterator(first.pred) ++
+                (for ((c, _) <- clauses.iterator.drop(currentClauseNum);
+                      p <- c.predicates.iterator)
+                  yield p)).toSeq.distinct
+
+              val exitSymex = Symex(symexContext, scope, last, heapModel)
+              exitSymex outputClause(exit, srcInfo)
+
+              preds
+            }
 
           import HornClauses._
           val progInvariants =
-            for (pred <- preds) yield {
+            for (pred <- progressPreds) yield {
               val extraArgTerms =
                 predArgumentSorts(pred)
                   .drop(scope.allFormalVarTerms.size)
@@ -3303,9 +3336,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 scope.allFormalVarTerms.take(pred.arity) ++ extraArgTerms
               (cond :- IAtom(pred, allArgTerms))
             }
-
-          val exitSymex = Symex(symexContext, scope, last, heapModel)
-          exitSymex outputClause(exit, srcInfo)
 
           localProgressBlocks += progInvariants
         }

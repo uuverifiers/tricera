@@ -15,7 +15,7 @@ thread B {
   int y;
 
   d = 0;
-  progress (1) {}
+  progress (1);
   assume(d > 1);
 
   y = x;
