@@ -1,0 +1,56 @@
+
+simple-loop.c
+
+Inferred ACSL annotations
+================================================================================
+/* Other loop invariants */
+/* loop invariant for the loop on line 2 */
+/*@
+  loop invariant 3 >= i && i >= 0;
+*/
+================================================================================
+
+SAFE
+
+simple-loop-annotate.c
+
+Inferred ACSL annotations
+================================================================================
+/* Other loop invariants */
+/* loop invariant for the loop on line 6 */
+/*@
+  loop invariant 3 >= i && i >= 0;
+*/
+================================================================================
+
+SAFE
+
+simple-loop-contract.c
+
+Inferred ACSL annotations
+================================================================================
+/* Other loop invariants */
+/* loop invariant for the loop on line 3 */
+/*@
+  loop invariant \false;
+*/
+================================================================================
+
+SAFE
+
+loop-in-func.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for value */
+/*@
+  requires \true;
+  ensures \true;
+*/
+/* loop invariant for the loop on line 3 */
+/*@
+  loop invariant 3 >= i && i >= 0;
+*/
+================================================================================
+
+SAFE

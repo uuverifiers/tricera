@@ -214,18 +214,18 @@ SAFE
 nonlinear2.hcc
 Warning: no definition of function "nondet" available
 
-----------------
+--------------------
 Init:
-    main7_3     
-----------------
-       |        
-       |        
-       V        
- main12_7(2, 4) 
-----------------
+      main7_3       
+--------------------
+         |          
+         |          
+         V          
+ main12_7(42, 1764) 
+--------------------
 Final:
- main12_7(2, 4) 
-----------------
+ main12_7(42, 1764) 
+--------------------
 Failed assertion:
 false :- main12_7(x:7, y:10). (line:13 col:5) (property: user-assertion)
 

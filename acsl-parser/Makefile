@@ -25,6 +25,9 @@ JAVA_FLAGS:=
 .PHONY: all
 all: download-jars acsl-parser.jar tricera/acsl/Test.class
 
+ACSL_PARSER_PKG_PREFIX=tricera.acsl
+
+
 include $(PARSER_BASEDIR)/../cc-parser/download_jars.mk
 
 acsl-parser.jar: $(PARSER_BINDIR) $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class $(PARSER_BINDIR)/tricera/acsl/sym.class $(PARSER_BINDIR)/tricera/acsl/Yylex.class $(PARSER_BINDIR)/tricera/acsl/PrettyPrinterNonStatic.class $(PARSER_BINDIR)/tricera/acsl/parser.class $(PARSER_BINDIR)/tricera/acsl/AllVisitor.class $(PARSER_BINDIR)/tricera/acsl/AbstractVisitor.class $(PARSER_BINDIR)/tricera/acsl/ComposVisitor.class $(PARSER_BINDIR)/tricera/acsl/FoldVisitor.class
@@ -49,6 +52,7 @@ $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.java: acsl.cf
 	bnfc -p tricera --java --jflex -l acsl.cf
 
 $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.class: $(PARSER_BINDIR)/tricera/acsl/Absyn/acsl.java
+	python3 $(PARSER_BASEDIR)/../cc-parser/add_source_info.py $(PARSER_BASEDIR) $(ACSL_PARSER_PKG_PREFIX)
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/acsl/Absyn/*.java
 
 tricera/acsl/Yylex.java: tricera/acsl/Yylex

@@ -1,17 +1,25 @@
 #!/bin/sh
 
-LAZABS=../../tri
-
 TESTS="get-1.c  \
        incdec-1.c  \
        incdec-2.c  \
        max-1.c  \
        max-2.c  \
        multadd-1.c  \
-       truck-2.c"
+       truck-2.c  \
+       heapptr-to-stackptr.c \
+       qualified-heapptr-to-stackptr.c \
+       multi-arg-1.c multi-arg-2.c"
 
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -acsl "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
+done
+
+TESTS="struct-field-read.c"
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -cex -acsl -m:entry "$@" $name 2>&1 | grep -v 'at '
 done

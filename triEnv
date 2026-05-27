@@ -18,21 +18,6 @@ done;
 
 LAZABS_HOME=`dirname "${SOURCE}"`;
 
-if [ -f ${LAZABS_HOME}/dist/tri-pp ]; then
-   	# binary distribution
-  export TRI_PP_PATH="${LAZABS_HOME}/dist";
-
-else if [ -f ${LAZABS_HOME}/tri-pp ]; then
-
-    # binary distribution from sbt
-  export TRI_PP_PATH="${LAZABS_HOME}";
-
-else
-    echo "Could not find tri-pp." >&2
-    exit 1
-
-fi; fi
-
 export JAVA_OPTS="-Xmx2024m -Xss20000k";
 
 if [ -f ${LAZABS_HOME}/dist/tricera.jar ]; then

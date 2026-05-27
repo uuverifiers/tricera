@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Existing heap tests run with the invariant-based heap encoding (reachsafety only).
+# Uses the "fun" family encoding which assumes memory safety.
+TESTS="list-001.c swap-1.c swap-2.c simple-struct.c simple-arith.c simple-struct-2.c inv-compare-zero-bug.c postop.c preop.c opassign.c list-001-fail.c list-002-fail.c swap-1-fail.c swap-2-fail.c simple-struct-fail.c struct-chained-ptr-field-1-safe.c struct-chained-ptr-field-1-unsafe.c stackptr-to-heapptr.c mutually-referential-structs.c mutually-referential-structs-fail.c mutually-referential-structs-unsafe.c opassign-struct.c postop-struct.c preop-struct.c swap-3.c simple-arith-unsafe.c simple-struct-unsafe.c opassign-unsafe.c postop-unsafe.c preop-unsafe.c swap-unsafe.c opassign-struct-unsafe.c list-safe.c list-unsafe.c illegal-access-001.c illegal-access-002.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -invEncoding:RW-fun-tag-opt-p -reachsafety "$@" ../horn-hcc-heap/$name 2>&1 | grep -v 'at '
+done

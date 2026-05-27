@@ -1,0 +1,16 @@
+int g = 0;
+
+/*@
+  assigns g;
+  ensures g == \old(g) + 1;
+*/
+void incr() {
+  g += 1;
+}
+
+int main() {
+  incr();
+  assert(g == 1);
+  incr();
+  assert(g == 2);
+}

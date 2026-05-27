@@ -29,6 +29,19 @@ When using a binary release, one can instead also call
 A full list of options can be obtained by calling ./tri -h.
 In particular, the options `-cex` can be used to show a counterexample when the program is unsafe, and `-log:n` (n in 1..3) can be used to show the solution when the program is safe.
 
+# Native Image
+TriCera can be compiled into a native image using [GraalVM](https://www.graalvm.org/) for significantly faster startup times.
+
+**Note**: Building the native image requires GraalVM 25+ for native compilation, while the base project compilation targets Java 17. Other Java versions should likely work for the base project, but older GraalVM versions may not work for native compilation. Please refer to the `.github/workflows/scala.yml` file for a working environment setup.
+
+To build the native image:
+```bash
+sbt nativeImage
+```
+The binary will be generated at `target/native-image/TriCera`.
+
+Once built, the standard `tri` executable script will automatically detect the presence of the native image and use it instead of the JVM version.
+
 # Try it out online
 TriCera has a [web interface](https://eldarica.org/tricera/) where you can try it out, which also contains many examples.
 

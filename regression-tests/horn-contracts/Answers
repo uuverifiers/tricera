@@ -3,10 +3,10 @@ contract1.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for f */
+/* contract for f */
 /*@
   requires 10 >= x && x >= 0;
-  ensures \result == \old(x) && 10 >= \old(x) && \old(x) >= 0;
+  ensures 10 >= \old(x) && \old(x) >= 0 && \result >= 0 && (\old(x) != 10 || \result != 0);
 */
 ================================================================================
 
@@ -16,10 +16,10 @@ contract2.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for f */
+/* contract for f */
 /*@
-  requires g >= 0 && x >= 0;
-  ensures \result >= \old(x) && g >= 1 && \old(x) >= 0 && \old(g) >= 0;
+  requires x >= 0 && g >= 0;
+  ensures \old(g) >= 0 && \old(x) >= 0 && g >= 1 && \result >= 0 && (\result >= \old(x) || \result >= 10);
 */
 ================================================================================
 
@@ -58,10 +58,10 @@ contract3.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for f */
+/* contract for f */
 /*@
-  requires g == 0 || (g - x >= 1 && g >= 1);
-  ensures g >= 0 && \old(g) >= 0 && (g != \old(g) || ((\old(x) >= 2*\old(g) || \old(g) - \old(x) >= 1) && (2*\old(g) - \old(x) >= 1 || 0 >= \old(g)))) && (\old(g) != 0 || ((g != 0 || 0 >= \old(x)) && (g >= \old(x) || 0 >= g))) && (g == \old(g) || g - \old(x) >= 1 || 0 >= \old(g)) && (g >= \old(g) || \old(x) >= g || 0 >= \old(g));
+  requires g >= 0;
+  ensures \old(g) >= 0 && g >= 0 && (g - \old(g) >= \old(x) || -1 >= \old(x));
 */
 ================================================================================
 
@@ -71,10 +71,10 @@ takeuchi.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for tak */
+/* contract for tak */
 /*@
   requires \true;
-  ensures (\result != \old(z) || \old(y) >= \old(z) || \old(x) - \old(y) >= 1) && (\result != \old(y) || \old(y) >= \old(z) || \old(y) >= \old(x)) && (\result == \old(z) || \result == \old(y) || \old(y) - \old(z) >= 1) && (\result == \old(y) || \old(z) >= \old(y) || \old(x) - \old(y) >= 1);
+  ensures (\old(y) == \result || \old(z) == \result || \old(y) - \old(z) >= 1) && (\old(y) == \result || \old(x) - \old(y) >= 1 || \old(z) >= \old(y)) && (\old(y) >= \old(z) || ((\old(y) != \result || \result >= \old(x)) && (\old(z) != \result || \old(x) - \old(y) >= 1)));
 */
 ================================================================================
 
@@ -84,10 +84,10 @@ assert.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for mult */
+/* contract for mult */
 /*@
-  requires x == N && N >= 0 && y >= 0;
-  ensures N2 == \old(N2) && N == \old(N) && \old(x) == \old(N) && \old(y) >= 0 && \old(N) >= 0 && (\result >= \old(y) || \result >= \old(N));
+  requires N == x && y >= 0 && x >= 0;
+  ensures \old(x) == N && \old(N) == N && \old(N2) == N2 && \old(y) >= 0 && \result >= 0 && N >= 0 && (\result >= \old(y) || 0 >= N);
 */
 ================================================================================
 
@@ -118,16 +118,143 @@ false :- main12_3_1(x:12), x:12 != 0. (line:14 col:3) (property: user-assertion)
 UNSAFE
 
 stackptr.hcc
-UNKNOWN (Unsupported C fragment. Function contracts are currently not supported together with stack pointers (10:5))
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f */
+/*@
+  requires \true;
+  ensures \valid(x) && \old(*x) - *x == -1;
+*/
+================================================================================
+
+SAFE
 
 struct-name-bug.hcc
 
 Inferred ACSL annotations
 ================================================================================
-/* contracts for foo */
+/* contract for foo */
 /*@
   requires s.f == 21;
-  ensures \old(s).f == 21 && 2*21 == \result;
+  ensures \result == 42 && \old(s).f == 21;
+*/
+================================================================================
+
+SAFE
+
+stackptr-func-dec.hcc
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f */
+/*@
+  requires \true;
+  ensures \valid(x) && \old(*x) - *x == -1;
+*/
+================================================================================
+
+SAFE
+
+stackptr-multi-arg.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for mod */
+/*@
+  requires \valid(t2) && \valid(t1) && 2147483647 >= t2->val && t2->val >= -2147483647 && 2147483646 >= t1->val && t1->val >= -2147483648;
+  ensures \valid(t2) && \valid(t1) && (\old(t2->val) >= 2147483648 || -2147483648 >= \old(t2->val) || \old(t1->val) >= 2147483647 || -2147483649 >= \old(t1->val) || (\old(t2->val) - t2->val == 1 && \old(t1->val) - t1->val == -1));
+*/
+================================================================================
+
+SAFE
+
+stackptr-nested-calls.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for decr */
+/*@
+  requires \valid(q) && 2147483647 >= q->val && q->val >= -2147483647;
+  ensures \valid(q) && (\old(q->val) - q->val == 1 || \old(q->val) >= 2147483648 || -2147483648 >= \old(q->val));
+*/
+/* contract for incdec */
+/*@
+  requires \valid(p) && 2147483646 >= p->val && p->val >= -2147483648;
+  ensures \valid(p) && (\old(p->val) >= 2147483647 || -2147483649 >= \old(p->val) || (p->val == \old(p->val) && 2147483646 >= \old(p->val) && \old(p->val) >= -2147483648));
+*/
+================================================================================
+
+SAFE
+
+stackptr-recursion.hcc
+
+---------------------------------
+Init:
+    main25_5(emptyHeap, 0, 0)    
+---------------------------------
+                |                
+                |                
+                V                
+ main35_0(emptyHeap, 0, 0, 2, 0) 
+---------------------------------
+                |                
+                |                
+                V                
+      main(emptyHeap, 0, 1)      
+---------------------------------
+Final:
+      main(emptyHeap, 0, 1)      
+---------------------------------
+Failed assertion:
+false :- main(@h, globalincr_0t:29, s:24), s:24 != 5. (line:26 col:5) (property: user-assertion)
+
+UNSAFE
+
+stackptr-retvalue.hcc
+UNKNOWN (Unsupported C fragment. 8:12 Stack pointers in combination with heap pointers)
+
+stackptr-struct.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for incr */
+/*@
+  requires \valid(t) && 2147483646 >= t->val && t->val >= -2147483647;
+  ensures \valid(t) && (\old(t->val) - t->val == -1 || \old(t->val) >= 2147483647 || -2147483648 >= \old(t->val));
+*/
+================================================================================
+
+SAFE
+
+stackptr-custom-entry.hcc
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for incr */
+/*@
+  requires \valid(t) && 2147483646 >= t->val && t->val >= -2147483648;
+  ensures \valid(t) && (\old(t->val) - t->val == -1 || \old(t->val) >= 2147483647 || -2147483649 >= \old(t->val));
+*/
+================================================================================
+
+SAFE
+
+stackptr-ilp32.hcc
+Warning: The following clause has different terms with the same name (term: globalf1_0p:12)
+main10_5(@h, globalf1_0p:12, c:9.\as[signed bv[32]]) :- c:9 >= -2147483648 & 2147483647 >= c:9 & globalf1_0p:12 >= -2147483648 & 2147483647 >= globalf1_0p:12 & @h = emptyHeap & globalf1_0p:12 = 0.\as[signed bv[32]].
+
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f1 */
+/*@
+  requires \valid(p) && 2147483647 >= *p && *p >= -2147483648;
+  ensures \valid(p) && (*p == 0 || \old(*p) >= 2147483648 || -2147483649 >= \old(*p));
 */
 ================================================================================
 

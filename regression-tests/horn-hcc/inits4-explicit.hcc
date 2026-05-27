@@ -1,0 +1,10 @@
+
+void main() {
+  static int g = _;
+  static unsigned int h = _;
+
+  assert(h >= 0);
+
+  // Should be UNSAFE
+  assert(g == 0);
+}

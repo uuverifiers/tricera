@@ -36,3 +36,7 @@ Other Error: 5:3 Unsupported operation: stack pointer argument to uninterpreted 
 
 unint-pred-simple-ptr-true.c
 SAFE
+
+unint-pred-unnamed-ptr-arg-bug.c
+Warning: no definition of function "nondet_ptr" available
+SAFE

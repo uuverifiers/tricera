@@ -71,6 +71,36 @@ false :- main(g:3, h:4), g:3 != 0. (line:8 col:3) (property: user-assertion)
 
 UNSAFE
 
+inits4.hcc
+SAFE
+
+inits4-explicit.hcc
+
+---------------
+Init:
+ main3_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+ main4_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+  main(1, 0)   
+---------------
+Final:
+  main(1, 0)   
+---------------
+Failed assertion:
+false :- main(g:3, h:4), g:3 != 0. (line:9 col:3) (property: user-assertion)
+
+UNSAFE
+
+shadowing-global.hcc
+SAFE
+
 shadowing.hcc
 SAFE
 
@@ -159,7 +189,7 @@ Final:
  main5_1(0, 1, 1) 
 ------------------
 Failed assertion:
-false :- main5_1(x:10, y:11, __eval5_7:5), __eval5_7:5 != 0. (line:13 col:3) (property: user-assertion)
+false :- main5_1(x:10, y:11, __eval5_10:5), __eval5_10:5 != 0. (line:13 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -181,7 +211,7 @@ Final:
  main13_16(2, 1, 2, 1) 
 -----------------------
 Failed assertion:
-false :- main13_16(x:10, y:11, __eval10_13:10, ite_13_16:1), __eval10_13:10 != ite_13_16:1. (line:13 col:3) (property: user-assertion)
+false :- main13_16(x:10, y:11, __eval10_19:10, ite_13_16:1), __eval10_19:10 != ite_13_16:1. (line:13 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -203,7 +233,7 @@ Final:
  main15_16(2, 1, 2, 1) 
 -----------------------
 Failed assertion:
-false :- main15_16(x:12, y:13, __eval12_15:12, ite_15_16:1), __eval12_15:12 != ite_15_16:1. (line:15 col:3) (property: user-assertion)
+false :- main15_16(x:12, y:13, __eval12_21:12, ite_15_16:1), __eval12_21:12 != ite_15_16:1. (line:15 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -239,6 +269,69 @@ SAFE
 
 static-shadowing-true.c
 SAFE
+
+static-global.c
+SAFE
+
+abort-1.c
+SAFE
+
+abort-2.c
+
+--------------
+Init:
+ main3_3(42)  
+--------------
+      |       
+      |       
+      V       
+ main3_15(42) 
+--------------
+      |       
+      |       
+      V       
+   main(42)   
+--------------
+Final:
+   main(42)   
+--------------
+Failed assertion:
+false :- main(x:2). (line:8 col:3) (property: user-assertion)
+
+UNSAFE
+
+inits2-opt.hcc
+
+---------------
+Init:
+ main9_3(0, 1) 
+---------------
+Final:
+ main9_3(0, 1) 
+---------------
+Failed assertion:
+false :- main9_3(g:3, h:4), g:3 != 0 | h:4 != 0. (line:9 col:3) (property: user-assertion)
+
+UNSAFE
+
+inits4-opt.hcc
+
+---------------
+Init:
+ main6_3(1, 0) 
+---------------
+       |       
+       |       
+       V       
+  main(1, 0)   
+---------------
+Final:
+  main(1, 0)   
+---------------
+Failed assertion:
+false :- main(g:3, h:4), g:3 != 0. (line:9 col:3) (property: user-assertion)
+
+UNSAFE
 
 test2b.hcc
 Warning: entry function "main" not found
@@ -285,4 +378,10 @@ Warning: entry function "main" not found
 SAFE
 
 preprocess-1.c
+SAFE
+
+preprocess-2-assert.c
+UNSAFE
+
+preprocess-3-assert.c
 SAFE

@@ -1,16 +1,18 @@
-import scala.sys.process._ // needed for url to fetch tri-pp
-import java.nio.file.{Paths, Files}
-import java.nio.file.attribute.PosixFilePermission._
+import scala.sys.process._
+import java.nio.file.{Files, Paths}
+import java.nio.file.attribute.PosixFilePermissions
+import scala.language.postfixOps
+import scala.util.Try
 
 lazy val commonSettings = Seq(
     name                 := "TriCera",
     organization         := "uuverifiers",
-    version              := "0.3.1",
+    version              := "0.4",
     homepage             := Some(url("https://github.com/uuverifiers/tricera")),
     licenses             := Seq("BSD-3-Clause" -> url("https://opensource.org/licenses/BSD-3-Clause")),
     description          := "TriCera is a model checker for C programs.",
-    scalaVersion         := "2.11.12",
-    crossScalaVersions   := Seq("2.11.12", "2.12.18"),
+    scalaVersion         := "2.13.17", // released 2025-10-06
+    crossScalaVersions   := Seq("2.13.17"),
     publishTo            := Some(Resolver.file("file",  new File( "/home/compilation/public_html/maven/" )) ),
     useCoursier          := false
 )
@@ -42,16 +44,31 @@ lazy val acslParser = (project in file("acsl-parser")).
 
 lazy val pp = taskKey[Unit]("")
 pp := {
-  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.1.3/tri-pp")
+  val f = url("https://github.com/zafer-esen/tri-pp/releases/download/v0.2.0/tri-pp-ubuntu-22.04")
   f #> file("tri-pp") !
 }
-def addExecutePermissions(file : File) {
-  val rf = fileToRichFile(file)
-  val permissions = Seq(OTHERS_EXECUTE, OWNER_EXECUTE, GROUP_EXECUTE).toSet
-  if(!permissions.subsetOf(rf.permissions)) {
-    permissions.foreach(rf.addPermission(_))
+
+def addExecutePermissions(file: File): Unit = {
+  val path = Paths.get(file.getAbsolutePath)
+  if (Files.exists(path)) {
+    val fileSystem = path.getFileSystem
+    if (fileSystem.supportedFileAttributeViews().contains("posix")) {
+      Try {
+        val permissions = PosixFilePermissions.fromString("rwxr-xr-x")
+        Files.setPosixFilePermissions(path, permissions)
+        println(s"Set execute permissions on ${file.getAbsolutePath}")
+      }.getOrElse {
+        println(s"Could not set execute permissions on ${file.getAbsolutePath}")
+      }
+    } else {
+      println(s"Skipping permission changes: " +
+        s"${file.getAbsolutePath} is on a non-POSIX filesystem (${fileSystem.provider()}).")
+    }
+  } else {
+    println(s"File not found: ${file.getAbsolutePath}")
   }
 }
+
 lazy val ppWithErrorHandling = taskKey[Unit]("Download the preprocessor")
 ppWithErrorHandling := {
   if ({val f = baseDirectory.value / "tri-pp"
@@ -83,29 +100,51 @@ lazy val root = (project in file(".")).
 
 //
 settings(
-  scalaSource in Compile := baseDirectory.value / "src",
-  //
-  scalaSource in Test := baseDirectory.value / "unit-tests",
-  //
   mainClass in Compile := Some("tricera.Main"),
   //
   scalacOptions in Compile ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
-  scalacOptions += (scalaVersion map { sv => sv match {
-                                        case "2.11.12" => "-optimise"
-                                        case "2.12.18" => "-opt:_"
-                                      }}).value,
+  scalacOptions += "-opt:_",
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.1",
-  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.1.1",
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.2.1",
+  libraryDependencies += "uuverifiers" %% "horn-concurrency" % "2.2.1",
   libraryDependencies += "net.jcazevedo" %% "moultingyaml" % "0.4.2",
-  libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.12",
-  libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.12" % "test",
+  libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.19",
+  libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % "test",
   excludeDependencies ++= Seq(
     // exclude java-cup from transitive dependencies, ccParser includes newer version
-    ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup"))
-)
+    ExclusionRule("net.sf.squirrel-sql.thirdparty-non-maven", "java-cup")),
+
+    Compile / resourceGenerators += Def.task {
+      val encodingsDir = (Compile / resourceDirectory).value / "tricera" / "heap" / "encodings"
+      val listFile = (Compile / resourceManaged).value / "tricera" / "heap" / "encodings" / "encodings.list"
+      if (encodingsDir.isDirectory) {
+        val names = encodingsDir.listFiles()
+          .filter(_.getName.endsWith(".yml"))
+          .map(_.getName.stripSuffix(".yml"))
+          .sorted
+          .mkString("\n")
+        IO.write(listFile, names)
+        Seq(listFile)
+      } else Seq.empty
+    }.taskValue,
+
+    nativeImageInstalled := true,
+    // point to GraalVM (recommended via env var)
+    //nativeImageGraalHome := file(sys.env("GRAALVM_HOME")).toPath,
+
+    nativeImageOptions ++= Seq(
+      "--no-fallback",
+      "-H:+ReportExceptionStackTraces",
+      "-H:IncludeResources=tricera/headers/.*\\.h",
+      "-H:IncludeResources=tricera/heap/encodings/.*\\.yml",
+      "-H:IncludeResources=tricera/heap/encodings/encodings\\.list"
+    ),
+
+    nativeImageAgentMerge := true
+  )
+ .enablePlugins(NativeImagePlugin)
 
 // project can also be built by providing dependencies under the lib directory
 // and uncommenting below code to discard clashing transitive dependencies

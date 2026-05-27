@@ -1,0 +1,14 @@
+// See https://github.com/uuverifiers/tricera/issues/60
+
+typedef enum {
+    FIRST,
+    SECOND,
+
+    MyEnum_COUNT
+} MyEnum;
+
+int array[MyEnum_COUNT];
+
+void main(void) {
+    assert(array[FIRST] == 0);
+}

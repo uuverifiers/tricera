@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LAZABS=../../tri
+
 
 TESTS="anon.hcc assign.hcc assign2.hcc assign-exp-eval-order.hcc assign-illegal.hcc \
        init.hcc loop.hcc nested.hcc typedef.hcc emptyStruct.hcc"
@@ -8,13 +8,13 @@ TESTS="anon.hcc assign.hcc assign2.hcc assign-exp-eval-order.hcc assign-illegal.
 for name in $TESTS; do
     echo
     echo $name
-    $LAZABS -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
 NOCEXTESTS="race.hcc"
 for name in $NOCEXTESTS; do
     echo
     echo $name
-    $LAZABS -abstract:off "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 

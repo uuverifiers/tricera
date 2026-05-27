@@ -1,0 +1,17 @@
+int g = 0;
+
+/*@
+  assigns g;
+  ensures g == n && \result == \old(g);
+*/
+int swapG(int n) {
+  int old = g;
+  g = n;
+  return old;
+}
+
+int main() {
+  int r = swapG(42);
+  assert(g == 42);
+  assert(r == 1);
+}

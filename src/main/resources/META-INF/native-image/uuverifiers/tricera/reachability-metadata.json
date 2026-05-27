@@ -1,0 +1,299 @@
+{
+  "reflection": [
+    {
+      "type": "ap.api.SimpleAPI$ProverStatus$",
+      "methods": [
+        {
+          "name": "Error",
+          "parameterTypes": []
+        },
+        {
+          "name": "Inconclusive",
+          "parameterTypes": []
+        },
+        {
+          "name": "Invalid",
+          "parameterTypes": []
+        },
+        {
+          "name": "OutOfMemory",
+          "parameterTypes": []
+        },
+        {
+          "name": "Running",
+          "parameterTypes": []
+        },
+        {
+          "name": "Sat",
+          "parameterTypes": []
+        },
+        {
+          "name": "Unknown",
+          "parameterTypes": []
+        },
+        {
+          "name": "Unsat",
+          "parameterTypes": []
+        },
+        {
+          "name": "Valid",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "ap.basetypes.IdealInt[]"
+    },
+    {
+      "type": "ap.parser.IAtom[]"
+    },
+    {
+      "type": "ap.parser.IFormula[]"
+    },
+    {
+      "type": "ap.parser.ITerm[]"
+    },
+    {
+      "type": "ap.terfor.ConstantTerm[]"
+    },
+    {
+      "type": "ap.terfor.conjunctions.Conjunction[]"
+    },
+    {
+      "type": "ap.terfor.conjunctions.Quantifier$ALL$[]"
+    },
+    {
+      "type": "ap.terfor.conjunctions.Quantifier$EX$[]"
+    },
+    {
+      "type": "ap.terfor.linearcombination.LinearCombination[]"
+    },
+    {
+      "type": "ap.terfor.preds.Atom[]"
+    },
+    {
+      "type": "ap.terfor.preds.Predicate[]"
+    },
+    {
+      "type": "ap.theories.sequences.ArraySeqTheoryBuilder",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "ap.theories.strings.SeqStringTheoryBuilder",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "ap.types.Sort[]"
+    },
+    {
+      "type": "java.lang.ClassValue"
+    },
+    {
+      "type": "java.lang.Object[][]"
+    },
+    {
+      "type": "java.lang.String[]"
+    },
+    {
+      "type": "java.lang.invoke.VarHandle",
+      "methods": [
+        {
+          "name": "releaseFence",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.Field[]"
+    },
+    {
+      "type": "java.lang.reflect.Method[]"
+    },
+    {
+      "type": "java.security.MessageDigestSpi"
+    },
+    {
+      "type": "java.security.SecureRandomParameters"
+    },
+    {
+      "type": "java.sql.Date"
+    },
+    {
+      "type": "java.sql.Timestamp"
+    },
+    {
+      "type": "java.util.HashSet",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "lazabs.horn.bottomup.AbstractState[]"
+    },
+    {
+      "type": "ostrich.OstrichStringTheoryBuilder",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "ostrich.cesolver.stringtheory.CEStringTheoryBuilder",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "scala.Enumeration$Val",
+      "methods": [
+        {
+          "name": "id",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "scala.Function1[]"
+    },
+    {
+      "type": "scala.Option[]"
+    },
+    {
+      "type": "scala.Tuple2[]"
+    },
+    {
+      "type": "scala.Tuple3[]"
+    },
+    {
+      "type": "scala.Tuple4[]"
+    },
+    {
+      "type": "scala.collection.Seq[]"
+    },
+    {
+      "type": "scala.collection.immutable.List[]"
+    },
+    {
+      "type": "scala.collection.mutable.BitSet[]"
+    },
+    {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en_US"
+    },
+    {
+      "type": "tricera.parsers.YAMLParser$BMOption",
+      "allDeclaredFields": true,
+      "allPublicMethods": true
+    },
+    {
+      "type": "tricera.parsers.YAMLParser$BMPropertyFile",
+      "allDeclaredFields": true,
+      "allPublicMethods": true
+    },
+    {
+      "type": "tricera.parsers.YAMLParser$BenchmarkInfo",
+      "allDeclaredFields": true,
+      "allPublicMethods": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$Declaration",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$Argument",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$Predicate",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$FunctionDef",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "tricera.concurrency.heap.InvariantEncodingParser$ParsedEncoding",
+      "allDeclaredFields": true,
+      "allPublicFields": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true
+    }
+  ],
+  "resources": [
+    {
+      "glob": "library.properties"
+    },
+    {
+      "glob": "ostrich/UnicodeData.txt"
+    },
+    {
+      "pattern": "tricera/headers/.*\\.h"
+    },
+    {
+      "pattern": "tricera/heap/encodings/.*\\.yml"
+    }
+  ]
+}

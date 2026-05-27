@@ -61,3 +61,9 @@ SAFE
 enum-typedef-pointer2.hcc
 Warning: no definition of function "nondet" available
 SAFE
+
+enum-typedef-bug-1.hcc
+SAFE
+
+enum-typedef-bug-2.hcc
+SAFE

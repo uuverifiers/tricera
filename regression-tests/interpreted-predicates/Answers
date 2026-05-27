@@ -41,4 +41,30 @@ false :- main(x:8), x:8 != 42. (line:10 col:3) (property: user-assertion)
 UNSAFE
 
 simple-loop-invariant-true.c
+Warning: no definition of function "nondet_int" available
 SAFE
+
+simple-loop-invariant-false.c
+Warning: no definition of function "nondet_int" available
+
+-------------------
+Init:
+     main10_3      
+-------------------
+         |         
+         |         
+         V         
+ main13_3(1, 0, 0) 
+-------------------
+         |         
+         |         
+         V         
+  main_3(0, 0, 0)  
+-------------------
+Final:
+  main_3(0, 0, 0)  
+-------------------
+Failed assertion:
+false :- main_3(n:10, x:12, i:13), x:12 = n:10 * n:10. (line:34 col:3) (property: user-assertion)
+
+UNSAFE

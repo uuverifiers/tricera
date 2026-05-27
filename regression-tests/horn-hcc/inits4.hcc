@@ -1,0 +1,8 @@
+
+void main() {
+  static int g;
+  static unsigned int h;
+
+  assert(h >= 0);
+  assert(g == 0);
+}

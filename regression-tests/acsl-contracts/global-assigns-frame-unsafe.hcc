@@ -1,0 +1,15 @@
+int x;
+int y = 5;
+
+/*@
+  assigns x;
+  ensures x == 0;
+*/
+void f() {
+  x = 0;
+}
+
+int main() {
+  f();
+  assert(x == 1);
+}

@@ -1,15 +1,28 @@
 #!/bin/sh
 
-if [ $(uname) = "Linux" ]; then
+if [ $(uname) = "Linux" -o $(uname) = "Darwin" ]; then
     pathCmd="readlink -f"
-elif [ $(uname) = "Darwin" ]; then
-    pathCmd="stat -f %N"
 else
     pathCmd="realpath"
 fi
 
-BASEDIR=`dirname $($pathCmd $0)`
+BASEDIR=`dirname "$($pathCmd "$0")"`
+NATIVE=$BASEDIR/target/native-image/TriCera
 
-. $BASEDIR/triEnv
+if [ -z "$TRI_PP_PATH" ]; then
+    if [ -f "$BASEDIR/dist/tri-pp" ]; then
+        export TRI_PP_PATH="$BASEDIR/dist"
+    elif [ -f "$BASEDIR/tri-pp" ]; then
+        export TRI_PP_PATH="$BASEDIR"
+    else
+        echo "Could not find tri-pp." >&2
+        exit 1
+    fi
+fi
 
-exec $LAZABS_CMD tricera.Main "$@"
+if [ -f $NATIVE ]; then
+    exec $NATIVE "$@"
+else
+    . "$BASEDIR/triEnv"
+    exec $LAZABS_CMD tricera.Main "$@"
+fi

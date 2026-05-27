@@ -2,6 +2,13 @@
 
 set -e
 
+if [ -z "$TRI_CMD" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+
+    export TRI_CMD="$ROOT_DIR/tri"
+fi
+
 DIR="$1"
 shift
 
