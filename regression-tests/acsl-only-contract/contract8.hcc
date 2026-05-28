@@ -1,0 +1,13 @@
+// Relies solely on specified post condition, not implementation.
+
+/*@
+  ensures \result >= 2;
+*/
+int foo(int x);
+
+
+void main()
+{
+  int a = foo(1);
+  assert(a == 2); // Should fail
+}
