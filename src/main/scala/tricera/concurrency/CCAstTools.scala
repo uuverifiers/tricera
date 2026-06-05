@@ -514,7 +514,8 @@ class CCAstFillFuncDef extends AbstractVisitor[Unit, MHashMap[String, Function_d
       ext.function_def_.accept(getName, ()),
       ext.function_def_.accept(copyAst, ()))
   }
-  
+  override def visit(ext: Rank_Func, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: Mitl_Spec, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Athread, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Global, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Chan, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
