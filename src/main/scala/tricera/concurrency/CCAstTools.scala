@@ -75,7 +75,7 @@ object CCAstDeclaration {
   def apply(d: ListDeclaration_specifier, i: Init_declarator): CCAstDeclaration = {
     new CCAstDeclaration(d, i, new ListExtra_specifier)
   }
-} 
+}
 
 class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: ListExtra_specifier) {
   import CCAstDeclaration._
@@ -114,7 +114,7 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
       case Some(_) => initDecls.add(initDeclarator.accept(replaceInit, initializer))
       case None => false
     }
-    
+
     new Declarators(
       copyAst(declarationSpecifiers),
       initDecls,
@@ -175,7 +175,7 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(decs: Declarators, arg: Unit): String = {
       decs.listinit_declarator_.asScala.map(d => d.accept(this, arg)).filter(n => n != "").head
     }
-    
+
     /* Init_declarator */
     override def visit(dec: OnlyDecl, arg: Unit): String = { dec.declarator_.accept(this, arg); }
     override def visit(dec: InitDecl, arg: Unit): String = { dec.declarator_.accept(this, arg); }
@@ -198,6 +198,7 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(dec: MathArray, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
     override def visit(dec: NewFuncDec, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
     override def visit(dec: OldFuncDec, arg: Unit): String = { dec.direct_declarator_.accept(this, arg); }
+    override def visit(dec: ClassCons, arg: Unit): String = {dec.direct_declarator_.accept(this, arg); }
 
     /* Parameter_declaration */
     override def visit(param: TypeAndParam, arg: Unit): String = { param.declarator_.accept(this, arg) }
@@ -209,6 +210,11 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(exp: Efunkpar, arg: Unit): String = { exp.exp_.accept(this, ()) }
     override def visit(exp: Evar, arg: Unit): String = { exp.cident_ }
     override def visit(exp: EvarWithType, arg: Unit): String = { exp.cident_ }
+    override def visit(exp: Eselect, arg: Unit): String = { exp.cident_ }
+    override def visit(exp: Epoint, arg: Unit): String = { exp.cident_ }
+
+    /* Class */
+   override def visit(cls: SpecialMemberFunc, arg: Unit): String = { cls.direct_declarator_.accept(this, arg) }
 }
 
 /**
@@ -252,15 +258,15 @@ class CCAstCopyVisitor extends ComposVisitor[Unit] {
 class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration_specifier, Init_declarator), Unit] {
   val copyAst = new CCAstCopyVisitor
   /* Function_def */
-  override def visit(defn: AnnotatedFunc, arg: Unit) = { 
+  override def visit(defn: AnnotatedFunc, arg: Unit) = {
     (copyAst(defn.listdeclaration_specifier_), new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
   }
   override def visit(defn: NewFuncInt, arg: Unit) = {
     val declarationSpecifiers = new ListDeclaration_specifier
     declarationSpecifiers.add(new Type(new Tint))
-    (declarationSpecifiers, new OnlyDecl(defn.declarator_.accept(copyAst, arg))); 
+    (declarationSpecifiers, new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
   }
-  override def visit(defn: NewFunc, arg: Unit) = { 
+  override def visit(defn: NewFunc, arg: Unit) = {
     (copyAst(defn.listdeclaration_specifier_), new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
   }
 }
@@ -300,7 +306,7 @@ class CCAstRemovePointerLevelVistor extends ComposVisitor[Unit] {
   private val copyAst = new CCAstCopyVisitor
 
   /* Declarator */
-  override def visit(dec: BeginPointer, arg: Unit): Declarator = { 
+  override def visit(dec: BeginPointer, arg: Unit): Declarator = {
     dec.pointer_ match {
       case p: Point =>
         new NoPointer(dec.direct_declarator_.accept(copyAst, ()))
@@ -336,7 +342,7 @@ class CCAstDeclaratorToNameVistor extends ComposVisitor[String => String] {
   override def visit(dec: ParenDecl, rename: String => String): Name = { dec.declarator_ match {
       case ptr: BeginPointer => ptr.direct_declarator_.accept(this, rename).asInstanceOf[Name]
       case d: NoPointer => d.direct_declarator_.accept(this, rename).asInstanceOf[Name]
-    } 
+    }
   }
   override def visit(dec: InitArray, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
   override def visit(dec: Incomplete, rename: String => String): Name = { dec.direct_declarator_.accept(this, rename).asInstanceOf[Name] }
@@ -361,20 +367,20 @@ class CCAstReplaceInitializerVistor extends ComposVisitor[Option[Initializer]] {
   private val copyAst = new CCAstCopyVisitor
 
   /* Init_declarator */
-  override def visit(dec: OnlyDecl, replacement: Option[Initializer]): Init_declarator = { 
+  override def visit(dec: OnlyDecl, replacement: Option[Initializer]): Init_declarator = {
     replacement match {
         case None => new OnlyDecl(dec.declarator_.accept(copyAst, ()))
         case Some(init) => new InitDecl(dec.declarator_.accept(copyAst, ()), init)
-    } 
+    }
   }
 
   override def visit(dec: InitDecl, replacement: Option[Initializer]): Init_declarator = {
     replacement match {
         case None => new OnlyDecl(dec.declarator_.accept(copyAst, ()))
         case Some(init) => new InitDecl(dec.declarator_.accept(copyAst, ()), init)
-    } 
+    }
   }
-  
+
   override def visit(dec: HintDecl, replacement: Option[Initializer]): Init_declarator = {
     replacement match {
         case None => new HintDecl(
@@ -386,7 +392,7 @@ class CCAstReplaceInitializerVistor extends ComposVisitor[Option[Initializer]] {
           init)
     }
   }
-  
+
   override def visit(dec: HintInitDecl, replacement: Option[Initializer]): Init_declarator = {
     replacement match {
         case None => new HintDecl(
@@ -406,13 +412,13 @@ class CCAstReplaceInitializerVistor extends ComposVisitor[Option[Initializer]] {
 class CCAstGetFunctionBodyVistor extends AbstractVisitor[Compound_stm, Unit] {
   val copyAst = new CCAstCopyVisitor
   /* Function_def */
-  override def visit(defn: AnnotatedFunc, arg: Unit) = { 
+  override def visit(defn: AnnotatedFunc, arg: Unit) = {
     defn.compound_stm_.accept(copyAst, arg)
   }
   override def visit(defn: NewFuncInt, arg: Unit) = {
     defn.compound_stm_.accept(copyAst, arg)
   }
-  override def visit(defn: NewFunc, arg: Unit) = { 
+  override def visit(defn: NewFunc, arg: Unit) = {
     defn.compound_stm_.accept(copyAst, arg)
   }
 }
@@ -444,7 +450,7 @@ class CCAstParamToAstDeclarationVistor extends AbstractVisitor[CCAstDeclaration,
     toDeclarationData(param.listdeclaration_specifier_, param.declarator_)
   }
 
-  override def visit(param: TypeHintAndParam, arg: Unit) = { 
+  override def visit(param: TypeHintAndParam, arg: Unit) = {
     toDeclarationData(param.listdeclaration_specifier_, param.declarator_)
   }
 
@@ -503,7 +509,8 @@ class CCAstFillFuncDef extends AbstractVisitor[Unit, MHashMap[String, Function_d
       ext.function_def_.accept(getName, ()),
       ext.function_def_.accept(copyAst, ()))
   }
-  
+  override def visit(ext: Ignored, fdefs: FuncDefs): Unit = { /* Do nothing */ }
+
   override def visit(ext: Athread, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Global, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Chan, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
