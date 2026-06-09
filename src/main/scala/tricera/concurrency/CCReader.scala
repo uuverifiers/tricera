@@ -1194,7 +1194,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
 
           val exitVar = scope.getResVar(returnType)
-          val exitPred = newPred(exitVar, Some(getLastSourceInfo(f.body)))
+          val exitPred = newPred(exitVar, f.body.map(getLastSourceInfo))
 
           val stm = pushArguments(f).getOrElse {
             throw new TranslationException("Entry function must have a body")
@@ -1286,6 +1286,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           case _ =>
         }
       }
+      case annFunDecl : AnnotatedFuncDeclarator => // nothing
       case preddecl : PredDeclarator => // nothing
       case interpPredDecl : InterpPredDeclarator => // nothing
     }

@@ -1729,7 +1729,10 @@ class Symex private (context        : SymexContext,
 //          assert(!(pointerArgs exists (_.isInstanceOf[CCStackPointer])),
 //                 "function contracts do not support pointer arguments yet")
 
-        val funDef = context.functionDefs(name)
+        val funReturnType = context.functionDefs.get(name) match {
+          case Some(funDef) => context.getType(funDef)
+          case None         => context.functionDecls(name)._2
+        }
 
         var argTerms : List[ITerm] = List()
         for (_ <- 0 until argCount)
@@ -1754,7 +1757,7 @@ class Symex private (context        : SymexContext,
 
         val prePredArgs : scala.Seq[ITerm] = globals ++ argTerms
 
-        val resVar : scala.Seq[CCVar] = scope.getResVar(context.getType(funDef))
+        val resVar : scala.Seq[CCVar] = scope.getResVar(funReturnType)
         val postPredArgs : scala.Seq[ITerm] =
           prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
 
