@@ -36,6 +36,7 @@ toh-contract-translation "" -dev -t:60
 loop-invariants "" -m:foo -inv -acsl -cex -dev -t:60
 at-expressions "" -assert -dev -t:60
 inv-encoding-reachsafety "" -dev -t:60
+cpp-exceptions "" -assert -dev -t:60
 #ParametricEncoder ""
 EOF
 )

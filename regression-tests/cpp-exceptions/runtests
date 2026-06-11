@@ -1,0 +1,26 @@
+#!/bin/sh
+
+TESTS="basic-no-exception.cpp \
+       throw-control-flow.cpp \
+       basic-handle-exception-value.cpp \
+       basic-uncaught-exception.cpp \
+       nested-exception-throwing-safe.cpp \
+       nested-exception-throwing-unsafe.cpp \
+       nested-exception-rethrowing-safe.cpp \
+       nested-exception-rethrowing-unsafe.cpp \
+       nested-correct-catch.cpp \
+       overwrite-exception-value.cpp \
+       nested-sequential-try-blocks.cpp \
+       basic-catch-function-call.cpp \
+       throw-struct.cpp \
+       exception-function-calls-propagation.cpp \
+       div-function-safe.cpp \
+       div-function-unsafe.cpp
+       rethrow-safe.cpp \
+       rethrow-unsafe.cpp"
+
+for name in $TESTS; do
+  echo
+  echo $name
+  $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -v 'at '
+done

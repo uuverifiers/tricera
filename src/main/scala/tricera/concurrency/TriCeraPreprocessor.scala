@@ -32,6 +32,7 @@ package tricera.concurrency
 import tricera.Main
 
 import sys.process.Process
+import java.io.File
 import java.nio.file.{Files, Paths}
 
 class TriCeraPreprocessor(val inputFilePath   : String,
@@ -40,6 +41,9 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                           val displayWarnings : Boolean,
                           val quiet           : Boolean,
                           val determinize     : Boolean) {
+  private val factsFile : File = File.createTempFile("tri-facts-", ".yml")
+  factsFile.deleteOnExit()
+
   val ppPath : String = sys.env.get("TRI_PP_PATH") match {
     case Some(path) => path + "/tri-pp"
     case _ =>
@@ -58,6 +62,7 @@ class TriCeraPreprocessor(val inputFilePath   : String,
     val langFlag = if (inputFilePath.endsWith(".cpp")) "-xc++" else "-xc"
     val cmdLine : scala.Seq[String] = scala.Seq(ppPath, input, "-o", output) ++
                      (if (quiet) scala.Seq("-q") else Nil) ++ extraArgs ++
+                     scala.Seq(s"--facts=${factsFile.getAbsolutePath}") ++
                      scala.Seq("-m", entryFunction, "--", langFlag) ++
                      (if (displayWarnings) Nil else scala.Seq("-Wno-everything"))
 
@@ -87,4 +92,36 @@ class TriCeraPreprocessor(val inputFilePath   : String,
         runPreprocessor(Seq(arg), msg, outputFilePath, outputFilePath)
     }
   }
+
+  // Facts about the produced program reported by tri-pp
+  val facts : PreprocessorFacts =
+    PreprocessorFacts.parseFile(factsFile.getAbsolutePath)
+}
+
+object PreprocessorFacts {
+  val empty : PreprocessorFacts =
+    PreprocessorFacts(usesThrow = false, usesTryCatch = false)
+
+  // Parse a tri-pp facts (YAML) file. A missing file, unreadable content or an
+  // absent key yields false for the corresponding fact (which will lead to
+  // an error if it is inaccurate, but it should not be missing in the first place).
+  def parseFile(path : String) : PreprocessorFacts =
+    try {
+      val src = scala.io.Source.fromFile(path)
+      try parse(src.mkString) finally src.close()
+    } catch { case _ : Throwable => empty }
+
+  private def parse(text : String) : PreprocessorFacts = {
+    import net.jcazevedo.moultingyaml._
+    val fields = text.parseYaml.asYamlObject.fields
+    def flag(key : String) : Boolean = fields.get(YamlString(key)) match {
+      case Some(YamlBoolean(b)) => b
+      case _                    => false
+    }
+    PreprocessorFacts(flag("usesThrow"), flag("usesTryCatch"))
+  }
+}
+
+case class PreprocessorFacts(usesThrow : Boolean, usesTryCatch : Boolean) {
+  def usesExceptions : Boolean = usesThrow || usesTryCatch
 }
