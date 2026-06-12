@@ -9,7 +9,11 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-15]
 
     steps:
     - uses: actions/checkout@v4
@@ -32,3 +36,32 @@ jobs:
       run: sbt nativeImage
     - name: Test
       run: cd regression-tests; export TERM=xterm; ./runalldirs
+    # On failure, regenerate the preprocessed .tri file for every input of each
+    # failed directory (-dumpPP writes <input>.tri before parsing starts, so it
+    # survives parse errors) and upload them with the Output files.
+    # Re-run each failed directory through rundir with its original flags from
+    # the runalldirs list, plus -dumpPP, so every test leaves its preprocessed
+    # file as <input>.tri (written before parsing, so it survives parse
+    # errors). macOS has no `timeout` command; the tests' own -t bounds apply.
+    - name: Collect debug files for failed tests
+      if: failure()
+      run: |
+        cd regression-tests
+        sed -n '/^TESTS=/,/^EOF$/p' runalldirs | sed '1d;$d' | while read -r line; do
+          case "$line" in \#*|"") continue ;; esac
+          eval "set -- $line"
+          [ -f "$1/Answers" ] && [ -f "$1/Output" ] || continue
+          cmp -s "$1/Answers" "$1/Output" && continue
+          ./rundir "$@" -dumpPP >/dev/null 2>&1 || true
+        done
+    # the debug files are emitted into the log
+    # Recover one with: base64 -d | gunzip  (copy the block between markers)
+    - name: Dump debug files to log
+      if: failure()
+      run: |
+        for f in regression-tests/*/Output regression-tests/*/*.tri; do
+          [ -f "$f" ] || continue
+          echo "===== BEGIN $f (gzip | base64) ====="
+          gzip -c "$f" | base64
+          echo "===== END $f ====="
+        done

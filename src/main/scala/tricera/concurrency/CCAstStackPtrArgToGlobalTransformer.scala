@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB
+ *               2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -65,40 +66,9 @@ private object CCAstUtils {
 }
 
 /**
-  * Vistor to test if an expression is a pointer to stack allocated data.
-  * 
-  * NOTE: This visitor requires a type annotated AST as produced by
-  *   the CCAstTypeAnnotationVistor.
-  * 
-  * NOTE: This is very simplistic in it's interpretation of
-  *   what is considered a stack pointer. However, something
-  *   more refined will require more elaborate data flow
-  *   analysis.
-  */
-class CCAstIsStackPointerVisitor extends AbstractVisitor[Boolean, Unit] {
-  /* Init_declarator */
-  override def visit(dec: InitDecl, arg: Unit) = { dec.initializer_.accept(this, ()) }
-  override def visit(dec: HintInitDecl, arg: Unit) = { dec.initializer_.accept(this, ()) }
-  override def visitDefault(dec: Init_declarator, arg: Unit) = { false }
-
-  /* Initializer */
-  override def visit(init: InitExpr, arg: Unit) = { init.exp_.accept(this, ()) }
-  override def visitDefault(init: Initializer, arg: Unit) = { false }
-
-  /* Exp */
-  override def visit(exp: Epreop, arg: Unit) = { exp.unary_operator_.accept(this, ()) }
-  override def visit(exp: EvarWithType, arg: Unit) = { exp.init_declarator_.accept(this, ()) }
-  override def visitDefault(exp: Exp, arg: Unit) = { false }
-
-  /* Unary opperator */
-  override def visit(op: Address, arg: Unit) = { true }
-  override def visitDefault(op: Unary_operator, arg: Unit) = { false }
-}
-
-/** 
   * Vistor to replace given pointers with global variables.
   */
-class CCAstPointerToGlobalVisitor extends CCAstCopyWithLocation[Map[String, CCAstDeclaration]] {
+class CCAstPointerToGlobalVisitor extends ComposVisitor[Map[String, CCAstDeclaration]] {
   private val getName = new CCAstGetNameVistor
   /* Stm */
   override def visit(stm: CompS, replacements: Map[String, CCAstDeclaration]): Stm = {
@@ -170,19 +140,23 @@ object CallSiteTransform {
   def apply(
     ptrTransformer: CCAstStackPtrArgToGlobalTransformer,
     funcDef: Function_def,
-    args: ListExp): CallSiteTransform = {
-    new CallSiteTransform(ptrTransformer, funcDef, copyAst(args))
+    callSite: Efunkpar): CallSiteTransform = {
+    new CallSiteTransform(ptrTransformer, funcDef, copyAst(callSite.listexp_), callSite)
   }
 }
 
 class CallSiteTransform(
   stackPtrTransformer:CCAstStackPtrArgToGlobalTransformer,
   originalDef: Function_def,
-  args: ListExp) {
+  args: ListExp,
+  callSite: SourceInfoProvider) {
   import CallSiteTransform._
   import CCAstUtils.isStackPtr
 
   private val getAnnotations = new CCAstGetFunctionAnnotationVisitor
+  // generated nodes get the location of the call site that caused them
+  // nodes copied from the source keep their locations
+  private val setMissingLocation = new CCAstSetMissingLocationVisitor(callSite)
 
   private val (specifiers, declarator) = {
     val (spec, dec) = originalDef.accept(getFunctionDeclaration, ())
@@ -213,7 +187,9 @@ class CallSiteTransform(
   }
 
   def wrapperInvocation(): Efunkpar = {
-    new Efunkpar(wrapperDeclaration().toEvarWithType(), copyAst(args))
+    val invocation = new Efunkpar(wrapperDeclaration().toEvarWithType(), copyAst(args))
+    invocation.accept(setMissingLocation, ())
+    invocation
   }
 
   def shouldInferContract()
@@ -254,14 +230,21 @@ class CallSiteTransform(
       val wrapperDec = wrapperDeclaration()
       val (body, transforms) = createTransformedBody(originalDef.accept(getFunctionBody, ()))
 
+      def withLocations(decl: External_declaration) = {
+        decl.accept(setMissingLocation, ())
+        decl
+      }
+      val globals = globalVariableDeclarations()
+      globals.asScala.foreach(_.accept(setMissingLocation, ()))
+
       knownAdditions += AstAddition(
-        wrapperDec.toGlobal(),
-        wrapperDec.toAfunc(createWrapperBody()),
-        transDec.toGlobal(),
-        transDec.toAfunc(
+        withLocations(wrapperDec.toGlobal()),
+        withLocations(wrapperDec.toAfunc(createWrapperBody())),
+        withLocations(transDec.toGlobal()),
+        withLocations(transDec.toAfunc(
           if (shouldInferContract()) {addAnnotationMarkers("contract")} else {""},
-          body),
-        globalVariableDeclarations(),
+          body)),
+        globals,
         globalVariableIdsToParameterIds(),
         MHashMap((transDec.getId() -> originalFuncName)),
         MHashMap((originalFuncName -> params.asScala.map(p => p.accept(getName,())).toList))
@@ -496,6 +479,24 @@ class AstAddition(
 }
 
 
+/**
+  * Vistor to set the source location of nodes that do not have one
+  * (freshly constructed nodes) to a given origin location. Nodes
+  * copied from the source keep their locations.
+  */
+class CCAstSetMissingLocationVisitor(origin: SourceInfoProvider)
+  extends FoldVisitor[Unit, Unit] {
+  override def leaf(x: Unit): Unit = ()
+  override def combine(x: Unit, r: Unit, a: Unit): Unit = ()
+  override def foldInit(p: Object, arg: Unit): Unit = p match {
+    case n: SourceInfoProvider if n.getLineNum <= 0 =>
+      n.setLineNum(origin.getLineNum)
+      n.setColNum(origin.getColNum)
+      n.setOffset(origin.getOffset)
+    case _ => ()
+  }
+}
+
 object  CCAstStackPtrArgToGlobalTransformer {
   import CallSiteTransform.CallSiteTransforms
   def apply(program: Program, entryFunctionId: String) = {
@@ -507,7 +508,7 @@ object  CCAstStackPtrArgToGlobalTransformer {
 }
 
 class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
-  extends CCAstCopyWithLocation[CallSiteTransform.CallSiteTransforms] {
+  extends ComposVisitor[CallSiteTransform.CallSiteTransforms] {
   // Idea: For each function invocation that has arguments that points to
   //   memory allocated on the stack (stack pointers), introduce two new
   //   functions, and for each stack pointer argument a global variable.
@@ -554,25 +555,11 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
 
     if (callSiteTransforms.nonEmpty) {
       val additions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
-      
-      val getMaxLineNumber = new CCAstMaxLineNumber
-      val updateLineNumbers = new CCAstUpdtLineNum[Unit](
-        declarations.asScala
-          .map(d => d.accept(getMaxLineNumber, ()))
-          .reduce(math.max)+1)
       val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
-      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.wrapperDeclarations
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.wrapperDefinitions
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
-      declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions
-        .map(i => i._2)
-        .map(i => {i.accept(updateLineNumbers, ()); i}).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.introducedGlobalVariables.map(_._2).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.wrapperDeclarations.map(_._2).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.wrapperDefinitions.map(_._2).asJavaCollection)
+      declarations.addAll(mainDefIndex, additions.transformedFunctionDefinitions.map(_._2).asJavaCollection)
       new Progr(declarations);
     } else {
       progr
@@ -589,7 +576,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
         //   a pointer. Then we don't know the name of the function
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
-        val tform = CallSiteTransform(this, funcDef, callSite.listexp_)
+        val tform = CallSiteTransform(this, funcDef, callSite)
         if (tform.shouldInferContract()) {
           transforms += tform
           tform.wrapperInvocation()

@@ -70,19 +70,24 @@ object CPreprocessor {
           tmpFile
         }
 
-        cmdLine = Seq("cpp", "-E", "-P", "-CC", "-nostdinc", "-undef")
+        // The compiler driver (cc -E) is used rather than the standalone cpp:
+        // on macOS, cpp runs in -traditional-cpp mode, where the # and ##
+        // operators do not exist (a macro body like #e then leaves a literal
+        // '#' in the output). -x c makes inputs preprocess as C regardless of
+        // their extension (.hcc), and '-' reads the piped input.
+        cmdLine = Seq("cc", "-E", "-P", "-CC", "-nostdinc", "-undef", "-x", "c", "-")
         val pipedInput = s"""#include "${macroHeaderTempFile.getAbsolutePath}"\n#include "$fileName"""""
         val inputStream = new java.io.ByteArrayInputStream(pipedInput.getBytes)
         (Process(cmdLine) #< inputStream #> preprocessedFile).!(errorSuppressingLogger)
       } else {
-        cmdLine = Seq("cpp", fileName, "-E", "-P", "-CC")
+        cmdLine = Seq("cc", "-E", "-P", "-CC", "-x", "c", fileName)
         (Process(cmdLine) #> preprocessedFile).!(errorSuppressingLogger)
       }
     } catch {
       case t : Throwable =>
         throw new Main.MainException(
           "The C preprocessor could not be executed. " +
-          "This might be due to cpp not being installed in the system.\n" +
+          "This might be due to cc not being installed in the system.\n" +
           "Attempted command: " + (if (cmdLine != null) cmdLine.mkString(" ") else "N/A")
           )
     }
