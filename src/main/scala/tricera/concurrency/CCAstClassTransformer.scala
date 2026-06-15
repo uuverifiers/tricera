@@ -55,7 +55,7 @@ object CCAstClassTransformer {
     val collectionResult = collector.collectedClassDefs
     if (collectionResult.isEmpty) return program
 
-    val transformed = program.accept(new ClassTransformer(collectionResult), (null, null))
+    val transformed = program.accept(new ClassTransformer(collectionResult, program), (null, null))
 
     transformed
   }
@@ -63,7 +63,7 @@ object CCAstClassTransformer {
 
 // When we collect class metadata, we use this visitor to store them with their fully
 // qualified name.
-class RenameClassVisitor extends CCAstCopyWithLocation[MHashMap[String, String]] {
+class RenameClassVisitor extends ComposVisitor[MHashMap[String, String]] {
 
   override def visit(dec: Tag, classMap: MHashMap[String, String]): Struct_or_union_spec =
     dec.struct_or_union_ match {
@@ -147,11 +147,18 @@ class ClassDefCollector extends ComposVisitor[(ListBuffer[Struct_dec], ListBuffe
 
 
   // Creates a new function declaration for a member function, with an added struct parameter
-  private def makeNewFuncDec(dd: Direct_declarator, renameArg: String => String): Direct_declarator = dd match {
-    case fd: NewFuncDec =>
-      new NewFuncDec(fd.direct_declarator_.accept(rename, renameArg), fd.parameter_type_)
-    case fd: OldFuncDec =>
-      new OldFuncDec(fd.direct_declarator_.accept(rename, renameArg))
+  private def makeNewFuncDec(dd: Direct_declarator, renameArg: String => String): Direct_declarator = {
+    val setMissingLocation = new CCAstSetMissingLocationVisitor(dd)
+    dd match {
+      case fd: NewFuncDec =>
+        val d = new NewFuncDec(fd.direct_declarator_.accept(rename, renameArg), fd.parameter_type_)
+        d.accept(setMissingLocation, ())
+        d
+      case fd: OldFuncDec =>
+        val d = new OldFuncDec(fd.direct_declarator_.accept(rename, renameArg))
+        d.accept(setMissingLocation, ())
+        d
+    }
   }
 
   // Converts member function definitions (Struct_dec) into global ones (Afunc)
@@ -187,7 +194,9 @@ class ClassDefCollector extends ComposVisitor[(ListBuffer[Struct_dec], ListBuffe
       lds
     }
 
+    val setMissingLocation = new CCAstSetMissingLocationVisitor(fun)
     val processedFunc = new NoPointer(makeNewFuncDec(fun.direct_declarator_, qualifiedCurrent))
+    processedFunc.accept(setMissingLocation, ())
     decls._2 += new Afunc(new NewFunc(voidReturn, processedFunc, fun.compound_stm_))
 
     fun
@@ -238,8 +247,9 @@ class ClassDefCollector extends ComposVisitor[(ListBuffer[Struct_dec], ListBuffe
 }
 
 class ClassTransformer(
-  val collectedDefs: MHashMap[String, CCAstClassTransformer.ClassDefInfo]
-) extends CCAstCopyWithLocation[Any] {
+  val collectedDefs: MHashMap[String, CCAstClassTransformer.ClassDefInfo],
+  val originalProg: Program
+) extends ComposVisitor[Any] with CopyAstLocation {
 
   private val getDeclarator          = new CCAstGetDeclaratorVistor
   private val getParameters          = new CCAstGetParametersVistor
@@ -248,8 +258,9 @@ class ClassTransformer(
   private val getFuncBody            = new CCAstGetFunctionBodyVistor
   private val getName                = new CCAstGetNameVistor
   private val getType                = new CCAstGetTypeVisitor
+  private val rename                 = new CCAstRenameInDeclarationVistor
+  private val setMissingLocation     = new CCAstSetMissingLocationVisitor(originalProg)
   private val isClass                = new IsClassVisitor
-
 
   private def globalStruct(className: String, structDecs: ListBuffer[Struct_dec]): External_declaration = {
     val specs         = new ListDeclaration_specifier
@@ -274,6 +285,16 @@ class ClassTransformer(
       .accept(getDeclarator, ())
       .accept(getParameters, ())
 
+    def renamePar(s: String) : String = "__arg_" + s
+    val renamedPars = {
+      val pars = new ListParameter_declaration
+      ctorParams.forEach {
+        case tap: TypeAndParam => pars.add(tap.accept(rename, renamePar(_)))
+        case _ =>
+      }
+      pars
+    }
+
     val objDecStm = {
       val specs = new ListDeclaration_specifier
       specs.add(new Type(new Tstruct(new TagType(new Struct, className))))
@@ -285,7 +306,7 @@ class ClassTransformer(
     val ctorCallStm = {
       val args = new ListExp
       args.add(new Epreop(new Address, new Evar("__obj")))
-      ctorParams.forEach {
+      renamedPars.forEach {
         case tap: TypeAndParam =>  args.add(new Evar(tap.accept(getName,())))
         case _                 =>
       }
@@ -303,7 +324,7 @@ class ClassTransformer(
         new NoPointer(
           new NewFuncDec(
             new Name(factoryFuncName(className)),
-            new AllSpec(ctorParams))),
+            new AllSpec(renamedPars))),
         new ScompTwo(bodyStms)
     ))
   }
@@ -339,11 +360,15 @@ class ClassTransformer(
 
 
   // Creates a class object pointer to the parameters of a member function
-  // off the form `struct className *this`
-  private def structParam(className: String): Parameter_declaration = {
+  // off the form `struct className *this`. We pass the original
+  // function declaration to set the missing location for this parameter
+  private def structParam(className: String, dd: Direct_declarator): Parameter_declaration = {
+    val setMissingLocation = new CCAstSetMissingLocationVisitor(dd)
     val specs = new ListDeclaration_specifier
     specs.addFirst(new Type(new Tstruct(new TagType(new Struct, className))))
-    new TypeAndParam(specs, new BeginPointer(new Point, new Name("this")))
+    val newParam = new TypeAndParam(specs, new BeginPointer(new Point, new Name("this")))
+    newParam.accept(setMissingLocation, ())
+    newParam
   }
 
   private def fwdDecClassName(ident: String): String = {
@@ -363,7 +388,7 @@ class ClassTransformer(
       val newParams = new ListParameter_declaration
       oldParams.forEach(_.accept(this, arg))
       newParams.addAll(oldParams)
-      newParams.addFirst(structParam(className))
+      newParams.addFirst(structParam(className, f))
       copyLocationInformation(f, new NewFuncDec(f.direct_declarator_, new AllSpec(newParams)))
     }
     else f
@@ -375,7 +400,7 @@ class ClassTransformer(
     if (fullName.contains("::")) {
       val className = fwdDecClassName(fullName)
       val params = new ListParameter_declaration
-      params.add(structParam(className))
+      params.add(structParam(className, f))
       copyLocationInformation(f, new NewFuncDec(f.direct_declarator_, new AllSpec(params)))
     }
     else f
@@ -507,6 +532,7 @@ class ClassTransformer(
 
   // Builds assignment to class object via call to its constructor
   private def buildConstructorDec(decls: Declarators, classCons: ClassCons): List[Stm] = {
+    val setMissingDecLoc = new CCAstSetMissingLocationVisitor(classCons)
     val className   = classNameFromDecl(decls)
     val objName     = classCons.accept(getName, ())
     val factoryArgs = new ListExp
@@ -515,6 +541,7 @@ class ClassTransformer(
     val initDecs    = new ListInit_declarator
     initDecs.add(new InitDecl(new NoPointer(new Name(objName)), new InitExpr(factoryCall)))
     val newDec = new Declarators(copyAst(decls.listdeclaration_specifier_), initDecs, new ListExtra_specifier)
+    newDec.accept(setMissingDecLoc, ())
     List(new DecS(newDec.accept(this, ())))
   }
 
@@ -568,7 +595,7 @@ class ClassTransformer(
   // NOTE: Only works for class types, calling constructors of primitive types outside
   // of `new` expressions is not supported.
   override def visit(ctor: ECtor, arg: Any): Exp = {
-    val className     = classNameFromTypeSpec(ctor.type_specifier_)
+    val className     = ctor.cident_
     val transformedArgs = new ListExp
     ctor.listexp_.forEach(e => transformedArgs.add(e.accept(this, ())))
     copyLocationInformation(ctor, new Efunkpar(new Evar(factoryFuncName(className)), transformedArgs))
@@ -576,7 +603,7 @@ class ClassTransformer(
 
   // Turns a destructor call of the form `obj.~className()` into `className::dtor(&obj)`
   override def visit(dtor: ESelDtor, arg: Any): Exp = {
-    val className = classNameFromTypeSpec(dtor.type_specifier_)
+    val className = dtor.cident_
     val params    = new ListExp
     params.addFirst(new Epreop(new Address, dtor.exp_).accept(this, ()))
     copyLocationInformation(dtor, new Efunkpar(new Evar(className ++ "::dtor"), params))
@@ -584,7 +611,7 @@ class ClassTransformer(
 
   // Turns a destructor call of the form `obj->~className()` into `className::dtor(obj)`
   override def visit(dtor: EPointDtor, arg: Any): Exp = {
-    val className = classNameFromTypeSpec(dtor.type_specifier_)
+    val className = dtor.cident_
     val params    = new ListExp
     params.addFirst(dtor.exp_.accept(this, ()))
     copyLocationInformation(dtor, new Efunkpar(new Evar(className ++ "::dtor"), params))
