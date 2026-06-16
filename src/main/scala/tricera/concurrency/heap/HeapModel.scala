@@ -174,8 +174,7 @@ trait HeapModel {
   def makePointer(typ : CCType) : CCHeapPointer =
     CCHeapPointer(addressSort, nullAddr(), typ)
   def makeArrayPointer(elementType   : CCType,
-                       arrayLocation : ArrayLocation.Value) : CCHeapArrayPointer =
-    CCHeapArrayPointer(addressRangeSort, zeroInitAddrRange(), elementType, arrayLocation)
+                       arrayLocation : ArrayLocation.Value) : CCHeapArrayPointer
 
   def read (p : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult
   def write(p : CCTerm, o : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult

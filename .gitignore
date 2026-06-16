@@ -20,6 +20,8 @@ Makefile
 cmake_install.cmake
 preprocessor/build
 tri-pp
+.tri-pp-version
+*.tri
 *.swp
 *.swo
 .metals/**
