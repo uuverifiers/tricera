@@ -738,6 +738,13 @@ class Symex private (context        : SymexContext,
       val pointerVal =
         eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
       if (isHeapPointer(pointerVal)) {
+        val cellTyp = pointerVal.typ match {
+          case p : CCHeapPointer => p.typ
+          case other             => other
+        }
+        maybeReplaceRhsWithNull(
+          rhsVal,
+          CCTerm.fromTerm(IIntLit(0), cellTyp, pointerVal.srcInfo))
         processHeapResult(heapModel.write(
           pointerVal, wrapAsHeapObject(topVal),
           values, getStaticLocationId(originalExp)))
@@ -745,6 +752,7 @@ class Symex private (context        : SymexContext,
         val lhsVal = eval(originalExp)(evalSettings,
                                        evalCtx.withEvaluatingLHS(true))
         val lhsName = asLValue(originalExp)
+        maybeReplaceRhsWithNull(rhsVal, lhsVal)
         val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
         setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
       }
