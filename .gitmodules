@@ -1,0 +1,12 @@
+[submodule "eldarica"]
+	path = eldarica
+	url = https://github.com/uuverifiers/eldarica
+	branch = scala-2.13
+[submodule "horn-concurrency"]
+	path = horn-concurrency
+	url = https://github.com/uuverifiers/horn-concurrency
+	branch = scala-2.13
+[submodule "princess"]
+	path = princess
+	url = https://github.com/uuverifiers/princess
+	branch = scala-2.13
