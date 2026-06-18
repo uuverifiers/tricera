@@ -738,6 +738,13 @@ class Symex private (context        : SymexContext,
       val pointerVal =
         eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
       if (isHeapPointer(pointerVal)) {
+        val cellTyp = pointerVal.typ match {
+          case p : CCHeapPointer => p.typ
+          case other             => other
+        }
+        maybeReplaceRhsWithNull(
+          rhsVal,
+          CCTerm.fromTerm(IIntLit(0), cellTyp, pointerVal.srcInfo))
         processHeapResult(heapModel.write(
           pointerVal, wrapAsHeapObject(topVal),
           values, getStaticLocationId(originalExp)))
@@ -745,6 +752,7 @@ class Symex private (context        : SymexContext,
         val lhsVal = eval(originalExp)(evalSettings,
                                        evalCtx.withEvaluatingLHS(true))
         val lhsName = asLValue(originalExp)
+        maybeReplaceRhsWithNull(rhsVal, lhsVal)
         val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
         setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
       }
@@ -904,6 +912,40 @@ class Symex private (context        : SymexContext,
     )
   }
 
+  private def extractAllocTypeAndCount(exp     : Efunkpar,
+                                       name    : String,
+                                       srcInfo : Option[SourceInfo])
+                                      (implicit evalSettings : EvalSettings,
+                                       evalCtx : EvalContext) : (CCType, CCTerm) = {
+    def fail = throw new UnsupportedCFragmentException(
+      getLineStringShort(srcInfo) + " Unsupported " + name +
+      " argument(s): " + (context.printer print exp) +
+      ". TriCera derives the allocated type from a sizeof(T); supported forms are " +
+      name + "(sizeof(T)), " + name + "(n*sizeof(T))" +
+      (if (name == "calloc") ", or calloc(n, sizeof(T))." else "."))
+
+    exp.listexp_.asScala.toList match {
+      case List(e : Ebytestype) =>
+        (context.getType(e),
+         CCTerm.fromTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
+      case List(e : Etimes) =>
+        (e.exp_1, e.exp_2) match {
+          case (bts : Ebytestype, _) => (context.getType(bts), eval(e.exp_2))
+          case (_, bts : Ebytestype) => (context.getType(bts), eval(e.exp_1))
+          case _                     => fail
+        }
+      case List(a, b) if name == "calloc" =>
+        (a, b) match {
+          case (bts : Ebytestype, other) if !other.isInstanceOf[Ebytestype] =>
+            (context.getType(bts), eval(other))
+          case (other, bts : Ebytestype) if !other.isInstanceOf[Ebytestype] =>
+            (context.getType(bts), eval(other))
+          case _ => fail
+        }
+      case _ => fail
+    }
+  }
+
   private def evalHelp(exp : Exp)
                       (implicit evalSettings : EvalSettings,
                        evalCtx      : EvalContext)
@@ -1000,6 +1042,23 @@ class Symex private (context        : SymexContext,
 
       implicit val symex: Symex = this
       pushVal(getAssignmentTarget(exp.exp_1).update(valueToAssign))
+
+    // The Darwin (macOS) assert macro expands to the conditional expression
+    //   (__builtin_expect(!(guard), 0) ? __assert_rtn(...) : (void)0);
+    // reduce it to assert(!cond), mirroring the glibc shape handled under
+    // Estmexp below.
+    case exp : Econdition
+      if exp.exp_2.isInstanceOf[Efunkpar] &&
+         asLValue(exp.exp_2.asInstanceOf[Efunkpar].exp_) == "__assert_rtn" =>
+      val cond = exp.exp_1 match {
+        case c : Efunkpar if asLValue(c.exp_) == "__builtin_expect" &&
+                             c.listexp_.size() > 0 =>
+          c.listexp_.asScala.head
+        case c => c
+      }
+      val assertArgList = new ListExp()
+      assertArgList.add(new Epreop(new Logicalneg(), cond))
+      evalHelp(new Efunkpar(new Evar("assert"), assertArgList))
 
     case exp : Econdition => // exp_1 ? exp_2 : exp_3
       val srcInfo = Some(getSourceInfo(exp))
@@ -1382,28 +1441,7 @@ class Symex private (context        : SymexContext,
           }
         case name@("malloc" | "calloc" | "alloca" | "__builtin_alloca")
           if !TriCeraParameters.get.useArraysForHeap => // todo: proper alloca and calloc
-          val (typ, allocSize) = exp.listexp_.asScala(0) match {
-            case exp : Ebytestype =>
-              (context.getType(exp), CCTerm.fromTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
-            //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
-            case exp : Etimes =>
-              exp.exp_1 match {
-                case e : Ebytestype => (context.getType(e), eval(exp.exp_2))
-                case e if exp.exp_2.isInstanceOf[Ebytestype] =>
-                  (context.getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
-                case _ =>
-                  throw new UnsupportedCFragmentException(
-                    getLineStringShort(srcInfo) +
-                    " Unsupported alloc expression: " + (context.printer print exp))
-              }
-            //case exp : Evar => // allocation in bytes
-            case e : Econst => // allocation in bytes
-              (CCInt, eval(e)) // todo: add support for char?
-
-            case _ => throw new UnsupportedCFragmentException(
-              getLineStringShort(srcInfo) +
-              " Unsupported alloc expression: " + (context.printer print exp))
-          }
+          val (typ, allocSize) = extractAllocTypeAndCount(exp, name, srcInfo)
 
           val arrayLoc = name match {
             case "malloc" | "calloc"           => ArrayLocation.Heap
@@ -1446,24 +1484,7 @@ class Symex private (context        : SymexContext,
            *       arrays to model heaps.
            */
 
-          val (typ, allocSize) = exp.listexp_.asScala(0) match {
-            case exp : Ebytestype =>
-              (context.getType(exp), CCTerm.fromTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
-            //case exp : Ebytesexpr => eval(exp.exp_).typ - handled by preprocessor
-            case exp : Etimes =>
-              exp.exp_1 match {
-                case e : Ebytestype => (context.getType(e), eval(exp.exp_2))
-                case e if exp.exp_2.isInstanceOf[Ebytestype] =>
-                  (context.getType(exp.exp_2.asInstanceOf[Ebytestype]), eval(e))
-                case _ =>
-                  throw new UnsupportedCFragmentException(
-                    "Unsupported alloc expression: " + (context.printer print exp))
-              }
-            //case exp : Evar => // allocation in bytes
-
-            case _ => throw new UnsupportedCFragmentException(
-              "Unsupported alloc expression: " + (context.printer print exp))
-          }
+          val (typ, allocSize) = extractAllocTypeAndCount(exp, name, srcInfo)
 
           val (sizeExpr, sizeInt) = allocSize match {
             case CCTerm(IIntLit(IdealInt(n)), typ, _, _)

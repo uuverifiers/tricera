@@ -88,38 +88,38 @@ Init:
                                         |                                        
                                         |                                        
                                         V                                        
-                            main15_36(S(const(4)), 0)                            
+                            main15_29(S(const(4)), 0)                            
 ---------------------------------------------------------------------------------
                                         |                                        
                                         |                                        
                                         V                                        
-                     main15_36(S(store(const(4), 0, 0)), 1)                      
+                     main15_29(S(store(const(4), 0, 0)), 1)                      
 ---------------------------------------------------------------------------------
                                         |                                        
                                         |                                        
                                         V                                        
-               main15_36(S(store(store(const(4), 0, 0), 1, 1)), 2)               
+               main15_29(S(store(store(const(4), 0, 0), 1, 1)), 2)               
 ---------------------------------------------------------------------------------
                                         |                                        
                                         |                                        
                                         V                                        
-        main15_36(S(store(store(store(const(4), 0, 0), 1, 1), 2, 2)), 3)         
+        main15_29(S(store(store(store(const(4), 0, 0), 1, 1), 2, 2)), 3)         
 ---------------------------------------------------------------------------------
                                         |                                        
                                         |                                        
                                         V                                        
-  main15_36(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 4)  
+  main15_29(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 4)  
 ---------------------------------------------------------------------------------
                                         |                                        
                                         |                                        
                                         V                                        
- main18_36_3(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
+ main18_29_3(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
 ---------------------------------------------------------------------------------
 Final:
- main18_36_3(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
+ main18_29_3(S(store(store(store(store(const(4), 0, 0), 1, 1), 2, 2), 3, 3)), 0) 
 ---------------------------------------------------------------------------------
 Failed assertion:
-false :- main18_36_3(s:14, i:18), select(S::data(s:14), i:18) = i:18. (line:19 col:5) (property: user-assertion)
+false :- main18_29_3(s:14, i:18), select(S::data(s:14), i:18) = i:18. (line:19 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -135,23 +135,23 @@ Init:
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_36_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
+false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
 
 UNSAFE
 
@@ -167,23 +167,23 @@ Init:
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_36_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
+false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
 
 UNSAFE
 
@@ -221,23 +221,23 @@ Init:
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_36_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
+false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
 
 UNSAFE
 
@@ -347,6 +347,38 @@ SAFE
 nondet-static-array-explicit-3.c
 SAFE
 
+calloc-2arg-array-safe.c
+SAFE
+
+calloc-2arg-array-unsafe.c
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                    main5_3(heap.empty, arrayPtr(AddrRange(heap.null, 0), 0), 2)                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 |                                                                                  
+                                                                                 |                                                                                  
+                                                                                 V                                                                                  
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 |                                                                                  
+                                                                                 |                                                                                  
+                                                                                 V                                                                                  
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 |                                                                                  
+                                                                                 |                                                                                  
+                                                                                 V                                                                                  
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main7_29_3(@h, a:1, n:4, p:6, i:7), getInt(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))) != 0. (line:8 col:5) (property: user-assertion)
+
+UNSAFE
+
 simple-global-memsafety1.c
 SAFE
 
@@ -360,7 +392,10 @@ pointer-arith-3-safe.c
 Splitting properties: {valid-deref,valid-memtrack,valid-free,unreach-call}
   valid-deref... SAFE
   valid-memtrack... SAFE
-  valid-free... SAFE
+  valid-free... Warning: type clash during inference: int vs Addr
+Warning: type clash during inference: int vs Addr
+Warning: type clash during inference: int vs Addr
+SAFE
   unreach-call... SAFE
 SAFE
 
@@ -379,18 +414,18 @@ Init:
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 0) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_36_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_36_3(@h, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:8) (property: valid-deref)
+false :- main7_29_3(@h, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:8) (property: valid-deref)
 
 UNSAFE
 UNSAFE

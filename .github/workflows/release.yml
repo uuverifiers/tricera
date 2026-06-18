@@ -1,0 +1,116 @@
+name: Release
+
+# Pushing a tag v* builds TriCera (native image) on every supported platform,
+# runs the regression tests, packages per-platform zips and attaches them to a
+# DRAFT release. 
+# A workflow_dispatch run is a dry run: it builds, tests and packages, but
+# creates no release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # One job creates the single draft release; the build jobs then upload into
+  # it. If each build job created the draft itself, several drafts for the
+  # same tag would appear.
+  create-draft:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Create draft release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          echo "release $GITHUB_REF_NAME already exists; reusing it"
+        else
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --draft --generate-notes --title "TriCera $GITHUB_REF_NAME"
+        fi
+
+  build:
+    needs: create-draft
+    # run even when create-draft is skipped (workflow_dispatch dry runs)
+    if: always() && (needs.create-draft.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+          - os: macos-15
+            platform: macos-arm64
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up GraalVM 25 (for native image)
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '25'
+        distribution: 'graalvm'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        set-java-home: 'false'
+    - name: Set up JDK 17 (for compilation)
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'sbt'
+    - name: Set up sbt
+      uses: sbt/setup-sbt@v1.1.22
+    - name: Build
+      run: sbt nativeImage
+    - name: Test
+      run: cd regression-tests; export TERM=xterm; ./runalldirs
+    # Same debug collection as in scala.yml: keep the preprocessed .tri files
+    # of failed directories so platform-specific failures can be inspected.
+    - name: Collect debug files for failed tests
+      if: failure()
+      run: |
+        cd regression-tests
+        sed -n '/^TESTS=/,/^EOF$/p' runalldirs | sed '1d;$d' | while read -r line; do
+          case "$line" in \#*|"") continue ;; esac
+          eval "set -- $line"
+          [ -f "$1/Answers" ] && [ -f "$1/Output" ] || continue
+          cmp -s "$1/Answers" "$1/Output" && continue
+          ./rundir "$@" -dumpPP >/dev/null 2>&1 || true
+        done
+    - name: Dump debug files to log
+      if: failure()
+      run: |
+        for f in regression-tests/*/Output regression-tests/*/*.tri; do
+          [ -f "$f" ] || continue
+          echo "===== BEGIN $f (gzip | base64) ====="
+          gzip -c "$f" | base64
+          echo "===== END $f ====="
+        done
+    - name: Package
+      run: |
+        VERSION="${GITHUB_REF_NAME#v}"
+        PKG="tricera-${VERSION}-${{ matrix.platform }}"
+        STAGE="$RUNNER_TEMP/$PKG/tricera"
+        mkdir -p "$STAGE/target/native-image"
+        cp target/native-image/TriCera "$STAGE/target/native-image/"
+        cp tri triEnv tri-client tri-pp README.md LICENSE "$STAGE/"
+        cp -R regression-tests "$STAGE/"
+        find "$STAGE/regression-tests" -name 'Output*' -delete
+        (cd "$RUNNER_TEMP/$PKG" && zip -qry "$PKG.zip" tricera)
+        mv "$RUNNER_TEMP/$PKG/$PKG.zip" .
+        shasum -a 256 "$PKG.zip" > "$PKG.zip.sha256"
+        ls -la "$PKG.zip"
+    - name: Upload to draft release
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+          --clobber tricera-*.zip tricera-*.zip.sha256

@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2021-2022 Pontus Ernstedt
- *               2022-2023 Zafer Esen. All rights reserved.
+ *               2022-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -224,12 +224,16 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
                 ctx.getGlobals.map(g => funCtx.getOldVar(g.name).get.term)
               val globToOld : Map[ITerm, ITerm] =
                 globals.zip(oldGlobals).toMap
+              val postGlobals : Seq[ITerm] =
+                ctx.getGlobals.map(g => funCtx.getPostGlobalVar(g.name).get.term)
+              val globToPost : Map[ITerm, ITerm] =
+                globals.zip(postGlobals).toMap
 
               val nonAssignedGlobals : Set[ITerm] =
                 globals.toSet.diff(idents.map(_.toTerm))
 
               nonAssignedGlobals.foldLeft(IBoolLit(true) : IFormula) (
-                (formula, term) => formula &&& term === globToOld(term)
+                (formula, term) => formula &&& globToPost(term) === globToOld(term)
               )
             }
 
@@ -357,7 +361,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     val funCtx = ctx.asInstanceOf[FunctionContext]
     inPostCond = true
     vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
-        ++ ctx.getGlobals.map(v => (v.name, v))).toMap
+        ++ ctx.getGlobals.map(v => (v.name, funCtx.getPostGlobalVar(v.name).get))).toMap
     val res = translatePred(clause.asInstanceOf[AST.AnEnsuresClause].expr_)
     inPostCond = false
     res

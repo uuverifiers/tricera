@@ -16,3 +16,10 @@ for name in $TESTS; do
     echo $name
     $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
+
+TESTS="struct-field-read.c"
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -cex -acsl -m:entry "$@" $name 2>&1 | grep -v 'at '
+done

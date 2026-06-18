@@ -61,10 +61,15 @@ object AnnotationParser extends RegexParsers {
     cident ~ maybe_cost ~ maybe_exp_args
   } ^^ {
     case s ~ mCost ~ mArgs if hintKeywords.keys.exists(_ == s) =>
-      AbsHintClause(hintKeywords(s), mCost, mArgs)
+      val mExp = mArgs.flatMap { str =>
+        try Some(ParserUtil.parseExp(str)) catch {
+          case _ : Exception => None
+        }
+      }
+      AbsHintClause(hintKeywords(s), mCost, mExp)
     case "contract" ~ None ~ None =>
       ContractGen
-    case s ~ None ~ None => // other cases
+    case s ~ _ ~ _ =>
       MaybeACSLAnnotation(s, "")
   }
 
@@ -83,13 +88,10 @@ object AnnotationParser extends RegexParsers {
     case _ => None
   }
 
-  def maybe_exp_args: Parser[Option[Exp]] = {
+  def maybe_exp_args: Parser[Option[String]] = {
     opt("{" ~ literalWithoutBraces ~ "}")
   } ^^ {
-    case Some(_ ~ expStr ~ _) =>
-      try Some(ParserUtil.parseExp(expStr)) catch {
-        case _ : Exception => None
-      }
+    case Some(_ ~ expStr ~ _) => Some(expStr)
     case _ => None
   }
 

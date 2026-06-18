@@ -272,6 +272,37 @@ false :- main_4(@h, head:9), Node::data(getNode(heap.read(@h, head:9))) != 0. (l
 
 UNSAFE
 
+calloc-2arg-safe.c
+SAFE
+
+calloc-2arg-unsafe.c
+
+--------------------------------------------------------------------------------
+Init:
+                              main2_3(heap.empty)                               
+--------------------------------------------------------------------------------
+                                       |                                        
+                                       |                                        
+                                       V                                        
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.addr(1)) 
+--------------------------------------------------------------------------------
+Final:
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.addr(1)) 
+--------------------------------------------------------------------------------
+Failed assertion:
+false :- main2_3_1(@h, x:2), getInt(heap.read(@h, x:2)) != 42. (line:3 col:3) (property: user-assertion)
+
+UNSAFE
+
+calloc-2arg-swapped-safe.c
+SAFE
+
+calloc-no-sizeof.c
+UNKNOWN (Unsupported C fragment. 2:12 Unsupported calloc argument(s): calloc <[ unsigned long * calloc ]> (2, 4). TriCera derives the allocated type from a sizeof(T); supported forms are calloc(sizeof(T)), calloc(n*sizeof(T)), or calloc(n, sizeof(T)).)
+
+calloc-ambiguous-sizeof.c
+UNKNOWN (Unsupported C fragment. 2:12 Unsupported calloc argument(s): calloc <[ unsigned long * calloc ]> (sizeof (int), sizeof (char)). TriCera derives the allocated type from a sizeof(T); supported forms are calloc(sizeof(T)), calloc(n*sizeof(T)), or calloc(n, sizeof(T)).)
+
 stack-array-1-unsafe.c
 UNSAFE
 
