@@ -87,6 +87,38 @@ public interface {interface_name} {{
                             f.write(new_content)
                         src_files_modified += 1
 
+                elif filename == "FoldVisitor.java":
+                    # Add the per-node hook foldInit,
+                    # unless the generated code already provides it.
+                    if "foldInit" not in content:
+                        hook = "\n  public R foldInit(Object p, A arg) { return leaf(arg); }\n"
+                        last_brace_index = content.rfind('}')
+                        new_content = content[:last_brace_index] + hook + content[last_brace_index:]
+                        new_content, n = re.subn(re.escape("R r = leaf(arg);"), "R r = foldInit(p, arg);", new_content)
+                        if n == 0:
+                            sys.exit(f"{filepath}: no fold seeds found to rewrite")
+                        with open(filepath, 'w') as f:
+                            f.write(new_content)
+                        src_files_modified += 1
+
+                elif filename == "ComposVisitor.java":
+                    # Copy line/col/offset from the original node to the rebuilt
+                    # one, unless the generated code already does.
+                    if "_result" not in content:
+                        def fix_return(m):
+                            typ, args = m.group(1), m.group(2)
+                            return (typ + " _result = new " + typ + "(" + args + ");\n"
+                                    "      _result.line_num = p.line_num;\n"
+                                    "      _result.col_num = p.col_num;\n"
+                                    "      _result.offset = p.offset;\n"
+                                    "      return _result;")
+                        new_content, n = re.subn(r'return new ([\w.]+)\(([^)]*)\);', fix_return, content)
+                        if n == 0:
+                            sys.exit(f"{filepath}: no constructor returns found to rewrite")
+                        with open(filepath, 'w') as f:
+                            f.write(new_content)
+                        src_files_modified += 1
+
                 elif "public abstract class" in content and "Visitor" in content:
                     # Abstract AST node (category)
                     # Find package declaration to know where we are

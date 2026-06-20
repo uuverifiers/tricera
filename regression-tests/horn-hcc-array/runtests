@@ -56,7 +56,7 @@ done
 for name in $ILP32TESTS; do
     echo
     echo $name
-    $TRI_CMD -cex -abstract:off -forceNondetInit -heapModel:native -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
+    $TRI_CMD -cex -abstract:off -forceNondetInit -heapModel:native -arithMode:ilp32 -solutionReconstruction:wp "$@" $name 2>&1 | grep -v 'at '
 done
 
 ## -heapModel:array

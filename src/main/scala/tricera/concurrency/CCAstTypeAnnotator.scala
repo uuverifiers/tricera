@@ -85,6 +85,10 @@ class CCAstTypeAnnotator {
     symTab.put("chan_send", createPointerDeclaration("chan_send", List(new Tvoid)))
     symTab.put("chan_receive", createPointerDeclaration("chan_receive", List(new Tvoid)))
     symTab.put("__builtin_alloca", createPointerDeclaration("__builtin_alloca", List(new Tvoid)))
+    // these appear in the expansion of the Darwin (macOS) assert macro
+    symTab.put("__builtin_expect", createDeclaration("__builtin_expect", List(new Tlong)))
+    symTab.put("__assert_rtn", createDeclaration("__assert_rtn", List(new Tvoid)))
+    symTab.put("__func__", createDeclaration("__func__", List(new Tvoid)))
     symTab.put("realloc", createPointerDeclaration("realloc", List(new Tvoid)))
     symTab.put("static_assert", createPointerDeclaration("static_assert", List(new Tvoid)))
     symTab
@@ -107,7 +111,7 @@ class CCAstTypeAnnotationData {
   Visitor to create a copy of an AST with EvarWithType nodes substituted for
   Evar nodes.
 */
-class CCAstTypeAnnotationVisitor extends CCAstCopyWithLocation[CCAstTypeAnnotationData] {
+class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] {
   val getName = new CCAstGetNameVistor
   val copyAst = new CCAstCopyVisitor
   val getDeclaration = new CCAstGetFunctionDeclarationVistor

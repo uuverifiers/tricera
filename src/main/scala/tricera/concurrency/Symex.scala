@@ -738,6 +738,13 @@ class Symex private (context        : SymexContext,
       val pointerVal =
         eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
       if (isHeapPointer(pointerVal)) {
+        val cellTyp = pointerVal.typ match {
+          case p : CCHeapPointer => p.typ
+          case other             => other
+        }
+        maybeReplaceRhsWithNull(
+          rhsVal,
+          CCTerm.fromTerm(IIntLit(0), cellTyp, pointerVal.srcInfo))
         processHeapResult(heapModel.write(
           pointerVal, wrapAsHeapObject(topVal),
           values, getStaticLocationId(originalExp)))
@@ -745,6 +752,7 @@ class Symex private (context        : SymexContext,
         val lhsVal = eval(originalExp)(evalSettings,
                                        evalCtx.withEvaluatingLHS(true))
         val lhsName = asLValue(originalExp)
+        maybeReplaceRhsWithNull(rhsVal, lhsVal)
         val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
         setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
       }
@@ -1034,6 +1042,23 @@ class Symex private (context        : SymexContext,
 
       implicit val symex: Symex = this
       pushVal(getAssignmentTarget(exp.exp_1).update(valueToAssign))
+
+    // The Darwin (macOS) assert macro expands to the conditional expression
+    //   (__builtin_expect(!(guard), 0) ? __assert_rtn(...) : (void)0);
+    // reduce it to assert(!cond), mirroring the glibc shape handled under
+    // Estmexp below.
+    case exp : Econdition
+      if exp.exp_2.isInstanceOf[Efunkpar] &&
+         asLValue(exp.exp_2.asInstanceOf[Efunkpar].exp_) == "__assert_rtn" =>
+      val cond = exp.exp_1 match {
+        case c : Efunkpar if asLValue(c.exp_) == "__builtin_expect" &&
+                             c.listexp_.size() > 0 =>
+          c.listexp_.asScala.head
+        case c => c
+      }
+      val assertArgList = new ListExp()
+      assertArgList.add(new Epreop(new Logicalneg(), cond))
+      evalHelp(new Efunkpar(new Evar("assert"), assertArgList))
 
     case exp : Econdition => // exp_1 ? exp_2 : exp_3
       val srcInfo = Some(getSourceInfo(exp))

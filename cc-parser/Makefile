@@ -52,6 +52,10 @@ concurrent_c.tex: concurrentC.cf
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java: concurrentC.cf
 	bnfc -p tricera.concurrency --java --jflex -l concurrentC.cf
 
+# add_source_info.py adds the SourceInfoProvider interface to the generated
+# AST classes and extends the generated visitors with FoldVisitor.foldInit
+# and ComposVisitor source location copying, unless the bnfc version used
+# already provides them. Generated with bnfc 2.9.6.1.
 $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.class: $(PARSER_BINDIR)/tricera/concurrency/concurrent_c/Absyn/concurrent_c.java
 	python3 $(PARSER_BASEDIR)/add_source_info.py $(PARSER_BASEDIR) $(CC_PARSER_PKG_PREFIX)
 	${JAVAC} ${JAVAC_FLAGS} -d $(PARSER_BINDIR) tricera/concurrency/concurrent_c/Absyn/*.java
