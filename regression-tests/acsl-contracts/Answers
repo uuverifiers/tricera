@@ -104,6 +104,15 @@ SAFE
 global-from-unsafe.hcc
 UNSAFE
 
+quant-forall-safe.hcc
+SAFE
+
+quant-forall-unsafe.hcc
+UNSAFE
+
+quant-exists-safe.hcc
+SAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 
