@@ -210,8 +210,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
           val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) =
             acs.foldLeft(Set[CCTerm](), Set[CCTerm]()) ({(sets, clause) =>
               val (i, p) =
-                translateAssigns(clause.assignsclause_
-                  .asInstanceOf[AST.AnAssignsClause])
+                translateAssigns(clause.assignsclause_)
               (i.union(sets._1), p.union(sets._2))
             })
 
@@ -322,12 +321,16 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   }
 
   // FIXME: Return ITerm directly?
-  def translateAssigns(clause : AST.AnAssignsClause) : (Set[CCTerm], Set[CCTerm]) = {
+  def translateAssigns(clause : AST.AssignsClause) : (Set[CCTerm], Set[CCTerm]) = {
     val srcInfo = getSourceInfo(clause)
     val funCtx = ctx.asInstanceOf[FunctionContext]
     vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
         ++ ctx.getGlobals.map(v => (v.name, v))).toMap
-    clause.locations_ match {
+    val locations = clause match {
+      case c : AST.AnAssignsClause     => c.locations_
+      case c : AST.AnAssignsClauseFrom => c.locations_1
+    }
+    locations match {
       case ls : AST.LocationsSome    =>
         val tSets : List[AST.TSet] =
           ls.listlocation_.asScala.toList

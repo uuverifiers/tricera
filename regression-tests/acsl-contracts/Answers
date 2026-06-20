@@ -98,6 +98,12 @@ SAFE
 global-at-unsafe.hcc
 UNSAFE
 
+global-from-safe.hcc
+SAFE
+
+global-from-unsafe.hcc
+UNSAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 

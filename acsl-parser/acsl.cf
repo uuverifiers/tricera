@@ -74,7 +74,8 @@ SimpleClauseEnsures. SimpleClause ::= EnsuresClause ;
 -- SimpleClauseAbrupt.     SimpleClause ::= AbruptClause ;
 separator SimpleClause "" ;
 
-AnAssignsClause. AssignsClause ::= "assigns" Locations ";" ;
+AnAssignsClause.     AssignsClause ::= "assigns" Locations ";" ;
+AnAssignsClauseFrom. AssignsClause ::= "assigns" Locations "\\from" Locations ";" ;
 
 LocationsSome.    Locations ::= [Location] ;
 LocationsNothing. Locations ::= "\\nothing" ;

@@ -35,6 +35,8 @@ TESTS="contract1.hcc  \
        global-old-unsafe.hcc \
        global-at-safe.hcc \
        global-at-unsafe.hcc \
+       global-from-safe.hcc \
+       global-from-unsafe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \
