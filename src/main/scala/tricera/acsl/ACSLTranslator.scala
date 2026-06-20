@@ -125,7 +125,15 @@ object ACSLTranslator {
       val (left, right) = annot.splitAt(3)
       left.concat(right.replace('@', ' '))
     }
-    replaceAtSymbols(annot)
+
+    def normalizeUnicode(s : String) : String =
+      s.replace("∀", "\\forall").replace("∃", "\\exists")
+       .replace("ℤ", "integer").replace("ℝ", "real")
+       .replace("⇒", "==>").replace("⇔", "<==>")
+       .replace("∧", "&&").replace("∨", "||").replace("¬", "!")
+       .replace("≡", "==").replace("≢", "!=").replace("≠", "!=")
+       .replace("≤", "<=").replace("≥", ">=")
+    normalizeUnicode(replaceAtSymbols(annot))
   }
 
 }
