@@ -421,6 +421,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EFieldFunMod => ???
     case e : AST.EApplication => ???
     case e : AST.EOld         => translateOldExpr(e)
+    case e : AST.EAt          => translateAtExpr(e)
     case e : AST.EValid       => translateValidExpr(e)
     case e : AST.ELit         => translateLitExpr(e.lit_)
     case e : AST.EIdent       => translateIdentExpr(e)
@@ -912,16 +913,27 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateOldExpr(expr : AST.EOld) : CCTerm = {
+  private def translateInOldState(e : AST.Expr) : CCTerm = {
     val old = vars
     val funCtx = ctx.asInstanceOf[FunctionContext]
     vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
         ++ funCtx.getGlobals.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
     useOldHeap = true
-    val res = translateTerm(expr.expr_)
+    val res = translateTerm(e)
     useOldHeap = false
     vars = old
     res
+  }
+
+  def translateOldExpr(expr : AST.EOld) : CCTerm = translateInOldState(expr.expr_)
+
+  def translateAtExpr(expr : AST.EAt) : CCTerm = expr.id_ match {
+    case "Pre" | "Old"        => translateInOldState(expr.expr_)
+    case "Here"               => translateTerm(expr.expr_)
+    case "Post" if inPostCond => translateTerm(expr.expr_)
+    case other => throw new ACSLParseException(
+      s"Unsupported or out-of-context label '$other' in \\at.",
+      getSourceInfo(expr))
   }
 
   def translateResultExpr(expr : AST.EResult) : CCTerm = {
