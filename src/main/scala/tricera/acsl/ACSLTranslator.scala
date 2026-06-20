@@ -413,7 +413,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
          | _ : AST.EDiv
          | _ : AST.EMod       => translateArith(expr)
     case e : AST.EUnary       => translateUnary(e)
-    case e : AST.ETypeCast    => ???
+    case e : AST.ETypeCast    => getType(e.typeexpr_).cast(translate(e.expr_))
     case e : AST.ESizeOfTerm  => ???
     case e : AST.ESizeOfType  => ???
     case e : AST.EArrayAccess => translateArrayAccessExpr(e)
@@ -702,6 +702,17 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   private def getType(typ : AST.TypeName) : CCType = typ match {
     case typ : AST.TypeNameLogic => getType(typ.logictypename_)
     case typ : AST.TypeNameC => getType(typ.ctypename_)
+  }
+
+  private def getType(typ : AST.TypeExpr) : CCType = {
+    val cte = typ.asInstanceOf[AST.TypeExprC].ctypeexpr_.asInstanceOf[AST.ACTypeExpr]
+    cte.cmaybeabsdec_ match {
+      case _ : AST.NoAbsDec =>
+        getType(cte.listcspecqual_.asScala.iterator.collect {
+          case sq : AST.CSpecQualTypeSpec => sq.ctypespec_
+        })
+      case d => throwNotImpl(d)
+    }
   }
 
   private def getType(typ : AST.LogicTypeName) : CCType = typ

@@ -1,0 +1,7 @@
+/*@ ensures \result == (unsigned int)(-1); */
+unsigned int f();
+
+void main() {
+  unsigned int r = f();
+  assert(r + 1 == 0);
+}

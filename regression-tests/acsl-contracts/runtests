@@ -40,6 +40,9 @@ TESTS="contract1.hcc  \
        quant-forall-safe.hcc \
        quant-forall-unsafe.hcc \
        quant-exists-safe.hcc \
+       cast-safe.hcc \
+       cast-unsafe.hcc \
+       cast-modular-safe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \
