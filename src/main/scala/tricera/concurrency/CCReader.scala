@@ -2304,7 +2304,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     decl match {
       case pp : PointPoint =>
         heapModelFactory.makePointer(createHeapPointerHelper(pp.pointer_, typ))
-      case p : Point       =>
+      case pp : PointQualPoint => // ignoring qualifiers (const/volatile)
+        heapModelFactory.makePointer(createHeapPointerHelper(pp.pointer_, typ))
+      case _ : Point | _ : PointQual =>
         heapModelFactory.makePointer(typ)
       case _ => throw new TranslationException(
         s"Type qualified pointers are currently not supported: $decl")
