@@ -121,10 +121,24 @@ object PreprocessorFacts {
       case Some(YamlBoolean(b)) => b
       case _                    => false
     }
-    PreprocessorFacts(flag("usesThrow"), flag("usesTryCatch"))
+    val typedefs : Map[String, String] =
+      fields.get(YamlString("typedefs")) match {
+        case Some(YamlArray(entries)) =>
+          entries.flatMap {
+            case YamlObject(m) =>
+              (m.get(YamlString("name")), m.get(YamlString("underlying"))) match {
+                case (Some(YamlString(n)), Some(YamlString(u))) => Some(n -> u)
+                case _                                          => None
+              }
+            case _ => None
+          }.toMap
+        case _ => Map.empty
+      }
+    PreprocessorFacts(flag("usesThrow"), flag("usesTryCatch"), typedefs)
   }
 }
 
-case class PreprocessorFacts(usesThrow : Boolean, usesTryCatch : Boolean) {
+case class PreprocessorFacts(usesThrow : Boolean, usesTryCatch : Boolean,
+                             typedefs : Map[String, String] = Map.empty) {
   def usesExceptions : Boolean = usesThrow || usesTryCatch
 }

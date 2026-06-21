@@ -405,7 +405,8 @@ class Main (args: Array[String]) {
 
     // todo: add a switch for this, also benchmark/profile
     val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
-      new java.io.FileReader(new java.io.File(ppFileName))))
+      new java.io.FileReader(new java.io.File(ppFileName))),
+      typedefs = preprocessorFacts.typedefs)
     val (reader, modelledHeapRes, callSiteTransforms) =
       try {
         CCReader(bufferedReader, funcName, propertiesToCheck, preprocessorFacts)

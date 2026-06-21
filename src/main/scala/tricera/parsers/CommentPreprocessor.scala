@@ -52,7 +52,8 @@ object CommentPreprocessor {
     end
   }
 
-  def apply(reader : BufferedReader, readerBufferSize : Int = 1000) :
+  def apply(reader : BufferedReader, readerBufferSize : Int = 1000,
+            typedefs : Map[String, String] = Map.empty) :
   BufferedReader = {
     val stringWriter = new StringWriter(readerBufferSize)
     val writer = new BufferedWriter(stringWriter)
@@ -140,8 +141,30 @@ object CommentPreprocessor {
 //    println("comment-preprocessed input:\n\n" + stringWriter.getBuffer.toString)
 
     new BufferedReader(new StringReader(
-      rewriteGhostLogicTypes(stringWriter.getBuffer.toString)))
+      substituteTypedefsInAnnotations(
+        rewriteGhostLogicTypes(stringWriter.getBuffer.toString), typedefs)))
     // todo: benchmark this with files, >1 MB, benchmark this whole class
+  }
+
+  // resolve C typedef names used in annotations
+  // TODO: do this without regex
+  private def substituteTypedefsInAnnotations(
+      s : String, typedefs : Map[String, String]) : String = {
+    if (typedefs.isEmpty) return s
+    val nameRegex = ("\\b(" +
+      typedefs.keys.toSeq.sortBy(-_.length)
+        .map(java.util.regex.Pattern.quote).mkString("|") + ")\\b").r
+    def subst(body : String) : String =
+      nameRegex.replaceAllIn(body, m =>
+        java.util.regex.Matcher.quoteReplacement(typedefs(m.group(1))))
+    def inSpans(text : String, open : String, close : String) : String =
+      new scala.util.matching.Regex(
+        "(?s)" + java.util.regex.Pattern.quote(open) + "(.*?)" +
+        java.util.regex.Pattern.quote(close), "body").replaceAllIn(text, m =>
+        java.util.regex.Matcher.quoteReplacement(
+          open + subst(m.group("body")) + close))
+    inSpans(inSpans(s, ghostOpenMarker, ghostCloseMarker),
+            annotationMarker, annotationMarker)
   }
 
   // ACSL treats `integer` and `boolean` as logic-type keywords

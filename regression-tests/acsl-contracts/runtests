@@ -50,6 +50,9 @@ TESTS="contract1.hcc  \
        valid-array-safe.hcc \
        valid-array-unsafe.hcc \
        valid-array-ensures-safe.hcc \
+       typedef-annotation-safe.hcc \
+       from-warning-body.hcc \
+       from-warning-bodyless.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \

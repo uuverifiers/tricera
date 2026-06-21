@@ -99,9 +99,11 @@ global-at-unsafe.hcc
 UNSAFE
 
 global-from-safe.hcc
+Warning: TriCera does not check \from dependency clauses; the \from in the contract of function 'incr' is ignored.
 SAFE
 
 global-from-unsafe.hcc
+Warning: TriCera does not check \from dependency clauses; the \from in the contract of function 'incr' is ignored.
 UNSAFE
 
 quant-forall-safe.hcc
@@ -141,6 +143,16 @@ valid-array-unsafe.hcc
 UNSAFE
 
 valid-array-ensures-safe.hcc
+SAFE
+
+typedef-annotation-safe.hcc
+SAFE
+
+from-warning-body.hcc
+Warning: TriCera does not check \from dependency clauses; the \from in the contract of function 'f' is ignored.
+SAFE
+
+from-warning-bodyless.hcc
 SAFE
 
 global-assigns-frame-safe.hcc

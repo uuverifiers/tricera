@@ -1091,6 +1091,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val contract = ACSLTranslator.translateACSL(
           "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
 
+        if (fun.body.isDefined &&
+            possibleACSLAnnotation.annot.contains("\\from"))
+          Util.warn(
+            s"TriCera does not check \\from dependency clauses; the \\from " +
+            s"in the contract of function '$name' is ignored.")
+
         prePredsToReplace.add(funContext.prePred.pred)
         postPredsToReplace.add(funContext.postPred.pred)
         funToPreAtom.put(name, atom(funContext.prePred))
