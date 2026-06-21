@@ -89,7 +89,8 @@ object CCReader {
     } else {
       prog
     }
-    val classTransformedProg = CCAstClassTransformer.transform(exceptionTransformedProg)
+    val newDeleteTransformedProg = CCAstNewDeleteTransformer.transform(exceptionTransformedProg)
+    val classTransformedProg = CCAstClassTransformer.transform(newDeleteTransformedProg)
     val atCallTransformedProg = CCAstAtExpressionTransformer.transform(classTransformedProg)
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =

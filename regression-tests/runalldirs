@@ -38,6 +38,7 @@ at-expressions "" -assert -dev -t:60
 inv-encoding-reachsafety "" -dev -t:60
 cpp-exceptions "" -assert -dev -t:60
 cpp-classes "" -assert -dev -t:60
+cpp-new-delete "" -assert -dev -t:60
 #ParametricEncoder ""
 EOF
 )

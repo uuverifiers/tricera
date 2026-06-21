@@ -368,6 +368,9 @@ Epredec.      Exp15 ::= "--" Exp15;
 Epreop.       Exp15 ::= Unary_operator Exp14;
 Ebytesexpr.   Exp15 ::= "sizeof" Exp15;
 Ebytestype.   Exp15 ::= "sizeof" "(" Type_name ")";
+ENew.         Exp15 ::= "new" Type_specifier New_initializer;
+EDelete.      Exp15 ::= "delete" Exp15 ;
+EDeleteParen. Exp15 ::= "delete" "(" Exp15 ")" ;
 Earray.       Exp16 ::= Exp16 "[" Exp "]" ;
 Efunk.        Exp16 ::= Exp16 "(" ")";
 Efunkpar.     Exp16 ::= Exp16 "(" [Exp2] ")";
@@ -440,3 +443,8 @@ AssignOr.     Assignment_op ::= "|=" ;
 comment "/*" "*/" ;
 comment "//";
 comment "#";
+
+InitPointer.  New_initializer ::= Pointer New_initializer;
+NoInit.       New_initializer ::= "" ;
+EmptyInit.    New_initializer ::= "(" ")" ;
+NewInitArgs.  New_initializer ::= "(" [Exp2] ")";

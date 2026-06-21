@@ -1,0 +1,30 @@
+
+class-safe.cpp
+SAFE
+
+new-del-inside-ctor.cpp
+SAFE
+
+ptr-to-ptr.cpp
+Warning: The following clause has different terms with the same name (term: nondet)
+main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(@h, O_Int(5))), O_Addr(heap.heapAddrPair_2(heap.alloc(@h, O_Int(5)))))), \if (nondet) \ then (heap.heapAddrPair_2(heap.alloc(heap.heapAddrPair_1(heap.alloc(@h, O_Int(5))), O_Addr(heap.heapAddrPair_2(heap.alloc(@h, O_Int(5))))))) \ else (\if (nondet) \ then (heap.heapAddrPair_2(heap.alloc(@h, O_Int(5)))) \ else (@v_cleanup)), heap.heapAddrPair_2(heap.alloc(heap.heapAddrPair_1(heap.alloc(@h, O_Int(5))), O_Addr(heap.heapAddrPair_2(heap.alloc(@h, O_Int(5))))))) :- main2_3(@h, @v_cleanup).
+
+SAFE
+
+class-ptr-member-safe.cpp
+SAFE
+
+class-ptr-member-unsafe.cpp
+UNSAFE
+
+nested-classes-safe.cpp
+SAFE
+
+nested-classes-unsafe.cpp
+UNSAFE
+
+prims-safe.cpp
+SAFE
+
+update-class-member.cpp
+SAFE
