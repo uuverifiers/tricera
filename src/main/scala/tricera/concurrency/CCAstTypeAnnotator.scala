@@ -174,7 +174,7 @@ class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] 
   /**
     Add an entry in the symbol table for a function declared with a contract.
   */
-  override def visit(dec: AnnotatedFuncDeclarator, symTab: CCAstTypeAnnotationData): Dec = {
+  override def visit(dec: AnnotatedFuncDeclarator, symTab: CCAstTypeAnnotationData): External_declaration = {
     val funcName = dec.declarator_.accept(getName, ())
     val decSpecifiers = copyAst(dec.listdeclaration_specifier_)
     val initDeclarator = new OnlyDecl(dec.declarator_.accept(copyAst, ()))

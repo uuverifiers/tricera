@@ -199,16 +199,12 @@ object CCReader {
     def apply(extDecl : External_declaration) : FuncDef = {
       extDecl match {
         case af : Afunc => FuncDef(af.function_def_)
-        case g : Global => g.dec_ match {
-          case a : AnnotatedFuncDeclarator =>
-            FuncDef(None, a.declarator_,
-              getSourceInfo(a.declarator_),
-              Some(a.listdeclaration_specifier_),
-              a.listannotation_.asScala.toSeq
-            )
-          case _ => throw new TranslationException("not yet implemented, this class was created" +
-                    "to deal with annotated function declarations")
-        }
+        case a : AnnotatedFuncDeclarator =>
+          FuncDef(None, a.declarator_,
+            getSourceInfo(a.declarator_),
+            Some(a.listdeclaration_specifier_),
+            a.listannotation_.asScala.toSeq
+          )
       }
     }
   }
@@ -844,6 +840,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case decl : Global =>
           collectVarDecls(decl.dec_, true, values, "", false)
 
+        case decl : AnnotatedFuncDeclarator =>
+          val funDec = collectAnnotatedFuncDecl(decl)
+          functionDecls.put(funDec.name, (funDec.directDecl, funDec.typ))
+
         case decl : Chan =>
           for (name <- decl.chan_def_.asInstanceOf[AChan].listcident_.asScala) {
             if (channels contains name)
@@ -953,14 +953,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case _: NewFunc       => Nil
           }
           distributeSourceToAnnots(FuncDef(f), annots)
-        case g : Global if (g.dec_ match {
-                          case _ : AnnotatedFuncDeclarator => true
-                          case _ => false}) => {
-            val annots : Seq[Annotation] = g.dec_ match { //TODO: Avoid repeating match twice
-              case a : AnnotatedFuncDeclarator => a.listannotation_.asScala.toList
-            }
-            distributeSourceToAnnots(FuncDef(g), annots)
-          }
+        case a : AnnotatedFuncDeclarator =>
+            distributeSourceToAnnots(FuncDef(a), a.listannotation_.asScala.toList)
       }.toMap
 
     // functions for which contracts should be generated
@@ -1312,7 +1306,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           case _ =>
         }
       }
-      case annFunDecl : AnnotatedFuncDeclarator => // nothing
       case preddecl : PredDeclarator => // nothing
       case interpPredDecl : InterpPredDeclarator => // nothing
     }
@@ -1354,6 +1347,25 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                    hints            : scala.Seq[Annotation],
                                    sourceInfo       : SourceInfo)
 
+  private def collectAnnotatedFuncDecl(annFunDecl : AnnotatedFuncDeclarator)
+      : CCFunctionDeclaration = {
+    val specType = getType(annFunDecl.listdeclaration_specifier_)
+    val name = getName(annFunDecl.declarator_)
+    val (typeWithPtrs, directDecl) = annFunDecl.declarator_ match {
+      case decl: NoPointer =>
+        (specType, decl.direct_declarator_)
+      case decl: BeginPointer =>
+        (getPtrType(decl.pointer_, specType), decl.direct_declarator_)
+    }
+    directDecl match {
+      case _: NewFuncDec | _: OldFuncDec =>
+        CCFunctionDeclaration(name, typeWithPtrs, directDecl,
+          getSourceInfo(annFunDecl.declarator_))
+      case _ => throw new TranslationException(
+        "annotated declarations can only be function declarations")
+    }
+  }
+
   /**
    * @param dec               The declaration to collect from.
    * @param isGlobal          If this is a global declaration
@@ -1362,29 +1374,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   def collectVarDecls(dec      : Dec,
                       isGlobal : Boolean) : scala.Seq[CCDeclaration] = {
     dec match {
-      //A bit code duplication here with below, not ideal
-      case annFunDecl : AnnotatedFuncDeclarator => {
-        val specType = getType(annFunDecl.listdeclaration_specifier_)
-        val isStatic = annFunDecl.listdeclaration_specifier_.asScala.exists {
-          case s : Storage =>
-            s.storage_class_specifier_.isInstanceOf[LocalProgram]
-          case _ => false
-        }
-        val name = getName(annFunDecl.declarator_)
-        val (typeWithPtrs, directDecl) = annFunDecl.declarator_ match {
-          case decl: NoPointer =>
-            (specType, decl.direct_declarator_)
-          case decl: BeginPointer =>
-            (getPtrType(decl.pointer_, specType), decl.direct_declarator_)
-        }
-        directDecl match {
-          // function declaration
-          case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
-            Seq(CCFunctionDeclaration(name, typeWithPtrs, directDecl,
-              getSourceInfo(annFunDecl.declarator_)))
-          case _ => throw new TranslationException("annotated declarations can only be function declarations")
-        }
-      }
       case decl: Declarators => {
         // S D1, D2, D3, ...
         // in C, the type of a variable is the spec type that can be further
