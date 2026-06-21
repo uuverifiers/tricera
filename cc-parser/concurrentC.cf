@@ -126,6 +126,10 @@ NoRetFunSpec.   Function_specifier ::= "_Noreturn" ;
 
 Const.      Type_qualifier ::= "const" ;
 NoOptim.    Type_qualifier ::= "volatile";
+Const1.     Type_qualifier ::= "__const__";
+Const2.     Type_qualifier ::= "__const";
+NoOptim1.   Type_qualifier ::= "__volatile__";
+NoOptim2.   Type_qualifier ::= "__volatile";
 Restrict1.  Type_qualifier ::= "__restrict__";
 Restrict2.  Type_qualifier ::= "__restrict";
 
@@ -243,6 +247,9 @@ AnnotationS.    Stm ::= Annotation ;
 AnnotatedIterS. Stm ::= Annotation Iter_stm ;
 GhostStm.       Stm ::= "⟦" [Stm] "⟧" ;
 
+-- Try catch
+TryCatchS.      Stm ::= Try_stm ;
+
 SlabelOne.   Labeled_stm ::= CIdent ":" Stm ;
 SlabelTwo.   Labeled_stm ::= "case" Constant_expression ":" Stm ;
 SlabelThree. Labeled_stm ::= "default" ":" Stm;
@@ -269,6 +276,13 @@ SjumpTwo.   Jump_stm ::= "continue" ";" ;
 SjumpThree. Jump_stm ::= "break" ";" ;
 SjumpFour.  Jump_stm ::= "return" ";" ;
 SjumpFive.  Jump_stm ::= "return" Exp ";" ;
+
+-- try-catch statements
+Stry. Try_stm ::= "try" Compound_stm [Catch_stm] ;
+
+Scatch. Catch_stm ::= "catch" "(" Parameter_declaration ")" Compound_stm ;
+
+separator nonempty Catch_stm "" ;
 
 SatomicOne. Atomic_stm ::= "atomic" Stm;
 SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
@@ -357,6 +371,11 @@ EvarWithType. Exp17 ::= CIdent "<[" [Declaration_specifier] Init_declarator "]>"
 Econst.       Exp17 ::= Constant;
 Estring.      Exp17 ::= String;
 Enondet.      Exp17 ::= "_";
+
+-- Throw expression
+EthrowOne.    Exp2 ::= "throw" Exp2;
+EthrowTwo.    Exp2 ::= "throw" ;
+
 
 coercions Exp 17;
 separator nonempty Exp2 ",";

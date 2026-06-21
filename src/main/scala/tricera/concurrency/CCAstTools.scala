@@ -36,33 +36,23 @@ import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 
 class AstToolsException(message: String) extends Exception(message)
 
-/**
-  * This trait defines a function to set the line number of
-  * an arbitrary kind of node in an AST.
-  */
-trait SetLineNumber {
-  def setLineNumber[T](item: T, lineNumber: Int): Unit = {
-    item match {
-      case p: SourceInfoProvider => p.setLineNum(lineNumber)
-      case _ =>
-        throw new AstToolsException(
-          s"Cannot set line number for ${item.getClass}")
-    }
-  }
-}
+class AstCopyException(message: String) extends Exception(message)
 
 /**
-  * This trait defines a function to get the line number of
-  * an arbitrary kind of node in an AST.
+  * This trait defines a function to copy the source location
+  * information from one AST node to another.
   */
-trait GetLineNumber {
-  def getLineNumber[T](item: T): Int = {
-    item match {
-      case p: SourceInfoProvider => p.getLineNum
-      case _ =>
-        throw new AstToolsException(
-          s"Cannot get line number for ${item.getClass}")
+trait CopyAstLocation {
+  def copyLocationInformation[T](src: T, dest: T): T = {
+    (src, dest) match {
+      case (s: SourceInfoProvider, d: SourceInfoProvider) =>
+        d.setLineNum(s.getLineNum)
+        d.setColNum(s.getColNum)
+        d.setOffset(s.getOffset)
+      case _ => throw new AstCopyException(
+        s"Cannot copy location information from $src to $dest")
     }
+    dest
   }
 }
 
@@ -224,7 +214,7 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
 /**
   * Vistor to copy an AST including source information.
   */
-class CCAstCopyVisitor extends CCAstCopyWithLocation[Unit] {
+class CCAstCopyVisitor extends ComposVisitor[Unit] {
   def apply(annotations: ListAnnotation): ListAnnotation = {
     val copy = new ListAnnotation
     copy.addAll(annotations.asScala.map(a => a.accept(this, ())).asJava)
@@ -306,7 +296,7 @@ class CCAstGetDeclaratorVistor extends AbstractVisitor[Declarator, Unit] {
 /**
   * Vistor class to remove one level of indirection ("dereference a pointer").
   */
-class CCAstRemovePointerLevelVistor extends CCAstCopyWithLocation[Unit] {
+class CCAstRemovePointerLevelVistor extends ComposVisitor[Unit] {
   private val copyAst = new CCAstCopyVisitor
 
   /* Declarator */
@@ -331,7 +321,7 @@ class CCAstRemovePointerLevelVistor extends CCAstCopyWithLocation[Unit] {
 /**
   * Vistor class to rename a declaration or definition.
   */
-class CCAstRenameInDeclarationVistor extends CCAstCopyWithLocation[String => String] {
+class CCAstRenameInDeclarationVistor extends ComposVisitor[String => String] {
   /* Direct_declarator */
   override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
 }
@@ -340,7 +330,7 @@ class CCAstRenameInDeclarationVistor extends CCAstCopyWithLocation[String => Str
   * Vistor class to transform any declaration to a scalar variable declaration,
   * removing e.g. array or function declaration elements.
   */
-class CCAstDeclaratorToNameVistor extends CCAstCopyWithLocation[String => String] {
+class CCAstDeclaratorToNameVistor extends ComposVisitor[String => String] {
   /* Direct_declarator */
   override def visit(dec: Name, rename: String => String): Name = { new Name(rename(dec.cident_)) }
   override def visit(dec: ParenDecl, rename: String => String): Name = { dec.declarator_ match {
@@ -358,7 +348,7 @@ class CCAstDeclaratorToNameVistor extends CCAstCopyWithLocation[String => String
 /**
   * Vistor class to replace one function declaration with another.
   */
-class CCAstReplaceFunctionDeclarationVistor extends CCAstCopyWithLocation[Direct_declarator] {
+class CCAstReplaceFunctionDeclarationVistor extends ComposVisitor[Direct_declarator] {
   /* Direct_declarator */
   override def visit(dec: NewFuncDec, replacement: Direct_declarator) = { replacement }
   override def visit(dec: OldFuncDec, replacement: Direct_declarator) = { replacement }
@@ -367,7 +357,7 @@ class CCAstReplaceFunctionDeclarationVistor extends CCAstCopyWithLocation[Direct
 /**
   * Vistor class to replace one initialization with another.
   */
-class CCAstReplaceInitializerVistor extends CCAstCopyWithLocation[Option[Initializer]] {
+class CCAstReplaceInitializerVistor extends ComposVisitor[Option[Initializer]] {
   private val copyAst = new CCAstCopyVisitor
 
   /* Init_declarator */
@@ -480,7 +470,7 @@ class CCAstGetTypeVisitor extends AbstractVisitor[Boolean, ListBuffer[Type_speci
 /**
   * Vistor class to replace EnumName instances with EnumVar.
   */
-class CCAstEnumNameToEnumVarVistor extends CCAstCopyWithLocation[Unit] {
+class CCAstEnumNameToEnumVarVistor extends ComposVisitor[Unit] with CopyAstLocation {
   def apply(specifiers: ListDeclaration_specifier): ListDeclaration_specifier = {
     val copy = new ListDeclaration_specifier
     copy.addAll(specifiers.asScala.map(s => s.accept(this, ())).asJava)

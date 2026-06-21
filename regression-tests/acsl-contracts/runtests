@@ -29,6 +29,16 @@ TESTS="contract1.hcc  \
        contract25.hcc \
        contract26.hcc \
        contract27.hcc \
+       global-post-safe.hcc \
+       global-post-unsafe.hcc \
+       global-old-safe.hcc \
+       global-old-unsafe.hcc \
+       global-assigns-frame-safe.hcc \
+       global-assigns-frame-unsafe.hcc \
+       global-void-return-safe.hcc \
+       global-result-unsafe.hcc \
+       global-local-shadow-unsafe.hcc \
+       global-param-safe.hcc \
        struct-field-access-1-true.hcc \
        struct-field-access-2-false.hcc \
        struct-field-access-3-true.hcc \

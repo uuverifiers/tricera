@@ -1,0 +1,14 @@
+int g = 0;
+
+/*@
+  assigns g;
+  ensures g == n;
+*/
+void setG(int n) {
+  g = n;
+}
+
+int main() {
+  setG(42);
+  assert(g == 42);
+}

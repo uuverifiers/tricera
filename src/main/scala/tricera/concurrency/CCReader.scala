@@ -74,7 +74,8 @@ object CCReader {
 
   def apply(input : java.io.Reader, entryFunction : String,
             propertiesToCheck : Set[properties.Property] = Set(
-              properties.Reachability))
+              properties.Reachability),
+            facts : PreprocessorFacts = PreprocessorFacts.empty)
   : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
     val programText = new java.util.Scanner(input).useDelimiter("\\A").next()
     input.close() // Close the original reader.
@@ -83,11 +84,16 @@ object CCReader {
 
     def entry(parser : concurrent_c.parser) = parser.pProgram
     val prog = parseWithEntry(programReader, entry _)
-    val atCallTransformedProg = CCAstAtExpressionTransformer.transform(prog)
+    val exceptionTransformedProg = if (facts.usesExceptions) {
+      CCAstExceptionTransformer.transform(prog)
+    } else {
+      prog
+    }
+    val atCallTransformedProg = CCAstAtExpressionTransformer.transform(exceptionTransformedProg)
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
-  
+
     var reader : CCReader = null
     while (reader == null)
       try {
@@ -530,8 +536,8 @@ class CCReader private (prog              : Program,
   private def newPred(extraArgs : scala.Seq[CCVar],
                       srcInfo : Option[SourceInfo]) : CCPredicate = {
     val predNameSuffix = srcInfo match {
-      case Some(SourceInfo(line, col)) => s"${line}_$col"
-      case None => ""
+      case Some(SourceInfo(line, col)) if line >= 0 => s"${line}_$col"
+      case _ => ""
     }
     val predName =
       if (predicateHints.exists(_._1.name == prefix + predNameSuffix)) {

@@ -80,6 +80,36 @@ SAFE
 contract27.hcc
 SAFE
 
+global-post-safe.hcc
+SAFE
+
+global-post-unsafe.hcc
+UNSAFE
+
+global-old-safe.hcc
+SAFE
+
+global-old-unsafe.hcc
+UNSAFE
+
+global-assigns-frame-safe.hcc
+SAFE
+
+global-assigns-frame-unsafe.hcc
+UNSAFE
+
+global-void-return-safe.hcc
+SAFE
+
+global-result-unsafe.hcc
+UNSAFE
+
+global-local-shadow-unsafe.hcc
+UNSAFE
+
+global-param-safe.hcc
+SAFE
+
 struct-field-access-1-true.hcc
 SAFE
 

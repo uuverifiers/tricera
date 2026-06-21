@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Zafer Esen. All rights reserved.
+ * Copyright (c) 2025-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -98,25 +98,25 @@ object CCAstAtExpressionTransformer {
   private class LabelAndAtCallCollector(
     val atCallsBuffer   : ListBuffer[AtCallInfo],
     val labelToLocation : MHashMap[String, (Function_def, SlabelOne)]
-  ) extends ComposVisitor[Function_def] {
+  ) extends FoldVisitor[Unit, Function_def] {
     private val getName = new CCAstGetNameVistor
 
-    override def visit(p : Afunc, arg : Function_def) : Afunc = {
-      super.visit(p, p.function_def_)
-      p
-    }
+    override def leaf(x : Function_def) : Unit = ()
+    override def combine(x : Unit, r : Unit, a : Function_def) : Unit = ()
 
-    override def visit(p : SlabelOne, currentFunc : Function_def) : SlabelOne = {
+    override def visit(p : Afunc, arg : Function_def) : Unit =
+      super.visit(p, p.function_def_)
+
+    override def visit(p : SlabelOne, currentFunc : Function_def) : Unit = {
       if (currentFunc != null) {
         if (labelToLocation.contains(p.cident_))
           println(s"Warning: Duplicate label '${p.cident_}' found.")
         labelToLocation.put(p.cident_, (currentFunc, p))
       }
       super.visit(p, currentFunc)
-      p
     }
 
-    override def visit(p : Efunkpar, currentFunc : Function_def) : Efunkpar = {
+    override def visit(p : Efunkpar, currentFunc : Function_def) : Unit = {
       val funcName = p.accept(getName, ())
       if (funcName == atExpressionName) {
         if (currentFunc != null && p.listexp_.size() == 2) {
@@ -150,7 +150,6 @@ object CCAstAtExpressionTransformer {
             s"${p.listexp_.size()} arguments.")
       }
       super.visit(p, currentFunc)
-      p
     }
   }
 
@@ -220,7 +219,7 @@ object CCAstAtExpressionTransformer {
     replacements : Map[Efunkpar, Evar],
     insertions   : Map[SlabelOne, scala.Seq[Stm]],
     collection   : AtCallCollectionResult
-  ) extends CCAstCopyWithLocation[Function_def] {
+  ) extends ComposVisitor[Function_def] with CopyAstLocation {
 
     /**
      * Replaces an `at(...)` call with its corresponding ghost variable.

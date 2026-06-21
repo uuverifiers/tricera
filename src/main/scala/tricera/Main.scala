@@ -39,7 +39,7 @@ import hornconcurrency.ParametricEncoder
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.Util.NullStream
 import lazabs.prover._
-import tricera.concurrency.{CCReader, TriCeraPreprocessor}
+import tricera.concurrency.{CCReader, PreprocessorFacts, TriCeraPreprocessor}
 import tricera.Util.{SourceInfo, printlnDebug}
 import tricera.benchmarking.Benchmarking._
 import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
@@ -310,6 +310,7 @@ class Main (args: Array[String]) {
 
     // TriCera preprocessor (tri-pp)
     preprocessTimer.start()
+    var preprocessorFacts : PreprocessorFacts = PreprocessorFacts.empty
     val ppFileName: String = if (noPP) {
       if (printPP || dumpPP)
         Util.warn("Cannot print or dump preprocessor output due to -noPP")
@@ -332,6 +333,7 @@ class Main (args: Array[String]) {
         entryFunction = TriCeraParameters.get.funcName,
         determinize = TriCeraParameters.get.determinizeInput,
         noDeclSlice = hasGhost)
+      preprocessorFacts = pp.facts
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)
@@ -405,7 +407,7 @@ class Main (args: Array[String]) {
       new java.io.FileReader(new java.io.File(ppFileName))))
     val (reader, modelledHeapRes, callSiteTransforms) =
       try {
-        CCReader(bufferedReader, funcName, propertiesToCheck)
+        CCReader(bufferedReader, funcName, propertiesToCheck, preprocessorFacts)
       } catch {
         case e : ParseException if !devMode =>
           return ExecutionSummary(ParseError(e.getMessage), Map(),
