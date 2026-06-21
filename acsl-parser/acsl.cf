@@ -306,4 +306,4 @@ OldFuncDec.  CDirectDeclarator ::= CDirectDeclarator "(" ")" ;
 position token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
 separator Id "," ;
 
-token UnboundedInteger ('0' | (["123456789"] digit *));
+token UnboundedInteger (('0' ('x' | 'X') (digit | ["abcdefABCDEF"]) +) | '0' | (["123456789"] digit *));

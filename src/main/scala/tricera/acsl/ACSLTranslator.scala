@@ -464,7 +464,11 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       case t : AST.LitTrue  => CCTerm.fromFormula(IBoolLit(true), CCBool, srcInfo)
       case t : AST.LitFalse => CCTerm.fromFormula(IBoolLit(false), CCBool, srcInfo)
       case t : AST.LitInt =>
-        CCTerm.fromTerm(i(IdealInt(t.unboundedinteger_)), CCInt, srcInfo)
+        val s = t.unboundedinteger_
+        val value = if (s.startsWith("0x") || s.startsWith("0X"))
+                      IdealInt(s.substring(2), 16)
+                    else IdealInt(s)
+        CCTerm.fromTerm(i(value), CCInt, srcInfo)
       case t : AST.LitReal => ???
       case t : AST.LitString => ???
       case t : AST.LitChar => ???

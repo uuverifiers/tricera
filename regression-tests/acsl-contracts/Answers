@@ -187,6 +187,12 @@ SAFE
 assigns-array-unsafe.hcc
 UNSAFE
 
+hex-literal-safe.hcc
+SAFE
+
+hex-literal-unsafe.hcc
+UNSAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 
