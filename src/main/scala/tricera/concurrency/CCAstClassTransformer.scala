@@ -532,7 +532,7 @@ class ClassTransformer(
 
   // Builds assignment to class object via call to its constructor
   private def buildConstructorDec(decls: Declarators, classCons: ClassCons): List[Stm] = {
-    val setMissingDecLoc = new CCAstSetMissingLocationVisitor(classCons)
+    val setMissingLocation = new CCAstSetMissingLocationVisitor(decls)
     val className   = classNameFromDecl(decls)
     val objName     = classCons.accept(getName, ())
     val factoryArgs = new ListExp
@@ -541,7 +541,7 @@ class ClassTransformer(
     val initDecs    = new ListInit_declarator
     initDecs.add(new InitDecl(new NoPointer(new Name(objName)), new InitExpr(factoryCall)))
     val newDec = new Declarators(copyAst(decls.listdeclaration_specifier_), initDecs, new ListExtra_specifier)
-    newDec.accept(setMissingDecLoc, ())
+    newDec.accept(setMissingLocation, ())
     List(new DecS(newDec.accept(this, ())))
   }
 
