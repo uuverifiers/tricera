@@ -36,6 +36,13 @@
 AnnotContract.  Annotation ::= "/*@" FunctionContract "*/";
 AnnotAssertion. Annotation ::= "/*@" Assertion "*/";
 LoopAnnot.      Annotation ::= "/*@" LoopInvariant "*/";
+AnnotPredicate. Annotation ::= "/*@" PredicateDef "*/";
+
+PredWithParams. PredicateDef ::= "predicate" Id "{" [Id] "}" "(" [PredParam] ")" "=" Expr ";" ;
+PredNoParams.   PredicateDef ::= "predicate" Id "{" [Id] "}" "=" Expr ";" ;
+
+APredParam. PredParam ::= TypeName VarIdent ;
+separator nonempty PredParam "," ;
 
 entrypoints Annotation, FunctionContract, Assertion, LoopInvariant;
 

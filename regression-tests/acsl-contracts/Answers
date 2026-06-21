@@ -169,6 +169,24 @@ SAFE
 predicate-standalone-unsafe.hcc
 UNSAFE
 
+predicate-apply-safe.hcc
+SAFE
+
+predicate-apply-unsafe.hcc
+UNSAFE
+
+predicate-nested-safe.hcc
+SAFE
+
+predicate-nested-unsafe.hcc
+UNSAFE
+
+predicate-assert-safe.hcc
+SAFE
+
+predicate-assert-unsafe.hcc
+UNSAFE
+
 enum-constant-contract-safe.hcc
 SAFE
 

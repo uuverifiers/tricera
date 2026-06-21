@@ -62,6 +62,7 @@ object ACSLTranslator {
     val annotationBeginSourceInfo : SourceInfo
     val annotationNumLines : Int
     def enumeratorDefs : scala.collection.Map[String, CCTerm] = Map.empty
+    def acslPredicateDefs : scala.collection.Map[String, PredicateDef] = Map.empty
   }
 
   trait FunctionContext extends AnnotationContext {
@@ -137,6 +138,37 @@ object ACSLTranslator {
     normalizeUnicode(replaceAtSymbols(annot))
   }
 
+  case class PredicateDef(name        : String,
+                          labelParams : List[String],
+                          valueParams : List[String],
+                          body        : AST.Expr)
+
+  def parsePredicateDef(annot : String) : PredicateDef = {
+    val l = new Yylex(new java.io.StringReader(preprocess(annot)))
+    val p = new parser(l, l.getSymbolFactory())
+    p.pAnnotation() match {
+      case ap : AST.AnnotPredicate => ap.predicatedef_ match {
+        case d : AST.PredWithParams =>
+          PredicateDef(d.id_, d.listid_.asScala.toList,
+                       predParamNames(d.listpredparam_), d.expr_)
+        case d : AST.PredNoParams =>
+          PredicateDef(d.id_, d.listid_.asScala.toList, Nil, d.expr_)
+      }
+      case _ => throw new ACSLException("Expected a predicate definition.")
+    }
+  }
+
+  private def predParamNames(ps : AST.ListPredParam) : List[String] =
+    ps.asScala.toList.map {
+      case p : AST.APredParam => varIdentName(p.varident_)
+    }
+
+  private def varIdentName(v : AST.VarIdent) : String = v match {
+    case x : AST.VarIdentId       => x.id_
+    case x : AST.VarIdentArray    => varIdentName(x.varident_)
+    case x : AST.VarIdentPtrDeref => varIdentName(x.varident_)
+  }
+
 }
 
 /**
@@ -154,6 +186,11 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   var inPostCond = false
   var useOldHeap = false
   // TODO: Make all `translate` private?
+
+  // maps a predicate's label parameter to the `\at` label it is bound to
+  private val labelBindings = new MHashMap[String, String]
+  // a stack to detect recursive predicates (and reject them)
+  private var inliningStack  : List[String] = Nil
 
   // ---- Statement annotations (e.g., assertions) -----------
   def translate(assertAnnotation : AST.Assertion,
@@ -445,7 +482,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EStructPtrFieldAccess => ???
     case e : AST.EArrayFunMod => ???
     case e : AST.EFieldFunMod => ???
-    case e : AST.EApplication => ???
+    case e : AST.EApplication => translateApplicationExpr(e)
     case e : AST.EOld         => translateOldExpr(e)
     case e : AST.EAt          => translateAtExpr(e)
     case e : AST.EValid       => translateValidExpr(e)
@@ -887,9 +924,12 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         val bound: Option[CCTerm] = locals.get(ident)
         val scoped: Option[CCTerm] =
           vars.get(ident).map(v => CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
-        bound.orElse(scoped).orElse(ctx.enumeratorDefs.get(ident)).getOrElse(
-          throw new ACSLParseException(
-            s"Identifier $ident not found in scope.", srcInfo))
+        bound.orElse(scoped).orElse(ctx.enumeratorDefs.get(ident))
+          .orElse(ctx.acslPredicateDefs.get(ident).map(_ =>
+            inlinePredicate(ident, Nil, srcInfo)))
+          .getOrElse(
+            throw new ACSLParseException(
+              s"Identifier $ident not found in scope.", srcInfo))
     }
   }
 
@@ -1025,13 +1065,50 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 
   def translateOldExpr(expr : AST.EOld) : CCTerm = translateInOldState(expr.expr_)
 
-  def translateAtExpr(expr : AST.EAt) : CCTerm = expr.id_ match {
-    case "Pre" | "Old"        => translateInOldState(expr.expr_)
-    case "Here"               => translateTerm(expr.expr_)
-    case "Post" if inPostCond => translateTerm(expr.expr_)
-    case other => throw new ACSLParseException(
-      s"Unsupported or out-of-context label '$other' in \\at.",
-      getSourceInfo(expr))
+  def translateAtExpr(expr : AST.EAt) : CCTerm =
+    labelBindings.getOrElse(expr.id_, expr.id_) match {
+      case "Pre" | "Old"        => translateInOldState(expr.expr_)
+      case "Here"               => translateTerm(expr.expr_)
+      case "Post" if inPostCond => translateTerm(expr.expr_)
+      case other => throw new ACSLParseException(
+        s"Unsupported or out-of-context label '$other' in \\at.",
+        getSourceInfo(expr))
+    }
+
+  def translateApplicationExpr(expr : AST.EApplication) : CCTerm =
+    inlinePredicate(expr.id_, expr.listexpr_.asScala.toList, getSourceInfo(expr))
+
+  private def inlinePredicate(name     : String,
+                              argExprs : List[AST.Expr],
+                              srcInfo  : SourceInfo) : CCTerm = {
+    val pdef = ctx.acslPredicateDefs.getOrElse(name,
+      throw new ACSLParseException(s"Unknown ACSL predicate '$name'.", srcInfo))
+    if (inliningStack contains name)
+      throw new ACSLParseException(
+        s"Recursive ACSL predicate '$name' cannot be inlined.", srcInfo)
+    if (argExprs.size != pdef.valueParams.size)
+      throw new ACSLParseException(
+        s"ACSL predicate '$name' expects ${pdef.valueParams.size} argument(s)" +
+        s" but got ${argExprs.size}.", srcInfo)
+
+    val argTerms    = argExprs.map(translateTerm)
+    val savedLocals = pdef.valueParams.map(p => (p, locals.get(p)))
+    val savedLabels = pdef.labelParams.map(l => (l, labelBindings.get(l)))
+    pdef.valueParams.zip(argTerms).foreach { case (p, a) => locals.put(p, a) }
+    pdef.labelParams.foreach(l => labelBindings.put(l, "Here"))
+    inliningStack = name :: inliningStack
+    try translate(pdef.body)
+    finally {
+      inliningStack = inliningStack.tail
+      savedLocals.foreach {
+        case (p, Some(t)) => locals.put(p, t)
+        case (p, None)    => locals.remove(p)
+      }
+      savedLabels.foreach {
+        case (l, Some(s)) => labelBindings.put(l, s)
+        case (l, None)    => labelBindings.remove(l)
+      }
+    }
   }
 
   def translateResultExpr(expr : AST.EResult) : CCTerm = {

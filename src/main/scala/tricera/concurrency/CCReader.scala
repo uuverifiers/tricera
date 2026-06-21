@@ -386,6 +386,8 @@ class CCReader private (prog              : Program,
 
   private val uninterpPredDecls     = new MHashMap[String, CCPredicate]
   private val interpPredDefs        = new MHashMap[String, CCTerm]
+  private val acslPredicateDefs     =
+    new MHashMap[String, ACSLTranslator.PredicateDef]
   private val loopInvariants        =
     new MHashMap[String, (CCPredicate, SourceInfo)]
 
@@ -872,6 +874,13 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                    other.getClass.getSimpleName)
           }
 
+        case decl : PredicateExternal =>
+          val pdef = ACSLTranslator.parsePredicateDef(
+            "/*@" + decl.predicatestring_
+              .stripPrefix(Literals.predicateOpenMarker)
+              .stripSuffix(Literals.predicateCloseMarker) + "*/")
+          acslPredicateDefs.put(pdef.name, pdef)
+
         case _ => // nothing
       }
 
@@ -1021,6 +1030,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
         override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
           CCReader.this.enumeratorDefs
+
+        override def acslPredicateDefs
+            : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
+          CCReader.this.acslPredicateDefs
 
         def isHeapEnabled: Boolean = modelHeap
 
@@ -2649,6 +2662,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
             override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
               CCReader.this.enumeratorDefs
+            override def acslPredicateDefs
+                : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
+              CCReader.this.acslPredicateDefs
             /**
              * Returns the term from the init atom - this should work as
              * long as the annotation does not have side effects, because
@@ -2768,6 +2784,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
             override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
               CCReader.this.enumeratorDefs
+            override def acslPredicateDefs
+                : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
+              CCReader.this.acslPredicateDefs
             /**
              * Returns the term from the init atom - this should work as
              * long as the annotation does not have side effects, because
