@@ -426,7 +426,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EOld         => translateOldExpr(e)
     case e : AST.EAt          => translateAtExpr(e)
     case e : AST.EValid       => translateValidExpr(e)
-    case e : AST.EValidRead   => ???
+    case e : AST.EValidRead   => translateValidReadExpr(e)
     case e : AST.ESeparated   => translateSeparatedExpr(e)
     case e : AST.ELit         => translateLitExpr(e.lit_)
     case e : AST.EIdent       => translateIdentExpr(e)
@@ -774,10 +774,21 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 //  }
 
   // todo: this probably should work for statement annotations too
-  def translateValidExpr(expr : AST.EValid) : CCTerm = {
-    val srcInfo = getSourceInfo(expr)
-    val tSets : List[AST.TSet] =
-      expr.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
+  def translateValidExpr(expr : AST.EValid) : CCTerm =
+    translateValidLocations(
+      expr.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_),
+      getSourceInfo(expr))
+
+  def translateValidReadExpr(expr : AST.EValidRead) : CCTerm = {
+    tricera.Util.warn(
+      "\\valid_read is treated as \\valid (read-only memory is not modeled)")
+    translateValidLocations(
+      expr.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_),
+      getSourceInfo(expr))
+  }
+
+  private def translateValidLocations(tSets : List[AST.TSet],
+                                      srcInfo : SourceInfo) : CCTerm = {
     val terms : List[CCTerm] = tSets.collect({
       case t : AST.TSetTerm  => translateTerm(t.expr_)
       case t => throwNotImpl(t)
@@ -812,7 +823,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
             s"$t in \\valid not a heap pointer.", srcInfo)
       }
     )
-    CCTerm.fromFormula(res, CCBool, Some(getSourceInfo(expr)))
+    CCTerm.fromFormula(res, CCBool, Some(srcInfo))
   }
 
   def translateSeparatedExpr(expr : AST.ESeparated) : CCTerm = {

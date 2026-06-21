@@ -53,6 +53,8 @@ TESTS="contract1.hcc  \
        typedef-annotation-safe.hcc \
        from-warning-body.hcc \
        from-warning-bodyless.hcc \
+       valid-read-safe.hcc \
+       valid-read-unsafe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \
