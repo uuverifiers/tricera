@@ -181,6 +181,12 @@ SAFE
 enum-constant-assert-unsafe.hcc
 UNSAFE
 
+assigns-array-safe.hcc
+SAFE
+
+assigns-array-unsafe.hcc
+UNSAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 

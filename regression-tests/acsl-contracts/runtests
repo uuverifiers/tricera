@@ -61,6 +61,8 @@ TESTS="contract1.hcc  \
        enum-constant-contract-unsafe.hcc \
        enum-constant-assert-safe.hcc \
        enum-constant-assert-unsafe.hcc \
+       assigns-array-safe.hcc \
+       assigns-array-unsafe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \

@@ -341,12 +341,34 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
           case (t : AST.TSetTerm, (idents, ptrDerefs)) =>
             t.expr_ match {
               case i : AST.EIdent => (translate(i) :: idents, ptrDerefs)
+              case _ : AST.EResult => (idents, ptrDerefs)
               case p : AST.EUnary
                 if p.unaryop_.isInstanceOf[AST.UnaryPtrDeref] => {
                 useOldHeap = true
                 val res = (idents, translateTerm(p.expr_) :: ptrDerefs)
                 useOldHeap = false
                 res
+              }
+              case arr : AST.EArrayAccess => {
+                import ap.parser.IExpression.toFunApplier
+                useOldHeap = true
+                val array = translateTerm(arr.expr_1)
+                val index = translateTerm(arr.expr_2)
+                useOldHeap = false
+                array.typ match {
+                  case p : CCHeapArrayPointer =>
+                    val ops  = p.ptrOps
+                    val addr = ctx.getHeap.rangeNth(
+                      ops.getRange(array.toTerm),
+                      ops.getOffset(array.toTerm) + index.toTerm)
+                    val elemPtr = CCTerm.fromTerm(addr,
+                      CCHeapPointer(ctx.getHeap.AddressSort,
+                                    ctx.getHeap.nullAddr(), p.elementType),
+                      array.srcInfo)
+                    (idents, elemPtr :: ptrDerefs)
+                  case _ => throw new ACSLParseException(
+                    s"Unsupported array base in assigns clause: $array.", srcInfo)
+                }
               }
             case _ => throw new ACSLParseException("Only global identifiers or "
               + "heap pointer dereferences allowed in assigns-clauses.", srcInfo)
