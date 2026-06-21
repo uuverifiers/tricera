@@ -233,12 +233,13 @@ object Main {
       println("(error \"" + message.replace("\"", "\"\"\"") + "\")")
 
   // Used to decide whether to disable tri-pp's declaration slicer
-  // tri-pp does not know about ghost code usages
-  private val ghostCommentPattern =
-    ("""(/\*@|//@)\s*ghost\b""").r
-  private def containsGhostAnnotation(filePath : String) : Boolean = {
+  // tri-pp cannot see ACSL annotations, so it would slice declarations that are
+  // only referenced from one (ghost code, or a contract referencing a global).
+  private val acslCommentPattern =
+    ("""(/\*@|//@)""").r
+  private def containsACSLAnnotation(filePath : String) : Boolean = {
     val src = scala.io.Source.fromFile(filePath)
-    try ghostCommentPattern.findFirstIn(src.mkString).nonEmpty
+    try acslCommentPattern.findFirstIn(src.mkString).nonEmpty
     finally src.close()
   }
 
@@ -324,7 +325,7 @@ class Main (args: Array[String]) {
           println("=" * 80 + "\nTriCera's preprocessor (tri-pp) warnings and errors\n")
         }
 
-      val hasGhost = containsGhostAnnotation(cppFileName)
+      val hasACSL = containsACSLAnnotation(cppFileName)
 
       val pp = new TriCeraPreprocessor(cppFileName,
         preprocessedFile.getAbsolutePath,
@@ -332,7 +333,7 @@ class Main (args: Array[String]) {
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName,
         determinize = TriCeraParameters.get.determinizeInput,
-        noDeclSlice = hasGhost)
+        noDeclSlice = hasACSL)
       preprocessorFacts = pp.facts
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")

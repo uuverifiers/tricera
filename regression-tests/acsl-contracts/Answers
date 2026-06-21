@@ -131,6 +131,9 @@ UNSAFE
 separated-three-safe.hcc
 SAFE
 
+global-array-contract-safe.hcc
+SAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 

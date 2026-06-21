@@ -46,6 +46,7 @@ TESTS="contract1.hcc  \
        separated-safe.hcc \
        separated-unsafe.hcc \
        separated-three-safe.hcc \
+       global-array-contract-safe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \
