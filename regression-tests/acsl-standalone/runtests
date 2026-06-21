@@ -19,7 +19,17 @@ TESTS="inc_safe.c \
        dblptr-assigns_safe.c \
        dblptr-assigns_unsafe.c \
        swap_safe.c \
-       swap_unsafe.c"
+       swap_unsafe.c \
+       structptr_safe.c \
+       structptr_unsafe.c \
+       nestedptr_safe.c \
+       nestedptr_unsafe.c \
+       arrstruct_safe.c \
+       arrstruct_unsafe.c \
+       structarr_safe.c \
+       structarr_unsafe.c \
+       oldstruct_safe.c \
+       oldstruct_unsafe.c"
 
 for name in $TESTS; do
     echo

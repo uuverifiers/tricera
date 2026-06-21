@@ -233,3 +233,113 @@ Failed assertion:
 false :- foo12_8(@h, @v_cleanup, a, b, @h_old, @v_cleanup_old, a_old, b_old), !(getInt(heap.read(@h, a_old)) = getInt(heap.read(@h_old, b_old)) & getInt(heap.read(@h, b_old)) = getInt(heap.read(@h, a_old)) & (!(_p != a_old & _p != b_old) | heap.read(@h, _p) = heap.read(@h_old, _p))). (line:6 col:19) (property: postcondition of function foo asserted at 3:1.)
 
 UNSAFE
+
+structptr_safe.c
+SAFE
+
+structptr_unsafe.c
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+   foo3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(42)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(42)))), heap.null, heap.addr(1))    
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                        |                                                                                        
+                                                                                        |                                                                                        
+                                                                                        V                                                                                        
+ foo9_10(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(42)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(42)))), heap.null, heap.addr(1), 42) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ foo9_10(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(42)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(42)))), heap.null, heap.addr(1), 42) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- foo9_10(@h, @v_cleanup, p, @h_old, @v_cleanup_old, p_old, _res1), _res1 != 41. (line:6 col:23) (property: postcondition of function foo asserted at 3:1.)
+
+UNSAFE
+
+nestedptr_safe.c
+SAFE
+
+nestedptr_unsafe.c
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+   foo3_1(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Outer(Outer(heap.addr(2))))), O_Inner(Inner(7)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Outer(Outer(heap.addr(2))))), O_Inner(Inner(7)))), heap.null, heap.addr(1))   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                                             |                                                                                                                                                              
+                                                                                                                                                             |                                                                                                                                                              
+                                                                                                                                                             V                                                                                                                                                              
+ foo9_35(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Outer(Outer(heap.addr(2))))), O_Inner(Inner(7)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Outer(Outer(heap.addr(2))))), O_Inner(Inner(7)))), heap.null, heap.addr(1), 7) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ foo9_35(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Outer(Outer(heap.addr(2))))), O_Inner(Inner(7)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Outer(Outer(heap.addr(2))))), O_Inner(Inner(7)))), heap.null, heap.addr(1), 7) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- foo9_35(@h, @v_cleanup, p, @h_old, @v_cleanup_old, p_old, _res1), _res1 != 8. (line:7 col:26) (property: postcondition of function foo asserted at 3:1.)
+
+UNSAFE
+
+arrstruct_safe.c
+SAFE
+
+arrstruct_unsafe.c
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+   foo3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(7)))), heap.null, arrayPtr(AddrRange(heap.null, 2), -1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(7)))), heap.null, arrayPtr(AddrRange(heap.null, 2), -1))   
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                               |                                                                                                                
+                                                                                                               |                                                                                                                
+                                                                                                               V                                                                                                                
+ foo8_24(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(7)))), heap.null, arrayPtr(AddrRange(heap.null, 2), -1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(7)))), heap.null, arrayPtr(AddrRange(heap.null, 2), -1), 7) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ foo8_24(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(7)))), heap.null, arrayPtr(AddrRange(heap.null, 2), -1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(7)))), heap.null, arrayPtr(AddrRange(heap.null, 2), -1), 7) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- foo8_24(@h, @v_cleanup, g, @h_old, @v_cleanup_old, g_old, _res1), _res1 != 8. (line:6 col:24) (property: postcondition of function foo asserted at 3:1.)
+
+UNSAFE
+
+structarr_safe.c
+SAFE
+
+structarr_unsafe.c
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+   foo2_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(store(const(11), 2, 7))))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(store(const(11), 2, 7))))), heap.null, heap.addr(1))   
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                           |                                                                                                            
+                                                                                                           |                                                                                                            
+                                                                                                           V                                                                                                            
+ foo7_31(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(store(const(11), 2, 7))))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(store(const(11), 2, 7))))), heap.null, heap.addr(1), 7) 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ foo7_31(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(store(const(11), 2, 7))))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(store(const(11), 2, 7))))), heap.null, heap.addr(1), 7) 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- foo7_31(@h, @v_cleanup, p, @h_old, @v_cleanup_old, p_old, _res1), _res1 != 8. (line:5 col:27) (property: postcondition of function foo asserted at 2:1.)
+
+UNSAFE
+
+oldstruct_safe.c
+SAFE
+
+oldstruct_unsafe.c
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+ foo2_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(8)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(8)))), heap.null, heap.addr(1)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                    |                                                                                     
+                                                                                    |                                                                                     
+                                                                                    V                                                                                     
+  foo(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(8)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(8)))), heap.null, heap.addr(1))   
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+  foo(heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(8)))), heap.null, heap.addr(1), heap.heapAddrPair_1(heap.alloc(heap.empty, O_S(S(8)))), heap.null, heap.addr(1))   
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- foo(@h, @v_cleanup, p, @h_old, @v_cleanup_old, p_old), !(S::x(getS(heap.read(@h, p_old))) = S::x(getS(heap.read(@h_old, p_old))) + 1 & @h = @h_old). (line:5 col:21) (property: postcondition of function foo asserted at 2:1.)
+
+UNSAFE

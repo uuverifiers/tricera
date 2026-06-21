@@ -479,7 +479,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EArrayAccess => translateArrayAccessExpr(e)
     case e : AST.EStructFieldAccess =>
       translateStructFieldAccessExpr(e)
-    case e : AST.EStructPtrFieldAccess => ???
+    case e : AST.EStructPtrFieldAccess =>
+      translateStructPtrFieldAccessExpr(e)
     case e : AST.EArrayFunMod => ???
     case e : AST.EFieldFunMod => ???
     case e : AST.EApplication => translateApplicationExpr(e)
@@ -1029,25 +1030,49 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateStructFieldAccessExpr(expr: AST.EStructFieldAccess) : CCTerm = {
+  def translateStructFieldAccessExpr(expr: AST.EStructFieldAccess) : CCTerm =
+    getField(translate(expr.expr_), expr.id_,
+                 printer.print(expr), getSourceInfo(expr))
+
+  def translateStructPtrFieldAccessExpr(expr : AST.EStructPtrFieldAccess)
+  : CCTerm = {
     val srcInfo = getSourceInfo(expr)
-    val subExpr = translate(expr.expr_)
-    val fieldName = expr.id_
-    subExpr.typ match {
-      case struct : CCStruct =>
-        struct.getFieldIndex(fieldName) match {
-          case -1 =>
-            throw new ACSLParseException(
-              s"$fieldName is not a field of $struct: ${printer.print(expr)}", srcInfo)
-          case fieldInd =>
-            val fieldSelector = struct.getADTSelector(fieldInd)
-            val fieldTyp = struct.getFieldType(fieldInd)
-            CCTerm.fromTerm(IFunApp(fieldSelector, Seq(subExpr.toTerm)),
-                   fieldTyp, Some(srcInfo))
-        }
+    val ptr     = translate(expr.expr_)
+    ptr.typ match {
+      case p : CCHeapPointer =>
+        val heap    = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
+        val readObj = IFunApp(ctx.getHeap.read, Seq(heap, ptr.toTerm))
+        val getObj  = ctx.sortGetter(p.typ.toSort).getOrElse(
+          throw new ACSLParseException(
+            s"Cannot dereference ${printer.print(expr)}.", srcInfo))
+        val structTerm =
+          CCTerm.fromTerm(IFunApp(getObj, Seq(readObj)), p.typ, Some(srcInfo))
+        getField(structTerm, expr.id_, printer.print(expr), srcInfo)
       case _ =>
         throw new ACSLParseException(
-          s"Tried to access $expr but $subExpr is not a struct.", srcInfo)
+          s"Tried to access ${printer.print(expr)} but $ptr is not a pointer.",
+          srcInfo)
+    }
+  }
+
+  private def getField(structTerm : CCTerm, fieldName : String,
+                           shown : String, srcInfo : SourceInfo) : CCTerm = {
+    val struct = structTerm.typ match {
+      case s : CCStruct      => s
+      case f : CCStructField => f.structs(f.structName)
+      case _ =>
+        throw new ACSLParseException(
+          s"Tried to access $shown but $structTerm is not a struct.", srcInfo)
+    }
+    struct.getFieldIndex(fieldName) match {
+      case -1 =>
+        throw new ACSLParseException(
+          s"$fieldName is not a field of $struct: $shown", srcInfo)
+      case fieldInd =>
+        val fieldSelector = struct.getADTSelector(fieldInd)
+        val fieldTyp = struct.getFieldType(fieldInd)
+        CCTerm.fromTerm(IFunApp(fieldSelector, Seq(structTerm.toTerm)),
+               fieldTyp, Some(srcInfo))
     }
   }
 
