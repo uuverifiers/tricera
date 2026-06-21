@@ -83,6 +83,9 @@ case class CCTerm(t               : ITerm,
           "Cannot cast pointer type to arithmetic type.")
       case (oldType: CCHeapPointer, newType: CCHeapPointer) =>
         newType cast this
+      case (oldType: CCStackPointer, newType: CCHeapPointer)
+          if oldType.typ == newType.typ =>
+        this
       case _ =>
         throw new UnsupportedCastException(
           "do not know how to convert " + typ + " to " + newType +
