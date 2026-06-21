@@ -52,6 +52,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Stack}
 
+import java.lang.{Class => JClass}
+
 object Symex {
   def apply(context        : SymexContext,
             scope          : CCScope,
@@ -1344,6 +1346,48 @@ class Symex private (context        : SymexContext,
       val srcInfo = Some(getSourceInfo(exp))
       val typ = context.getType(exp)
       pushVal(CCTerm.fromTerm(IdealInt(typ.sizeInBytes), CCUInt, srcInfo))
+
+
+    case exp : ENew =>
+      val primitiveTypeClasses: Set[JClass[_ <: Type_specifier]] = Set(
+        classOf[Tint], classOf[Tfloat], classOf[Tdouble],
+        classOf[Tsigned], classOf[Tunsigned], classOf[Tshort],
+        classOf[Tlong], classOf[Tchar], classOf[Tbool]
+      )
+
+      def isPrimitive(ts : Type_specifier): Boolean =
+        primitiveTypeClasses.contains(ts.getClass)
+
+      def getInit(newInit : New_initializer): New_initializer = newInit match {
+        case p : InitPointer => getInit(p.new_initializer_)
+        case _ => newInit
+      }
+
+      if (!isPrimitive(exp.type_specifier_)) throw new TranslationException("Unsupported call to new")
+      else {
+        val srcInfo = Some(getSourceInfo(exp))
+        val arrayLoc = ArrayLocation.Heap
+        val typ = context.getType(exp.type_specifier_)
+
+        def evalNewInit(cellTyp : CCType, init : New_initializer) : CCTerm =
+          init match {
+            case _ : NoInit    => CCTerm.fromTerm(cellTyp.getZeroInit, cellTyp, srcInfo)
+            case _ : EmptyInit => CCTerm.fromTerm(cellTyp.getNonDet, cellTyp, srcInfo)
+            case args : NewInitArgs =>
+              CCTerm.fromTerm(eval(args.listexp_.asScala.head).t, cellTyp, srcInfo)
+            case p : InitPointer =>
+              evalNewInit(heapModel.makePointer(cellTyp), p.new_initializer_)
+            case _ => throw new TranslationException("Unsupported initializer for new")
+          }
+
+        val objectTerm = evalNewInit(typ, exp.new_initializer_)
+
+        val allocatedAddr = processHeapResult(
+          heapModel.alloc(wrapAsHeapObject(objectTerm), objectTerm.typ, values, getStaticLocationId(exp))).get
+
+        pushVal(allocatedAddr)
+      }
+
 
 //    case exp : Earray.      Exp16 ::= Exp16 "[" Exp "]" ;
 

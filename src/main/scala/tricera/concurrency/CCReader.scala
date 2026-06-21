@@ -89,7 +89,9 @@ object CCReader {
     } else {
       prog
     }
-    val atCallTransformedProg = CCAstAtExpressionTransformer.transform(exceptionTransformedProg)
+    val newDeleteTransformedProg = CCAstNewDeleteTransformer.transform(exceptionTransformedProg)
+    val classTransformedProg = CCAstClassTransformer.transform(newDeleteTransformedProg)
+    val atCallTransformedProg = CCAstAtExpressionTransformer.transform(classTransformedProg)
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
     val (transformedCallsProg, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
@@ -2706,8 +2708,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
             override def getOldHeapTerm : ITerm =
               getHeapTerm // todo: heap term for exit predicate?
-            
-            override val getStructMap: Map[IFunction, CCStruct] = 
+
+            override val getStructMap: Map[IFunction, CCStruct] =
               structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
 
             override val annotationBeginSourceInfo : SourceInfo =

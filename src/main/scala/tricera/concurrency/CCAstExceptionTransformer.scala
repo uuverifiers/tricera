@@ -127,10 +127,10 @@ object CCAstExceptionTransformer {
     paramDecl match {
       case catchAll: More => funcName + "_catch_all_" + catchId.toString()
       case typeAndParam: TypeAndParam =>
-        funcName + "_catch_" + 
+        funcName + "_catch_" +
         typeLabelName(typeAndParam.listdeclaration_specifier_) + "_" +
         typeAndParam.declarator_.accept(getName, ()) + "_" + catchId.toString()
-      case onlyType: OnlyType => 
+      case onlyType: OnlyType =>
         funcName + "_catch_" +
         typeLabelName(onlyType.listdeclaration_specifier_) + "_" + catchId.toString()
       case _ => throw new ExceptionTransformException("Invalid parameter declaration in catch")
@@ -264,7 +264,7 @@ object CCAstExceptionTransformer {
   }
 
   /**
-   * Naive approach to collecting exception types for functions 
+   * Naive approach to collecting exception types for functions
    * that may throw. Only considers throw statements in function
    * definitions and not function calls.
    */
@@ -317,7 +317,7 @@ object CCAstExceptionTransformer {
       funcTypesBuffer.put(funcName, listDecSpec)
 
       func
-    }  
+    }
   }
 
   private class ExceptionTransformer(
@@ -376,7 +376,7 @@ object CCAstExceptionTransformer {
 
         val structDeclaratorList = new ListStruct_declarator
         structDeclaratorList.add(new Decl(new NoPointer(new Name(fieldName))))
-        structDecs.add(new Structen(specQualList, structDeclaratorList))
+        structDecs.add(new Structen(specQualList, structDeclaratorList, new WithSemi))
       }
 
       declSpecList.add(new Type(new Tstruct(new Tag(new Struct, structName, structDecs))))
@@ -427,7 +427,7 @@ object CCAstExceptionTransformer {
       // Enum declaration for exception types
       extDeclarations.add(
         globalEnumDecl(
-          exceptionTypeEnumName, 
+          exceptionTypeEnumName,
           exceptionTypes.map(t => createExceptionTypeEnumName(t)).toList
         )
       )
@@ -435,7 +435,7 @@ object CCAstExceptionTransformer {
       // Struct declaration for exception values
       extDeclarations.add(
         globalStructDecl(
-          exceptionValueStructName, 
+          exceptionValueStructName,
           exceptionTypes.map(t => (t.toList, createExceptionStructField(t))).toList
         )
       )
@@ -916,7 +916,7 @@ object CCAstExceptionTransformer {
                   for (s <- sCompTwo.liststm_.asScala) {
                     stms.add(s)
                   }
-                } 
+                }
                 case _ => {}
               }
               case _ => throw new ExceptionTransformException("Invalid stm for transformed try stm")

@@ -55,6 +55,7 @@ class TriCeraPreprocessor(val inputFilePath   : String,
         " base directory")
   }
 
+  private val langFlag = if (inputFilePath.endsWith(".cpp")) "-xc++" else "-xc"
   private def runPreprocessor(extraArgs : scala.Seq[String],
                               errorMsg  : String,
                               input     : String,

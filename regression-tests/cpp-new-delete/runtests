@@ -1,0 +1,18 @@
+#!/bin/sh
+
+TESTS="class-safe.cpp \
+       new-del-inside-ctor.cpp \
+       ptr-to-ptr.cpp \
+       class-ptr-member-safe.cpp \
+       class-ptr-member-unsafe.cpp \
+       nested-classes-safe.cpp \
+       nested-classes-unsafe.cpp \
+       prims-safe.cpp \
+       update-class-member.cpp
+"
+
+for name in $TESTS; do
+  echo
+  echo $name
+  "./../../tri" "$@" -dev -memsafety $name 2>&1 | grep -v 'at '
+done

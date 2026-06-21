@@ -1,0 +1,23 @@
+#!/bin/sh
+
+TESTS="counter-safe.cpp \
+       counter-unsafe.cpp \
+       mult-classes-safe.cpp \
+       mult-classes-unsafe.cpp \
+       nested-classes-safe.cpp \
+       nested-classes-unsafe.cpp\
+       inline-class-def-safe.cpp\
+       inline-class-def-unsafe.cpp\
+       nested-class-constr.cpp\
+       fwddec-safe.cpp\
+       fwddec-unsafe.cpp\
+       fwddec-nested-class-safe.cpp\
+       fwddec-nested-class-unsafe.cpp\
+       ctor-dtor-ptr-members-safe.cpp\
+       ctor-dtor-ptr-members-unsafe.cpp"
+
+for name in $TESTS; do
+  echo
+  echo $name
+  $TRI_CMD -memsafety "$@" $name 2>&1 | grep -v 'at '
+done
