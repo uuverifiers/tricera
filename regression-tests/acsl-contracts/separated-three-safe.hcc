@@ -1,0 +1,20 @@
+// SAFE: *p == 7 survives writes to *q and *r only because \separated(p, q, r)
+// makes the three pointers pairwise distinct.
+
+/*@
+  requires \valid(p, q, r);
+  requires \separated(p, q, r);
+*/
+void foo(int* p, int* q, int* r) {
+  *p = 7;
+  *q = 43;
+  *r = 44;
+  assert(*p == 7);
+}
+
+int main(void) {
+  int* p = malloc(sizeof(*p));
+  int* q = malloc(sizeof(*q));
+  int* r = malloc(sizeof(*r));
+  foo(p, q, r);
+}

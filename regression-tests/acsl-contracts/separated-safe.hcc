@@ -1,0 +1,16 @@
+// *p == 7 survives *q = 43 because \separated(p, q) 
+/*@
+  requires \valid(p, q);
+  requires \separated(p, q);
+*/
+void foo(int* p, int* q) {
+  *p = 7;
+  *q = 43;
+  assert(*p == 7);
+}
+
+int main(void) {
+  int* p = malloc(sizeof(*p));
+  int* q = malloc(sizeof(*q));
+  foo(p, q);
+}

@@ -122,6 +122,15 @@ UNSAFE
 cast-modular-safe.hcc
 SAFE
 
+separated-safe.hcc
+SAFE
+
+separated-unsafe.hcc
+UNSAFE
+
+separated-three-safe.hcc
+SAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 

@@ -426,6 +426,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EOld         => translateOldExpr(e)
     case e : AST.EAt          => translateAtExpr(e)
     case e : AST.EValid       => translateValidExpr(e)
+    case e : AST.EValidRead   => ???
+    case e : AST.ESeparated   => translateSeparatedExpr(e)
     case e : AST.ELit         => translateLitExpr(e.lit_)
     case e : AST.EIdent       => translateIdentExpr(e)
     case e : AST.EResult      => translateResultExpr(e)
@@ -800,6 +802,22 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       }
     )
     CCTerm.fromFormula(res, CCBool, Some(getSourceInfo(expr)))
+  }
+
+  def translateSeparatedExpr(expr : AST.ESeparated) : CCTerm = {
+    val srcInfo = getSourceInfo(expr)
+    val tSets : List[AST.TSet] =
+      expr.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
+    val terms : List[CCTerm] = tSets.collect({
+      case t : AST.TSetTerm  => translateTerm(t.expr_)
+      case t => throwNotImpl(t)
+    })
+    val res : IFormula =
+      terms.toSeq.combinations(2).foldLeft(IBoolLit(true) : IFormula) {
+        case (formula, Seq(a, b)) => formula &&& (a.toTerm =/= b.toTerm)
+        case (formula, _)         => formula
+      }
+    CCTerm.fromFormula(res, CCBool, Some(srcInfo))
   }
 
   def translateIdentExpr(t : AST.EIdent) : CCTerm = {

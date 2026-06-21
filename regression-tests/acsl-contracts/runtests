@@ -43,6 +43,9 @@ TESTS="contract1.hcc  \
        cast-safe.hcc \
        cast-unsafe.hcc \
        cast-modular-safe.hcc \
+       separated-safe.hcc \
+       separated-unsafe.hcc \
+       separated-three-safe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \

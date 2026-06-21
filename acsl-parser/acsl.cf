@@ -179,6 +179,8 @@ EApplication. Expr22 ::= Id "(" [Expr2] ")" ;
 EOld.         Expr22 ::= "\\old" "(" Expr2 ")" ;
 EAt.          Expr22 ::= "\\at" "(" Expr2 "," Id ")" ;
 EValid.       Expr22 ::= "\\valid" "(" [Location] ")" ;
+EValidRead.   Expr22 ::= "\\valid_read" "(" [Location] ")" ;
+ESeparated.   Expr22 ::= "\\separated" "(" [Location] ")" ;
 
 ELit.         Expr23 ::= Lit ;
 EIdent.       Expr23 ::= Id ;
