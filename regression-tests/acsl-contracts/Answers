@@ -134,6 +134,15 @@ SAFE
 global-array-contract-safe.hcc
 SAFE
 
+valid-array-safe.hcc
+SAFE
+
+valid-array-unsafe.hcc
+UNSAFE
+
+valid-array-ensures-safe.hcc
+SAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 

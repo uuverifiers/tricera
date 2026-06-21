@@ -796,6 +796,17 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
           val corrSort : IFormula =
             ctx.getHeap.hasUserHeapCtor(readObj, ctx.getCtor(sort))
           formula &&& valid & corrSort
+        case p : CCHeapArrayPointer =>
+          import ap.parser.IExpression.{toFunApplier, toPredApplier}
+          val ops = p.ptrOps
+          val heap : ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
+          val addr : ITerm = ctx.getHeap.rangeNth(ops.getRange(term.toTerm),
+                                                  ops.getOffset(term.toTerm))
+          val valid    : IFormula = ctx.getHeap.isAlloc(heap, addr)
+          val readObj  : IFunApp  = ctx.getHeap.read(heap, addr)
+          val corrSort : IFormula =
+            ctx.getHeap.hasUserHeapCtor(readObj, ctx.getCtor(p.elementType.toSort))
+          formula &&& valid & corrSort
         case t =>
           throw new ACSLParseException(
             s"$t in \\valid not a heap pointer.", srcInfo)
@@ -878,8 +889,27 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
             CCTerm.fromTerm(getObj(readObj), p.typ, t.srcInfo)
           case p => throwNotImpl(p) // FIXME: Handle stackptr
         }
-      case op : AST.UnaryAddressOf => throwNotImpl(op)
-        //IFunApp(ctx.getHeap.nthAddr, Seq(ctx.getHeapTerm, right))
+      case _ : AST.UnaryAddressOf =>
+        expr.expr_ match {
+          case arrAcc : AST.EArrayAccess => translateAddressOfArrayElement(arrAcc)
+          case other                     => throwNotImpl(other)
+        }
+    }
+  }
+
+  def translateAddressOfArrayElement(term : AST.EArrayAccess) : CCTerm = {
+    val srcInfo = getSourceInfo(term)
+    val array = translateTerm(term.expr_1)
+    val index = translateTerm(term.expr_2)
+    array.typ match {
+      case p : CCHeapArrayPointer =>
+        val ops = p.ptrOps
+        val elemPtr = ops.mkArrayPtr(ops.getRange(array.toTerm),
+                                     ops.getOffset(array.toTerm) + index.toTerm)
+        CCTerm.fromTerm(elemPtr, p, array.srcInfo)
+      case _ =>
+        throw new ACSLParseException(
+          s"Cannot take address of $array[$index].", srcInfo)
     }
   }
 

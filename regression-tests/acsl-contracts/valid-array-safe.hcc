@@ -1,0 +1,10 @@
+int g[5];
+
+/*@ requires \valid(&g[4]);
+    assigns \nothing; */
+void consumer(void);
+
+int main(void) {
+  consumer();
+  return 0;
+}
