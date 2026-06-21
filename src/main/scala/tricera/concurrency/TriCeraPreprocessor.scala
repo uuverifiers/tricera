@@ -40,7 +40,8 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                           val entryFunction   : String,
                           val displayWarnings : Boolean,
                           val quiet           : Boolean,
-                          val determinize     : Boolean) {
+                          val determinize     : Boolean,
+                          val noDeclSlice     : Boolean = false) {
   private val factsFile : File = File.createTempFile("tri-facts-", ".yml")
   factsFile.deleteOnExit()
 
@@ -78,7 +79,9 @@ class TriCeraPreprocessor(val inputFilePath   : String,
   }
 
   private val initialReturnCode = runPreprocessor(
-    Nil, "TriCera preprocessor could not be executed.", inputFilePath, outputFilePath)
+    if (noDeclSlice) Seq("--no-decl-slice") else Nil,
+    "TriCera preprocessor could not be executed.",
+    inputFilePath, outputFilePath)
   val hasError : Boolean = initialReturnCode != 0
 
   if (determinize) {
