@@ -1019,6 +1019,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
         def getResultVar: Option[CCVar] = postResVar
 
+        override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
+          CCReader.this.enumeratorDefs
+
         def isHeapEnabled: Boolean = modelHeap
 
         def getHeap: Heap =
@@ -2644,6 +2647,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
           val stmSymex = Symex(symexContext, scope, entry, heapModel)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
+            override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
+              CCReader.this.enumeratorDefs
             /**
              * Returns the term from the init atom - this should work as
              * long as the annotation does not have side effects, because
@@ -2761,6 +2766,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
           val stmSymex = Symex(symexContext, scope, entry, heapModel)
           class LocalContext extends ACSLTranslator.StatementAnnotationContext {
+            override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
+              CCReader.this.enumeratorDefs
             /**
              * Returns the term from the init atom - this should work as
              * long as the annotation does not have side effects, because

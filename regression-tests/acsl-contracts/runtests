@@ -57,6 +57,10 @@ TESTS="contract1.hcc  \
        valid-read-unsafe.hcc \
        predicate-standalone-safe.hcc \
        predicate-standalone-unsafe.hcc \
+       enum-constant-contract-safe.hcc \
+       enum-constant-contract-unsafe.hcc \
+       enum-constant-assert-safe.hcc \
+       enum-constant-assert-unsafe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \

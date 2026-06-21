@@ -169,6 +169,18 @@ SAFE
 predicate-standalone-unsafe.hcc
 UNSAFE
 
+enum-constant-contract-safe.hcc
+SAFE
+
+enum-constant-contract-unsafe.hcc
+UNSAFE
+
+enum-constant-assert-safe.hcc
+SAFE
+
+enum-constant-assert-unsafe.hcc
+UNSAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 

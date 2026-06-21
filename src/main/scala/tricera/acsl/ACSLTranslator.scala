@@ -61,6 +61,7 @@ object ACSLTranslator {
     val getStructMap: Map[IFunction, CCStruct]
     val annotationBeginSourceInfo : SourceInfo
     val annotationNumLines : Int
+    def enumeratorDefs : scala.collection.Map[String, CCTerm] = Map.empty
   }
 
   trait FunctionContext extends AnnotationContext {
@@ -860,11 +861,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         val bound: Option[CCTerm] = locals.get(ident)
         val scoped: Option[CCTerm] =
           vars.get(ident).map(v => CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
-        bound.getOrElse(
-          scoped.getOrElse(throw new ACSLParseException(
-            s"Identifier $ident not found in scope.", srcInfo)
-          )
-        )
+        bound.orElse(scoped).orElse(ctx.enumeratorDefs.get(ident)).getOrElse(
+          throw new ACSLParseException(
+            s"Identifier $ident not found in scope.", srcInfo))
     }
   }
 
