@@ -24,6 +24,10 @@ object Literals {
   val ghostOpenMarker  = "⟦"
   val ghostCloseMarker = "⟧"
 
+  // Markers around standalone global annotations (e.g. predicate definitions)
+  val predicateOpenMarker  = "⟪"
+  val predicateCloseMarker = "⟫"
+
   val atExpressionName = "$at"
 
   val anonStructName = ".AS"

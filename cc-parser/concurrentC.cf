@@ -20,6 +20,7 @@ AnnotatedFuncDeclarator. External_declaration ::= [Annotation] [Declaration_spec
 Chan.          External_declaration ::= Chan_def ;
 Ignored.       External_declaration ::= IgnoredDecl;
 GhostExternal. External_declaration ::= "⟦" [External_declaration] "⟧" ;
+PredicateExternal. External_declaration ::= PredicateString ;
 
 -- following can be left in source after preprocessing, simply ignore them.
 ExternKeyword. IgnoredDecl ::= "__extension__" ;
@@ -294,6 +295,8 @@ separator nonempty Stm "";
 token CIdent (letter | '_' | '$' | '\\') (letter | digit | '_' | '$')*;
 
 token AnnotationString {"■■"} (char - ["■"])* {"■■"};
+
+token PredicateString {"⟪"} (char - ["⟫"])* {"⟫"};
 
 token UnboundedInteger ["123456789"] digit *;
 

@@ -33,9 +33,11 @@ import tricera.Literals
 
 // preprocesses ACSL style comments to make life easier for the parser.
 object CommentPreprocessor {
-  val annotationMarker   = Literals.annotationMarker
-  val ghostOpenMarker    = Literals.ghostOpenMarker
-  val ghostCloseMarker   = Literals.ghostCloseMarker
+  val annotationMarker     = Literals.annotationMarker
+  val ghostOpenMarker      = Literals.ghostOpenMarker
+  val ghostCloseMarker     = Literals.ghostCloseMarker
+  val predicateOpenMarker  = Literals.predicateOpenMarker
+  val predicateCloseMarker = Literals.predicateCloseMarker
 
   private val ghostKeyword = "ghost"
 
@@ -141,10 +143,27 @@ object CommentPreprocessor {
 //    println("comment-preprocessed input:\n\n" + stringWriter.getBuffer.toString)
 
     new BufferedReader(new StringReader(
-      substituteTypedefsInAnnotations(
-        rewriteGhostLogicTypes(stringWriter.getBuffer.toString), typedefs)))
+      rewriteGlobalAnnotations(
+        substituteTypedefsInAnnotations(
+          rewriteGhostLogicTypes(stringWriter.getBuffer.toString), typedefs))))
     // todo: benchmark this with files, >1 MB, benchmark this whole class
   }
+
+  // re-wrap predicate definitions in distinct markers so they parse standalone
+  // TODO: avoid textual rewriting of annotations
+  private val annotationSpanRegex =
+    new scala.util.matching.Regex(
+      "(?s)" + java.util.regex.Pattern.quote(annotationMarker) + "(.*?)" +
+      java.util.regex.Pattern.quote(annotationMarker), "body")
+  private def rewriteGlobalAnnotations(s : String) : String =
+    annotationSpanRegex.replaceAllIn(s, m => {
+      val body = m.group("body")
+      val (open, close) =
+        if (body.matches("(?s)\\s*predicate\\b.*"))
+          (predicateOpenMarker, predicateCloseMarker)
+        else (annotationMarker, annotationMarker)
+      java.util.regex.Matcher.quoteReplacement(open + body + close)
+    })
 
   // resolve C typedef names used in annotations
   // TODO: do this without regex

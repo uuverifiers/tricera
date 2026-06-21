@@ -55,6 +55,8 @@ TESTS="contract1.hcc  \
        from-warning-bodyless.hcc \
        valid-read-safe.hcc \
        valid-read-unsafe.hcc \
+       predicate-standalone-safe.hcc \
+       predicate-standalone-unsafe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \

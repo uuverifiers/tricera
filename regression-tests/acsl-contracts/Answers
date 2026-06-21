@@ -163,6 +163,12 @@ valid-read-unsafe.hcc
 Warning: \valid_read is treated as \valid (read-only memory is not modeled)
 UNSAFE
 
+predicate-standalone-safe.hcc
+SAFE
+
+predicate-standalone-unsafe.hcc
+UNSAFE
+
 global-assigns-frame-safe.hcc
 SAFE
 

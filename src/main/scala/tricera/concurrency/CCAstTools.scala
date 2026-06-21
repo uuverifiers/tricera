@@ -511,4 +511,5 @@ class CCAstFillFuncDef extends AbstractVisitor[Unit, MHashMap[String, Function_d
   override def visit(ext: Ignored, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: GhostExternal, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: AnnotatedFuncDeclarator, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: PredicateExternal, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
 }
