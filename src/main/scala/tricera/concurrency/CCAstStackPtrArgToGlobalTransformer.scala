@@ -34,6 +34,7 @@ import concurrent_c.Absyn._
 
 import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 import scala.jdk.CollectionConverters._
+import tricera.concurrency.ccreader.CCExceptions.UnsupportedCFragmentException
 
 private object CCAstUtils {
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
@@ -173,11 +174,66 @@ class CallSiteTransform(
   }
 
   val originalFuncName = declarator.accept(getName, ())
+
+  private def addressString(arg : Exp) : String = arg match {
+    case tc : Etypeconv => addressString(tc.exp_)
+    case e              => new PrettyPrinterNonStatic().print(e)
+  }
+
+  private val removedArgs : Seq[Exp] =
+    params.asScala.zip(args.asScala)
+      .filter({ case (_, a) => isStackPtr(a) }).map(_._2).toSeq
+
+  private val firstParamWithSameAddress : Map[String, String] = {
+    val firstForAddress = MHashMap[String, String]()
+    removedParams.asScala.zip(removedArgs).map({ case (p, a) =>
+      val nm = p.accept(getName, ())
+      (nm, firstForAddress.getOrElseUpdate(addressString(a), nm))
+    }).toMap
+  }
+
   val suffix = {
-    args.asScala.zipWithIndex
-      .withFilter({ case (arg, index) => isStackPtr(arg)})
-      .map({ case (arg, index) => f"_${index}"})
-      .reduce((a,b) => a+b)      
+    val stackPtrArgs =
+      args.asScala.zipWithIndex.filter({ case (a, _) => isStackPtr(a) }).toSeq
+    stackPtrArgs.map({ case (a, i) =>
+      val owner = stackPtrArgs.find({ case (a2, _) => addressString(a2) == addressString(a) }).get._2
+      f"_${owner}"
+    }).reduce(_ + _)
+  }
+
+  // The variable an address is taken of, when that address is a plain
+  // `&<var/field/index>` with no pointer dereference; None otherwise (a `*`/`->`
+  // is involved, or the argument is itself a pointer, so we cannot tell)
+  private def addressBase(arg : Exp) : Option[String] = arg match {
+    case tc : Etypeconv => addressBase(tc.exp_)
+    case pre : Epreop if pre.unary_operator_.isInstanceOf[Address] =>
+      lvalueBase(pre.exp_)
+    case _              => None
+  }
+  private def lvalueBase(lv : Exp) : Option[String] = lv match {
+    case v : Evar         => Some(v.cident_)
+    case v : EvarWithType => Some(v.cident_)
+    case s : Eselect      => lvalueBase(s.exp_)
+    case a : Earray       => lvalueBase(a.exp_1)
+    case _                => None
+  }
+
+  private def mustAlias(a : Exp, b : Exp) : Boolean =
+    addressString(a) == addressString(b)
+
+  private def mayAlias(a : Exp, b : Exp) : Boolean =
+    (addressBase(a), addressBase(b)) match {
+      case (Some(x), Some(y)) => x == y
+      case _                  => true
+    }
+
+  def rejectIfArgsMayAlias() : Unit = {
+    for (Seq(a, b) <- removedArgs.combinations(2).toSeq
+         if mayAlias(a, b) && !mustAlias(a, b))
+      throw new UnsupportedCFragmentException(
+        s"Cannot decide whether the stack-pointer arguments to contract " +
+        s"function '$originalFuncName' may alias. Pass the same lvalue, or " +
+        s"distinct simple variables/fields, to its pointer parameters.")
   }
 
   def getAstAdditions(): AstAddition = {
@@ -277,8 +333,8 @@ class CallSiteTransform(
 
   private def globalVariableDeclarations(): ListExternal_declaration = {
     val globals = new ListExternal_declaration
-    for (param <- removedParams.asScala) {
-      globals.add(toGlobalDeclaration(param).toGlobal())
+    for (g <- removedParams.asScala.map(toGlobalDeclaration).distinctBy(_.getId())) {
+      globals.add(g.toGlobal())
     }
     globals
   }
@@ -291,7 +347,8 @@ class CallSiteTransform(
 
   private def toGlobalDeclaration(param: Parameter_declaration) = {
     param
-      .accept(rename, toGlobalVariableName(originalFuncName)(_))
+      .accept(rename, (n : String) =>
+        toGlobalVariableName(originalFuncName)(firstParamWithSameAddress.getOrElse(n, n)))
       .accept(removePointer, ())
       .accept(toCCAstDeclaration, ())
   }
@@ -384,6 +441,7 @@ class CallSiteTransform(
     def composeBody() = {
       val paramGlobalPairs = removedParams.asScala.map(p => (p.accept(toCCAstDeclaration,()), toGlobalDeclaration(p)))
       val savedGlobalPairs = paramGlobalPairs.map({ case (p, g) => (g.withId(savedIdentifier(g.getId())), g)})
+        .distinctBy({ case (_, g) => g.getId() })
       val body = new ListStm
   
       for ((saved, global) <- savedGlobalPairs) {
@@ -578,6 +636,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
         //   transformed function.
         val tform = CallSiteTransform(this, funcDef, callSite)
         if (tform.shouldInferContract()) {
+          tform.rejectIfArgsMayAlias()
           transforms += tform
           tform.wrapperInvocation()
         } else {

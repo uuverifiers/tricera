@@ -185,6 +185,52 @@ Inferred ACSL annotations
 
 SAFE
 
+alias-share-safe.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f */
+/*@
+  requires \valid(q) && *q == 0;
+  ensures \valid(q) && (\old(*q) != 0 || (\result == 2 && *q == 2));
+*/
+================================================================================
+
+SAFE
+
+alias-share-unsafe.c
+
+--------------------------------------
+Init:
+      main9_5(heap.empty, 0, 0)       
+--------------------------------------
+                  |                   
+                  |                   
+                  V                   
+ main9_5_8(heap.empty, 0, 0, 2, 2, 0) 
+--------------------------------------
+                  |                   
+                  |                   
+                  V                   
+        main(heap.empty, 0, 2)        
+--------------------------------------
+Final:
+        main(heap.empty, 0, 2)        
+--------------------------------------
+Failed assertion:
+false :- main(@h, globalf_0_0p:9, x:8), x:8 != 1. (line:11 col:5) (property: user-assertion)
+
+UNSAFE
+
+alias-reject-overlap.c
+UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
+
+alias-reject-array.c
+UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
+
+alias-reject-deref.c
+UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
+
 struct-field-read.c
 
 Inferred ACSL annotations
