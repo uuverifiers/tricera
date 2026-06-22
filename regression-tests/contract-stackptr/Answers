@@ -46,3 +46,15 @@ SAFE
 
 extern_pre_unsafe.c
 UNSAFE
+
+cast_safe.c
+SAFE
+
+cast_unsafe.c
+UNSAFE
+
+castalias_safe.c
+SAFE
+
+castalias_unsafe.c
+UNSAFE

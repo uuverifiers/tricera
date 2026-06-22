@@ -58,6 +58,7 @@ private object CCAstUtils {
     //   more refined will require more exlaborate data flow
     //   analysis.
     exp match {
+      case x: Etypeconv => isStackPtr(x.exp_)
       case x: Epreop =>
           x.unary_operator_ match {
               case _: Address => true

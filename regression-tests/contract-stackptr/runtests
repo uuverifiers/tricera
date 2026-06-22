@@ -15,7 +15,11 @@ TESTS="inc_safe.c \
        extern_struct_safe.c \
        extern_struct_unsafe.c \
        extern_pre_safe.c \
-       extern_pre_unsafe.c"
+       extern_pre_unsafe.c \
+       cast_safe.c \
+       cast_unsafe.c \
+       castalias_safe.c \
+       castalias_unsafe.c"
 
 for name in $TESTS; do
     echo
