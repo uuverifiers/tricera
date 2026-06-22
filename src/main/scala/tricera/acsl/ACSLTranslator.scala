@@ -672,8 +672,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   }
 
   /**
-   * There are three cases in the ACSL grammar:
+   * There are four cases in the ACSL grammar:
    *   term ? term : term -> term
+   *   pred ? term : term -> term
    *   term ? pred : pred -> pred
    *   pred ? pred : pred -> pred
    */
@@ -684,7 +685,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     val srcInfo = Some(getSourceInfo(expr))
 
     (cond, left, right) match {
-      case (c@CCTerm(_, _, _, None), l@CCTerm(_,lType,_, None), r@CCTerm(_,rType,_, None)) =>
+      case (c@CCTerm(_, _, _, _), l@CCTerm(_,lType,_, None), r@CCTerm(_,rType,_, None)) =>
         if (lType != rType) {
           // TODO: support implicit type casts.
           throw new ACSLParseException(

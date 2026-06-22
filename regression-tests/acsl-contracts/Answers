@@ -249,3 +249,9 @@ SAFE
 
 struct-field-access-4-false.hcc
 UNSAFE
+
+ternary-pred-safe.hcc
+SAFE
+
+ternary-pred-unsafe.hcc
+UNSAFE
