@@ -29,7 +29,13 @@ TESTS="inc_safe.c \
        structarr_safe.c \
        structarr_unsafe.c \
        oldstruct_safe.c \
-       oldstruct_unsafe.c"
+       oldstruct_unsafe.c \
+       namedassert_safe.c \
+       namedassert_unsafe.c \
+       namedpost_safe.c \
+       namedpost_unsafe.c \
+       namedpre_safe.c \
+       namedpre_unsafe.c"
 
 for name in $TESTS; do
     echo

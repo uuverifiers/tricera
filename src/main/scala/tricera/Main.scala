@@ -650,10 +650,10 @@ class Main (args: Array[String]) {
               violatedRichAssertionClause match {
                 case Some(assertionClause) =>
                   val mappedSrcInfo = assertionClause.property match {
-                    case properties.FunctionPrecondition(funName, _) =>
+                    case properties.FunctionPrecondition(funName, _, _) =>
                       ppLineMapping(assertionClause.srcInfo)
                         .orElse(ppLineMapping.findInOriginal(funName))
-                    case properties.FunctionPostcondition(funName, _) =>
+                    case properties.FunctionPostcondition(funName, _, _) =>
                       ppLineMapping(assertionClause.srcInfo)
                         .orElse(ppLineMapping.findInOriginal(funName))
                     case _ =>

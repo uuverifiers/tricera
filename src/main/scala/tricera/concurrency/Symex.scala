@@ -1400,7 +1400,7 @@ class Symex private (context        : SymexContext,
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "abort" =>
           /** Treat abort as assert(0). */
-          assertProperty(false, srcInfo, properties.UserAssertion)
+          assertProperty(false, srcInfo, properties.UserAssertion())
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "$HEAP_TYPE_DEFAULT" =>
           /** A builtin to access the default object of the heap */
@@ -1438,7 +1438,7 @@ class Symex private (context        : SymexContext,
             case _ =>
               atomicEvalFormula(exp.listexp_. asScala.head, specCtx).toFormula
           }
-          assertProperty(property, srcInfo, properties.UserAssertion)
+          assertProperty(property, srcInfo, properties.UserAssertion())
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "exit" if exp.listexp_.size == 1 =>
           addGuard(IBoolLit(false))

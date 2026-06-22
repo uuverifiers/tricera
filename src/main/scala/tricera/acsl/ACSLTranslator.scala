@@ -199,8 +199,13 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     val srcInfo = getSourceInfo(assertAnnotation)
     assertAnnotation match {
       case regularAssertion : AST.RegularAssertion =>
-            val f = translate(regularAssertion.expr_)
-            StatementAnnotation(f.toFormula, isAssert = true)
+            val (name, body) = regularAssertion.expr_ match {
+              case e : AST.ENaming1 => (Some(e.id_), e.expr_)
+              case e : AST.ENaming2 => (Some(e.string_), e.expr_)
+              case e                => (None, e)
+            }
+            val f = translate(body)
+            StatementAnnotation(f.toFormula, isAssert = true, name)
       case _ =>
         throw new ACSLParseException("Behaviour assertions are " +
           "currently unsupported.", srcInfo)
@@ -237,9 +242,13 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       // TODO: do not use "and" and "toFormula" below,losing source information!
       // NOTE: `pre` and `post` defaults to true given usage of `and`.
       useOldHeap = true
-      val pre  : IFormula = IExpression.and(rcs.map(f => translate(f).toFormula))
+      val preClauses : Seq[(Option[String], IFormula)] =
+        rcs.map(f => (reqClauseName(f), translate(f).toFormula))
+      val pre  : IFormula = IExpression.and(preClauses.map(_._2))
       useOldHeap = false
-      val post : IFormula = IExpression.and(ecs.map(f => translate(f).toFormula))
+      val postClauses : Seq[(Option[String], IFormula)] =
+        ecs.map(f => (ensClauseName(f), translate(f).toFormula))
+      val post : IFormula = IExpression.and(postClauses.map(_._2))
 
       // FIXME: Refactor and break out in functions!
       val assigns : (IFormula, IFormula) = acs match {
@@ -353,7 +362,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       // todo: have separate line numbers for ecs
       new FunctionContract(pre, post, assigns._1, assigns._2,
                            getSourceInfo(c),
-                           getActualSourceInfo(ctx, postSrcInfo))
+                           getActualSourceInfo(ctx, postSrcInfo),
+                           preClauses, postClauses)
 
     case _ => throwNotImpl(contract)
   }
@@ -445,9 +455,21 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     translatePred(clause.asInstanceOf[AST.ARequiresClause].expr_)
   }
 
+  private def reqClauseName(c : AST.RequiresClause) : Option[String] =
+    namingName(c.asInstanceOf[AST.ARequiresClause].expr_)
+
+  private def ensClauseName(c : AST.SimpleClauseEnsures) : Option[String] =
+    namingName(c.ensuresclause_.asInstanceOf[AST.AnEnsuresClause].expr_)
+
+  private def namingName(e : AST.Expr) : Option[String] = e match {
+    case n : AST.ENaming1 => Some(n.id_)
+    case n : AST.ENaming2 => Some(n.string_)
+    case _                => None
+  }
+
   def translate(expr : AST.Expr) : CCTerm = expr match {
-    case e : AST.ENaming1  => ???
-    case e : AST.ENaming2  => ???
+    case e : AST.ENaming1  => translate(e.expr_)
+    case e : AST.ENaming2  => translate(e.expr_)
     case _ :   AST.EForAll
          | _ : AST.EExists => translateQuantified(expr)
     case e : AST.EBinding  => ???

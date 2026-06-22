@@ -187,6 +187,15 @@ SAFE
 predicate-assert-unsafe.hcc
 UNSAFE
 
+named-assert-safe.hcc
+SAFE
+
+named-assert-unsafe.hcc
+UNSAFE
+
+named-string-assert-safe.hcc
+SAFE
+
 enum-constant-contract-safe.hcc
 SAFE
 

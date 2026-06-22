@@ -343,3 +343,64 @@ Failed assertion:
 false :- foo(@h, @v_cleanup, p, @h_old, @v_cleanup_old, p_old), !(S::x(getS(heap.read(@h, p_old))) = S::x(getS(heap.read(@h_old, p_old))) + 1 & @h = @h_old). (line:5 col:21) (property: postcondition of function foo asserted at 2:1.)
 
 UNSAFE
+
+namedassert_safe.c
+SAFE
+
+namedassert_unsafe.c
+
+-----------
+Init:
+ foo3_3(5) 
+-----------
+Final:
+ foo3_3(5) 
+-----------
+Failed assertion:
+false :- foo3_3(x), x != 6. (line:3 col:3) (property: user-assertion: myname)
+
+UNSAFE
+
+namedpost_safe.c
+SAFE
+
+namedpost_unsafe.c
+
+-------------
+Init:
+   foo1_1    
+-------------
+      |      
+      |      
+      V      
+ foo2_24(-1) 
+-------------
+Final:
+ foo2_24(-1) 
+-------------
+Failed assertion:
+false :- foo2_24(_res1), _res1 < 1. (line:2 col:4) (property: postcondition pos of function foo asserted at 1:1.)
+
+UNSAFE
+
+namedpre_safe.c
+SAFE
+
+namedpre_unsafe.c
+
+---------------
+Init:
+    foo4_17    
+---------------
+       |       
+       |       
+       V       
+ foo4_24_1(-5) 
+---------------
+Final:
+ foo4_24_1(-5) 
+---------------
+Failed assertion:
+false :- foo4_24_1(bar`x), bar`x < 0. (line:4 col:24) (property: precondition nonneg of function bar asserted at 4:24.)
+
+UNSAFE

@@ -2739,7 +2739,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
-                                        properties.Reachability)
+                                        properties.UserAssertion(res.name))
               } else
                 warn("Ignoring annotation: " + annot)
             case _ => warn("Ignoring annotation: " + annot)

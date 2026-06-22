@@ -63,6 +63,9 @@ TESTS="contract1.hcc  \
        predicate-nested-unsafe.hcc \
        predicate-assert-safe.hcc \
        predicate-assert-unsafe.hcc \
+       named-assert-safe.hcc \
+       named-assert-unsafe.hcc \
+       named-string-assert-safe.hcc \
        enum-constant-contract-safe.hcc \
        enum-constant-contract-unsafe.hcc \
        enum-constant-assert-safe.hcc \
