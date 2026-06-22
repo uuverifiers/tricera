@@ -9,7 +9,13 @@ TESTS="inc_safe.c \
        mixed_safe.c \
        mixed_unsafe.c \
        oldstruct_safe.c \
-       oldstruct_unsafe.c"
+       oldstruct_unsafe.c \
+       extern_inc_safe.c \
+       extern_inc_unsafe.c \
+       extern_struct_safe.c \
+       extern_struct_unsafe.c \
+       extern_pre_safe.c \
+       extern_pre_unsafe.c"
 
 for name in $TESTS; do
     echo

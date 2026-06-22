@@ -141,29 +141,49 @@ object CallSiteTransform {
   // with something existing in the original source.
   private val separator = "\u001F"
 
+  private val getFunctionAnnotation = new CCAstGetFunctionAnnotationVisitor
+
   def apply(
     ptrTransformer: CCAstStackPtrArgToGlobalTransformer,
     funcDef: Function_def,
     callSite: Efunkpar): CallSiteTransform = {
-    new CallSiteTransform(ptrTransformer, funcDef, copyAst(callSite.listexp_), callSite)
+    new CallSiteTransform(
+      ptrTransformer,
+      funcDef.accept(getFunctionDeclaration, ()),
+      getFunctionAnnotation(funcDef),
+      Some(funcDef.accept(getFunctionBody, ())),
+      copyAst(callSite.listexp_), callSite)
+  }
+
+  def apply(
+    ptrTransformer: CCAstStackPtrArgToGlobalTransformer,
+    funcDecl: AnnotatedFuncDeclarator,
+    callSite: Efunkpar): CallSiteTransform = {
+    new CallSiteTransform(
+      ptrTransformer,
+      funcDecl.accept(getFunctionDeclaration, ()),
+      getFunctionAnnotation(funcDecl),
+      None,
+      copyAst(callSite.listexp_), callSite)
   }
 }
 
 class CallSiteTransform(
   stackPtrTransformer:CCAstStackPtrArgToGlobalTransformer,
-  originalDef: Function_def,
+  declaration: (ListDeclaration_specifier, Init_declarator),
+  annotations: ListAnnotation,
+  body: Option[Compound_stm],
   args: ListExp,
   callSite: SourceInfoProvider) {
   import CallSiteTransform._
   import CCAstUtils.isStackPtr
 
-  private val getAnnotations = new CCAstGetFunctionAnnotationVisitor
   // generated nodes get the location of the call site that caused them
   // nodes copied from the source keep their locations
   private val setMissingLocation = new CCAstSetMissingLocationVisitor(callSite)
 
   private val (specifiers, declarator) = {
-    val (spec, dec) = originalDef.accept(getFunctionDeclaration, ())
+    val (spec, dec) = declaration
     (spec, dec.accept(getDeclarator, ()))
   }
   private val params = declarator.accept(getParameters, ())
@@ -252,7 +272,7 @@ class CallSiteTransform(
   }
 
   def shouldInferContract()
-    : Boolean = getAnnotations(originalDef)
+    : Boolean = annotations
       .asScala.toList.map({case a: Annot1 => a.annotationstring_}) match {
         case head::tail if (head == addAnnotationMarkers("contract")) => true
         case _ => false
@@ -261,7 +281,7 @@ class CallSiteTransform(
   def hasExplicitContract() : Boolean = explicitContractText.isDefined
 
   private def explicitContractText : Option[String] =
-    getAnnotations(originalDef).asScala.toList.collect {
+    annotations.asScala.toList.collect {
       case a : Annot1 =>
         a.annotationstring_.stripPrefix(annotationMarker).stripSuffix(annotationMarker)
     }.find(c => AnnotationParser(c).exists(_.isInstanceOf[MaybeACSLAnnotation]))
@@ -308,7 +328,6 @@ class CallSiteTransform(
     val transDec = transformedDeclaration()
     if (!knownAdditions.transformedFunctionDefinitions.contains(transDec.getId())) {
       val wrapperDec = wrapperDeclaration()
-      val (body, transforms) = createTransformedBody(originalDef.accept(getFunctionBody, ()))
 
       def withLocations(decl: External_declaration) = {
         decl.accept(setMissingLocation, ())
@@ -317,11 +336,20 @@ class CallSiteTransform(
       val globals = globalVariableDeclarations()
       globals.asScala.foreach(_.accept(setMissingLocation, ()))
 
+      val (transformedDefinition, transforms) = body match {
+        case Some(originalBody) =>
+          val (transformedBody, ts) = createTransformedBody(originalBody)
+          (transDec.toAfunc(transformedContractAnnotation(), transformedBody), ts)
+        case None =>
+          (transDec.toAnnotatedFuncDeclarator(transformedContractAnnotation()),
+           new CallSiteTransforms)
+      }
+
       knownAdditions += AstAddition(
         withLocations(wrapperDec.toGlobal()),
         withLocations(wrapperDec.toAfunc(createWrapperBody())),
         withLocations(transDec.toGlobal()),
-        withLocations(transDec.toAfunc(transformedContractAnnotation(), body)),
+        withLocations(transformedDefinition),
         globals,
         globalVariableIdsToParameterIds(),
         MHashMap((transDec.getId() -> originalFuncName)),
@@ -619,7 +647,9 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
   private val getName = new CCAstGetNameVistor
   private val copyAst = new CCAstCopyVisitor
   private val fillFuncDefs = new CCAstFillFuncDef
+  private val fillFuncDecls = new CCAstFillFuncDecl
   private val functionDefinitions = new MHashMap[String, Function_def]
+  private val functionDeclarations = new MHashMap[String, AnnotatedFuncDeclarator]
 
   /* Program */
   override def visit(progr: Progr, callSiteTransforms: CallSiteTransforms): Program = {
@@ -638,6 +668,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
     }
 
     progr.accept(fillFuncDefs, functionDefinitions)
+    progr.accept(fillFuncDecls, functionDeclarations)
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
 
     if (callSiteTransforms.nonEmpty) {
@@ -655,29 +686,38 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
   
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {
+    val funcName = callSite.accept(getName, ())
+
+    def transformCall(tform: CallSiteTransform, untransformed: => Exp): Exp =
+      if (tform.shouldInferContract() || tform.hasExplicitContract()) {
+        tform.rejectIfArgsMayAlias()
+        transforms += tform
+        tform.wrapperInvocation()
+      } else {
+        untransformed
+      }
+
     (callSite.listexp_.asScala.find(CCAstUtils.isStackPtr),
-     functionDefinitions.get(callSite.accept(getName, ()))) match {
-      case (Some(_), Some(funcDef)) => 
+     functionDefinitions.get(funcName),
+     functionDeclarations.get(funcName)) match {
+      case (Some(_), Some(funcDef), _) =>
         val exp = super.visit(callSite, transforms)
         // TODO: This will not work if function is invoked through
         //   a pointer. Then we don't know the name of the function
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
-        val tform = CallSiteTransform(this, funcDef, callSite)
-        if (tform.shouldInferContract() || tform.hasExplicitContract()) {
-          tform.rejectIfArgsMayAlias()
-          transforms += tform
-          tform.wrapperInvocation()
-        } else {
-          exp
-        }
-      case (Some(_), None) =>
+        transformCall(CallSiteTransform(this, funcDef, callSite), exp)
+      case (Some(_), None, Some(funcDecl)) =>
+        // bodyless callee: stays bodyless so the contract is assumed, not checked
+        val exp = super.visit(callSite, transforms)
+        transformCall(CallSiteTransform(this, funcDecl, callSite), exp)
+      case (Some(_), None, None) =>
         // We are missing the function definition for the function
         // at the callsite. This could be either because it is a
         // library function or because it is a predicate defined in
         // $...$ comment syntax used as argument to assume/assert.
         // Either way we can't transform and rewrite the function.
-        super.visit(callSite, transforms) 
+        super.visit(callSite, transforms)
       case _ =>
         super.visit(callSite, transforms)
     }

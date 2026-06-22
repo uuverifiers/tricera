@@ -28,3 +28,21 @@ SAFE
 
 oldstruct_unsafe.c
 UNSAFE
+
+extern_inc_safe.c
+SAFE
+
+extern_inc_unsafe.c
+UNSAFE
+
+extern_struct_safe.c
+SAFE
+
+extern_struct_unsafe.c
+UNSAFE
+
+extern_pre_safe.c
+SAFE
+
+extern_pre_unsafe.c
+UNSAFE
