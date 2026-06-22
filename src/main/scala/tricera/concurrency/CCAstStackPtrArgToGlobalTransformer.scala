@@ -35,6 +35,9 @@ import concurrent_c.Absyn._
 import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 import scala.jdk.CollectionConverters._
 import tricera.concurrency.ccreader.CCExceptions.UnsupportedCFragmentException
+import tricera.parsers.AnnotationParser
+import tricera.parsers.AnnotationParser.MaybeACSLAnnotation
+import tricera.parsers.CommentPreprocessor.annotationMarker
 
 private object CCAstUtils {
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
@@ -255,6 +258,27 @@ class CallSiteTransform(
         case _ => false
     }
 
+  def hasExplicitContract() : Boolean = explicitContractText.isDefined
+
+  private def explicitContractText : Option[String] =
+    getAnnotations(originalDef).asScala.toList.collect {
+      case a : Annot1 =>
+        a.annotationstring_.stripPrefix(annotationMarker).stripSuffix(annotationMarker)
+    }.find(c => AnnotationParser(c).exists(_.isInstanceOf[MaybeACSLAnnotation]))
+
+  def paramToGlobalName : Map[String, String] =
+    removedParams.asScala.map { p =>
+      val n = p.accept(getName, ())
+      (n, toGlobalVariableName(originalFuncName)(firstParamWithSameAddress.getOrElse(n, n)))
+    }.toMap
+
+  private def transformedContractAnnotation() : String =
+    if (shouldInferContract()) addAnnotationMarkers("contract")
+    else explicitContractText match {
+      case Some(clauses) => addAnnotationMarkers(clauses)
+      case None          => ""
+    }
+
   private def wrapIdentifier(id: String) = {
     f"wrapped${separator}${id}${suffix}"
   }
@@ -297,13 +321,13 @@ class CallSiteTransform(
         withLocations(wrapperDec.toGlobal()),
         withLocations(wrapperDec.toAfunc(createWrapperBody())),
         withLocations(transDec.toGlobal()),
-        withLocations(transDec.toAfunc(
-          if (shouldInferContract()) {addAnnotationMarkers("contract")} else {""},
-          body)),
+        withLocations(transDec.toAfunc(transformedContractAnnotation(), body)),
         globals,
         globalVariableIdsToParameterIds(),
         MHashMap((transDec.getId() -> originalFuncName)),
-        MHashMap((originalFuncName -> params.asScala.map(p => p.accept(getName,())).toList))
+        MHashMap((originalFuncName -> params.asScala.map(p => p.accept(getName,())).toList)),
+        if (hasExplicitContract()) MHashMap((transDec.getId() -> paramToGlobalName))
+        else MHashMap[String, Map[String, String]]()
       )
 
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))
@@ -487,7 +511,8 @@ object AstAddition {
     introducedGlobalVariables: ListExternal_declaration,
     globalVariableIdToParameterId: MHashMap[String, String],
     transformedFunctionIdToOriginalId: MHashMap[String, String],
-    originalFunctionIdToParamterIds: MHashMap[String, List[String]]): AstAddition = {
+    originalFunctionIdToParamterIds: MHashMap[String, List[String]],
+    transformedFunctionIdToParamToGlobal: MHashMap[String, Map[String, String]]): AstAddition = {
     val addition = new AstAddition
     addition.transformedFunctionDefinitions.put(transformedDefinition.accept(getName, ()), transformedDefinition)
     addition.transformedFunctionDeclarations.put(transformedDeclaration.accept(getName, ()), transformedDeclaration)
@@ -497,6 +522,7 @@ object AstAddition {
     addition.globalVariableIdToParameterId ++= globalVariableIdToParameterId
     addition.transformedFunctionIdToOriginalId ++= transformedFunctionIdToOriginalId
     addition.originalFunctionIdToParamterIds ++= originalFunctionIdToParamterIds
+    addition.transformedFunctionIdToParamToGlobal ++= transformedFunctionIdToParamToGlobal
     addition
   }
 }
@@ -509,7 +535,8 @@ class AstAddition(
   val introducedGlobalVariables: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
   val globalVariableIdToParameterId: MHashMap[String, String] = MHashMap[String, String](),
   val transformedFunctionIdToOriginalId: MHashMap[String, String] = MHashMap[String, String](),
-  val originalFunctionIdToParamterIds: MHashMap[String, List[String]] = MHashMap[String, List[String]]()) {
+  val originalFunctionIdToParamterIds: MHashMap[String, List[String]] = MHashMap[String, List[String]](),
+  val transformedFunctionIdToParamToGlobal: MHashMap[String, Map[String, String]] = MHashMap[String, Map[String, String]]()) {
 
   def +(that: AstAddition) = {
     new AstAddition(
@@ -520,7 +547,8 @@ class AstAddition(
       this.introducedGlobalVariables ++ that.introducedGlobalVariables,
       this.globalVariableIdToParameterId ++ that.globalVariableIdToParameterId,
       this.transformedFunctionIdToOriginalId ++ that.transformedFunctionIdToOriginalId,
-      this.originalFunctionIdToParamterIds ++ that.originalFunctionIdToParamterIds)
+      this.originalFunctionIdToParamterIds ++ that.originalFunctionIdToParamterIds,
+      this.transformedFunctionIdToParamToGlobal ++ that.transformedFunctionIdToParamToGlobal)
   }
 
   def +=(that: AstAddition) = {
@@ -532,6 +560,7 @@ class AstAddition(
     this.globalVariableIdToParameterId ++= that.globalVariableIdToParameterId
     this.transformedFunctionIdToOriginalId ++= that.transformedFunctionIdToOriginalId
     this.originalFunctionIdToParamterIds ++= that.originalFunctionIdToParamterIds
+    this.transformedFunctionIdToParamToGlobal ++= that.transformedFunctionIdToParamToGlobal
     this
   }
 }
@@ -635,7 +664,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
         val tform = CallSiteTransform(this, funcDef, callSite)
-        if (tform.shouldInferContract()) {
+        if (tform.shouldInferContract() || tform.hasExplicitContract()) {
           tform.rejectIfArgsMayAlias()
           transforms += tform
           tform.wrapperInvocation()

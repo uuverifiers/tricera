@@ -46,7 +46,7 @@ import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 import scala.collection.mutable.{ArrayBuffer, Stack, HashMap => MHashMap,
   HashSet => MHashSet}
 import tricera.Util._
-import tricera.acsl.{ACSLTranslator, FunctionContract}
+import tricera.acsl.{ACSLRewriter, ACSLTranslator, FunctionContract}
 import tricera.concurrency.ccreader._
 import tricera.HeapInfo
 import tricera.params.TriCeraParameters
@@ -94,11 +94,17 @@ object CCReader {
     val (transformedCallsProg, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
 
+    val funcParamToGlobalMaps : Map[String, Map[String, String]] =
+      if (callSiteTransforms.isEmpty) Map.empty
+      else callSiteTransforms.map(_.getAstAdditions()).reduce(_ += _)
+             .transformedFunctionIdToParamToGlobal.toMap
+
     var reader : CCReader = null
     while (reader == null)
       try {
         reader = new CCReader(
-          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames)
+          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames,
+          funcParamToGlobalMaps)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -237,7 +243,9 @@ object CCReader {
 class CCReader private (prog              : Program,
                         entryFunction     : String,
                         propertiesToCheck : Set[properties.Property],
-                        inputVarNames     : scala.Seq[String]) {
+                        inputVarNames     : scala.Seq[String],
+                        funcParamToGlobalMaps : Map[String, Map[String, String]] =
+                          Map.empty) {
 
   import CCReader._
 
@@ -1103,9 +1111,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val name = fun.name
         val funContext = functionContexts(name)
         val possibleACSLAnnotation = annot.asInstanceOf[MaybeACSLAnnotation]
+        val astTransform : tricera.acsl.Absyn.Annotation => tricera.acsl.Absyn.Annotation =
+          funcParamToGlobalMaps.get(name) match {
+            case Some(paramToGlobal) =>
+              ann => ACSLRewriter.rewrite(ann, ACSLRewriter.globalizeParams(paramToGlobal))
+            case None => identity
+          }
         // todo: try / catch and print msg?
         val contract = ACSLTranslator.translateACSL(
-          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
+          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext,
+          astTransform)
 
         if (fun.body.isDefined &&
             possibleACSLAnnotation.annot.contains("\\from"))

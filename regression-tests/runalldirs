@@ -34,6 +34,7 @@ quantifiers "" -assert -dev -t:60
 interpreted-predicates "" -assert -dev -t:60
 properties "" -assert -dev -t:60
 toh-contract-translation "" -dev -t:60 -solutionReconstruction:wp
+contract-stackptr "" -t:60
 loop-invariants "" -m:foo -inv -acsl -cex -dev -t:60
 at-expressions "" -assert -dev -t:60
 inv-encoding-reachsafety "" -dev -t:60

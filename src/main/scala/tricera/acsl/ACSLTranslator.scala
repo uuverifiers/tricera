@@ -88,11 +88,13 @@ object ACSLTranslator {
 
   @throws[ACSLException]("if not called with the right context")
   @throws[ACSLParseException]("if parsing or translation fails")
-  def translateACSL(annot : String,
-                    ctx   : AnnotationContext) : ParsedAnnotation = {
+  def translateACSL(annot        : String,
+                    ctx          : AnnotationContext,
+                    astTransform : AST.Annotation => AST.Annotation = identity)
+  : ParsedAnnotation = {
     val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
     val p : parser = new parser(l, l.getSymbolFactory())
-    val ast : AST.Annotation = p.pAnnotation()
+    val ast : AST.Annotation = astTransform(p.pAnnotation())
     val translator = new ACSLTranslator(ctx)
 
     ast match {

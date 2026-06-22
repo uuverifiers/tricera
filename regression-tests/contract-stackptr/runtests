@@ -1,0 +1,18 @@
+#!/bin/sh
+
+TESTS="inc_safe.c \
+       inc_unsafe.c \
+       structfield_safe.c \
+       structfield_unsafe.c \
+       twoptr_safe.c \
+       twoptr_unsafe.c \
+       mixed_safe.c \
+       mixed_unsafe.c \
+       oldstruct_safe.c \
+       oldstruct_unsafe.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -acsl "$@" $name 2>&1 | grep -v 'at '
+done
