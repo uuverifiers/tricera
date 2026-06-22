@@ -1,0 +1,12 @@
+
+
+enum E { A, B, C, D };
+
+void main() {
+  enum E e = C;
+  unsigned int u = (unsigned int) e;
+  enum E f = (enum E) 1;
+  int s = (int) f;
+  assert(u == 2);
+  assert(s == 3);
+}

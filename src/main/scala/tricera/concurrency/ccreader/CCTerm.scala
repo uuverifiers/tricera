@@ -67,6 +67,10 @@ case class CCTerm(t               : ITerm,
         CCTerm.fromTerm(toTerm, CCMathInt, srcInfo)
       case (CCMathInt, _: CCArithType) =>
         newType cast this
+      case (_: CCIntEnum, _: CCArithType) =>
+        newType cast this
+      case (_: CCArithType, _: CCIntEnum) =>
+        CCTerm.fromTerm(toTerm, newType, srcInfo)
       case (_, CCVoid) => this
       // todo: do not do anything for casts to void?
       case (_: CCArithType, newType: CCHeapPointer) =>
