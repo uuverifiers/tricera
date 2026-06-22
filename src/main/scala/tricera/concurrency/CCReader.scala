@@ -3253,14 +3253,24 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           translate(stm.stm_, newEntry, exit)
         }
 
-        // add clauses for the various cases of the switch
+        // Variables declared in the switch body before a label are in scope at
+        // the label but their declaration is skipped when jumping to it, so the
+        // extra case arguments are filled with fresh unconstrained constants.
+        def dispatchToCase(target : CCPredicate) : Unit = {
+          val entryArgs  = selectorSymex.getValuesAsTerms
+          val targetArgs = entryArgs.take(target.arity) ++ (
+            for (i <- entryArgs.size until target.arity)
+            yield IConstant(new ConstantTerm("switchSkippedDecl_" + i)))
+          selectorSymex outputClause(atom(target, targetArgs), target.srcInfo)
+        }
+
         val (defaults, cases) = collector partition (_._1 == null)
         val guards = for ((value, _) <- cases) yield (selector === value.toTerm)
 
         for (((_, target), guard) <- cases.iterator zip guards.iterator) {
           selectorSymex.saveState
           selectorSymex addGuard guard
-          selectorSymex outputClause(target, target.srcInfo) // todo: correct line no?
+          dispatchToCase(target)
           selectorSymex.restoreState
         }
 
@@ -3274,7 +3284,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           case scala.Seq((_, target)) => {
             selectorSymex.saveState
             selectorSymex addGuard ~or(guards)
-            selectorSymex outputClause(target, target.srcInfo)
+            dispatchToCase(target)
             selectorSymex.restoreState
           }
           case _ =>
