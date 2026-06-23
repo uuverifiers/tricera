@@ -28,3 +28,8 @@ SAFE
 
 overlapping-types-unsafe.cpp
 UNSAFE
+
+binomial-func.cpp
+Warning: Struct DomainErr was declared, but never defined, or it has no fields.
+Warning: Struct ArgumentErr was declared, but never defined, or it has no fields.
+SAFE
