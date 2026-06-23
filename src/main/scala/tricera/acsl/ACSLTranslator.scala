@@ -1,6 +1,7 @@
 /**
  * Copyright (c) 2021-2022 Pontus Ernstedt
- *               2022-2026 Zafer Esen. All rights reserved.
+ *               2022-2026 Zafer Esen
+ *               2026 Hugo Sacilotto. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -90,7 +91,7 @@ object ACSLTranslator {
   @throws[ACSLParseException]("if parsing or translation fails")
   def translateACSL(annot : String,
                     ctx   : AnnotationContext,
-                    exceptionTypes: Map[String, IdealInt]) : ParsedAnnotation = {
+                    exceptionTypes: Option[Map[String, IdealInt]] = None) : ParsedAnnotation = {
     val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
     val p : parser = new parser(l, l.getSymbolFactory())
     val ast : AST.Annotation = p.pAnnotation()
@@ -137,24 +138,30 @@ object ACSLTranslator {
  * @param ctx Context providing information about the parsed program where
  *            the ACSL annotation appears in.
  */
-class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: Map[String, IdealInt]) {
+class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: Option[Map[String, IdealInt]]) {
   import scala.collection.mutable.{HashMap => MHashMap}
   import ACSLTranslator._
 
   private val printer = new tricera.acsl.PrettyPrinterNonStatic
 
-  val (exceptionFlag, exceptionFlagPost) : (ITerm, ITerm) = {
+  val (exceptionFlag, exceptionFlagPost) : (Option[ITerm], Option[ITerm]) = {
     val flagVar = ctx.getGlobals.find(g => 
       g.name == "__exception_flag"
-    ).getOrElse(throw new ACSLException("Exception flag global variable not found"))
-    (flagVar.term, ctx.asInstanceOf[FunctionContext].getPostGlobalVar(flagVar.name).get.term)
+    )
+    flagVar match {
+      case None => (None, None)
+      case Some(fv) => (Some(fv.term), Some(ctx.asInstanceOf[FunctionContext].getPostGlobalVar(fv.name).get.term))
+    }
   }
 
-  val (exceptionType, exceptionTypePost) : (ITerm, ITerm) = {
+  val exceptionTypePost : Option[ITerm] = {
     val typeVar = ctx.getGlobals.find(g =>
       g.name == "__exception_type"
-    ).getOrElse(throw new ACSLException("Exception type global variable not found"))
-    (typeVar.term, ctx.asInstanceOf[FunctionContext].getPostGlobalVar(typeVar.name).get.term)
+    )
+    typeVar match {
+      case None => None
+      case Some(t) => Some(ctx.asInstanceOf[FunctionContext].getPostGlobalVar(t.name).get.term)
+    }
   }
 
   val locals = new MHashMap[String, CCTerm]
@@ -218,28 +225,45 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
         case _ => None
       })
 
-      val newPre = pre &&& (exceptionFlag === 0)
-      val defaultThrow = new AST.ThrowsClauseEmpty(new AST.ELit(new AST.LitTrue))
+      // Only consider exceptions in contracts if exception types exist in the program
+      // Ignore throws clauses otherwise
+      val (exceptionPre, exceptionPost, exceptionAcs) = {
+        exceptionTypeMap match {
+          case None => {
+            // Display a warning if throws clauses are used in program without exceptions
+            if (!tcs.isEmpty) {
+              println("Warning: Throws clauses will be ignored")
+            }
+            (pre, post, acs)
+          }
+          case _ => {
+            val exceptionPre = pre &&& (exceptionFlag.get === 0)
+            val defaultThrow = new AST.ThrowsClauseEmpty(new AST.ELit(new AST.LitTrue))
 
-      val newPost: IFormula = if (tcs.size > 0) {
-        constructPost(tcs, post)
-      } else {
-        constructPost(List(defaultThrow), post)
-      }
+            val exceptionPost: IFormula = if (tcs.size > 0) {
+              constructExceptionPost(tcs, post)
+            } else {
+              constructExceptionPost(List(defaultThrow), post)
+            }
 
-      val listLocation = new AST.ListLocation
-      listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_flag"))))
-      listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_type"))))
-      listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_value"))))
-      val exceptionAssigns = new AST.SimpleClauseAssigns(new AST.AnAssignsClause(new AST.LocationsSome(listLocation)))
+            val listLocation = new AST.ListLocation
+            listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_flag"))))
+            listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_type"))))
+            listLocation.add(new AST.ALocation(new AST.TSetTerm(new AST.EIdent("__exception_value"))))
+            val exceptionAssigns = new AST.SimpleClauseAssigns(new AST.AnAssignsClause(new AST.LocationsSome(listLocation)))
 
-      val newAcs =  acs match {
-        case Nil => acs
-        case _ => exceptionAssigns :: acs
+            val exceptionAcs =  acs match {
+              case Nil => acs
+              case _ => exceptionAssigns :: acs
+            }
+
+            (exceptionPre, exceptionPost, exceptionAcs)
+          }
+        }
       }
 
       // FIXME: Refactor and break out in functions!
-      val assigns : (IFormula, IFormula) = newAcs match {
+      val assigns : (IFormula, IFormula) = exceptionAcs match {
         case Nil => (IBoolLit(true), IBoolLit(true))
         case acs =>
           val (idents, ptrDerefs) : (Set[CCTerm], Set[CCTerm]) =
@@ -349,7 +373,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
       }
 
       // todo: have separate line numbers for ecs
-      new FunctionContract(newPre, newPost, assigns._1, assigns._2,
+      new FunctionContract(exceptionPre, exceptionPost, assigns._1, assigns._2,
                            getSourceInfo(c),
                            getActualSourceInfo(ctx, postSrcInfo))
 
@@ -389,7 +413,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
     }
   }
 
-  def constructPost(throwsClauses: List[AST.ThrowsClause], post: IFormula) : IFormula = {
+  def constructExceptionPost(throwsClauses: List[AST.ThrowsClause], post: IFormula) : IFormula = {
     val emptyThrowsClauses = throwsClauses.flatMap(c => c match {
       case empty: AST.ThrowsClauseEmpty => Some(empty)
       case _ => None
@@ -399,8 +423,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
       case _ => None
     }) 
 
-    (exceptionFlagPost === 0 ==> post) &&&
-    (exceptionFlagPost =/= 0 ==> (
+    (exceptionFlagPost.get === 0 ==> post) &&&
+    (exceptionFlagPost.get =/= 0 ==> (
       throwsClausesEmptyFormula(emptyThrowsClauses) &&&
       throwsClausesTypesFormula(typedThrowsClauses)
       )
@@ -408,10 +432,10 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
   }
 
   def throwsClausesEmptyFormula(clauses: List[AST.ThrowsClauseEmpty]) : IFormula = {
-    val exceptionTypeInts = exceptionTypeMap.map(x => x._2).toList
+    val exceptionTypeInts = exceptionTypeMap.get.map(x => x._2).toList
 
     IExpression.and(clauses.map(clause => translate(clause.expr_).toFormula)) &&&
-    IExpression.or(exceptionTypeInts.map(t => exceptionTypePost === t))
+    IExpression.or(exceptionTypeInts.map(t => exceptionTypePost.get === t))
   }
 
   def throwsClausesTypesFormula(clauses: List[AST.ThrowsClauseTypes]) : IFormula = {
@@ -421,13 +445,13 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: M
 
       val exceptionTypeInts = exceptionTypes.map(t => {
         val typeString = exceptionTypeToString(t).toUpperCase()
-        exceptionTypeMap.get(typeString) match {
+        exceptionTypeMap.get.get(typeString) match {
           case Some(enumVariant) => enumVariant
           case None => throw new ACSLParseException("Exception type not found in enum declaration", getSourceInfo(t))
         }
       })
 
-      IExpression.or(exceptionTypeInts.map(t => exceptionTypePost === t)) ==> pred
+      IExpression.or(exceptionTypeInts.map(t => exceptionTypePost.get === t)) ==> pred
     }))
   }
 

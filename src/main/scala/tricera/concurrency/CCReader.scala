@@ -56,6 +56,7 @@ import CCExceptions._
 import tricera.{Util, properties}
 import tricera.Literals
 import tricera.concurrency.heap.{HeapModel, HeapModelFactory, HeapTheoryModel}
+import tricera.concurrency.PreprocessorFacts
 
 /** Implicit conversion so that we can get a Scala-like iterator from a
  * a Java list */
@@ -72,11 +73,14 @@ object CCReader {
   private[concurrency] val GT  = new CCVar("_GT", None, CCClock, GlobalStorage)
   private[concurrency] val GTU = new CCVar("_GTU", None, CCInt, GlobalStorage)
 
+  private var preprocessorFacts = PreprocessorFacts.empty
+
   def apply(input : java.io.Reader, entryFunction : String,
             propertiesToCheck : Set[properties.Property] = Set(
               properties.Reachability),
             facts : PreprocessorFacts = PreprocessorFacts.empty)
   : (CCReader, Boolean, CallSiteTransform.CallSiteTransforms) = { // second ret. arg is true if modelled heap
+    preprocessorFacts = facts
     val programText = new java.util.Scanner(input).useDelimiter("\\A").next()
     input.close() // Close the original reader.
     val inputVarNames = ParseUtil.parseInputComment(programText) // for the invariant encoding heap model
@@ -1051,7 +1055,11 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val funContext = functionContexts(name)
         val possibleACSLAnnotation = annot.asInstanceOf[MaybeACSLAnnotation]
 
-        val exceptionTypes: Map[String, IdealInt] = enumDefs.get("ExceptionType").get.asInstanceOf[CCIntEnum].enumerators.toMap
+        val exceptionTypes: Option[Map[String, IdealInt]] = if (preprocessorFacts.usesExceptions) {
+          Some(enumDefs.get("ExceptionType").get.asInstanceOf[CCIntEnum].enumerators.toMap)
+        } else {
+          None
+        }
 
         // todo: try / catch and print msg?
         val contract = ACSLTranslator.translateACSL(
@@ -2630,7 +2638,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             override val annotationNumLines : Int = 1
           }
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext(), Map()) match {
+            "/*@" + annot + "*/", new LocalContext()) match {
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
@@ -2719,7 +2727,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             override val annotationNumLines : Int = 1
           }
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext(), Map()) match {
+            "/*@" + annot + "*/", new LocalContext()) match {
             case res : tricera.acsl.LoopAnnotation =>
                 ???
             case _ =>
