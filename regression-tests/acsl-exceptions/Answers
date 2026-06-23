@@ -1,0 +1,35 @@
+
+simple-contract-safe.cpp
+SAFE
+
+simple-contract-unsafe.cpp
+UNSAFE
+
+simple-contract-type-safe.cpp
+SAFE
+
+simple-contract-type-pred-safe.cpp
+SAFE
+
+simple-contract-type-pred-safe-2.cpp
+SAFE
+
+simple-contract-type-pred-unsafe-contract.cpp
+UNSAFE
+
+multi-func-call-safe.cpp
+SAFE
+
+multiple-clauses-with-types-safe.cpp
+SAFE
+
+overlapping-types-safe.cpp
+SAFE
+
+overlapping-types-unsafe.cpp
+UNSAFE
+
+binomial-func.cpp
+Warning: Struct DomainErr was declared, but never defined, or it has no fields.
+Warning: Struct ArgumentErr was declared, but never defined, or it has no fields.
+SAFE
