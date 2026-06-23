@@ -85,7 +85,9 @@ TESTS="contract1.hcc  \
        struct-field-access-3-true.hcc \
        struct-field-access-4-false.hcc \
        ternary-pred-safe.hcc \
-       ternary-pred-unsafe.hcc"
+       ternary-pred-unsafe.hcc \
+       stmt-assert-flow-safe.hcc \
+       stmt-assert-flow-unsafe.hcc"
 
 for name in $TESTS; do
     echo

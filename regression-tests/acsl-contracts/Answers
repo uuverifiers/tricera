@@ -255,3 +255,9 @@ SAFE
 
 ternary-pred-unsafe.hcc
 UNSAFE
+
+stmt-assert-flow-safe.hcc
+SAFE
+
+stmt-assert-flow-unsafe.hcc
+UNSAFE

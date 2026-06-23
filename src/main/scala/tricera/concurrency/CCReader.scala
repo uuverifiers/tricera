@@ -2654,6 +2654,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               warn("Ignoring ACSL annotation (possibly " +
                 "an error or an unsupported fragment):\n" + e.getMessage)
           }
+          val vars = scope.allFormalVarTerms
+          output(addRichClause(Clause(atom(exit, vars take exit.arity),
+                                      List(atom(entry, vars take entry.arity)), true),
+            Some(getSourceInfo(stm))))
         case stm : AnnotatedIterS =>
           translate(stm.annotation_, stm.iter_stm_, entry, exit)
         case stm : GhostStm =>
