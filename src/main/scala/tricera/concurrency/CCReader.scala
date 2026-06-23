@@ -2651,8 +2651,11 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           try{translate(stm.annotation_, entry)}
           catch {
             case e : Exception =>
-              warn("Ignoring ACSL annotation (possibly " +
-                "an error or an unsupported fragment):\n" + e.getMessage)
+              throw new TranslationException(
+                getLineString(Some(getSourceInfo(stm))) +
+                "Failed to process ACSL statement annotation (parse error or " +
+                "unsupported fragment)\n" +
+                e.getMessage)
           }
           val vars = scope.allFormalVarTerms
           output(addRichClause(Clause(atom(exit, vars take exit.arity),

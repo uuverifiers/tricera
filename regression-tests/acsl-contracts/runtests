@@ -87,7 +87,8 @@ TESTS="contract1.hcc  \
        ternary-pred-safe.hcc \
        ternary-pred-unsafe.hcc \
        stmt-assert-flow-safe.hcc \
-       stmt-assert-flow-unsafe.hcc"
+       stmt-assert-flow-unsafe.hcc \
+       stmt-assert-untranslatable-error.hcc"
 
 for name in $TESTS; do
     echo

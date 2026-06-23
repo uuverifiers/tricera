@@ -261,3 +261,7 @@ SAFE
 
 stmt-assert-flow-unsafe.hcc
 UNSAFE
+
+stmt-assert-untranslatable-error.hcc
+Horn Translation Error: At (6:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+Identifier x not found in scope.
