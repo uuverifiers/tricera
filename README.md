@@ -3,7 +3,7 @@ TriCera is a model checker for C programs, that is being developed and maintaine
 * C structs, 
 * arrays, 
 * stack and heap pointers (but no pointer arithmetic),
-* basic heap (dynamic memory) operations including malloc, (a variant of) calloc and free,
+* basic heap (dynamic memory) operations including malloc, calloc and free,
 * threads (with its own syntax),
 * function contracts,
 

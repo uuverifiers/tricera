@@ -31,7 +31,7 @@ package tricera.concurrency
 
 import ap.parser._
 import IExpression.{ConstantTerm, Predicate, Sort}
-import ap.theories.Heap
+import ap.theories.heaps.Heap
 import ap.types.MonoSortedIFunction
 import hornconcurrency.ParametricEncoder
 import lazabs.horn.bottomup.HornClauses.Clause

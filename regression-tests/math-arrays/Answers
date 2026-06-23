@@ -4,7 +4,7 @@ simple-math-array-1.hcc
 Solution (Prolog)
 ================================================================================
 main10_7_3(a:4, n:5, i:6) :- n:5 = 3 & 2 >= i:6 & i:6 >= 0 & ((i:6 = 2 & select(a:4, 2) = 2) | (i:6 >= 1 & select(a:4, 1 + i:6) - i:6 = 1 & select(a:4, i:6) = i:6) | (select(a:4, 2 + i:6) - i:6 = 2 & select(a:4, 1 + i:6) - i:6 = 1 & select(a:4, i:6) = i:6)).
-main7_3(a:4, n:5, i:6) :- i:6 = 0 & n:5 = 3.
+main7_3(a:4, n:5, i:6) :- n:5 = 3 & i:6 = 0.
 main7_7(a:4, n:5, i:6) :- n:5 = 3 & 3 >= i:6 & i:6 >= 0 & (0 >= i:6 | (i:6 = 1 & select(a:4, 0) = 0) | (select(a:4, 1) = 1 & select(a:4, 0) = 0 & (i:6 != 3 | select(a:4, 2) = 2))).
 ================================================================================
 
@@ -15,8 +15,8 @@ struct-array.hcc
 Solution (Prolog)
 ================================================================================
 main10_5(arr:7, old_arr:8).
-main_2(arr:7, old_arr:8) :- A::a(select(old_arr:8, 2)) >= 10 & store(old_arr:8, 2, A(2*A::a(select(old_arr:8, 2)))) = arr:7.
-main_3(arr:7, old_arr:8) :- A::a(select(old_arr:8, 2)) >= 10 & store(old_arr:8, 2, A(2*A::a(select(old_arr:8, 2)))) = arr:7.
+main_2(arr:7, old_arr:8) :- select(old_arr:8, 1) = select(arr:7, 1) & A::a(select(arr:7, 2)) = 2*A::a(select(old_arr:8, 2)).
+main_3(arr:7, old_arr:8) :- select(old_arr:8, 1) = select(arr:7, 1).
 ================================================================================
 
 SAFE

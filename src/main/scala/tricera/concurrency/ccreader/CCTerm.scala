@@ -119,6 +119,8 @@ object CCTerm {
 
       case (_: CCHeapArrayPointer, _ : CCArithType) =>
         (a, b) // pointer arithmetic, do not unify
+      case (_ : CCArithType, _: CCHeapArrayPointer) =>
+        (a, b)
 
       case (_: CCHeapPointer, _: CCHeapPointer) =>
         (a, b) // do not unify heap pointer types

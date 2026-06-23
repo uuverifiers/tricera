@@ -78,6 +78,9 @@ Warning: entry function "main" not found
 SAFE
 
 bitwise1.hcc
+Warning: Verification of clause was not possible:
+false :- inv_main20_3(i:20), i:20 != (bv_and(32, i:20, 65535.\as[bv[32]]).\as[bv[32]].\as[int] + bv_and(32, i:20, 4294901760.\as[bv[32]]).\as[bv[32]].\as[int]).\as[bv[32]].
+Checker said: OutOfMemory
 SAFE
 
 bitwise2.hcc

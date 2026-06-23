@@ -37,7 +37,7 @@ import scala.jdk.CollectionConverters._
 import ap.parser._
 import ap.theories.nia.GroebnerMultiplication._
 import ap.types.{Sort, SortedConstantTerm}
-import ap.theories.Heap
+import ap.theories.heaps.Heap
 import tricera.Util.{SourceInfo, getSourceInfo}
 import tricera.concurrency.ccreader._
 import CCExceptions._
@@ -1001,7 +1001,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: O
     array.typ match {
       case p : CCHeapPointer =>
         val heap: ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
-        val access: IFunApp = ctx.getHeap.addressRangeNth(array.toTerm, index.toTerm)
+        val access: IFunApp = ctx.getHeap.rangeNth(array.toTerm, index.toTerm)
         val readObj: IFunApp = ctx.getHeap.read(heap, access)
         val getObj: IFunction = ctx.sortGetter(p.typ.toSort).getOrElse(
           throw new ACSLParseException(s"Cannot access $array[$index].", srcInfo)
@@ -1009,7 +1009,10 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext, exceptionTypeMap: O
         CCTerm.fromTerm(getObj(readObj), p.typ, array.srcInfo)
       case p : CCHeapArrayPointer =>
         val heap: ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
-        val access: IFunApp = ctx.getHeap.addressRangeNth(array.toTerm, index.toTerm)
+        val ops = p.ptrOps
+        val rawRange = ops.getRange(array.toTerm)
+        val effectiveIndex = ops.getOffset(array.toTerm) + index.toTerm
+        val access: IFunApp = ctx.getHeap.rangeNth(rawRange, effectiveIndex)
         val readObj: IFunApp = ctx.getHeap.read(heap, access)
         val getObj: IFunction = ctx.sortGetter(p.elementType.toSort).getOrElse(
           throw new ACSLParseException(s"Cannot access $array[$index].", srcInfo)
