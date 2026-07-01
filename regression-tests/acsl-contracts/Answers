@@ -402,9 +402,32 @@ stmt-assert-at-loopcurrent-error.hcc
 Horn Translation Error: At (7:5)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
 label 'LoopCurrent' is not yet supported in a statement annotation
 
-stmt-assert-at-clabel-bodylocal-nonmain-error.hcc
-Horn Translation Error: At (7:3)): Failed to capture the expression for a labelled state in a statement annotation (referenced name not in function-entry scope, or unsupported)
-Identifier acc not found in scope.
+stmt-assert-at-clabel-bodylocal-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-bodylocal-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-midbody-local-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-midbody-local-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-loop-local-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-loop-local-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-sibling-decl-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-sibling-decl-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-decl-after-label-error.hcc
+Identifier z not found in scope.
 
 stmt-assert-at-clabel-expr-arith-safe.hcc
 SAFE

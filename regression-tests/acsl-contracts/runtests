@@ -132,7 +132,15 @@ TESTS="contract1.hcc  \
        stmt-assert-at-init-error.hcc \
        stmt-assert-at-loopentry-error.hcc \
        stmt-assert-at-loopcurrent-error.hcc \
-       stmt-assert-at-clabel-bodylocal-nonmain-error.hcc \
+       stmt-assert-at-clabel-bodylocal-safe.hcc \
+       stmt-assert-at-clabel-bodylocal-unsafe.hcc \
+       stmt-assert-at-clabel-midbody-local-safe.hcc \
+       stmt-assert-at-clabel-midbody-local-unsafe.hcc \
+       stmt-assert-at-clabel-loop-local-safe.hcc \
+       stmt-assert-at-clabel-loop-local-unsafe.hcc \
+       stmt-assert-at-clabel-sibling-decl-safe.hcc \
+       stmt-assert-at-clabel-sibling-decl-unsafe.hcc \
+       stmt-assert-at-clabel-decl-after-label-error.hcc \
        stmt-assert-at-clabel-expr-arith-safe.hcc \
        stmt-assert-at-clabel-expr-arith-unsafe.hcc \
        stmt-assert-at-clabel-expr-array-safe.hcc \

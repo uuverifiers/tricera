@@ -1,0 +1,9 @@
+// the captured name is declared after the label
+int main(void) {
+  int x = 0;
+L:
+  x = x + 1;
+  int z = 5;
+  /*@ assert \at(z, L) == 5; @*/
+  return 0;
+}

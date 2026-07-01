@@ -1,8 +1,4 @@
-// known TriCera limitation, \at cannot refer to locals in a function
-// workaround: make them global or a parameter.
-
-
-
+// \at over a body-local of a non-entry function
 int f(int n) {
   int acc = n;
 L:

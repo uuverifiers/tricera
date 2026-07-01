@@ -2430,6 +2430,64 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     all.toSet
   }
 
+  // for each C-label, the declared types of the body locals visible at it
+  private def labelDeclaredTypes(body : Compound_stm)
+    : Map[String, Map[String, CCType]] = {
+    val result = scala.collection.mutable.Map.empty[String, Map[String, CCType]]
+    var scopes = List.empty[scala.collection.mutable.Map[String, CCType]]
+    def inScope(a : => Unit) : Unit = {
+      scopes = scala.collection.mutable.Map.empty[String, CCType] :: scopes
+      try a finally scopes = scopes.tail
+    }
+    def dec(d : Dec) : Unit =
+      try {
+        for (decl <- collectVarDecls(d, isGlobal = false)) decl match {
+          case v : CCVarDeclaration => scopes.head(v.name) = v.typ
+          case _ =>
+        }
+      } catch { case _ : Throwable => }
+    def stm(s : Stm) : Unit = s match {
+      case s : LabelS     => labeled(s.labeled_stm_)
+      case s : CompS      => comp(s.compound_stm_)
+      case s : SelS       => sel(s.selection_stm_)
+      case s : IterS      => iter(s.iter_stm_)
+      case s : AtomicS    => atomic(s.atomic_stm_)
+      case s : AnnotatedIterS => iter(s.iter_stm_)
+      case s : DecS       => dec(s.dec_)
+      case s : GhostStm   => s.liststm_.asScala.foreach(stm)
+      case _              =>
+    }
+    def labeled(s : Labeled_stm) : Unit = s match {
+      case s : SlabelOne   =>
+        result(s.cident_) =
+          scopes.reverse.foldLeft(Map.empty[String, CCType])(_ ++ _)
+        stm(s.stm_)
+      case s : SlabelTwo   => stm(s.stm_)
+      case s : SlabelThree => stm(s.stm_)
+    }
+    def comp(s : Compound_stm) : Unit = s match {
+      case _ : ScompOne =>
+      case s : ScompTwo => inScope { s.liststm_.asScala.foreach(stm) }
+    }
+    def sel(s : Selection_stm) : Unit = s match {
+      case s : SselOne   => stm(s.stm_)
+      case s : SselTwo   => stm(s.stm_1); stm(s.stm_2)
+      case s : SselThree => stm(s.stm_)
+    }
+    def iter(s : Iter_stm) : Unit = s match {
+      case s : SiterOne   => stm(s.stm_)
+      case s : SiterTwo   => stm(s.stm_)
+      case s : SiterThree => stm(s.stm_)
+      case s : SiterFour  => stm(s.stm_)
+    }
+    def atomic(s : Atomic_stm) : Unit = s match {
+      case s : SatomicOne => stm(s.stm_)
+      case s : SatomicTwo => stm(s.stm_)
+    }
+    comp(body)
+    result.toMap
+  }
+
   //////////////////////////////////////////////////////////////////////////////
 
   private def inlineFunction(functionDef : Function_def,
@@ -2595,13 +2653,17 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     def setParams(params : scala.Seq[CCVar]) : Unit = entryParams = params
 
     // resolves names/heap for a statement annotation against one symex state (a
-    // label to capture, or the assert site). resolvableNames limits visible names
+    // label to capture, or the assert site). resolvableNames limits visible names,
+    // declaredTypes supplies types for names outside that limit
     private class StatementContext(symex           : Symex,
                                    srcInfo         : SourceInfo,
-                                   resolvableNames : Option[Set[String]] = None)
+                                   resolvableNames : Option[Set[String]] = None,
+                                   declaredTypes   : Map[String, CCType] = Map.empty)
         extends ACSLTranslator.StatementAnnotationContext {
       override def getTermInScope(name : String) : Option[CCTerm] =
-        if (resolvableNames.exists(!_.contains(name))) None
+        if (resolvableNames.exists(!_.contains(name)))
+          declaredTypes.get(name).map(t =>
+            CCTerm.fromTerm(new CCVar(name, None, t, AutoStorage).term, t, None))
         else scope.allFormalVars.zipWithIndex.find(_._1.name == name) match {
           case Some((_, i)) => Some(symex.getValues(i))
           case None         => None
@@ -2655,7 +2717,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     }
 
     // a CCBool capture variable holds an int term, but toFormula tests a CCBool
-    // against BoolADT.True. Re-type the term as CCInt so it asserts as term != 0
+    // against BoolADT.True. A CCInt capture instead asserts as term != 0
     private def boolToInt(t : CCTerm) : CCTerm =
       if (t.typ == CCBool) CCTerm.fromTerm(t.toTerm, CCInt, t.srcInfo) else t
 
@@ -2680,17 +2742,30 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val entryDefined =
           (entryParams.map(_.name) ++ scope.GlobalVars.vars.map(_.name) ++
            scope.LocalVars.vars.map(_.name)).toSet
-        val entryCtx   = new StatementContext(entrySymex, srcInfo, Some(entryDefined))
-        val translator = new ACSLTranslator(entryCtx)
+        // a C-label capture takes its type from the body declarations visible
+        // at its label
+        val labelEnvs =
+          if (labelCaptures.isEmpty) Map.empty[String, Map[String, CCType]]
+          else labelDeclaredTypes(body)
+        val preTranslator = new ACSLTranslator(
+          new StatementContext(entrySymex, srcInfo, Some(entryDefined)))
         for ((eat, cvName) <- captures) {
+          val isPre = ACSLTranslator.Label(eat.id_) == ACSLTranslator.Label.Pre
+          val hint =
+            if (isPre) "referenced name not in function-entry scope, or unsupported"
+            else "referenced name not visible at the label, or unsupported"
+          val translator =
+            if (isPre) preTranslator
+            else new ACSLTranslator(
+              new StatementContext(entrySymex, srcInfo, Some(entryDefined),
+                                   labelEnvs.getOrElse(eat.id_, Map.empty)))
           val t = boolToInt(
             try translator.translate(eat.expr_)
             catch {
               case e : Throwable => throw new TranslationException(
                 getLineString(Some(srcInfo)) +
                 "Failed to capture the expression for a labelled state in a " +
-                "statement annotation (referenced name not in function-entry " +
-                "scope, or unsupported)\n" + e.getMessage)
+                s"statement annotation ($hint)\n" + e.getMessage)
             })
           if (isArrayType(t.typ))
             throw new TranslationException(getLineString(Some(srcInfo)) +
@@ -2699,7 +2774,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           val cv = new CCVar(cvName, Some(srcInfo), t.typ, AutoStorage)
           scope.LocalVars addVar cv
           // a C-label is bound at the label point, until then it is unconstrained
-          if (ACSLTranslator.Label(eat.id_) == ACSLTranslator.Label.Pre)
+          if (isPre)
             entrySymex.addValue(t)
           else
             entrySymex.addValue(CCTerm.fromTerm(IConstant(cv.term), cv.typ,
@@ -2730,7 +2805,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           if (t.typ != cvVar.typ)
             throw new TranslationException(getLineString(Some(srcInfo)) +
               s"the type of the captured expression for C-label '$name' differs " +
-              "from its type in the function-entry scope, which is not supported")
+              "from its declared type (shadowing with a different type is not " +
+              "supported)")
           bound += (cvIndex -> t.toTerm)
         }
         val capturedAtLabel = newPred(Nil, Some(srcInfo))
