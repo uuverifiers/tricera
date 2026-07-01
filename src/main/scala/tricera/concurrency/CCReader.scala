@@ -3110,96 +3110,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     private def translate(loop_annot : Annotation,
                           iter       : Iter_stm,
                           entry      : CCPredicate,
-                          exit       : CCPredicate) : Unit = {
-      val annotationInfo = AnnotationParser(annotationStringExtractor(loop_annot))
-      annotationInfo match {
-        case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
-          val stmSymex = Symex(symexContext, scope, entry, heapModel)
-          class LocalContext extends ACSLTranslator.StatementAnnotationContext {
-            override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
-              CCReader.this.enumeratorDefs
-            override def acslPredicateDefs
-                : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
-              CCReader.this.acslPredicateDefs
-            /**
-             * Returns the term from the init atom - this should work as
-             * long as the annotation does not have side effects, because
-             * it always returns the original terms from initAtom
-             */
-            override def getTermInScope(name : String) : Option[CCTerm] = {
-              entry.argVars.zipWithIndex.find{
-                case (v, i) => v.name == name
-              } match {
-                case Some((v, i)) =>
-                  stmSymex.initAtomArgs match {
-                    case Some(args) => Some(CCTerm.fromTerm(args(i), v.typ, v.srcInfo))
-                    case None       => None
-                  }
-                case None         => None
-              }
-            }
-
-            override def getGlobals : scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
-            override def sortWrapper(s : Sort) : Option[IFunction] =
-              sortWrapperMap get s
-            override def sortGetter(s : Sort) : Option[IFunction] =
-              sortGetterMap get s
-            override def wrapperSort(wrapper: IFunction): Option[Sort] =
-              wrapper match {
-                case w: MonoSortedIFunction =>
-                  wrapperSortMap.get(w)
-                case _ => None
-              }
-            override def getterSort(getter: IFunction): Option[Sort] =
-              getter match {
-                case g: MonoSortedIFunction =>
-                  getterSortMap.get(g)
-                case _ => None
-              }
-            override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
-            override def getTypOfPointer(t : CCType) : CCType =
-              t match {
-                case p : CCHeapPointer => p.typ
-                case _ => t
-              }
-            override def isHeapEnabled : Boolean = modelHeap
-            override def getHeap : HeapTheoryObject =
-              if (modelHeap) heap else throw NeedsHeapModelException
-            override def getHeapTerm : ITerm = {
-              if (modelHeap) {
-                val heapVar = heapModel.get match {
-                  case m : HeapTheoryModel => m.heapVar
-                  case _                   => throw new TranslationException(
-                    "Heap in ACSL only supported using the theory of heaps.")
-                }
-                stmSymex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
-              } else throw NeedsHeapModelException
-            }
-
-            override def getOldHeapTerm : ITerm =
-              getHeapTerm // todo: heap term for exit predicate?
-            
-            override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
-
-            override val annotationBeginSourceInfo : SourceInfo =
-              getSourceInfo(loop_annot)
-
-            override val annotationNumLines : Int = 1
-          }
-          ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
-            case res : tricera.acsl.LoopAnnotation =>
-                ???
-            case _ =>
-              warn("Ignoring annotation: " + annot)
-              ???
-          }
-        case _  =>
-          warn("Ignoring annotation: " + annotationInfo)
-          ???
-      }
-    }
+                          exit       : CCPredicate) : Unit =
+      throw new TranslationException(
+        getLineString(Some(getSourceInfo(loop_annot))) +
+        "explicit loop invariants are not yet supported")
 
 
     private def translate(dec     : Dec,
