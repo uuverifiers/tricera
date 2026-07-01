@@ -1,6 +1,7 @@
-void callee(int x) {
-  /*@ assert x == 0; @*/
+void f(void) {
+  int y = 3;
+  /*@ assert \at(y, Pre) == 0; @*/
 }
 void main(void) {
-  callee(0);
+  f();
 }

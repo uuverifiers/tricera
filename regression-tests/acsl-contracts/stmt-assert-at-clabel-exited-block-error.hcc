@@ -1,0 +1,12 @@
+
+
+int main(void) {
+  int x = 5;
+  {
+L:
+    x = 10;
+  }
+  x = 20;
+  /*@ assert \at(x, L) == 10; @*/
+  return 0;
+}

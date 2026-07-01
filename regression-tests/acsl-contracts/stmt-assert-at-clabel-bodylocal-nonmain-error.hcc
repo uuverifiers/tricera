@@ -1,0 +1,15 @@
+// known TriCera limitation, \at cannot refer to locals in a function
+// workaround: make them global or a parameter.
+
+
+
+int f(int n) {
+  int acc = n;
+L:
+  acc = acc + 100;
+  /*@ assert \at(acc, L) + 100 == acc; @*/
+  return acc;
+}
+void main(void) {
+  f(7);
+}

@@ -1,0 +1,14 @@
+// \at(e, Pre) inside a function that has a contract is not supported
+
+/*@
+  requires x >= 0;
+  ensures \result == 99;
+*/
+int f(int x) {
+  x = 99;
+  /*@ assert \at(x, Pre) == 7; @*/
+  return x;
+}
+void main(void) {
+  f(7);
+}

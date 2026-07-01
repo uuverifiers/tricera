@@ -39,6 +39,7 @@ import ap.types.{Sort, SortedConstantTerm}
 import ap.theories.heaps.Heap
 import tricera.Util.{SourceInfo, getSourceInfo}
 import tricera.concurrency.ccreader._
+import tricera.Literals
 import CCExceptions._
 
 class ACSLException(msg : String) extends Exception(msg)
@@ -74,6 +75,30 @@ object ACSLTranslator {
 
   trait StatementAnnotationContext extends AnnotationContext {
     def getTermInScope (name : String) : Option[CCTerm]
+  }
+
+  // The ACSL state that \at(e, id) refers to (ACSL v1.23, Table 2.1)
+  sealed abstract class Label
+  object Label {
+    case object Here        extends Label
+    case object Pre         extends Label
+    case object Old         extends Label
+    case object Post        extends Label
+    case object Init        extends Label
+    case object LoopEntry   extends Label
+    case object LoopCurrent extends Label
+    final case class CLabel(name : String) extends Label
+
+    def apply(id : String) : Label = id match {
+      case "Here"        => Here
+      case "Pre"         => Pre
+      case "Old"         => Old
+      case "Post"        => Post
+      case "Init"        => Init
+      case "LoopEntry"   => LoopEntry
+      case "LoopCurrent" => LoopCurrent
+      case name          => CLabel(name)
+    }
   }
 
   private[acsl] def getActualLine(ctx : AnnotationContext, line : Int) = {
@@ -169,6 +194,42 @@ object ACSLTranslator {
     case x : AST.VarIdentId       => x.id_
     case x : AST.VarIdentArray    => varIdentName(x.varident_)
     case x : AST.VarIdentPtrDeref => varIdentName(x.varident_)
+  }
+
+  def parseAnnotation(annot : String) : AST.Annotation = {
+    val l = new Yylex(new java.io.StringReader(preprocess(annot)))
+    val p = new parser(l, l.getSymbolFactory())
+    p.pAnnotation()
+  }
+
+  // labels that need to be captured ahead of their use
+  def isCapturedLabel(id : String) : Boolean = Label(id) match {
+    case Label.Pre        => true
+    case Label.CLabel(_)  => true
+    case _                => false
+  }
+
+  private def copyLoc[N <: SourceInfoProvider]
+                     (src : SourceInfoProvider, node : N) : N = {
+    node.setLineNum(src.getLineNum)
+    node.setColNum(src.getColNum)
+    node.setOffset(src.getOffset)
+    node
+  }
+
+  // collect captured \at nodes. EAt has structural equality
+  class CaptureCollector extends ComposVisitor[Unit] {
+    val found = new scala.collection.mutable.ListBuffer[AST.EAt]
+    override def visit(p : AST.EAt, a : Unit) : AST.Expr =
+      if (isCapturedLabel(p.id_)) { found += p; p } else super.visit(p, a)
+  }
+
+  // rewrite an \at expr using its capture variable
+  class CaptureRewriter(names : Map[AST.EAt, String]) extends ComposVisitor[Unit] {
+    override def visit(p : AST.EAt, a : Unit) : AST.Expr =
+      if (isCapturedLabel(p.id_))
+        copyLoc(p, new AST.EIdent(names(p)))
+      else super.visit(p, a)
   }
 
 }
@@ -939,7 +1000,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     // FIXME: Order of lookups (priority)?
 
     val maybeTerm = ctx match {
-      case stmCtx: StatementAnnotationContext =>
+      case stmCtx : StatementAnnotationContext =>
         stmCtx.getTermInScope(ident)
       case _ => None
     }
@@ -1113,17 +1174,38 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     res
   }
 
-  def translateOldExpr(expr : AST.EOld) : CCTerm = translateInOldState(expr.expr_)
+  def translateOldExpr(expr : AST.EOld) : CCTerm =
+    if (ctx.isInstanceOf[FunctionContext]) translateInOldState(expr.expr_)
+    else throw new ACSLParseException(
+      "\\old is not visible in a statement annotation; use \\at(e, Pre)",
+      getSourceInfo(expr))
 
-  def translateAtExpr(expr : AST.EAt) : CCTerm =
-    labelBindings.getOrElse(expr.id_, expr.id_) match {
-      case "Pre" | "Old"        => translateInOldState(expr.expr_)
-      case "Here"               => translateTerm(expr.expr_)
-      case "Post" if inPostCond => translateTerm(expr.expr_)
-      case other => throw new ACSLParseException(
-        s"Unsupported or out-of-context label '$other' in \\at.",
-        getSourceInfo(expr))
+  // ACSL 2.4.3 Table 2.1: Old/Post are contract-only. In a statement annotation
+  // Pre and C-labels are handled by the capture mechanism (CCReader rewrites them
+  // before this runs), so reaching a C-label here means it was not captured (e.g.
+  // used before the label, in an exited block, or undefined).
+  private def labelUnavailableMsg(label : Label, id : String) : String = {
+    val where =
+      if (ctx.isInstanceOf[StatementAnnotationContext]) "a statement annotation"
+      else "this contract clause"
+    label match {
+      case Label.Old | Label.Post => s"label '$id' is not visible in $where (ACSL 2.4.3)"
+      case Label.CLabel(_)        => s"C-label '$id' is not visible at this use in $where"
+      case _                      => s"label '$id' is not yet supported in $where"
     }
+  }
+
+  def translateAtExpr(expr : AST.EAt) : CCTerm = {
+    val labelId = labelBindings.getOrElse(expr.id_, expr.id_)
+    Label(labelId) match {
+      case Label.Pre | Label.Old if ctx.isInstanceOf[FunctionContext] =>
+        translateInOldState(expr.expr_)
+      case Label.Here               => translateTerm(expr.expr_)
+      case Label.Post if inPostCond => translateTerm(expr.expr_)
+      case label => throw new ACSLParseException(
+        labelUnavailableMsg(label, labelId), getSourceInfo(expr))
+    }
+  }
 
   def translateApplicationExpr(expr : AST.EApplication) : CCTerm =
     inlinePredicate(expr.id_, expr.listexpr_.asScala.toList, getSourceInfo(expr))
@@ -1163,6 +1245,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 
   def translateResultExpr(expr : AST.EResult) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
+    if (!ctx.isInstanceOf[FunctionContext])
+      throw new ACSLParseException(
+        "\\result is not visible in a statement annotation", srcInfo)
     val funCtx = ctx.asInstanceOf[FunctionContext]
     if (!inPostCond) {
       throw new ACSLParseException("\\result has no meaning.", srcInfo)

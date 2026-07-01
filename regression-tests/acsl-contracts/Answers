@@ -263,5 +263,193 @@ stmt-assert-flow-unsafe.hcc
 UNSAFE
 
 stmt-assert-untranslatable-error.hcc
+Horn Translation Error: At (2:3)): Failed to capture the expression for a labelled state in a statement annotation (referenced name not in function-entry scope, or unsupported)
+Identifier y not found in scope.
+
+stmt-assert-pre-safe.hcc
+SAFE
+
+stmt-assert-pre-unsafe.hcc
+UNSAFE
+
+stmt-assert-inlined-param-safe.hcc
+SAFE
+
+stmt-assert-inlined-param-unsafe.hcc
+UNSAFE
+
+stmt-assert-here-safe.hcc
+SAFE
+
+stmt-assert-here-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-param-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-param-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-loop-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-loop-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-loop-error.hcc
+Horn Translation Error: At (9:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+
+stmt-assert-at-clabel-array-error.hcc
+Horn Translation Error: At (5:3)): a whole-array value (logical array) cannot be captured; only scalar values are supported
+
+stmt-assert-at-clabel-distinct-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-distinct-unsafe.hcc
+UNSAFE
+
+stmt-assert-old-error.hcc
+Horn Translation Error: At (5:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+\old is not visible in a statement annotation; use \at(e, Pre)
+
+stmt-assert-at-clabel-undefined-error.hcc
+Horn Translation Error: At (7:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+At (7:3)): reference to undefined C-label 'NOPE'
+
+stmt-assert-at-clabel-forward-error.hcc
+Horn Translation Error: At (5:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+
+stmt-assert-at-clabel-exited-block-error.hcc
+Horn Translation Error: At (10:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+
+stmt-assert-at-clabel-post-error.hcc
 Horn Translation Error: At (6:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
-Identifier x not found in scope.
+label 'Post' is not visible in a statement annotation (ACSL 2.4.3)
+
+stmt-assert-at-clabel-goto-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-goto-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-goto-between-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-goto-between-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-bypass-goto-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-bypass-case-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-if-arm-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-struct-field-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-struct-field-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-array-elem-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-array-elem-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-two-labels-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-two-labels-unsafe.hcc
+UNSAFE
+
+stmt-assert-pre-contract-error.hcc
+Horn Translation Error: At (3:1)): \at(e, Pre) or \at(e, C-label) in a statement annotation is not yet supported in a function with a contract; use \at(e, Here), or remove the contract so the function is inlined
+
+stmt-assert-result-error.hcc
+Horn Translation Error: At (4:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+\result is not visible in a statement annotation
+
+stmt-assert-at-init-error.hcc
+Horn Translation Error: At (5:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+label 'Init' is not yet supported in a statement annotation
+
+stmt-assert-at-loopentry-error.hcc
+Horn Translation Error: At (7:5)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+label 'LoopEntry' is not yet supported in a statement annotation
+
+stmt-assert-at-loopcurrent-error.hcc
+Horn Translation Error: At (7:5)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+label 'LoopCurrent' is not yet supported in a statement annotation
+
+stmt-assert-at-clabel-bodylocal-nonmain-error.hcc
+Horn Translation Error: At (7:3)): Failed to capture the expression for a labelled state in a statement annotation (referenced name not in function-entry scope, or unsupported)
+Identifier acc not found in scope.
+
+stmt-assert-at-clabel-expr-arith-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-expr-arith-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-expr-array-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-expr-array-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-expr-struct-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-expr-struct-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-expr-nested-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-expr-nested-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-expr-ternary-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-expr-ternary-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-relation-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-relation-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-struct-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-struct-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-pointer-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-pointer-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-char-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-char-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-uint-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-uint-unsafe.hcc
+UNSAFE

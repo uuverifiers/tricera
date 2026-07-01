@@ -1,0 +1,8 @@
+// \old is contract-only
+
+int f(int x) {
+  x = 8;
+  /*@ assert \old(x) == 7; @*/
+  return x;
+}
+void main(void) { f(7); }

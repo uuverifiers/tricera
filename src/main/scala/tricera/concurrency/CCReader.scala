@@ -1160,6 +1160,11 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
             Some(f.sourceInfo)))// todo: correct source info?
           val translator = FunctionTranslator(exitPred, name)
+          if (bodyCaptures(stm).nonEmpty)
+            throw new TranslationException(getLineString(Some(f.sourceInfo)) +
+              "\\at(e, Pre) or \\at(e, C-label) in a statement annotation is not yet " +
+              "supported in a function with a contract; use \\at(e, Here), or remove " +
+              "the contract so the function is inlined")
           val finalPred = typ match {
             case CCVoid =>
               translator.translateNoReturn(stm, entryPred)
@@ -1258,6 +1263,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           } 
 
           val translator = FunctionTranslator(exitPred, f.name)
+          // entry parameters, needed by setupLabelCaptures to resolve captured expressions
+          translator.setParams(scope.LocalVars.getVarsInTopFrame)
 
           /**
            * There can be various ways out of a function. If a function has a
@@ -2323,6 +2330,106 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   private def atom(ccPred : CCPredicate) : IAtom =
     atom(ccPred, ccPred.argVars.map(_.term))
 
+  // text of each statement annotation. bodyStmtAnnotations gathers them over a
+  // function body to find every captured \at(e, label) ref
+  private def stmtAnnotations(annot : Annotation) : scala.Seq[String] =
+    AnnotationParser(annotationStringExtractor(annot)).collect {
+      case MaybeACSLAnnotation(a, _) => a
+    }
+
+  private def bodyStmtAnnotations(stm : Stm) : scala.Seq[String] = stm match {
+    case s : LabelS         => bodyStmtAnnotations(s.labeled_stm_)
+    case s : CompS          => bodyStmtAnnotations(s.compound_stm_)
+    case s : SelS           => bodyStmtAnnotations(s.selection_stm_)
+    case s : IterS          => bodyStmtAnnotations(s.iter_stm_)
+    case s : AtomicS        => bodyStmtAnnotations(s.atomic_stm_)
+    case s : AnnotationS    => stmtAnnotations(s.annotation_)
+    case s : AnnotatedIterS =>
+      stmtAnnotations(s.annotation_) ++ bodyStmtAnnotations(s.iter_stm_)
+    case s : GhostStm       => s.liststm_.asScala.toSeq.flatMap(bodyStmtAnnotations)
+    case _                  => Nil
+  }
+  private def bodyStmtAnnotations(stm : Labeled_stm) : scala.Seq[String] = stm match {
+    case s : SlabelOne   => bodyStmtAnnotations(s.stm_)
+    case s : SlabelTwo   => bodyStmtAnnotations(s.stm_)
+    case s : SlabelThree => bodyStmtAnnotations(s.stm_)
+  }
+  private def bodyStmtAnnotations(stm : Compound_stm) : scala.Seq[String] = stm match {
+    case _ : ScompOne => Nil
+    case s : ScompTwo => s.liststm_.asScala.toSeq.flatMap(bodyStmtAnnotations)
+  }
+  private def bodyStmtAnnotations(stm : Selection_stm) : scala.Seq[String] = stm match {
+    case s : SselOne   => bodyStmtAnnotations(s.stm_)
+    case s : SselTwo   => bodyStmtAnnotations(s.stm_1) ++ bodyStmtAnnotations(s.stm_2)
+    case s : SselThree => bodyStmtAnnotations(s.stm_)
+  }
+  private def bodyStmtAnnotations(stm : Iter_stm) : scala.Seq[String] = stm match {
+    case s : SiterOne   => bodyStmtAnnotations(s.stm_)
+    case s : SiterTwo   => bodyStmtAnnotations(s.stm_)
+    case s : SiterThree => bodyStmtAnnotations(s.stm_)
+    case s : SiterFour  => bodyStmtAnnotations(s.stm_)
+  }
+  private def bodyStmtAnnotations(stm : Atomic_stm) : scala.Seq[String] = stm match {
+    case s : SatomicOne => bodyStmtAnnotations(s.stm_)
+    case s : SatomicTwo => bodyStmtAnnotations(s.stm_)
+  }
+
+  // the distinct captured \at(e, label) nodes across a function body
+  private def bodyCaptures(body : Compound_stm) : scala.Seq[tricera.acsl.Absyn.EAt] =
+    bodyStmtAnnotations(body).flatMap { annot =>
+      val parsed =
+        try Some(ACSLTranslator.parseAnnotation("/*@" + annot + "*/"))
+        catch { case _ : Throwable => None }
+      parsed match {
+        case Some(ast) =>
+          val collector = new ACSLTranslator.CaptureCollector
+          ast.accept(collector, ())
+          collector.found.toSeq
+        case None => Nil
+      }
+    }.distinct
+
+  // every C-label defined in the body
+  private def collectLabels(body : Compound_stm) : Set[String] = {
+    val all = scala.collection.mutable.Set.empty[String]
+    def stm(s : Stm) : Unit = s match {
+      case s : LabelS     => labeled(s.labeled_stm_)
+      case s : CompS      => comp(s.compound_stm_)
+      case s : SelS       => sel(s.selection_stm_)
+      case s : IterS      => iter(s.iter_stm_)
+      case s : AtomicS    => atomic(s.atomic_stm_)
+      case s : AnnotatedIterS => iter(s.iter_stm_)
+      case s : GhostStm   => s.liststm_.asScala.foreach(stm)
+      case _              =>
+    }
+    def labeled(s : Labeled_stm) : Unit = s match {
+      case s : SlabelOne   => all += s.cident_; stm(s.stm_)
+      case s : SlabelTwo   => stm(s.stm_)
+      case s : SlabelThree => stm(s.stm_)
+    }
+    def comp(s : Compound_stm) : Unit = s match {
+      case _ : ScompOne =>
+      case s : ScompTwo => s.liststm_.asScala.foreach(stm)
+    }
+    def sel(s : Selection_stm) : Unit = s match {
+      case s : SselOne   => stm(s.stm_)
+      case s : SselTwo   => stm(s.stm_1); stm(s.stm_2)
+      case s : SselThree => stm(s.stm_)
+    }
+    def iter(s : Iter_stm) : Unit = s match {
+      case s : SiterOne   => stm(s.stm_)
+      case s : SiterTwo   => stm(s.stm_)
+      case s : SiterThree => stm(s.stm_)
+      case s : SiterFour  => stm(s.stm_)
+    }
+    def atomic(s : Atomic_stm) : Unit = s match {
+      case s : SatomicOne => stm(s.stm_)
+      case s : SatomicTwo => stm(s.stm_)
+    }
+    comp(body)
+    all.toSet
+  }
+
   //////////////////////////////////////////////////////////////////////////////
 
   private def inlineFunction(functionDef : Function_def,
@@ -2343,13 +2450,17 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
     val isInjected = injectedFunctionNames contains functionName
     val translator = FunctionTranslator(exit, functionName)
+    // entry parameters, needed by setupLabelCaptures to resolve captured expressions
+    translator.setParams(scope.LocalVars.getVarsInTopFrame)
+    val bodyEntry =
+      translator.setupLabelCaptures(stm, entry, getSourceInfo(stm))
     val finalPred =
       if (isInjected) inInjectedCode {
-        if (isNoReturn) { translator.translateNoReturn(stm, entry); exit }
-        else translator.translateWithReturn(stm, entry)
+        if (isNoReturn) { translator.translateNoReturn(stm, bodyEntry); exit }
+        else translator.translateWithReturn(stm, bodyEntry)
       } else {
-        if (isNoReturn) { translator.translateNoReturn(stm, entry); exit }
-        else translator.translateWithReturn(stm, entry)
+        if (isNoReturn) { translator.translateNoReturn(stm, bodyEntry); exit }
+        else translator.translateWithReturn(stm, bodyEntry)
       }
     scope.LocalVars popFrame
   }
@@ -2473,6 +2584,165 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   private class FunctionTranslator private (returnPred   : Option[CCPredicate],
                                             functionName : String) {
     private var inGhostMode : Boolean = false
+
+    private var entryParams     : scala.Seq[CCVar] = Nil
+    private var captureNames    : Map[tricera.acsl.Absyn.EAt, String] = Map.empty
+    // C-label -> (capture-var, e) pairs at the label
+    private var labelCaptures   : Map[String, scala.Seq[(String, tricera.acsl.Absyn.Expr)]] =
+      Map.empty
+    private var definedLabels   : Set[String] = Set.empty
+
+    def setParams(params : scala.Seq[CCVar]) : Unit = entryParams = params
+
+    // resolves names/heap for a statement annotation against one symex state (a
+    // label to capture, or the assert site). resolvableNames limits visible names
+    private class StatementContext(symex           : Symex,
+                                   srcInfo         : SourceInfo,
+                                   resolvableNames : Option[Set[String]] = None)
+        extends ACSLTranslator.StatementAnnotationContext {
+      override def getTermInScope(name : String) : Option[CCTerm] =
+        if (resolvableNames.exists(!_.contains(name))) None
+        else scope.allFormalVars.zipWithIndex.find(_._1.name == name) match {
+          case Some((_, i)) => Some(symex.getValues(i))
+          case None         => None
+        }
+      override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
+        CCReader.this.enumeratorDefs
+      override def acslPredicateDefs
+          : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
+        CCReader.this.acslPredicateDefs
+      override def getGlobals : scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
+      override def sortWrapper(s : Sort) : Option[IFunction] = sortWrapperMap get s
+      override def sortGetter(s : Sort) : Option[IFunction] = sortGetterMap get s
+      override def wrapperSort(wrapper : IFunction) : Option[Sort] = wrapper match {
+        case w : MonoSortedIFunction => wrapperSortMap.get(w)
+        case _ => None
+      }
+      override def getterSort(getter : IFunction) : Option[Sort] = getter match {
+        case g : MonoSortedIFunction => getterSortMap.get(g)
+        case _ => None
+      }
+      override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
+      override def getTypOfPointer(t : CCType) : CCType = t match {
+        case p : CCHeapPointer => p.typ
+        case t => t
+      }
+      override def isHeapEnabled : Boolean = modelHeap
+      override def getHeap : HeapTheoryObject =
+        if (modelHeap) heap
+        else throw new TranslationException("getHeap called with no heap!")
+      override def getHeapTerm : ITerm =
+        if (modelHeap) {
+          val heapVar = heapModel.get match {
+            case m : HeapTheoryModel => m.heapVar
+            case _ => throw new TranslationException(
+              "Heap in ACSL only supported using the theory of heaps.")
+          }
+          symex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
+        } else throw new TranslationException("getHeapTerm called with no heap!")
+      override def getOldHeapTerm : ITerm =
+        throw new TranslationException(
+          "\\old/pre-state heap is not available in statement annotations.")
+      override val getStructMap : Map[IFunction, CCStruct] =
+        structDefs.values.map((struct : CCStruct) => (struct.ctor, struct)).toMap
+      override val annotationBeginSourceInfo : SourceInfo = srcInfo
+      override val annotationNumLines : Int = 1
+    }
+
+    private def isArrayType(t : CCType) : Boolean = t match {
+      case _ : CCArray | _ : CCHeapArrayPointer => true
+      case _ => false
+    }
+
+    // a CCBool capture variable holds an int term, but toFormula tests a CCBool
+    // against BoolADT.True. Re-type the term as CCInt so it asserts as term != 0
+    private def boolToInt(t : CCTerm) : CCTerm =
+      if (t.typ == CCBool) CCTerm.fromTerm(t.toTerm, CCInt, t.srcInfo) else t
+
+    // declares a capture variable at entry for each \at(e, label)
+    def setupLabelCaptures(body    : Compound_stm,
+                           entry   : CCPredicate,
+                           srcInfo : SourceInfo) : CCPredicate = {
+      val captures = bodyCaptures(body).zipWithIndex.map {
+        case (eat, i) => (eat, Literals.captureVarPrefix + i)
+      }
+      captureNames = captures.toMap
+      definedLabels = collectLabels(body)
+      labelCaptures = captures.collect {
+        case (eat, name) if ACSLTranslator.Label(eat.id_).isInstanceOf[
+                              ACSLTranslator.Label.CLabel] =>
+          (eat.id_, (name, eat.expr_))
+      }.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
+
+      if (captures.isEmpty) entry
+      else {
+        val entrySymex = Symex(symexContext, scope, entry, heapModel)
+        val entryDefined =
+          (entryParams.map(_.name) ++ scope.GlobalVars.vars.map(_.name) ++
+           scope.LocalVars.vars.map(_.name)).toSet
+        val entryCtx   = new StatementContext(entrySymex, srcInfo, Some(entryDefined))
+        val translator = new ACSLTranslator(entryCtx)
+        for ((eat, cvName) <- captures) {
+          val t = boolToInt(
+            try translator.translate(eat.expr_)
+            catch {
+              case e : Throwable => throw new TranslationException(
+                getLineString(Some(srcInfo)) +
+                "Failed to capture the expression for a labelled state in a " +
+                "statement annotation (referenced name not in function-entry " +
+                "scope, or unsupported)\n" + e.getMessage)
+            })
+          if (isArrayType(t.typ))
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              "a whole-array value (logical array) cannot be captured; only " +
+              "scalar values are supported")
+          val cv = new CCVar(cvName, Some(srcInfo), t.typ, AutoStorage)
+          scope.LocalVars addVar cv
+          // a C-label is bound at the label point, until then it is unconstrained
+          if (ACSLTranslator.Label(eat.id_) == ACSLTranslator.Label.Pre)
+            entrySymex.addValue(t)
+          else
+            entrySymex.addValue(CCTerm.fromTerm(IConstant(cv.term), cv.typ,
+                                                Some(srcInfo)))
+        }
+        val entryWithCaptures = newPred(Nil, Some(srcInfo))
+        entrySymex.outputClause(entryWithCaptures, Some(srcInfo))
+        entryWithCaptures
+      }
+    }
+
+    // binds `name`'s capture variables to e evaluated in the label's state, as an
+    // assignment, so a label reached more than once holds the most recent passage
+    private def bindLabelCaptures(name      : String,
+                                  labelPred : CCPredicate,
+                                  srcInfo   : SourceInfo) : CCPredicate = {
+      val caps = labelCaptures.getOrElse(name, Nil)
+      if (caps.isEmpty) labelPred
+      else {
+        val labelSymex = Symex(symexContext, scope, labelPred, heapModel)
+        val labelCtx   = new StatementContext(labelSymex, srcInfo)
+        val translator = new ACSLTranslator(labelCtx)
+        var bound : Map[Int, ITerm] = Map.empty
+        for ((cvName, eAst) <- caps) {
+          val t = boolToInt(translator.translate(eAst))
+          val cvIndex = scope.lookupVar(cvName, functionName)
+          val cvVar   = scope.allFormalVars(cvIndex)
+          if (t.typ != cvVar.typ)
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              s"the type of the captured expression for C-label '$name' differs " +
+              "from its type in the function-entry scope, which is not supported")
+          bound += (cvIndex -> t.toTerm)
+        }
+        val capturedAtLabel = newPred(Nil, Some(srcInfo))
+        val args = scope.allFormalVarTerms.zipWithIndex.map {
+          case (term, i) => bound.getOrElse(i, term)
+        }.take(capturedAtLabel.arity)
+        output(addRichClause(Clause(atom(capturedAtLabel, args),
+          List(atom(labelPred, scope.allFormalVarTerms take labelPred.arity)), true),
+          Some(srcInfo)))
+        capturedAtLabel
+      }
+    }
 
     private def symexFor(initPred : CCPredicate,
                          stm : Expression_stm) : (Symex, Option[CCTerm]) = {
@@ -2621,6 +2891,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       new ArrayBuffer[(String, CCPredicate, scala.Seq[ITerm], Int, SourceInfo)]
     private val labelledLocs =
       new MHashMap[String, (CCPredicate, scala.Seq[ITerm])]
+    // C-labels visible at the current point, one set per open statement block, so
+    // a label goes out of scope when its block ends (C local-variable scoping). A
+    // \at(e, L) use is only valid for a label in this stack (declared before the
+    // use, in an enclosing or the current block)
+    private val labelScopes =
+      new scala.collection.mutable.Stack[scala.collection.mutable.Set[String]]
+    private def labelVisible(name : String) : Boolean =
+      labelScopes.exists(_.contains(name))
     private val usedJumpTargets =
       new MHashMap[CCPredicate, String]
     private val atomicBlocks =
@@ -2676,88 +2954,41 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             true), srcInfo))
       }
 
+    // rejects \at(e, L) uses of a C-label L that ACSL does not make visible here:
+    // undefined, used before the label, or in a block that already ended
+    private def checkLabelVisibility(annot   : String,
+                                     srcInfo : SourceInfo) : Unit = {
+      val parsed =
+        try Some(ACSLTranslator.parseAnnotation("/*@" + annot + "*/"))
+        catch { case _ : Throwable => None }
+      for (ast <- parsed) {
+        val collector = new ACSLTranslator.CaptureCollector
+        ast.accept(collector, ())
+        for (eat <- collector.found
+             if ACSLTranslator.Label(eat.id_)
+                  .isInstanceOf[ACSLTranslator.Label.CLabel]) {
+          val label = eat.id_
+          if (!definedLabels.contains(label))
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              s"reference to undefined C-label '$label'")
+          else if (!labelVisible(label))
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              s"reference to C-label '$label' which is not visible here " +
+              "(it must appear before the use and not in a block that has ended)")
+        }
+      }
+    }
+
     private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
       val annotationInfo = AnnotationParser(annotationStringExtractor(stm))
       annotationInfo match {
         case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
+          checkLabelVisibility(annot, getSourceInfo(stm))
           val stmSymex = Symex(symexContext, scope, entry, heapModel)
-          class LocalContext extends ACSLTranslator.StatementAnnotationContext {
-            override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
-              CCReader.this.enumeratorDefs
-            override def acslPredicateDefs
-                : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
-              CCReader.this.acslPredicateDefs
-            /**
-             * Returns the term from the init atom - this should work as
-             * long as the annotation does not have side effects, because
-             * it always returns the original terms from initAtom
-             */
-            override def getTermInScope(name: String): Option[CCTerm] = {
-              entry.argVars.zipWithIndex.find {
-                case (v, i) => v.name == name
-              } match {
-                case Some((v, i)) =>
-                  stmSymex.initAtomArgs match {
-                    case Some(args) => Some(CCTerm.fromTerm(args(i), v.typ, v.srcInfo))
-                    case None => None
-                  }
-                case None => None
-              }
-            }
-
-            override def getGlobals: scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
-            override def sortWrapper(s: Sort): Option[IFunction] =
-              sortWrapperMap get s
-            override def sortGetter(s: Sort): Option[IFunction] =
-              sortGetterMap get s
-            override def wrapperSort(wrapper: IFunction): Option[Sort] =
-              wrapper match {
-                case w: MonoSortedIFunction =>
-                  wrapperSortMap.get(w)
-                case _ => None
-              }
-            override def getterSort(getter: IFunction): Option[Sort] =
-              getter match {
-                case g: MonoSortedIFunction =>
-                  getterSortMap.get(g)
-                case _ => None
-              }
-
-            override def getCtor(s: Sort): Int = sortCtorIdMap(s)
-            override def getTypOfPointer(t: CCType): CCType =
-              t match {
-                case p : CCHeapPointer => p.typ
-                case t => t
-              }
-            override def isHeapEnabled: Boolean = modelHeap
-            override def getHeap: HeapTheoryObject =
-              if (modelHeap) heap
-              else throw new TranslationException("getHeap called with no heap!")
-            override def getHeapTerm: ITerm = {
-              if (modelHeap) {
-                val heapVar = heapModel.get match {
-                  case m : HeapTheoryModel => m.heapVar
-                  case _ => throw new TranslationException(
-                    "Heap in ACSL only supported using the theory of heaps.")
-                }
-                stmSymex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
-              } else throw new TranslationException("getHeapTerm called with no heap!")
-            }
-            override def getOldHeapTerm: ITerm = {
-              if (modelHeap) getHeapTerm
-              else throw new TranslationException("getOldHeapTerm called with no heap!")
-            } // todo: heap term for exit predicate?
-
-            override val getStructMap: Map[IFunction, CCStruct] =
-              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
-
-            override val annotationBeginSourceInfo : SourceInfo =
-              getSourceInfo(stm)
-
-            override val annotationNumLines : Int = 1
-          }
+          val ctx = new StatementContext(stmSymex, getSourceInfo(stm))
+          val rewriter = new ACSLTranslator.CaptureRewriter(captureNames)
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
+            "/*@" + annot + "*/", ctx, _.accept(rewriter, ())) match {
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
@@ -2908,7 +3139,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         if (labelledLocs contains stm.cident_)
           throw new TranslationException("multiple labels " + stm.cident_)
         labelledLocs.put(stm.cident_, (entry, scope.allFormalVarTerms))
-        translate(stm.stm_, entry, exit)
+        if (labelScopes.nonEmpty) labelScopes.top += stm.cident_
+        val labelEntry =
+          bindLabelCaptures(stm.cident_, entry, getSourceInfo(stm))
+        translate(stm.stm_, labelEntry, exit)
       }
       case stm : SlabelTwo => { // Labeled_stm ::= "case" Constant_expression ":" Stm ;
         val caseVal = translateConstantExpr(stm.constant_expression_)
@@ -2952,6 +3186,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         }
         output(addRichClause(entryClause, entryPred.srcInfo))
 
+        // set up the label captures before translating this function body
+        val bodyEntry =
+          setupLabelCaptures(compound, entryPred, getSourceInfo(compound))
+
         val initStmts : Iterator[Stm] = {
           val inputInitCode =
             if(TriCeraParameters.get.determinizeInput)
@@ -2969,10 +3207,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val initStmsPeek = ap.util.PeekIterator(initStmts)
         if (initStmsPeek.hasNext) {
           val midPred = newPred(Nil, None)
-          inInjectedCode { translateStmSeq(initStmsPeek, entryPred, midPred) }
+          inInjectedCode { translateStmSeq(initStmsPeek, bodyEntry, midPred) }
           translateStmSeq(ap.util.PeekIterator(stmsIt), midPred, exit)
         } else {
-          translateStmSeq(ap.util.PeekIterator(stmsIt), entryPred, exit)
+          translateStmSeq(ap.util.PeekIterator(stmsIt), bodyEntry, exit)
         }
         scope.LocalVars popFrame
       }
@@ -3039,6 +3277,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     private def translateStmSeq(stmsIt : Iterator[Stm],
                                 entry : CCPredicate,
                                 exit : CCPredicate) : Unit = {
+      labelScopes.push(scala.collection.mutable.Set.empty[String])
+      try translateStmSeqInScope(stmsIt, entry, exit)
+      finally labelScopes.pop()
+    }
+
+    private def translateStmSeqInScope(stmsIt : Iterator[Stm],
+                                       entry : CCPredicate,
+                                       exit : CCPredicate) : Unit = {
       var prevPred = entry
       while (stmsIt.hasNext)
         stmsIt.next match {

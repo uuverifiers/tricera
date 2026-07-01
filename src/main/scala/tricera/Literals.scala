@@ -30,6 +30,10 @@ object Literals {
 
   val atExpressionName = "$at"
 
+  // Prefix for variables holding a value captured at a labelled program state
+  // (\at(e, label)).
+  val captureVarPrefix = "$cap_"
+
   val anonStructName = ".AS"
   val anonEnumName   = ".ES"
 }

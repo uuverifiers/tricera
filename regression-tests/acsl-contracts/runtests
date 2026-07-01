@@ -88,7 +88,67 @@ TESTS="contract1.hcc  \
        ternary-pred-unsafe.hcc \
        stmt-assert-flow-safe.hcc \
        stmt-assert-flow-unsafe.hcc \
-       stmt-assert-untranslatable-error.hcc"
+       stmt-assert-untranslatable-error.hcc \
+       stmt-assert-pre-safe.hcc \
+       stmt-assert-pre-unsafe.hcc \
+       stmt-assert-inlined-param-safe.hcc \
+       stmt-assert-inlined-param-unsafe.hcc \
+       stmt-assert-here-safe.hcc \
+       stmt-assert-here-unsafe.hcc \
+       stmt-assert-at-clabel-safe.hcc \
+       stmt-assert-at-clabel-unsafe.hcc \
+       stmt-assert-at-clabel-param-safe.hcc \
+       stmt-assert-at-clabel-param-unsafe.hcc \
+       stmt-assert-at-clabel-loop-safe.hcc \
+       stmt-assert-at-clabel-loop-unsafe.hcc \
+       stmt-assert-at-clabel-loop-error.hcc \
+       stmt-assert-at-clabel-array-error.hcc \
+       stmt-assert-at-clabel-distinct-safe.hcc \
+       stmt-assert-at-clabel-distinct-unsafe.hcc \
+       stmt-assert-old-error.hcc \
+       stmt-assert-at-clabel-undefined-error.hcc \
+       stmt-assert-at-clabel-forward-error.hcc \
+       stmt-assert-at-clabel-exited-block-error.hcc \
+       stmt-assert-at-clabel-post-error.hcc \
+       stmt-assert-at-clabel-goto-safe.hcc \
+       stmt-assert-at-clabel-goto-unsafe.hcc \
+       stmt-assert-at-clabel-goto-between-safe.hcc \
+       stmt-assert-at-clabel-goto-between-unsafe.hcc \
+       stmt-assert-at-clabel-bypass-goto-unsafe.hcc \
+       stmt-assert-at-clabel-bypass-case-unsafe.hcc \
+       stmt-assert-at-clabel-if-arm-unsafe.hcc \
+       stmt-assert-at-clabel-struct-field-safe.hcc \
+       stmt-assert-at-clabel-struct-field-unsafe.hcc \
+       stmt-assert-at-clabel-array-elem-safe.hcc \
+       stmt-assert-at-clabel-array-elem-unsafe.hcc \
+       stmt-assert-at-clabel-two-labels-safe.hcc \
+       stmt-assert-at-clabel-two-labels-unsafe.hcc \
+       stmt-assert-pre-contract-error.hcc \
+       stmt-assert-result-error.hcc \
+       stmt-assert-at-init-error.hcc \
+       stmt-assert-at-loopentry-error.hcc \
+       stmt-assert-at-loopcurrent-error.hcc \
+       stmt-assert-at-clabel-bodylocal-nonmain-error.hcc \
+       stmt-assert-at-clabel-expr-arith-safe.hcc \
+       stmt-assert-at-clabel-expr-arith-unsafe.hcc \
+       stmt-assert-at-clabel-expr-array-safe.hcc \
+       stmt-assert-at-clabel-expr-array-unsafe.hcc \
+       stmt-assert-at-clabel-expr-struct-safe.hcc \
+       stmt-assert-at-clabel-expr-struct-unsafe.hcc \
+       stmt-assert-at-clabel-expr-nested-safe.hcc \
+       stmt-assert-at-clabel-expr-nested-unsafe.hcc \
+       stmt-assert-at-clabel-expr-ternary-safe.hcc \
+       stmt-assert-at-clabel-expr-ternary-unsafe.hcc \
+       stmt-assert-at-clabel-relation-safe.hcc \
+       stmt-assert-at-clabel-relation-unsafe.hcc \
+       stmt-assert-at-clabel-struct-safe.hcc \
+       stmt-assert-at-clabel-struct-unsafe.hcc \
+       stmt-assert-at-clabel-pointer-safe.hcc \
+       stmt-assert-at-clabel-pointer-unsafe.hcc \
+       stmt-assert-at-clabel-char-safe.hcc \
+       stmt-assert-at-clabel-char-unsafe.hcc \
+       stmt-assert-at-clabel-uint-safe.hcc \
+       stmt-assert-at-clabel-uint-unsafe.hcc"
 
 for name in $TESTS; do
     echo
