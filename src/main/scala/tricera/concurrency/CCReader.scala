@@ -748,6 +748,23 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
 
+  // resolve a malloc's sizeof(T) to the used type
+  private def sizeofUsedType(e : Ebytestype) : Option[UsedType] =
+    e.type_name_ match {
+      case p : PlainType =>
+        val specs = p.listspec_qual_.asScala.collect {
+          case ts : TypeSpec => ts.type_specifier_ }.toList
+        specs.collectFirst { case s : Tstruct => UsedType.Struct(getStructName(s)) }
+          .orElse(try Some(UsedType.Scalar(getType(e)))
+                  catch { case _ : Throwable => None })
+      case _ : ExtendedType => None // pointer target: stored as an address
+    }
+
+  val programInfo : ProgramInfo =
+    new CCAstProgramInfoCollector(structInfos.toSeq, e => sizeofUsedType(e)).apply(prog)
+  tricera.Util.printlnDebug("program info: needs heap = " + programInfo.needsHeap +
+    ", heap types: {" + programInfo.heapTypes.mkString(", ") + "}")
+
   private val globalVars : scala.Seq[CCVarDeclaration] =
     if (inputVarNames.nonEmpty) {
       for (decl <- prog.asInstanceOf[Progr].listexternal_declaration_.asScala
