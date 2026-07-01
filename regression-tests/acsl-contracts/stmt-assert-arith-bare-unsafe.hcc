@@ -1,4 +1,4 @@
-// arithmetic result is typed as bool, so assert (x+y) is checked as (x+y == 0)
+// bare arithmetic assert, true iff the value is nonzero
 int main(void) {
   int x = 2;
   int y = -2;

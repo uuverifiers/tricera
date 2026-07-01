@@ -95,6 +95,10 @@ TESTS="contract1.hcc  \
        stmt-assert-inlined-param-unsafe.hcc \
        stmt-assert-here-safe.hcc \
        stmt-assert-here-unsafe.hcc \
+       stmt-assert-arith-bare-safe.hcc \
+       stmt-assert-arith-bare-unsafe.hcc \
+       stmt-assert-arith-bare-minus-safe.hcc \
+       stmt-assert-arith-bare-minus-unsafe.hcc \
        stmt-assert-at-clabel-safe.hcc \
        stmt-assert-at-clabel-unsafe.hcc \
        stmt-assert-at-clabel-param-safe.hcc \

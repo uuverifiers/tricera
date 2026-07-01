@@ -284,6 +284,18 @@ SAFE
 stmt-assert-here-unsafe.hcc
 UNSAFE
 
+stmt-assert-arith-bare-safe.hcc
+SAFE
+
+stmt-assert-arith-bare-unsafe.hcc
+UNSAFE
+
+stmt-assert-arith-bare-minus-safe.hcc
+SAFE
+
+stmt-assert-arith-bare-minus-unsafe.hcc
+UNSAFE
+
 stmt-assert-at-clabel-safe.hcc
 SAFE
 

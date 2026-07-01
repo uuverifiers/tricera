@@ -1,0 +1,7 @@
+// bare arithmetic assert, true iff the value is nonzero
+int main(void) {
+  int x = 4;
+  int y = 4;
+  /*@ assert (x - y); @*/
+  return 0;
+}

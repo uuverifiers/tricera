@@ -642,32 +642,22 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 
   def translateArith(expr : AST.Expr) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
-    CCTerm.fromTerm(
-      expr match {
-        case eq : AST.EPlus   =>
-          val lhs : ITerm = translateTerm(eq.expr_1).toTerm
-          val rhs : ITerm = translateTerm(eq.expr_2).toTerm
-          lhs + rhs
-        case neq : AST.EMinus =>
-          val lhs : ITerm = translateTerm(neq.expr_1).toTerm
-          val rhs : ITerm = translateTerm(neq.expr_2).toTerm
-          lhs - rhs
-        case neq : AST.EMult =>
-          val lhs : ITerm = translateTerm(neq.expr_1).toTerm
-          val rhs : ITerm = translateTerm(neq.expr_2).toTerm
-          lhs * rhs
-        case neq : AST.EDiv  =>
-          val lhs : ITerm = translateTerm(neq.expr_1).toTerm
-          val rhs : ITerm = translateTerm(neq.expr_2).toTerm
-          lhs / rhs
-        case neq : AST.EMod   =>
-          val lhs : ITerm = translateTerm(neq.expr_1).toTerm
-          val rhs : ITerm = translateTerm(neq.expr_2).toTerm
-          lhs % rhs
-        case _              =>
-          throw new ACSLParseException(
-            "Op is recognized, got " + (printer print expr), srcInfo)
-      }, CCBool, Some(srcInfo))
+    def binArith(l : AST.Expr, r : AST.Expr)
+                (op : (ITerm, ITerm) => ITerm) : CCTerm = {
+      // the result keeps the operands' unified arithmetic type, not a predicate type
+      val (lhs, rhs) = CCTerm.unifyTypes(translateTerm(l), translateTerm(r))
+      CCTerm.fromTerm(op(lhs.toTerm, rhs.toTerm), lhs.typ, Some(srcInfo))
+    }
+    expr match {
+      case e : AST.EPlus  => binArith(e.expr_1, e.expr_2)(_ + _)
+      case e : AST.EMinus => binArith(e.expr_1, e.expr_2)(_ - _)
+      case e : AST.EMult  => binArith(e.expr_1, e.expr_2)(_ * _)
+      case e : AST.EDiv   => binArith(e.expr_1, e.expr_2)(_ / _)
+      case e : AST.EMod   => binArith(e.expr_1, e.expr_2)(_ % _)
+      case _              =>
+        throw new ACSLParseException(
+          "Op is recognized, got " + (printer print expr), srcInfo)
+    }
   }
 
   /**
