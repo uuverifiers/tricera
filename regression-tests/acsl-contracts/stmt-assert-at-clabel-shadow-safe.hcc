@@ -1,0 +1,11 @@
+// a capture of a local shadowing a global
+int g = 3;
+int main(void) {
+  {
+    long g = 5;
+L:
+    g = g + 1;
+    /*@ assert \at(g, L) + 1 == g; @*/
+  }
+  return 0;
+}

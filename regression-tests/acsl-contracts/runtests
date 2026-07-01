@@ -99,6 +99,8 @@ TESTS="contract1.hcc  \
        stmt-assert-arith-bare-unsafe.hcc \
        stmt-assert-arith-bare-minus-safe.hcc \
        stmt-assert-arith-bare-minus-unsafe.hcc \
+       stmt-assert-shadow-safe.hcc \
+       stmt-assert-shadow-unsafe.hcc \
        stmt-assert-at-clabel-safe.hcc \
        stmt-assert-at-clabel-unsafe.hcc \
        stmt-assert-at-clabel-param-safe.hcc \
@@ -140,6 +142,8 @@ TESTS="contract1.hcc  \
        stmt-assert-at-clabel-loop-local-unsafe.hcc \
        stmt-assert-at-clabel-sibling-decl-safe.hcc \
        stmt-assert-at-clabel-sibling-decl-unsafe.hcc \
+       stmt-assert-at-clabel-shadow-safe.hcc \
+       stmt-assert-at-clabel-shadow-unsafe.hcc \
        stmt-assert-at-clabel-decl-after-label-error.hcc \
        stmt-assert-at-clabel-expr-arith-safe.hcc \
        stmt-assert-at-clabel-expr-arith-unsafe.hcc \

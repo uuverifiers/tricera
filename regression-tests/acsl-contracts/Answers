@@ -296,6 +296,12 @@ SAFE
 stmt-assert-arith-bare-minus-unsafe.hcc
 UNSAFE
 
+stmt-assert-shadow-safe.hcc
+SAFE
+
+stmt-assert-shadow-unsafe.hcc
+UNSAFE
+
 stmt-assert-at-clabel-safe.hcc
 SAFE
 
@@ -424,6 +430,12 @@ stmt-assert-at-clabel-sibling-decl-safe.hcc
 SAFE
 
 stmt-assert-at-clabel-sibling-decl-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-shadow-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-shadow-unsafe.hcc
 UNSAFE
 
 stmt-assert-at-clabel-decl-after-label-error.hcc

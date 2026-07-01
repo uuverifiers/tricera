@@ -2661,12 +2661,17 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                    declaredTypes   : Map[String, CCType] = Map.empty)
         extends ACSLTranslator.StatementAnnotationContext {
       override def getTermInScope(name : String) : Option[CCTerm] =
-        if (resolvableNames.exists(!_.contains(name)))
-          declaredTypes.get(name).map(t =>
-            CCTerm.fromTerm(new CCVar(name, None, t, AutoStorage).term, t, None))
-        else scope.allFormalVars.zipWithIndex.find(_._1.name == name) match {
-          case Some((_, i)) => Some(symex.getValues(i))
-          case None         => None
+        declaredTypes.get(name) match {
+          case Some(t) =>
+            Some(CCTerm.fromTerm(new CCVar(name, None, t, AutoStorage).term, t,
+                                 None))
+          case None if resolvableNames.exists(!_.contains(name)) => None
+          case None =>
+            // annotations see ghost variables too, unlike regular C code
+            scope.lookupAnyVarNoException(name, functionName) match {
+              case -1 => None
+              case i  => Some(symex.getValues(i))
+            }
         }
       override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
         CCReader.this.enumeratorDefs
