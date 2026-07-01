@@ -319,7 +319,8 @@ class Main (args: Array[String]) {
         displayWarnings = logPPLevel == 2,
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName,
-        determinize = TriCeraParameters.get.determinizeInput)
+        determinize = TriCeraParameters.get.determinizeInput,
+        noDeclSlice = TriCeraParameters.get.slice)
       preprocessorFacts = pp.facts
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")

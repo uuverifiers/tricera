@@ -89,10 +89,22 @@ object CCReader {
     } else {
       prog
     }
+
+    // Eliminate $at expressions.
     val atCallTransformedProg = CCAstAtExpressionTransformer.transform(exceptionTransformedProg)
+
+    // Add type annotations to identifiers in the AST (some later stages rely on this).
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
-    val (transformedCallsProg, callSiteTransforms) =
+
+    // Replace stack pointers in function arguments with globals.
+    val (transformedCallsProg0, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
+
+    // Slice unused declarations and types.
+    val transformedCallsProg =
+      if (TriCeraParameters.get.slice)
+        CCAstSlicer(transformedCallsProg0, entryFunction)
+      else transformedCallsProg0
 
     var reader : CCReader = null
     while (reader == null)

@@ -111,6 +111,8 @@ class TriCeraParameters extends GlobalParameters {
   var determinizeInput : Boolean = false
   var invEncoding      : Option[String] = None
 
+  var slice            : Boolean = false
+
   var heapModel : TriCeraParameters.HeapModel = TriCeraParameters.NativeHeap
 
   var devMode : Boolean = false
@@ -347,6 +349,8 @@ class TriCeraParameters extends GlobalParameters {
 
     case "-forceNondetInit"  :: rest => forceNondetInit = true; parseArgs(rest)
 
+    case "-slice"            :: rest => slice = true; parseArgs(rest)
+
     case arg :: rest if Set("-v", "--version").contains(arg) =>
       println(version); false
     case arg :: rest if Set("-h", "--help").contains(arg) =>
@@ -384,6 +388,7 @@ class TriCeraParameters extends GlobalParameters {
     |-cppLight          Same as -cpp but does not include system header files and builtin macros.
     |                   I.e., -nostdinc -undef
     |-forceNondetInit   Initialize static and global variables to non-deterministic values.
+    |-slice             Remove functions, globals and types unreachable from the entry point before encoding.
 
     |Checked properties:
     |-reachsafety       Enables checking of explicitly specified properties via assert statements.
