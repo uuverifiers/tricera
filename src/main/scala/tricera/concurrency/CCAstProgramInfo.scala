@@ -33,17 +33,19 @@ import concurrent_c.Absyn._
 
 import scala.jdk.CollectionConverters._
 
-import tricera.concurrency.ccreader.{CCType, StructInfo}
+import tricera.acsl.ACSLTranslator
+import tricera.concurrency.ccreader.{CCType, CCInt, CCUInt, StructInfo}
 
 // Facts about the program: how each type is used and in which function
 // (None = global).
 
 // onHeap: the type needs to be on the heap
-sealed abstract class UsageKind(val onHeap : Boolean)
-case object ValueUse     extends UsageKind(false) // by value
-case object HeapAlloc    extends UsageKind(true)  // malloc/calloc target
-case object ArrayElem    extends UsageKind(true)  // heap-modeled array element
-case object PointerField extends UsageKind(true)  // pointee of a struct pointer field
+sealed abstract class HeapUsageKind(val onHeap : Boolean)
+case object ValueUse     extends HeapUsageKind(false) // by value
+case object HeapAlloc    extends HeapUsageKind(true)  // malloc/calloc target
+case object ArrayElem    extends HeapUsageKind(true)  // heap-modeled array element
+case object PointerField extends HeapUsageKind(true)  // pointee of a struct pointer field
+case object ContractPtr  extends HeapUsageKind(true)  // inside an ACSL annotation
 
 // Structs are known only by tag here: their CCType is built with the heap ADT
 sealed abstract class UsedType
@@ -58,7 +60,7 @@ object UsedType {
 
 case class TypeUsage(enclosingFunction : Option[String],
                      typ               : UsedType,
-                     kind              : UsageKind)
+                     kind              : HeapUsageKind)
 
 class ProgramInfo(val usages : Seq[TypeUsage]) {
   def types                       : Set[UsedType] = usages.map(_.typ).toSet
@@ -74,17 +76,15 @@ class ProgramInfo(val usages : Seq[TypeUsage]) {
 }
 
 /**
-  * Builds ProgramInfo for the program. Currently records the uses that
-  * place a value on the heap: allocations and struct pointer fields.
+  * Builds ProgramInfo for the program. Currently records the uses that place a
+  * value on the heap: allocations, array elements, struct pointer fields.
   */
 class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
-                                resolveAlloc : Ebytestype => Option[UsedType]) {
+                                resolveAlloc : Ebytestype => Option[UsedType],
+                                resolveDecl  : ListDeclaration_specifier => Option[UsedType]) {
 
   def apply(prog : Program) : ProgramInfo =
-    new ProgramInfo(allocationUses(prog) ++ pointerFieldUses)
-
-  private def allocationUses(prog : Program) : Seq[TypeUsage] =
-    prog.accept(new AllocVisitor, None)
+    new ProgramInfo(prog.accept(new UsageVisitor, None) ++ pointerFieldUses)
 
   // A pointer struct field is a heap pointer, so its pointee is a heap type
   private def pointerFieldUses : Seq[TypeUsage] =
@@ -97,9 +97,10 @@ class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
       TypeUsage(None, typ, PointerField)
     }
 
-  // malloc/calloc sites; the allocated type is a sizeof(T)
-  private class AllocVisitor extends FoldVisitor[Seq[TypeUsage], Option[String]] {
-    private val getName = new CCAstGetNameVistor
+  // heap type uses in the AST: malloc/calloc and array declarations
+  private class UsageVisitor extends FoldVisitor[Seq[TypeUsage], Option[String]] {
+    private val getName  = new CCAstGetNameVistor
+    private val acslRefs = new ACSLReferencedNamesVisitor
 
     override def leaf(arg : Option[String]) : Seq[TypeUsage] = Seq.empty
     override def combine(x : Seq[TypeUsage], y : Seq[TypeUsage],
@@ -118,6 +119,50 @@ class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
         case _ => Seq.empty
       }
       allocated ++ super.visit(call, arg)
+    }
+
+    // an array declaration puts its element type on the heap
+    override def visit(decl : Declarators, arg : Option[String]) : Seq[TypeUsage] = {
+      val elem =
+        if (decl.listinit_declarator_.asScala.exists(isArrayDeclarator))
+          resolveDecl(decl.listdeclaration_specifier_)
+            .map(t => TypeUsage(arg, t, ArrayElem)).toSeq
+        else Seq.empty
+      elem ++ super.visit(decl, arg)
+    }
+
+    // heap types from ACSL annotations
+    // struct tags + int/uint
+    // TODO: proper detection of scalar types
+    override def visit(annot : Annot1, arg : Option[String]) : Seq[TypeUsage] = {
+      val marker = tricera.Literals.annotationMarker.length
+      val text   = annot.annotationstring_
+      val body   =
+        if (text.length >= 2 * marker) text.substring(marker, text.length - marker)
+        else text
+      val names =
+        try ACSLTranslator.parseToAST("/*@" + body + "*/").accept(acslRefs, ())
+        catch { case _ : Throwable => Set.empty[String] }
+      val structs = structInfos.map(_.name).filter(names)
+        .map(n => TypeUsage(arg, UsedType.Struct(n), ContractPtr))
+      val scalars = Seq[CCType](CCInt, CCUInt)
+        .map(t => TypeUsage(arg, UsedType.Scalar(t), ContractPtr))
+      structs ++ scalars ++ super.visit(annot, arg)
+    }
+
+    private def isArrayDeclarator(init : Init_declarator) : Boolean = {
+      val direct = (init match {
+        case d : OnlyDecl     => Some(d.declarator_)
+        case d : InitDecl     => Some(d.declarator_)
+        case d : HintInitDecl => Some(d.declarator_)
+        case _                => None
+      }).flatMap {
+        case d : NoPointer    => Some(d.direct_declarator_)
+        case d : BeginPointer => Some(d.direct_declarator_)
+        case _                => None
+      }
+      direct.exists(d =>
+        d.isInstanceOf[InitArray] || d.isInstanceOf[Incomplete] || d.isInstanceOf[MathArray])
     }
 
     private def calleeName(exp : Exp) : Option[String] = exp match {

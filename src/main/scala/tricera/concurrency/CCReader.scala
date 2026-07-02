@@ -659,11 +659,24 @@ class CCReader private (prog              : Program,
       (struct.name, HeapTheoryObject.CtorSignature(ADTFieldList, HeapTheoryObject.ADTSort(i+1)))
     }).toList
 
-  // todo: only add types that exist in the program - should also add machine arithmetic types
-  val predefSignatures =
-    List(("O_Int", HeapTheoryObject.CtorSignature(List(("getInt", HeapTheoryObject.OtherSort(CCInt.toSort))), ObjSort)),
-         ("O_UInt", HeapTheoryObject.CtorSignature(List(("getUInt", HeapTheoryObject.OtherSort(CCUInt.toSort))), ObjSort))) ++
+  val programInfo : ProgramInfo =
+    new CCAstProgramInfoCollector(structInfos.toSeq, e => sizeofUsedType(e),
+                                  s => declSpecUsedType(s)).apply(prog)
+  tricera.Util.printlnDebug("program info: needs heap = " + programInfo.needsHeap +
+    ", heap types: {" + programInfo.heapTypes.mkString(", ") + "}")
+
+  // scalar heap object wrapper, one per sort
+  private def scalarWrapper(t : CCType) : (String, HeapTheoryObject.CtorSignature) =
+    ("O_" + t.shortName, HeapTheoryObject.CtorSignature(
+      List(("get_" + t.shortName, HeapTheoryObject.OtherSort(t.toSort))), ObjSort))
+
+  // only the scalar types the program puts on the heap
+  val predefSignatures = {
+    val seen = new MHashSet[Sort]
+    programInfo.heapTypes.toList.collect { case UsedType.Scalar(t) => t }
+      .filter(t => seen.add(t.toSort)).map(scalarWrapper) ++
     HeapModel.addressWrapperSignatures(heapModelType, ObjSort)
+  }
 // Make sure that we have one object sort per sort
 private val ctorObjSorts =
   predefSignatures.flatMap(s => s._2.arguments.map(_._2))
@@ -760,10 +773,13 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       case _ : ExtendedType => None // pointer target: stored as an address
     }
 
-  val programInfo : ProgramInfo =
-    new CCAstProgramInfoCollector(structInfos.toSeq, e => sizeofUsedType(e)).apply(prog)
-  tricera.Util.printlnDebug("program info: needs heap = " + programInfo.needsHeap +
-    ", heap types: {" + programInfo.heapTypes.mkString(", ") + "}")
+  // resolve an array declaration's element type to the used type
+  private def declSpecUsedType(specs : ListDeclaration_specifier) : Option[UsedType] = {
+    val tspecs = specs.asScala.collect { case t : Type => t.type_specifier_ }.toList
+    tspecs.collectFirst { case s : Tstruct => UsedType.Struct(getStructName(s)) }
+      .orElse(try Some(UsedType.Scalar(getType(specs)))
+              catch { case _ : Throwable => None })
+  }
 
   private val globalVars : scala.Seq[CCVarDeclaration] =
     if (inputVarNames.nonEmpty) {
