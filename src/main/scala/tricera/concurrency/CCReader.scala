@@ -626,6 +626,7 @@ class CCReader private (prog              : Program,
     }
 
   import ap.theories.{Heap => HeapTheoryObject}
+  import ap.theories.ADT
 
   def defObjCtor(objectCtors : scala.Seq[IFunction]) : ITerm = objectCtors.last()
   val ObjSort = HeapTheoryObject.ADTSort(0)
@@ -635,29 +636,6 @@ class CCReader private (prog              : Program,
       HeapModel.ModelType.Invariants
     else
       HeapModel.ModelType.TheoryOfHeaps
-
-  val structCtorSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
-    (for ((struct, i) <- structInfos zipWithIndex) yield {
-      if(struct.fieldInfos isEmpty) warn(
-        s"Struct ${struct.name} was declared, but never defined, " +
-          "or it has no fields.")
-      val ADTFieldList : scala.Seq[(String, HeapTheoryObject.CtorArgSort)] =
-        for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
-              struct.fieldInfos) yield
-          (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
-            if (ptrDepth > 0) {
-              HeapModel.pointerFieldCtorSort(heapModelType)
-            } else { fieldType match {
-              case Left(ind) => HeapTheoryObject.ADTSort(ind + 1)
-              case Right(typ) =>
-                typ match {
-                  case _ : CCHeapArrayPointer => HeapTheoryObject.AddrRangeSort
-                  case _ => HeapTheoryObject.OtherSort(typ.toSort)
-                }
-            }
-            })
-      (struct.name, HeapTheoryObject.CtorSignature(ADTFieldList, HeapTheoryObject.ADTSort(i+1)))
-    }).toList
 
   val programInfo : ProgramInfo =
     new CCAstProgramInfoCollector(structInfos.toSeq, e => sizeofUsedType(e),
@@ -683,9 +661,87 @@ private val ctorObjSorts =
 assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
 
+  // only heap structs get O_<struct> wrappers
+  private val heapStructNames : Set[String] =
+    programInfo.heapTypes.collect { case UsedType.Struct(n) => n }
+
+  // structInfos indices of the structs kept in the heap object ADT
+  private val heapGroupIndices : Set[Int] = {
+    // put on the heap, or has a heap pointer field
+    val direct = structInfos.indices.filter { i =>
+      heapStructNames(structInfos(i).name) ||
+      structInfos(i).fieldInfos.exists(f =>
+        f.ptrDepth > 0 || f.typ.toOption.exists(_.isInstanceOf[CCHeapArrayPointer]))
+    }.toSet
+
+    // i ~ j when struct i has struct j as an inline (non-pointer) field
+    val nesting : Map[Int, Set[Int]] = {
+      val es = for {
+        i <- structInfos.indices
+        FieldInfo(_, Left(j), d) <- structInfos(i).fieldInfos if d == 0
+      } yield i -> j.intValue
+      (es ++ es.map(_.swap)).groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap
+    }
+
+    @scala.annotation.tailrec
+    def close(g : Set[Int]) : Set[Int] = {
+      val grown = g ++ g.flatMap(nesting.getOrElse(_, Set.empty))
+      if (grown == g) g else close(grown)
+    }
+    close(direct)
+  }
+  tricera.Util.printlnDebug("heap-group structs: {" +
+    heapGroupIndices.toSeq.sorted.map(structInfos(_).name).mkString(", ") + "}, standalone: {" +
+    structInfos.indices.filterNot(heapGroupIndices).map(structInfos(_).name).mkString(", ") + "}")
+
+  // each struct's position within its own ADT
+  private val heapGroupOrder  : Seq[Int]      = structInfos.indices.filter(heapGroupIndices)
+  private val standaloneOrder : Seq[Int]      = structInfos.indices.filterNot(heapGroupIndices)
+  private val toHeapPos       : Map[Int, Int] = heapGroupOrder.zipWithIndex.toMap
+  private val toStandalonePos : Map[Int, Int] = standaloneOrder.zipWithIndex.toMap
+
+  // heap-group structs only; HeapObject is sort 0, so position p is ADTSort(p+1)
+  val structCtorSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
+    (for (i <- heapGroupOrder) yield {
+      val struct = structInfos(i)
+      if (struct.fieldInfos isEmpty) warn(
+        s"Struct ${struct.name} was declared, but never defined, or it has no fields.")
+      val fields : scala.Seq[(String, HeapTheoryObject.CtorArgSort)] =
+        for (FieldInfo(rawFieldName, fieldType, ptrDepth) <- struct.fieldInfos) yield
+          (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
+            if (ptrDepth > 0) HeapModel.pointerFieldCtorSort(heapModelType)
+            else fieldType match {
+              case Left(ind)  => HeapTheoryObject.ADTSort(toHeapPos(ind.intValue) + 1)
+              case Right(typ) => typ match {
+                case _ : CCHeapArrayPointer => HeapTheoryObject.AddrRangeSort
+                case _                      => HeapTheoryObject.OtherSort(typ.toSort)
+              }
+            })
+      (struct.name,
+        HeapTheoryObject.CtorSignature(fields, HeapTheoryObject.ADTSort(toHeapPos(i) + 1)))
+    }).toList
+
+  // non-heap structs
+  private val standaloneADT : Option[ADT] =
+    if (standaloneOrder.isEmpty) None
+    else Some(new ADT(
+      standaloneOrder.map(structInfos(_).name).toList,
+      (for (i <- standaloneOrder) yield {
+        val struct = structInfos(i)
+        val fields =
+          for (FieldInfo(rawFieldName, fieldType, _) <- struct.fieldInfos) yield
+            (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
+              fieldType match {
+                case Left(ind)  => ADT.ADTSort(toStandalonePos(ind.intValue))
+                case Right(typ) => ADT.OtherSort(typ.toSort)
+              })
+        (struct.name, ADT.CtorSignature(fields.toList, ADT.ADTSort(toStandalonePos(i))))
+      }).toList,
+      ADT.TermMeasure.Size))
+
   val wrapperSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
     predefSignatures ++
-      (for ((name, signature) <- structCtorSignatures) yield {
+      (for ((name, signature) <- structCtorSignatures if heapStructNames(name)) yield {
         ("O_" + name,
           HeapTheoryObject.CtorSignature(List(("get" + name, signature.result)), ObjSort))
       })
@@ -709,17 +765,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   def getHeapInfo = if (modelHeap) Some(HeapInfo(heap, heapModel.get)) else None
 
-  private val structCtorsOffset = predefSignatures.size
   val defObj = heap.userHeapConstructors.last
-  val structCount = structInfos.size
-  val objectWrappers = heap.userHeapConstructors.take(structCount+structCtorsOffset)
+  val heapStructCount = heapGroupOrder.size
+  // number of object wrappers, used to slice out the struct ctors
+  private val wrapperCount = wrapperSignatures.size
+  val objectWrappers = heap.userHeapConstructors.take(wrapperCount)
   val objectGetters =
-    for (sels <- heap.userHeapSelectors.take(structCount+structCtorsOffset)
+    for (sels <- heap.userHeapSelectors.take(wrapperCount)
          if sels.nonEmpty) yield sels.head
-  val structCtors = heap.userHeapConstructors.slice(structCtorsOffset+structCount,
-    structCtorsOffset+2*structCount)
-  val structSels = heap.userHeapSelectors.slice(structCtorsOffset+structCount,
-    structCtorsOffset+2*structCount)
+  val structCtors = heap.userHeapConstructors.slice(wrapperCount, wrapperCount+heapStructCount)
+  val structSels = heap.userHeapSelectors.slice(wrapperCount, wrapperCount+heapStructCount)
 
   val objectSorts : scala.IndexedSeq[Sort] =
     objectGetters.toIndexedSeq.map(f => f.resSort)
@@ -732,13 +787,13 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   val wrapperSortMap : Map[MonoSortedIFunction, Sort] =
     sortWrapperMap.map(_.swap)
   val sortCtorIdMap : Map[Sort, Int] =
-    objectSorts.zip(0 until structCount+structCtorsOffset).toMap
+    objectSorts.zip(0 until wrapperCount).toMap
 
   private val heapModelFactory : HeapModelFactory =
     HeapModel.factory(heapModelType, symexContext, scope)
 
   for (((ctor, sels), i) <- structCtors zip structSels zipWithIndex) {
-    val curStruct = structInfos(i)
+    val curStruct = structInfos(heapGroupOrder(i))
     val fieldInfos = curStruct.fieldInfos
     val fieldsWithType = for (j <- fieldInfos.indices) yield {
       val fullFieldName =
@@ -759,6 +814,24 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         heapModelFactory.makePointer(actualType)
       else actualType})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
+  }
+
+  standaloneADT.foreach { adt =>
+    for ((origIdx, k) <- standaloneOrder.zipWithIndex) {
+      val curStruct = structInfos(origIdx)
+      val ctor = adt.constructors(k).asInstanceOf[MonoSortedIFunction]
+      val sels = adt.selectors(k).map(_.asInstanceOf[MonoSortedIFunction])
+      val fieldsWithType = for (j <- curStruct.fieldInfos.indices) yield {
+        val fullFieldName =
+          CCStruct.rawToFullFieldName(curStruct.name, curStruct.fieldInfos(j).name)
+        assert(sels(j).name == fullFieldName)
+        (sels(j), curStruct.fieldInfos(j).typ match {
+          case Left(ind)  => CCStructField(structInfos(ind).name, structDefs)
+          case Right(typ) => typ
+        })
+      }
+      structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
+    }
   }
 
   // resolve a malloc's sizeof(T) to the used type
