@@ -1,0 +1,102 @@
+
+dead-global.c
+slice removed 1 of 3 declarations: g_dead
+SAFE
+
+dead-function.c
+slice removed 1 of 3 declarations: dead_fn
+SAFE
+
+dead-code-only-ref.c
+slice removed 2 of 3 declarations: only_in_dead, dead
+SAFE
+
+dead-mutual-recursion.c
+slice removed 3 of 4 declarations: pong, ping, pong
+SAFE
+
+dead-struct.c
+slice removed 1 of 3 declarations: Dead
+SAFE
+
+dead-enum.c
+slice removed 1 of 3 declarations: Status, OK, FAIL
+SAFE
+
+dead-anon-aggregate.c
+slice removed 1 of 2 declarations: 
+SAFE
+
+chain-unsafe.c
+slice removed 1 of 5 declarations: never_called
+UNSAFE
+
+thread-unsafe.c
+slice removed 1 of 4 declarations: not_in_thread
+Warning: entry function "main" not found
+UNSAFE
+
+global-write-unsafe.c
+slice removed 1 of 4 declarations: unused_global
+UNSAFE
+
+static-inline-unsafe.c
+slice removed 1 of 4 declarations: unused_static
+UNSAFE
+
+struct-via-cast-kept.c
+slice removed 1 of 3 declarations: dead_global
+SAFE
+
+struct-param-type-kept.c
+slice removed 1 of 4 declarations: dead_global
+SAFE
+
+struct-nested-field-kept.c
+slice removed 1 of 4 declarations: dead_global
+SAFE
+
+enum-array-size-kept.c
+slice removed 1 of 3 declarations: dead_global
+SAFE
+
+recursive-struct.c
+slice removed 1 of 3 declarations: dead_global
+SAFE
+
+init-reference.c
+slice removed 1 of 4 declarations: unused
+SAFE
+
+multi-declarator.c
+slice removed 1 of 3 declarations: dead
+SAFE
+
+contract-global-unsafe.c
+slice removed 1 of 4 declarations: dead_unused
+UNSAFE
+
+assert-global-unsafe.c
+slice removed 1 of 3 declarations: dead_unused
+UNSAFE
+
+loopinv-global-unsafe.c
+slice removed 1 of 3 declarations: dead_unused
+Warning: Ignoring annotation:  loop invariant i <= bound; 
+UNSAFE
+
+dead-global-collides-acsl-field.c
+slice removed 1 of 4 declarations: field
+SAFE
+
+dead-global-collides-acsl-old-keyword.c
+slice removed 1 of 4 declarations: old
+SAFE
+
+fptr-address-taken-kept.c
+slice removed 1 of 3 declarations: reallyDead
+SAFE
+
+entry-foo.c
+slice removed 1 of 2 declarations: main
+SAFE

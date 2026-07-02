@@ -40,6 +40,7 @@ at-expressions "" -assert -dev -t:60
 smoke "" -smoke -assertNoVerify -t:60
 inv-encoding-reachsafety "" -dev -t:60
 cpp-exceptions "" -assert -dev -t:60
+slicer "" -slice -debug -t:60
 #ParametricEncoder ""
 EOF
 )

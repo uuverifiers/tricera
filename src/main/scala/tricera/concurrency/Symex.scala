@@ -878,8 +878,7 @@ class Symex private (context        : SymexContext,
       case Some(wrapper) =>
         CCTerm.fromTerm(wrapper(term.toTerm), CCHeapObject(context.heap), term.srcInfo)
       case None =>
-        throw new TranslationException(
-          s"No constructor found to make ${term.typ} a heap object!")
+        context.forceHeapObjectWrappers(Seq(term.typ))
     }
 
   private def callFunction(name    : String,
@@ -1293,12 +1292,14 @@ class Symex private (context        : SymexContext,
           topVal.toTerm match {
             case fieldFun: IFunApp
               if !(context.objectGetters contains fieldFun.fun) &&
-                 (context.heap.userHeapSelectors exists(_ contains fieldFun.fun)) => // an ADT
+                 context.structDefs.values.exists(_.sels.exists(_._1 == fieldFun.fun)) => // struct field selector
               val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
               rootTerm match {
                 case Left(c) =>
                   val rootInd: Int = scope.lookupVar(c.name, evalCtx.enclosingFunctionName)
                   val structType = getValue(rootInd, false).typ.asInstanceOf[CCStruct]
+                  if (!(context.heap.userHeapSelectors exists(_ contains fieldFun.fun)))
+                    context.forceHeapObjectWrappers(Seq(structType))
                   assert(rootInd > -1 && rootInd < values.size - 1) // todo
                   val ptr = CCStackPointer(rootInd, popVal.typ, structType.getFieldAddress(fieldNames))
                   pushVal(CCTerm.fromTerm(IExpression.Int2ITerm(rootInd), ptr, srcInfo)) //we don't care about the value

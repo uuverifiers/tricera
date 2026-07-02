@@ -111,15 +111,19 @@ object ACSLTranslator {
                col    = srcInfo.col)
   }
 
+  def parseToAST(annot : String) : AST.Annotation = {
+    val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
+    val p : parser = new parser(l, l.getSymbolFactory())
+    p.pAnnotation()
+  }
+
   @throws[ACSLException]("if not called with the right context")
   @throws[ACSLParseException]("if parsing or translation fails")
   def translateACSL(annot        : String,
                     ctx          : AnnotationContext,
                     astTransform : AST.Annotation => AST.Annotation = identity)
   : ParsedAnnotation = {
-    val l : Yylex = new Yylex(new java.io.StringReader(preprocess(annot)))
-    val p : parser = new parser(l, l.getSymbolFactory())
-    val ast : AST.Annotation = astTransform(p.pAnnotation())
+    val ast : AST.Annotation = astTransform(parseToAST(annot))
     val translator = new ACSLTranslator(ctx)
 
     ast match {
@@ -194,12 +198,6 @@ object ACSLTranslator {
     case x : AST.VarIdentId       => x.id_
     case x : AST.VarIdentArray    => varIdentName(x.varident_)
     case x : AST.VarIdentPtrDeref => varIdentName(x.varident_)
-  }
-
-  def parseAnnotation(annot : String) : AST.Annotation = {
-    val l = new Yylex(new java.io.StringReader(preprocess(annot)))
-    val p = new parser(l, l.getSymbolFactory())
-    p.pAnnotation()
   }
 
   // labels that need to be captured ahead of their use

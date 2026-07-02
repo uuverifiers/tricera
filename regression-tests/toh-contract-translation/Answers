@@ -144,18 +144,18 @@ Init:
                                                                                                   |                                                                                                  
                                                                                                   |                                                                                                  
                                                                                                   V                                                                                                  
- main14_3_10(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(47))), O_Int(42))), heap.addr(1), heap.addr(2), heap.addr(1), heap.addr(2), 3, 4, heap.null, heap.null) 
+ main14_3_10(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(47))), O_int(42))), heap.addr(1), heap.addr(2), heap.addr(1), heap.addr(2), 3, 4, heap.null, heap.null) 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                                   |                                                                                                  
                                                                                                   |                                                                                                  
                                                                                                   V                                                                                                  
-                    main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(47))), O_Int(42))), heap.null, heap.null, heap.addr(2), heap.addr(1))                     
+                    main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(47))), O_int(42))), heap.null, heap.null, heap.addr(2), heap.addr(1))                     
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
-                    main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(47))), O_Int(42))), heap.null, heap.null, heap.addr(2), heap.addr(1))                     
+                    main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(47))), O_int(42))), heap.null, heap.null, heap.addr(2), heap.addr(1))                     
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, globalswap_0_1x:14, globalswap_0_1y:14, a:11, b:12), getInt(heap.read(@h, a:11)) != 42 | getInt(heap.read(@h, b:12)) != 0. (line:15 col:3) (property: user-assertion)
+false :- main_2(@h, globalswap_0_1x:14, globalswap_0_1y:14, a:11, b:12), get_int(heap.read(@h, a:11)) != 42 | get_int(heap.read(@h, b:12)) != 0. (line:15 col:3) (property: user-assertion)
 
 UNSAFE
 

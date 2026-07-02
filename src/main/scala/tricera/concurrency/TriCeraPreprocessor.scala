@@ -62,7 +62,9 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                               output    : String) : Int = {
     val langFlag = if (inputFilePath.endsWith(".cpp")) "-xc++" else "-xc"
     val cmdLine : scala.Seq[String] = scala.Seq(ppPath, input, "-o", output) ++
-                     (if (quiet) scala.Seq("-q") else Nil) ++ extraArgs ++
+                     (if (quiet) scala.Seq("-q") else Nil) ++
+                     (if (noDeclSlice) scala.Seq("--no-decl-slice") else Nil) ++
+                     extraArgs ++
                      scala.Seq(s"--facts=${factsFile.getAbsolutePath}") ++
                      scala.Seq("-m", entryFunction, "--", langFlag) ++
                      (if (displayWarnings) Nil else scala.Seq("-Wno-everything"))

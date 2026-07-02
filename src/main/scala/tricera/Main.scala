@@ -333,7 +333,7 @@ class Main (args: Array[String]) {
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName,
         determinize = TriCeraParameters.get.determinizeInput,
-        noDeclSlice = hasACSL)
+        noDeclSlice = hasACSL || TriCeraParameters.get.slice)
       preprocessorFacts = pp.facts
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")

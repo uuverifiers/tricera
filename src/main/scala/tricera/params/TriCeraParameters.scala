@@ -111,10 +111,13 @@ class TriCeraParameters extends GlobalParameters {
   var determinizeInput : Boolean = false
   var invEncoding      : Option[String] = None
 
+  var slice            : Boolean = false
+
   var heapModel : TriCeraParameters.HeapModel = TriCeraParameters.NativeHeap
 
   var devMode : Boolean = false
   var printDebugMessages : Boolean = false
+  var printDebugHeapTypes : Boolean = false
 
   var displayACSL = false
   var inferLoopInvariants = false
@@ -323,6 +326,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-debug" :: rest => printDebugMessages = true; parseArgs(rest)
+    case "-debugHeapTypes" :: rest => printDebugHeapTypes = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-sym" :: rest      =>
       symexEngine = GlobalParameters.SymexEngine.BreadthFirstForward
@@ -349,6 +353,8 @@ class TriCeraParameters extends GlobalParameters {
     case "-splitProperties"  :: rest => splitProperties = true; parseArgs(rest)
 
     case "-forceNondetInit"  :: rest => forceNondetInit = true; parseArgs(rest)
+
+    case "-slice"            :: rest => slice = true; parseArgs(rest)
 
     case arg :: rest if Set("-v", "--version").contains(arg) =>
       println(version); false
@@ -388,6 +394,7 @@ class TriCeraParameters extends GlobalParameters {
     |-cppLight          Same as -cpp but does not include system header files and builtin macros.
     |                   I.e., -nostdinc -undef
     |-forceNondetInit   Initialize static and global variables to non-deterministic values.
+    |-slice             Remove functions, globals and types unreachable from the entry point before encoding.
 
     |Checked properties:
     |-reachsafety       Enables checking of explicitly specified properties via assert statements.
