@@ -564,12 +564,13 @@ class Main (args: Array[String]) {
       return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
     import tricera.Util._
-    import tricera.postprocessor.ResultPrinters.{printSolutionProlog, printSolutionSMT}
+    import tricera.postprocessor.ResultPrinters.{printSolutionProlog, printSolutionSMT, printVacuousAssertions}
     import tricera.postprocessor.ResultConverter.hornSolverSolutionToResult
 
     val result = verificationLoop.result
       .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
+      .tapIf(TriCeraParameters.get.smoke)(printVacuousAssertions(reader.assertionSites))
       .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
       .through(MergeTransformedFunctionsContracts(callSiteTransforms))
 

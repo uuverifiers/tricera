@@ -438,6 +438,12 @@ class CCReader private (prog              : Program,
     new ArrayBuffer[(ParametricEncoder.Process, ParametricEncoder.Replication)]
 
   private val assertionClauses = new ArrayBuffer[CCAssertionClause]
+
+  def assertionSites
+    : scala.Seq[(scala.Seq[ap.terfor.preds.Predicate],
+                 Option[SourceInfo], properties.Property)] =
+    assertionClauses.map(
+      c => (c.clause.body.map(_.pred), c.srcInfo, c.property)).toSeq
   private val timeInvariants = new ArrayBuffer[Clause]
 
   private val clauses =

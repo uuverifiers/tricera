@@ -119,15 +119,17 @@ class TriCeraParameters extends GlobalParameters {
   var displayACSL = false
   var inferLoopInvariants = false
   var fullSolutionOnAssert = true
+  var smoke = false
 
   override def needFullSolution: Boolean =
     (assertions && fullSolutionOnAssert) ||
       displaySolutionProlog || displaySolutionSMT || displayACSL || log ||
-      inferLoopInvariants
+      inferLoopInvariants || smoke
 
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
     that.arithMode = this.arithMode
+    that.smoke = this.smoke
   }
 
   override def clone: TriCeraParameters = {
@@ -173,6 +175,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
+    case "-smoke" :: rest => smoke = true; parseArgs(rest)
 
     case "-heapModel:native" :: rest =>
       heapModel = TriCeraParameters.NativeHeap
@@ -369,6 +372,7 @@ class TriCeraParameters extends GlobalParameters {
     |-ssol              Show solution in SMT-LIB format
     |-inv               Try to infer loop invariants
     |-acsl              Print inferred ACSL annotations
+    |-smoke             Warn about assertions whose program point is unreachable (vacuously verified)
     |-log:n             Display progress based on verbosity level n (0 <= n <= 3)
     |                     1: Statistics only
     |                     2: Include invariants
