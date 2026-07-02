@@ -67,6 +67,9 @@ import scala.collection.mutable
 object CCReader {
   private[concurrency] var useTime = false
   private[concurrency] var modelHeap = false
+  // heap-reaching types with no wrapper on an earlier attempt
+  private[concurrency] val forcedObjectWrapperTypes = new mutable.LinkedHashMap[Sort, CCType]
+  private val warnedFunctionNames = new MHashSet[String]
 
   // Reserve two variables for time
   private[concurrency] val GT  = new CCVar("_GT", None, CCClock, GlobalStorage)
@@ -107,6 +110,8 @@ object CCReader {
       else transformedCallsProg0
 
     var reader : CCReader = null
+    forcedObjectWrapperTypes.clear()
+    warnedFunctionNames.clear()
     while (reader == null)
       try {
         reader = new CCReader(
@@ -118,6 +123,9 @@ object CCReader {
         }
         case NeedsHeapModelException => {
           modelHeap = true
+        }
+        case NeedsObjectWrapperException => {
+          // the missing type was recorded in forcedObjectWrapperTypes
         }
       }
     (reader, modelHeap, callSiteTransforms)
@@ -259,7 +267,7 @@ class CCReader private (prog              : Program,
     override def usingInitialPredicates : Boolean =
       CCReader.this.usingInitialPredicates
     override def warnedFunctionNames : MHashSet[String] =
-      CCReader.this.warnedFunctionNames
+      CCReader.warnedFunctionNames
 
     // --- Data & Type Mappings ---
     override def predCCPredMap : MHashMap[Predicate, CCPredicate] =
@@ -288,6 +296,8 @@ class CCReader private (prog              : Program,
       CCReader.this.sortWrapperMap
     override def sortCtorIdMap : Map[Sort, Int] =
       CCReader.this.sortCtorIdMap
+    override def forceHeapObjectWrappers(typs : Iterable[CCType]) : Nothing =
+      CCReader.this.forceHeapObjectWrappers(typs)
     override def objectGetters : scala.Seq[MonoSortedIFunction] =
       CCReader.this.objectGetters
     override def defObj : IFunction =
@@ -373,7 +383,6 @@ class CCReader private (prog              : Program,
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
-  private val warnedFunctionNames = new MHashSet[String]
   private val functionContexts = new MHashMap[String, FunctionContext]
   private val functionPostOldArgs = new MHashMap[String, scala.Seq[CCVar]]
   private val functionClauses =
@@ -640,18 +649,28 @@ class CCReader private (prog              : Program,
   val programInfo : ProgramInfo =
     new CCAstProgramInfoCollector(structInfos.toSeq, e => sizeofUsedType(e),
                                   s => declSpecUsedType(s)).apply(prog)
-  tricera.Util.printlnDebug("program info: needs heap = " + programInfo.needsHeap +
-    ", heap types: {" + programInfo.heapTypes.mkString(", ") + "}")
+  tricera.Util.printlnDebugHeapTypes("program info: needs heap = " + programInfo.needsHeap +
+    ", heap types: {" + programInfo.heapTypes.map(_.toString).toList.sorted.mkString(", ") + "}")
+
+  private val forcedScalarTypes : List[CCType] =
+    CCReader.forcedObjectWrapperTypes.values.toList.filterNot(t =>
+      t.isInstanceOf[CCStruct] || t.isInstanceOf[CCStructField])
+  private val forcedStructNames : Set[String] =
+    CCReader.forcedObjectWrapperTypes.values.collect {
+      case s : CCStruct      => s.shortName
+      case f : CCStructField => f.structName
+    }.toSet
 
   // scalar heap object wrapper, one per sort
   private def scalarWrapper(t : CCType) : (String, HeapTheoryObject.CtorSignature) =
     ("O_" + t.shortName, HeapTheoryObject.CtorSignature(
       List(("get_" + t.shortName, HeapTheoryObject.OtherSort(t.toSort))), ObjSort))
 
-  // only the scalar types the program puts on the heap
+  // the scalar types the program puts on the heap
   val predefSignatures = {
     val seen = new MHashSet[Sort]
-    programInfo.heapTypes.toList.collect { case UsedType.Scalar(t) => t }
+    (programInfo.heapTypes.toList.collect { case UsedType.Scalar(t) => t } ++
+       forcedScalarTypes)
       .filter(t => seen.add(t.toSort)).map(scalarWrapper) ++
     HeapModel.addressWrapperSignatures(heapModelType, ObjSort)
   }
@@ -661,9 +680,9 @@ private val ctorObjSorts =
 assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
 
-  // only heap structs get O_<struct> wrappers
+  // heap structs get O_<struct> wrappers
   private val heapStructNames : Set[String] =
-    programInfo.heapTypes.collect { case UsedType.Struct(n) => n }
+    programInfo.heapTypes.collect { case UsedType.Struct(n) => n } ++ forcedStructNames
 
   // structInfos indices of the structs kept in the heap object ADT
   private val heapGroupIndices : Set[Int] = {
@@ -690,7 +709,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     }
     close(direct)
   }
-  tricera.Util.printlnDebug("heap-group structs: {" +
+  tricera.Util.printlnDebugHeapTypes("heap-group structs: {" +
     heapGroupIndices.toSeq.sorted.map(structInfos(_).name).mkString(", ") + "}, standalone: {" +
     structInfos.indices.filterNot(heapGroupIndices).map(structInfos(_).name).mkString(", ") + "}")
 
@@ -700,12 +719,13 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   private val toHeapPos       : Map[Int, Int] = heapGroupOrder.zipWithIndex.toMap
   private val toStandalonePos : Map[Int, Int] = standaloneOrder.zipWithIndex.toMap
 
+  for (struct <- structInfos if struct.fieldInfos.isEmpty)
+    warn(s"Struct ${struct.name} was declared, but never defined, or it has no fields.")
+
   // heap-group structs only; HeapObject is sort 0, so position p is ADTSort(p+1)
   val structCtorSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
     (for (i <- heapGroupOrder) yield {
       val struct = structInfos(i)
-      if (struct.fieldInfos isEmpty) warn(
-        s"Struct ${struct.name} was declared, but never defined, or it has no fields.")
       val fields : scala.Seq[(String, HeapTheoryObject.CtorArgSort)] =
         for (FieldInfo(rawFieldName, fieldType, ptrDepth) <- struct.fieldInfos) yield
           (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
@@ -788,6 +808,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     sortWrapperMap.map(_.swap)
   val sortCtorIdMap : Map[Sort, Int] =
     objectSorts.zip(0 until wrapperCount).toMap
+
+  // todo: get rid of this
+  def forceHeapObjectWrappers(typs : Iterable[CCType]) : Nothing = {
+    val fresh = typs.filter(t => CCReader.forcedObjectWrapperTypes.put(t.toSort, t).isEmpty).toList
+    if (fresh.nonEmpty) throw NeedsObjectWrapperException
+    else throw new TranslationException(
+      "no heap object wrapper for " + typs.map(_.shortName).mkString(", "))
+  }
 
   private val heapModelFactory : HeapModelFactory =
     HeapModel.factory(heapModelType, symexContext, scope)

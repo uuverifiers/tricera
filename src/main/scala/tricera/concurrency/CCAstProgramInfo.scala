@@ -86,6 +86,16 @@ class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
   def apply(prog : Program) : ProgramInfo =
     new ProgramInfo(prog.accept(new UsageVisitor, None) ++ pointerFieldUses)
 
+  // run f with stdout/stderr muted
+  private def quietly[A](f : => A) : A = {
+    val (oldOut, oldErr) = (System.out, System.err)
+    val sink = new java.io.PrintStream(new java.io.OutputStream {
+      override def write(b : Int) : Unit = ()
+    })
+    System.setOut(sink); System.setErr(sink)
+    try f finally { System.setOut(oldOut); System.setErr(oldErr) }
+  }
+
   // A pointer struct field is a heap pointer, so its pointee is a heap type
   private def pointerFieldUses : Seq[TypeUsage] =
     for (struct <- structInfos;
@@ -141,7 +151,7 @@ class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
         if (text.length >= 2 * marker) text.substring(marker, text.length - marker)
         else text
       val names =
-        try ACSLTranslator.parseToAST("/*@" + body + "*/").accept(acslRefs, ())
+        try quietly(ACSLTranslator.parseToAST("/*@" + body + "*/").accept(acslRefs, ()))
         catch { case _ : Throwable => Set.empty[String] }
       val structs = structInfos.map(_.name).filter(names)
         .map(n => TypeUsage(arg, UsedType.Struct(n), ContractPtr))

@@ -9,13 +9,13 @@ Init:
                                                            |                                                           
                                                            |                                                           
                                                            V                                                           
- main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(11))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(10))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
 -----------------------------------------------------------------------------------------------------------------------
 Final:
- main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(11))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(10))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
 -----------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:6), arrayPtrOffset(a:6) + n:9))). (line:12 col:11) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:6), arrayPtrOffset(a:6) + n:9))). (line:12 col:11) (property: valid-deref)
 
 UNSAFE
 
@@ -23,13 +23,13 @@ out-of-bounds-line2.c
 
 ---------------------------------------------------------------------------------------------------------------------------------
 Init:
- main7_3_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
+ main7_3_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
 ---------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_3_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
+ main7_3_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
 ---------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:4), arrayPtrOffset(a:4) + 42))). (line:7 col:11) (property: valid-deref)
+false :- main7_3_1(@h, @v_cleanup, a:4), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:4), arrayPtrOffset(a:4) + 42))). (line:7 col:11) (property: valid-deref)
 
 UNSAFE
 
@@ -43,13 +43,13 @@ Init:
                                                            |                                                           
                                                            |                                                           
                                                            V                                                           
- main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(11))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(10))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
 -----------------------------------------------------------------------------------------------------------------------
 Final:
- main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(11))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(10))), heap.null, arrayPtr(AddrRange(heap.addr(1), 1), 0), 1) 
 -----------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:6), arrayPtrOffset(a:6) + n:9))). (line:12 col:3) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:6, n:9), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:6), arrayPtrOffset(a:6) + n:9))). (line:12 col:3) (property: valid-deref)
 
 UNSAFE
 
@@ -57,13 +57,13 @@ out-of-bounds-line4.c
 
 -------------------------------------------------------------------------------------------------------------------------------
 Init:
- main7_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
+ main7_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
 -------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
+ main7_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 42)), heap.null, arrayPtr(AddrRange(heap.addr(1), 42), 0)) 
 -------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_3(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:4), arrayPtrOffset(a:4) - 1))). (line:7 col:3) (property: valid-deref)
+false :- main7_3(@h, @v_cleanup, a:4), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:4), arrayPtrOffset(a:4) - 1))). (line:7 col:3) (property: valid-deref)
 
 UNSAFE
 
@@ -135,23 +135,23 @@ Init:
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
+false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
 
 UNSAFE
 
@@ -167,23 +167,23 @@ Init:
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
+false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
 
 UNSAFE
 
@@ -199,13 +199,13 @@ Init:
                                                                                     |                                                                                    
                                                                                     |                                                                                    
                                                                                     V                                                                                    
- main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:1, n:4, p:6), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:10) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:1, n:4, p:6), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:10) (property: valid-deref)
 
 UNSAFE
 
@@ -221,23 +221,23 @@ Init:
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                        |                                                                                       
                                                                                        |                                                                                       
                                                                                        V                                                                                       
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), heap.null, arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
+false :- main7_29_3(@h, @v_cleanup, a:1, n:4, p:6, i:7), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:12) (property: valid-deref)
 
 UNSAFE
 
@@ -253,13 +253,13 @@ Init:
                                                                                     |                                                                                    
                                                                                     |                                                                                    
                                                                                     V                                                                                    
- main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), -1)) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:1, n:4, p:6), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:10) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:1, n:4, p:6), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:10) (property: valid-deref)
 
 UNSAFE
 
@@ -275,13 +275,13 @@ Init:
                                                                                    |                                                                                    
                                                                                    |                                                                                    
                                                                                    V                                                                                    
- main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), 1)) 
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), 1)) 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), 1)) 
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), heap.null, arrayPtr(AddrRange(heap.addr(1), 3), 0), 3, arrayPtr(AddrRange(heap.addr(1), 3), 1)) 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, @v_cleanup, a:1, n:4, p:6), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) + 2))). (line:8 col:10) (property: valid-deref)
+false :- main_2(@h, @v_cleanup, a:1, n:4, p:6), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) + 2))). (line:8 col:10) (property: valid-deref)
 
 UNSAFE
 
@@ -306,13 +306,13 @@ nondet-global-array-explicit-1.c
 
 -------------------------------------------------------------------------------------------------------------------
 Init:
- main5_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main5_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 -------------------------------------------------------------------------------------------------------------------
 Final:
- main5_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main5_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 -------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main5_5(@h, a:1), getInt(heap.read(@h, heap.rangeNth(arrayPtrRange(a:1), arrayPtrOffset(a:1) - 0))) != 0. (line:5 col:5) (property: user-assertion)
+false :- main5_5(@h, a:1), get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:1), arrayPtrOffset(a:1) - 0))) != 0. (line:5 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -326,18 +326,18 @@ nondet-static-array-explicit-1.c
 
 ---------------------------------------------------------------------------------------------------------------------
 Init:
-  main3_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0))  
+  main3_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0))  
 ---------------------------------------------------------------------------------------------------------------------
                                                           |                                                          
                                                           |                                                          
                                                           V                                                          
- main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 ---------------------------------------------------------------------------------------------------------------------
 Final:
- main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 ---------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main3_5_1(@h, a:3), getInt(heap.read(@h, heap.rangeNth(arrayPtrRange(a:3), arrayPtrOffset(a:3) - 0))) != 0. (line:6 col:5) (property: user-assertion)
+false :- main3_5_1(@h, a:3), get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:3), arrayPtrOffset(a:3) - 0))) != 0. (line:6 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -359,23 +359,23 @@ Init:
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 0), 0) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 1) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 2) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_29_3(@h, a:1, n:4, p:6, i:7), getInt(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))) != 0. (line:8 col:5) (property: user-assertion)
+false :- main7_29_3(@h, a:1, n:4, p:6, i:7), get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))) != 0. (line:8 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -409,23 +409,23 @@ Init:
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
-                          main(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2)                          
+                          main(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2)                          
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 0) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 1), 0) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                  |                                                                                  
                                                                                  |                                                                                  
                                                                                  V                                                                                  
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Final:
- main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
+ main7_29_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2, arrayPtr(AddrRange(heap.addr(1), 2), 2), 1) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_29_3(@h, a:1, n:4, p:6, i:7), !is_O_Int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:8) (property: valid-deref)
+false :- main7_29_3(@h, a:1, n:4, p:6, i:7), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(p:6), arrayPtrOffset(p:6) - 0))). (line:8 col:8) (property: valid-deref)
 
 UNSAFE
 UNSAFE
@@ -434,13 +434,13 @@ nondet-global-array-opt-1.c
 
 -------------------------------------------------------------------------------------------------------------------
 Init:
- main7_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main7_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 -------------------------------------------------------------------------------------------------------------------
 Final:
- main7_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main7_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 -------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main7_5(@h, a:3), getInt(heap.read(@h, heap.rangeNth(arrayPtrRange(a:3), arrayPtrOffset(a:3) + 1))) != 0. (line:7 col:5) (property: user-assertion)
+false :- main7_5(@h, a:3), get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:3), arrayPtrOffset(a:3) + 1))) != 0. (line:7 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -454,18 +454,18 @@ nondet-static-array-opt-1.c
 
 ---------------------------------------------------------------------------------------------------------------------
 Init:
-  main3_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0))  
+  main3_5(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0))  
 ---------------------------------------------------------------------------------------------------------------------
                                                           |                                                          
                                                           |                                                          
                                                           V                                                          
- main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 ---------------------------------------------------------------------------------------------------------------------
 Final:
- main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_Int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
+ main3_5_1(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(10), 5)), arrayPtr(AddrRange(heap.addr(1), 5), 0)) 
 ---------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main3_5_1(@h, a:3), getInt(heap.read(@h, heap.rangeNth(arrayPtrRange(a:3), arrayPtrOffset(a:3) + 1))) != 0. (line:6 col:5) (property: user-assertion)
+false :- main3_5_1(@h, a:3), get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:3), arrayPtrOffset(a:3) + 1))) != 0. (line:6 col:5) (property: user-assertion)
 
 UNSAFE
 
