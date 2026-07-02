@@ -1,0 +1,10 @@
+// an element assign leaves the other elements unchanged
+int g[5];
+/*@ assigns g[f2];
+    ensures g[\old(f2)] == 5; @*/
+extern void f1(int f2);
+int main(void) {
+  f1(1);
+  /*@ assert g[0] == 1; @*/
+  return 0;
+}
