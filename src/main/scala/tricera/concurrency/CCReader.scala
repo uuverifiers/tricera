@@ -3165,18 +3165,21 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
         case stm: AnnotationS => // todo: move this into a separate translate method
-          try{translate(stm.annotation_, entry)}
-          catch {
-            case e : Exception =>
-              throw new TranslationException(
-                getLineString(Some(getSourceInfo(stm))) +
-                "Failed to process ACSL statement annotation (parse error or " +
-                "unsupported fragment)\n" +
-                e.getMessage)
-          }
+          val assumed =
+            try{translate(stm.annotation_, entry)}
+            catch {
+              case e : Exception =>
+                throw new TranslationException(
+                  getLineString(Some(getSourceInfo(stm))) +
+                  "Failed to process ACSL statement annotation (parse error or " +
+                  "unsupported fragment)\n" +
+                  e.getMessage)
+            }
           val vars = scope.allFormalVarTerms
+          val constraint : IFormula = assumed.getOrElse(true)
           output(addRichClause(Clause(atom(exit, vars take exit.arity),
-                                      List(atom(entry, vars take entry.arity)), true),
+                                      List(atom(entry, vars take entry.arity)),
+                                      constraint),
             Some(getSourceInfo(stm))))
         case stm : AnnotatedIterS =>
           translate(stm.annotation_, stm.iter_stm_, entry, exit)
@@ -3218,7 +3221,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       }
     }
 
-    private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
+    private def translate(stm : Annotation, entry : CCPredicate)
+    : Option[IFormula] = {
       val annotationInfo = AnnotationParser(annotationStringExtractor(stm))
       annotationInfo match {
         case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
@@ -3232,11 +3236,15 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
                                         properties.UserAssertion(res.name))
-              } else
-                warn("Ignoring annotation: " + annot)
-            case _ => warn("Ignoring annotation: " + annot)
+                None
+              } else Some(res.f)
+            case _ =>
+              warn("Ignoring annotation: " + annot)
+              None
           }
-        case _ => warn("Ignoring annotation: " + annotationInfo)
+        case _ =>
+          warn("Ignoring annotation: " + annotationInfo)
+          None
       }
     }
 

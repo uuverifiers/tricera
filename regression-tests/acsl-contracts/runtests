@@ -164,7 +164,11 @@ TESTS="contract1.hcc  \
        stmt-assert-at-clabel-char-safe.hcc \
        stmt-assert-at-clabel-char-unsafe.hcc \
        stmt-assert-at-clabel-uint-safe.hcc \
-       stmt-assert-at-clabel-uint-unsafe.hcc"
+       stmt-assert-at-clabel-uint-unsafe.hcc \
+       stmt-admit-assumed-safe.hcc \
+       stmt-admit-frame-unsafe.hcc \
+       stmt-check-obligation-unsafe.hcc \
+       stmt-check-holds-safe.hcc"
 
 for name in $TESTS; do
     echo

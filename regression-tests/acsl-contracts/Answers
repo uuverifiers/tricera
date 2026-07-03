@@ -500,3 +500,15 @@ SAFE
 
 stmt-assert-at-clabel-uint-unsafe.hcc
 UNSAFE
+
+stmt-admit-assumed-safe.hcc
+SAFE
+
+stmt-admit-frame-unsafe.hcc
+UNSAFE
+
+stmt-check-obligation-unsafe.hcc
+UNSAFE
+
+stmt-check-holds-safe.hcc
+SAFE

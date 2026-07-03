@@ -266,7 +266,13 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
               case e                => (None, e)
             }
             val f = translate(body)
-            StatementAnnotation(f.toFormula, isAssert = true, name)
+            // assert and check are proof obligations, admit is an assumption
+            val isAssert = regularAssertion.assertionkind_ match {
+              case nb : AST.NonBlockingAssert =>
+                !nb.clausekind_.isInstanceOf[AST.ClauseKindAdmit]
+              case _ => true
+            }
+            StatementAnnotation(f.toFormula, isAssert, name)
       case _ =>
         throw new ACSLParseException("Behaviour assertions are " +
           "currently unsupported.", srcInfo)
