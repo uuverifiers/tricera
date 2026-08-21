@@ -19,7 +19,7 @@ for name in $TESTS; do
     $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
 
-TESTS="struct-field-read.c"
+TESTS="struct-field-read.c enum-indexed-struct.c"
 for name in $TESTS; do
     echo
     echo $name

@@ -33,6 +33,7 @@ import ap.terfor.ConstantTerm
 import ap.terfor.preds.Predicate
 import ap.terfor.conjunctions.Quantifier
 import ap.parser._
+import ap.types.MonoSortedIFunction
 import IExpression.Sort
 import Sort.:::
 import tricera.{
@@ -422,6 +423,21 @@ object ACSLLineariser {
         case IFunApp(ACSLExpression.oldArrow, Seq(_: IConstant, _: IConstant)) =>
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, "->", ")", 2)
+
+        case IFunApp(ACSLExpression.arrayAccess, Seq(_, _)) =>
+          allButLast(ctxt setPrecLevel 0, "[", "]", 2)
+
+        case IFunApp(ACSLExpression.arrayAccessOldPointer, Seq(_, _)) =>
+          print("\\old(")
+          SubArgs(List(ctxt setParentOp ")[", ctxt setParentOp "]"))
+
+        case IFunApp(ACSLExpression.oldArrayFieldAccess, Seq(_, _)) =>
+          print("\\old(")
+          allButLast(ctxt setPrecLevel 0, ".", ")", 2)
+
+        case IFunApp(ACSLExpression.oldArrayAccess, Seq(_, _)) =>
+          print("\\old(")
+          allButLast(ctxt setPrecLevel 0, "[", "])", 2)
            
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {

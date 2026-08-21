@@ -29,7 +29,10 @@
 package tricera
 
 import ap.theories.heaps.Heap
+import ap.theories.heaps.ArrayHeap
+import ap.theories.heaps.NativeHeap
 import ap.parser.IFunction
+import ap.types.MonoSortedIFunction
 import tricera.concurrency.heap.{HeapModel, HeapTheoryModel}
 
 
@@ -85,6 +88,27 @@ final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
     objectCtorToSel.values.exists(_.contains(func))
 
   def getReadFun: IFunction = heap.read
+
+  def isArrayPointerRangeSelector(function: IFunction): Boolean = heapModel match {
+    case model: HeapTheoryModel => function == model.arrayPtrOps.rangeSel
+    case _ => false
+  }
+
+  def isArrayRangeStart(function: IFunction): Boolean = heap match {
+    case arrayHeap: ArrayHeap => function == arrayHeap.rangeStart
+    case _: NativeHeap => function.name.endsWith("rangeStart")
+    case _ => false
+  }
+
+  def objectFieldSelectors(objectSelector: IFunction): Seq[MonoSortedIFunction] =
+    objectSelector match {
+      case selector: MonoSortedIFunction =>
+        heap.userHeapConstructors.zip(heap.userHeapSelectors).collectFirst {
+          case (constructor, selectors) if constructor.resSort == selector.resSort =>
+            selectors.collect { case field: MonoSortedIFunction => field }
+        }.getOrElse(Seq.empty)
+      case _ => Seq.empty
+    }
 
   def objectCtorToSelector(objectCtor: IFunction): Option[IFunction] =
     objectCtorToSel.get(objectCtor).flatten
