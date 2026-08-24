@@ -287,7 +287,8 @@ abstract sealed class CCType {
       structType.ctor(const: _*)
     case p : CCHeapPointer                => p.nullAddr
     case p : CCHeapArrayPointer           => p.zeroInitAddrRange
-    case CCArray(_, _, _, arrayTheory, _) => arrayTheory.const(0)
+    case CCArray(elementType, _, _, arrayTheory, _) =>
+      arrayTheory.const(elementType.getZeroInit)
     case _                                => IIntLit(0)
   }
 }
