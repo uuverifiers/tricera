@@ -186,7 +186,7 @@ Inferred ACSL annotations
 /* contract for helper_read_record */
 /*@
   requires slot == 1;
-  ensures \old(slot) == 1 && \old(records) == records;
+  ensures \old(slot) == 1 && \old(records) == records && records[1] == \result;
 */
 ================================================================================
 

@@ -1,6 +1,7 @@
 /**
- * Copyright (c) 2023 Oskar Soederberg. All rights reserved.
- * 
+ * Copyright (c) 2023 Oskar Soederberg
+ *               2026 Zafer Esen. All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  * 
@@ -109,6 +110,44 @@ object ACSLExpressionProcessor extends ResultProcessor {
     }
 
     private def isOldHeap(p: ProgVarProxy): Boolean = heapInfo.isHeap(p) && p.isPreExec
+
+    private object ArrayPtrRange {
+      def unapply(t: ITerm): Option[ProgVarProxy] = t match {
+        case IFunApp(rangeSel, Seq(ConstantAsProgVarProxy(array)))
+            if heapInfo.isArrayPtrRange(rangeSel) => Some(array)
+        case _ => None
+      }
+    }
+
+    // rangeNth(rangeSel(a), i) or rangeStart(rangeSel(a)) + i
+    private object ArrayElementAddress {
+      def unapply(address: ITerm): Option[(ProgVarProxy, ITerm)] = address match {
+        case IFunApp(nth, Seq(ArrayPtrRange(array), index))
+            if heapInfo.isRangeNth(nth) && isCleanIndex(index) =>
+          Some((array, index))
+        case IPlus(index, IFunApp(start, Seq(ArrayPtrRange(array))))
+            if heapInfo.isRangeStart(start) && isCleanIndex(index) =>
+          Some((array, index))
+        case IPlus(IFunApp(start, Seq(ArrayPtrRange(array))), index)
+            if heapInfo.isRangeStart(start) && isCleanIndex(index) =>
+          Some((array, index))
+        case _ => None
+      }
+    }
+
+    private def isCleanIndex(index: ITerm): Boolean =
+      !ContainsTOHVisitor(index, heapInfo)
+
+    // Bare constants inside an ACSL index denote entry-state values in a
+    // precondition and, wrapped in \old, pre-state values in a postcondition;
+    // otherwise they denote post-state values. Parameters always denote their
+    // entry values in ACSL contracts.
+    private def indexStateOk(index: ITerm, oldState: Boolean): Boolean =
+      SymbolCollector.constants(index).forall {
+        case p: ProgVarProxy =>
+          p.isParameter || (if (oldState) p.isPreExec else !p.isPreExec)
+        case _ => false
+      }
 
     override def postVisit(
         t: IExpression,
@@ -244,6 +283,47 @@ object ACSLExpressionProcessor extends ResultProcessor {
             // SSSOWO TODO: What about loop invariants?
             case _ => t update subres
           }
+        }
+
+        // read(h, element address of a[i]).get_<sort> ~> a[i]
+        case IFunApp(getFun, Seq(
+          TheoryOfHeapFunApp(readFun,
+            Seq(ConstantAsProgVarProxy(h), ArrayElementAddress(array, index))
+          ))) if heapInfo.isObjSelector(getFun) &&
+          heapInfo.isReadFun(readFun) &&
+          heapInfo.isHeap(h) => context match {
+          case _: PreCondition =>
+            ACSLExpression.arrayAccessFunApp(
+              ACSLExpression.arrayAccess, array, index)
+          case _: PostCondition =>
+            (
+              isOldHeap(h),
+              array.isPreExec,
+              array.isParameter
+            ) match {
+              case (false, false, false)
+                if indexStateOk(index, oldState = false) =>
+                // read(@h, a), a not param => a[i]
+                ACSLExpression.arrayAccessFunApp(
+                  ACSLExpression.arrayAccess, array, index)
+              case (false, true, true)
+                if indexStateOk(index, oldState = false) =>
+                // read(@h, a_0), a is param => a[i]
+                ACSLExpression.arrayAccessFunApp(
+                  ACSLExpression.arrayAccess, array, index)
+              case (false, true, false)
+                if indexStateOk(index, oldState = false) =>
+                // read(@h, a_0), a not param => \old(a)[i]
+                ACSLExpression.arrayAccessFunApp(
+                  ACSLExpression.arrayAccessOldPointer, array, index)
+              case (true, true, _)
+                if indexStateOk(index, oldState = true) =>
+                // read(@h_0, a_0) => \old(a[i])
+                ACSLExpression.arrayAccessFunApp(
+                  ACSLExpression.oldArrayAccess, array, index)
+              case _ => t update subres
+            }
+          case _ => t update subres
         }
         case _ => t update subres
       }

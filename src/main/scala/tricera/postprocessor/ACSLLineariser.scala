@@ -422,6 +422,17 @@ object ACSLLineariser {
         case IFunApp(ACSLExpression.oldArrow, Seq(_: IConstant, _: IConstant)) =>
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, "->", ")", 2)
+
+        case IFunApp(ACSLExpression.arrayAccess, Seq(_, _)) =>
+          allButLast(ctxt setPrecLevel 0, "[", "]", 2)
+
+        case IFunApp(ACSLExpression.arrayAccessOldPointer, Seq(_, _)) =>
+          print("\\old(")
+          allButLast(ctxt setPrecLevel 0, ")[", "]", 2)
+
+        case IFunApp(ACSLExpression.oldArrayAccess, Seq(_, _)) =>
+          print("\\old(")
+          allButLast(ctxt setPrecLevel 0, "[", "])", 2)
            
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {
