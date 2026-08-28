@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB
+ *               2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -280,16 +281,31 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
               case c: ProgVarProxy => 
                 (c.asInstanceOf[ConstantTerm], ACSLExpression.derefFunApp(ACSLExpression.deref, c))})
             .toMap
+      // derefed stack pointers are valid by construction
+      val derefParams = (preDerefMap.keySet ++ postDerefMap.keySet).collect {
+        case p: ProgVarProxy if p.isPreExec => p
+      }.toSeq.distinctBy(_.name).sortBy(p => funcParamsIds.indexOf(p.name))
       FunctionInvariants(
         id,
         isSrcAnnotated,
-        PreCondition(derefParameters(preCondition, preDerefMap)),
+        PreCondition(addValidParams(
+          derefParameters(preCondition, preDerefMap), derefParams)),
         PostCondition(derefParameters(postCondition, postDerefMap)),
         loopInvariants)
   }
 
+  private def addValidParams(invariant: Invariant,
+                             params: Seq[ProgVarProxy]): Invariant =
+    invariant match {
+      case Invariant(form, heapInfo, sourceInfo) if params.nonEmpty =>
+        val validAtoms = params.map(p =>
+          IAtom(ACSLExpression.valid, Seq(IConstant(p))): IFormula)
+        Invariant(form.&(validAtoms.reduce(_ & _)), heapInfo, sourceInfo)
+      case _ => invariant
+    }
+
   private def derefParameters(invariant: Invariant, derefMap: Map[ConstantTerm, ITerm]): Invariant = invariant match {
-    case Invariant(form, heapInfo, sourceInfo) => 
+    case Invariant(form, heapInfo, sourceInfo) =>
       Invariant(ConstantSubstVisitor(form, derefMap), heapInfo, sourceInfo)
   }
 }

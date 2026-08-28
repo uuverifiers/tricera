@@ -76,7 +76,8 @@ object ToVariableForm extends ResultProcessor {
       Invariant(
         EqualitySwapper(
           form,
-          valueSet.toCanonicalFormMap).asInstanceOf[IFormula],
+          valueSet.toCanonicalFormMap,
+          maybeHeapInfo).asInstanceOf[IFormula],
         maybeHeapInfo,
         maybeSourceInfo)
   }
@@ -88,12 +89,14 @@ object ToExplicitForm {
 }
 
 object EqualitySwapper {
-  def apply(expr : IExpression, swapMap : Map[IExpression, ITerm]) =
-    (new EqualitySwapper(swapMap))(expr)
+  def apply(expr : IExpression, swapMap : Map[IExpression, ITerm],
+            heapInfo : Option[HeapInfo] = None) =
+    (new EqualitySwapper(swapMap, heapInfo))(expr)
 }
 
-class EqualitySwapper(swapMap : Map[IExpression, ITerm])
-    extends CollectingVisitor[Int, IExpression] 
+class EqualitySwapper(swapMap : Map[IExpression, ITerm],
+                      heapInfo : Option[HeapInfo] = None)
+    extends CollectingVisitor[Int, IExpression]
     with ExpressionUtils {
   def apply(contractCondition : IExpression) : IExpression = {
     def rewriter(expr : IExpression) : IExpression = {
@@ -114,6 +117,9 @@ class EqualitySwapper(swapMap : Map[IExpression, ITerm])
     val updated = t update subres
     (updated, swapMap.getOrElse(updated, updated)) match {
       case (IFunApp(_, Seq()), swapped: IConstant) =>
+        swapped
+      case (IFunApp(fun, _), swapped: IConstant)
+          if heapInfo.exists(_.isAddrFun(fun)) =>
         swapped
       case _ =>
         updated

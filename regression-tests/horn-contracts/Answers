@@ -123,7 +123,7 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for f */
 /*@
-  requires \true;
+  requires \valid(x);
   ensures \valid(x) && \old(*x) - *x == -1;
 */
 ================================================================================
@@ -149,7 +149,7 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for f */
 /*@
-  requires \true;
+  requires \valid(x);
   ensures \valid(x) && \old(*x) - *x == -1;
 */
 ================================================================================
@@ -164,7 +164,7 @@ Inferred ACSL annotations
 /* contract for mod */
 /*@
   requires \valid(t2) && \valid(t1) && 2147483647 >= t2->val && t2->val >= -2147483647 && 2147483646 >= t1->val && t1->val >= -2147483648;
-  ensures \valid(t2) && \valid(t1) && (\old(t2->val) >= 2147483648 || -2147483648 >= \old(t2->val) || \old(t1->val) >= 2147483647 || -2147483649 >= \old(t1->val) || (\old(t2->val) - t2->val == 1 && \old(t1->val) - t1->val == -1));
+  ensures \valid(t2) && \valid(t1) && \old(t2->val) - t2->val == 1 && \old(t1->val) - t1->val == -1 && 2147483647 >= \old(t2->val) && \old(t2->val) >= -2147483647 && 2147483646 >= \old(t1->val) && \old(t1->val) >= -2147483648;
 */
 ================================================================================
 
@@ -178,12 +178,12 @@ Inferred ACSL annotations
 /* contract for decr */
 /*@
   requires \valid(q) && 2147483647 >= q->val && q->val >= -2147483647;
-  ensures \valid(q) && (\old(q->val) - q->val == 1 || \old(q->val) >= 2147483648 || -2147483648 >= \old(q->val));
+  ensures \valid(q) && \old(q->val) - q->val == 1 && 2147483647 >= \old(q->val) && \old(q->val) >= -2147483647;
 */
 /* contract for incdec */
 /*@
   requires \valid(p) && 2147483646 >= p->val && p->val >= -2147483648;
-  ensures \valid(p) && (\old(p->val) >= 2147483647 || -2147483649 >= \old(p->val) || (p->val == \old(p->val) && 2147483646 >= \old(p->val) && \old(p->val) >= -2147483648));
+  ensures \valid(p) && p->val == \old(p->val) && 2147483646 >= \old(p->val) && \old(p->val) >= -2147483648;
 */
 ================================================================================
 
@@ -224,7 +224,7 @@ Inferred ACSL annotations
 /* contract for incr */
 /*@
   requires \valid(t) && 2147483646 >= t->val && t->val >= -2147483647;
-  ensures \valid(t) && (\old(t->val) - t->val == -1 || \old(t->val) >= 2147483647 || -2147483648 >= \old(t->val));
+  ensures \valid(t) && \old(t->val) - t->val == -1 && 2147483646 >= \old(t->val) && \old(t->val) >= -2147483647;
 */
 ================================================================================
 
@@ -238,7 +238,7 @@ Inferred ACSL annotations
 /* contract for incr */
 /*@
   requires \valid(t) && 2147483646 >= t->val && t->val >= -2147483648;
-  ensures \valid(t) && (\old(t->val) - t->val == -1 || \old(t->val) >= 2147483647 || -2147483649 >= \old(t->val));
+  ensures \valid(t) && \old(t->val) - t->val == -1 && 2147483646 >= \old(t->val) && \old(t->val) >= -2147483648;
 */
 ================================================================================
 
@@ -254,7 +254,7 @@ Inferred ACSL annotations
 /* contract for f1 */
 /*@
   requires \valid(p) && 2147483647 >= *p && *p >= -2147483648;
-  ensures \valid(p) && (*p == 0 || \old(*p) >= 2147483648 || -2147483649 >= \old(*p));
+  ensures \valid(p) && *p == 0 && \old(*p) >= -2147483648 && 2147483647 >= \old(*p);
 */
 ================================================================================
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Zafer Esen. All rights reserved.
+ * Copyright (c) 2025-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -73,8 +73,8 @@ class FormulaSimplifier extends SolutionProcessor {
       val theoryCollector = new TheoryCollector
       theoryCollector(expr)
       p.addTheories(theoryCollector.theories)
-      ACSLExpression.functions.foreach(f => p.addFunction(f))
-      ACSLExpression.predicates.foreach(r => p.addRelation(r))
+      ACSLExpression.functionsSorted.foreach(f => p.addFunction(f))
+      ACSLExpression.predicatesSorted.foreach(r => p.addRelation(r))
       p.simplify(expr)
     }
 }

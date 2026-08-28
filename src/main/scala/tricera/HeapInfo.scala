@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB
+ *               2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,12 +29,37 @@
  */
 package tricera
 
-import ap.theories.heaps.Heap
+import ap.theories.ADT
+import ap.theories.heaps.{ArrayHeap, Heap, NativeHeap}
 import ap.parser.IFunction
+import tricera.concurrency.ccreader.ArrayPtrOps
 import tricera.concurrency.heap.{HeapModel, HeapTheoryModel}
 
 
 final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
+  private val arrayPtrOps : Option[ArrayPtrOps] = heapModel match {
+    case m : HeapTheoryModel => Some(m.arrayPtrOps)
+    case _ => None
+  }
+
+  private val rangeStartSel : Option[IFunction] =
+    ADT.Selector.unapply(heap.rangeSize).map {
+      case (adt, ctorIndex, _) => adt.selectors(ctorIndex)(0)
+    }
+
+  def isRangeNth(function : IFunction) : Boolean = function == heap.rangeNth
+
+  def isRangeSize(function : IFunction) : Boolean = function == heap.rangeSize
+
+  def isRangeStart(function : IFunction) : Boolean =
+    rangeStartSel.contains(function)
+
+  def isArrayPtrRange(function : IFunction) : Boolean =
+    arrayPtrOps.exists(_.rangeSel == function)
+
+  def isArrayPtrOffset(function : IFunction) : Boolean =
+    arrayPtrOps.exists(_.offsetSel == function)
+
   private def findObjectCtorsAndSels(heap: Heap): Map[IFunction, Option[IFunction]] = {
     heap.userHeapConstructors
       .zip(heap.userHeapSelectors)
@@ -70,6 +96,28 @@ final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
 
   def isNewAddrFun(function: IFunction): Boolean =
     function == heap.heapAddrPair_2
+
+  def isAddrFun(function: IFunction): Boolean =
+    function == heap.addr
+
+  private def isHeapTheoryFun(function: IFunction): Boolean =
+    Heap.HeapRelatedFunction.unapply(function).contains(heap)
+
+  // The fused allocation functions are private in the heap theories, so
+  // they cannot be compared against directly.
+  def isAllocHeapFun(function: IFunction): Boolean =
+    isHeapTheoryFun(function) &&
+      function.arity == 2 && function.name == "allocHeap"
+
+  def isAllocAddrFun(function: IFunction): Boolean =
+    isHeapTheoryFun(function) &&
+      function.arity == 2 && function.name == "allocAddr"
+
+  val heapSizeFun: Option[IFunction] = heap match {
+    case h: NativeHeap => Some(h.heapSize)
+    case h: ArrayHeap  => Some(h.heapSize)
+    case _             => None
+  }
 
   def isHeap(constant: ProgVarProxy): Boolean = heapModel match {
     case m : HeapTheoryModel =>

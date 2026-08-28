@@ -1,6 +1,7 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
- *               2025 Scania CV AB. All rights reserved.
+ *               2025 Scania CV AB.
+                 2026 Zafer Esen All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -138,13 +139,9 @@ object TheoryOfHeapRemoverVisitor {
           case (IBoolLit(true), IBoolLit(true)) =>
             // Both sides were removed during traversal
             IBoolLit(true)
-          case (IBoolLit(true), _) =>
-            // LHS has been removed
-            rhs
-          case (_, IBoolLit(true)) =>
-            // RHS has been removed
-            lhs
-          case _ => 
+          case (IBoolLit(true), _) | (_, IBoolLit(true)) =>
+            IBoolLit(true)
+          case _ =>
             // Neither side was removed during traversal
             form update subres
         }
@@ -199,6 +196,11 @@ object ContainsTOHVisitor {
       case IFunApp(fun, _)
         if heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun) =>
         ShortCutResult(true)
+      case IFunApp(fun, _)
+        if heapInfo.isArrayPtrRange(fun) || heapInfo.isArrayPtrOffset(fun) ||
+          heapInfo.isRangeNth(fun) || heapInfo.isRangeStart(fun) ||
+          heapInfo.isRangeSize(fun) =>
+        ShortCutResult(true)
       case Is_O_Sort(_) =>
         ShortCutResult(true)
       case _ =>
@@ -230,6 +232,9 @@ object ExplicitPointerRemover {
         subres: Seq[IExpression]
     ): IExpression = {
       t update subres match {
+      case INot(IBoolLit(true)) =>
+        // the negated subformula was removed, not proved true
+        IBoolLit(true)
       case f: IFormula if ContainsExplicitPointerVisitor(f) =>
         IBoolLit(true)
       case _ =>
