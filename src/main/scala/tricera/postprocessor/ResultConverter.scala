@@ -29,7 +29,8 @@
 
 package tricera.postprocessor
 
-import ap.parser.{IConstant, IFormula, VariableSubstVisitor}
+import ap.parser.{CollectingVisitor, IConstant, IExpression, IFormula,
+                  IFunApp, IIntLit, ITerm, Simplifier, VariableSubstVisitor}
 import lazabs.horn.preprocessor.HornPreprocessor
 import tricera._
 import tricera.concurrency.CCReader
@@ -45,19 +46,40 @@ object ResultConverter {
     import scala.collection.mutable.HashSet
     import Literals.{invPrefix, postExecSuffix, preExecSuffix, resultExecSuffix}
 
-    def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[CCVar], funcParams: Seq[String]): IFormula = {
-      def stripSuffix(name: String) = {
-        if (name.endsWith(preExecSuffix)) {
-          name.dropRight(preExecSuffix.size)
-        } else if (name.endsWith(postExecSuffix)) {
-          name.dropRight(postExecSuffix.size)
-        } else if (name.endsWith(resultExecSuffix)) {
-          name.dropRight(resultExecSuffix.size)
-        } else {
-          name
-        }
+    def stripSuffix(name: String) = {
+      if (name.endsWith(preExecSuffix)) {
+        name.dropRight(preExecSuffix.size)
+      } else if (name.endsWith(postExecSuffix)) {
+        name.dropRight(postExecSuffix.size)
+      } else if (name.endsWith(resultExecSuffix)) {
+        name.dropRight(resultExecSuffix.size)
+      } else {
+        name
+      }
+    }
+
+    def globalArraySizes(predVars: Seq[CCVar]): Map[String, Int] =
+      (for (v <- predVars;
+            size <- v.typ match {
+              case p: CCHeapArrayPointer
+                if p.arrayLocation == ArrayLocation.Global => p.declaredSize
+              case _ => None
+            })
+       yield stripSuffix(v.name) -> size).toMap
+
+    // a declared global array pointer has 0 offset and known size
+    def resolveGlobalArrayFacts(formula: IFormula, predVars: Seq[CCVar],
+                                heapInfo: Option[HeapInfo]): IFormula =
+      heapInfo match {
+        case Some(info) =>
+          val sizes = globalArraySizes(predVars)
+          if (sizes.isEmpty) formula
+          else (new Simplifier)(
+            GlobalArrayFactsVisitor(formula, sizes, info))
+        case None => formula
       }
 
+    def replacePredVarWithFunctionParam(formula: IFormula, predVars: Seq[CCVar], funcParams: Seq[String]): IFormula = {
       def nameToState(name: String):ProgVarProxy.State = {
         if (name.endsWith(preExecSuffix)) {
           ProgVarProxy.State.PreExec
@@ -118,7 +140,11 @@ object ResultConverter {
         val (ccPred, srcInfo) = inv
         val (_, form) = solution.find(
           p => p._1.name.stripPrefix(invPrefix) == ccPred.pred.name).get
-        LoopInvariant(replacePredVarWithFunctionParam(form, ccPred.argVars, paramNames), heapInfo, srcInfo)
+        LoopInvariant(
+          resolveGlobalArrayFacts(
+            replacePredVarWithFunctionParam(form, ccPred.argVars, paramNames),
+            ccPred.argVars, heapInfo),
+          heapInfo, srcInfo)
     }
 
     def toFunctionInvariants(
@@ -134,17 +160,23 @@ object ResultConverter {
         funcId,
         annotatedFuncs(funcId),
         PreCondition(Invariant(
-          replacePredVarWithFunctionParam(
-            solution(ctx.prePred.pred),
+          resolveGlobalArrayFacts(
+            replacePredVarWithFunctionParam(
+              solution(ctx.prePred.pred),
+              ctx.prePred.argVars,
+              paramNames),
             ctx.prePred.argVars,
-            paramNames),
+            heapInfo),
           heapInfo,
           ctx.prePred.srcInfo)),
         PostCondition(Invariant(
-          replacePredVarWithFunctionParam(
-            solution(ctx.postPred.pred),
+          resolveGlobalArrayFacts(
+            replacePredVarWithFunctionParam(
+              solution(ctx.postPred.pred),
+              ctx.postPred.argVars,
+              paramNames),
             ctx.postPred.argVars,
-            paramNames),
+            heapInfo),
           heapInfo,
           ctx.postPred.srcInfo)),
         loopInvs
@@ -178,5 +210,40 @@ object ResultConverter {
       case Left(None) => Empty()
       case Right(cex) => CounterExample(cex)
     }
-  }  
+  }
+
+  private object GlobalArrayFactsVisitor {
+    def apply(formula: IFormula, sizes: Map[String, Int],
+              heapInfo: HeapInfo): IFormula =
+      new GlobalArrayFactsVisitor(sizes, heapInfo)
+        .visit(formula, ()).asInstanceOf[IFormula]
+  }
+
+  private class GlobalArrayFactsVisitor(
+    sizes: Map[String, Int],
+    heapInfo: HeapInfo
+  ) extends CollectingVisitor[Unit, IExpression] {
+
+    private def knownSize(t: ITerm): Option[Int] = t match {
+      case IConstant(p: ProgVarProxy) if p.isGlobal => sizes.get(p.name)
+      case _ => None
+    }
+
+    override def postVisit(
+        t: IExpression,
+        arg: Unit,
+        subres: Seq[IExpression]
+    ): IExpression = (t update subres) match {
+      case IFunApp(offsetSel, Seq(arr))
+          if heapInfo.isArrayPtrOffset(offsetSel) &&
+            knownSize(arr).isDefined =>
+        IIntLit(0)
+      case IFunApp(rangeSize, Seq(IFunApp(rangeSel, Seq(arr))))
+          if heapInfo.isRangeSize(rangeSize) &&
+            heapInfo.isArrayPtrRange(rangeSel) &&
+            knownSize(arr).isDefined =>
+        IIntLit(knownSize(arr).get)
+      case updated => updated
+    }
+  }
 }

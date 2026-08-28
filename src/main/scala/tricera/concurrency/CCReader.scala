@@ -1364,7 +1364,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                     (ArrayLocation.Stack, Some(a.constant_expression_))
                   case _ => (ArrayLocation.Heap, None)
                 }
-                (heapModelFactory.makeArrayPointer(typeWithPtrs, arrayLocation), initArrayExpr)
+                val declaredSize = arrayLocation match {
+                  case ArrayLocation.Global =>
+                    initArrayExpr.flatMap(e =>
+                      try Some(translateConstantExpr(e))
+                      catch { case _ : TranslationException => None })
+                      .map(_.toTerm).collect { case IIntLit(v) => v.intValueSafe }
+                  case _ => None
+                }
+                (heapModelFactory.makeArrayPointer(typeWithPtrs, arrayLocation)
+                   .copy(declaredSize = declaredSize), initArrayExpr)
               }
               // todo: adjust needsHeap below if an array type does not require heap
               // for instance if we model arrays using the theory of arrays or unroll

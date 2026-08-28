@@ -635,7 +635,8 @@ case class CCHeapArrayPointer(addressRangeSort: Sort,
                               zeroInitAddrRange: ITerm,
                               elementType:       CCType,
                               arrayLocation:     ArrayLocation,
-                              ptrOps:            ArrayPtrOps)
+                              ptrOps:            ArrayPtrOps,
+                              declaredSize:      Option[Int] = None)
     extends CCType {
   def shortName = "[]"
 }

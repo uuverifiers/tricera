@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
- *               2025 Zafer Esen. All rights reserved.
+ *               2025-2026 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -115,6 +115,9 @@ def separatedPointers(pointerEquivs : ValSet) : IFormula = {
       case _ => IBoolLit(true)
     }
   }
+
+  val functionsSorted  : Seq[IFunction] = functions.toSeq.sortBy(_.name)
+  val predicatesSorted : Seq[Predicate] = predicates.toSeq.sortBy(_.name)
 }
 
 object ACSLFunction {

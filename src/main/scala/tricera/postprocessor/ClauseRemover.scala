@@ -196,6 +196,11 @@ object ContainsTOHVisitor {
       case IFunApp(fun, _)
         if heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun) =>
         ShortCutResult(true)
+      case IFunApp(fun, _)
+        if heapInfo.isArrayPtrRange(fun) || heapInfo.isArrayPtrOffset(fun) ||
+          heapInfo.isRangeNth(fun) || heapInfo.isRangeStart(fun) ||
+          heapInfo.isRangeSize(fun) =>
+        ShortCutResult(true)
       case Is_O_Sort(_) =>
         ShortCutResult(true)
       case _ =>
