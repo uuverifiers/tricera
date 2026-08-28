@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2020-2022 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2020-2026 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -433,6 +433,13 @@ object ACSLLineariser {
         case IFunApp(ACSLExpression.oldArrayAccess, Seq(_, _)) =>
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, "[", "])", 2)
+
+        case IFunApp(ACSLExpression.arrayFieldAccess, Seq(_, _: IConstant)) =>
+          allButLast(ctxt setPrecLevel 0, ".", "", 2)
+
+        case IFunApp(ACSLExpression.oldArrayFieldAccess, Seq(_, _: IConstant)) =>
+          print("\\old(")
+          allButLast(ctxt setPrecLevel 0, ".", ")", 2)
            
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {

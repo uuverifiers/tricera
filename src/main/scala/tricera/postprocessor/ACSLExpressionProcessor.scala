@@ -285,6 +285,56 @@ object ACSLExpressionProcessor extends ResultProcessor {
           }
         }
 
+        // field(read(h, element address of a[i]).get_<sort>) ~> a[i].f
+        case IFunApp(selector: MonoSortedIFunction, Seq(
+          IFunApp(getFun, Seq(
+            TheoryOfHeapFunApp(readFun,
+              Seq(ConstantAsProgVarProxy(h), ArrayElementAddress(array, index))
+            ))))) if heapInfo.isObjSelector(getFun) &&
+          heapInfo.isReadFun(readFun) &&
+          isSelector(selector) &&
+          heapInfo.isHeap(h) => context match {
+          case _: PreCondition =>
+            ACSLExpression.arrayFieldAccessFunApp(
+              ACSLExpression.arrayFieldAccess,
+              ACSLExpression.arrayAccessFunApp(
+                ACSLExpression.arrayAccess, array, index),
+              selector)
+          case _: PostCondition =>
+            (
+              isOldHeap(h),
+              array.isPreExec,
+              array.isParameter
+            ) match {
+              case (false, false, false) | (false, true, true)
+                if indexStateOk(index, oldState = false) =>
+                // read(@h, a) => a[i].f
+                ACSLExpression.arrayFieldAccessFunApp(
+                  ACSLExpression.arrayFieldAccess,
+                  ACSLExpression.arrayAccessFunApp(
+                    ACSLExpression.arrayAccess, array, index),
+                  selector)
+              case (false, true, false)
+                if indexStateOk(index, oldState = false) =>
+                // read(@h, a_0), a not param => \old(a)[i].f
+                ACSLExpression.arrayFieldAccessFunApp(
+                  ACSLExpression.arrayFieldAccess,
+                  ACSLExpression.arrayAccessFunApp(
+                    ACSLExpression.arrayAccessOldPointer, array, index),
+                  selector)
+              case (true, true, _)
+                if indexStateOk(index, oldState = true) =>
+                // read(@h_0, a_0) => \old(a[i].f)
+                ACSLExpression.arrayFieldAccessFunApp(
+                  ACSLExpression.oldArrayFieldAccess,
+                  ACSLExpression.arrayAccessFunApp(
+                    ACSLExpression.arrayAccess, array, index),
+                  selector)
+              case _ => t update subres
+            }
+          case _ => t update subres
+        }
+
         // read(h, element address of a[i]).get_<sort> ~> a[i]
         case IFunApp(getFun, Seq(
           TheoryOfHeapFunApp(readFun,

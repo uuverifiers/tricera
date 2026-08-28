@@ -191,3 +191,16 @@ Inferred ACSL annotations
 ================================================================================
 
 SAFE
+
+enum-indexed-struct-field.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for helper_read_level */
+/*@
+  requires slot == 1;
+  ensures \old(slot) == 1 && \old(records) == records && records[1].level == \result;
+*/
+================================================================================
+
+SAFE

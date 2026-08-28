@@ -56,11 +56,15 @@ object ACSLExpression {
     new IFunction("arrayAccessOldPointer", 2, false, false) // \old(a)[i]
   val oldArrayAccess =
     new IFunction("oldArrayAccess", 2, false, false) // \old(a[i])
+  val arrayFieldAccess =
+    new IFunction("arrayFieldAccess", 2, false, false) // a[i].f, \old(a)[i].f
+  val oldArrayFieldAccess =
+    new IFunction("oldArrayFieldAccess", 2, false, false) // \old(a[i].f)
   val separated = new Predicate("\\separated", 2) // \separated(p1, p2)
 
   val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer,
                       oldArrow, arrayAccess, arrayAccessOldPointer,
-                      oldArrayAccess)
+                      oldArrayAccess, arrayFieldAccess, oldArrayFieldAccess)
   val predicates = Set(valid, separated)
 
   def fun2Identifier(fun : IFunction) = fun.name.split("::").last
@@ -78,6 +82,17 @@ object ACSLExpression {
       index: ITerm
   ): IFunApp = {
     IFunApp(arrayFunction, Seq(IConstant(array), index))
+  }
+
+  def arrayFieldAccessFunApp(
+      fieldFunction: IFunction,
+      arrayApp: IFunApp,
+      selector: MonoSortedIFunction
+  ): IFunApp = {
+    IFunApp(
+      fieldFunction,
+      Seq(arrayApp, IConstant(new ConstantTerm(fun2Identifier(selector))))
+    )
   }
 
   def arrowFunApp(
