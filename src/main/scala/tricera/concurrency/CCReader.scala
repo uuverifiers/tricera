@@ -40,6 +40,7 @@ import concurrent_c._
 import concurrent_c.Absyn._
 import hornconcurrency.{ParametricEncoder, System, TimedSystem,
                         SystemTransformations, SignalSystem}
+import hornconcurrency.MITL
 import lazabs.horn.abstractions.VerificationHints
 import lazabs.horn.abstractions.VerificationHints._
 import lazabs.horn.bottomup.HornClauses
@@ -614,7 +615,16 @@ class CCReader private (prog              : Program,
         collectStructDefsFromComp(comp)
       case _ =>
     }
+  //////////////////////////////MITL////////////////////////////////////////////
+  
+  private val mitl_specs = prog.asInstanceOf[Progr].listexternal_declaration_.asScala.collect{
+    case decl: Mitl_Spec => decl
+  }
+  private val rank_funcs = prog.asInstanceOf[Progr].listexternal_declaration_.asScala.collect{
+    case decl: Rank_Func => decl
+  }
 
+  /////////////////////////////////////////////////////////////////////////////
   import ap.theories.{Heap => HeapTheoryObject}
 
   def defObjCtor(objectCtors : scala.Seq[IFunction]) : ITerm = objectCtors.last()
@@ -856,6 +866,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
         case _ => // nothing
       }
+    
+
+
+    
 
     val globalsSize = scope.GlobalVars.size
     /**
@@ -3378,15 +3392,50 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                                backgroundClauses)
 
     if (useSignals) {
-      SignalSystem(processes.toList,
-                   scope.GlobalVars.size,
-                   (assertionClauses).map(_.clause).toList,
-                   System.RationalTime(0),
-                   signals.values.toSet,
-                   progressBlocks.toSeq,
-                   None,
-                   VerificationHints(predHints),
-                   backgroundAxioms)
+      import hornconcurrency._
+      val programSignalSystem = AcceptingSignalSystem(processes.toList,
+              scope.GlobalVars.size,
+              (assertionClauses).map(_.clause).toList,
+              System.RationalTime(0),
+              signals.values.toSet,
+              progressBlocks.toSeq,
+              Map(), //TODO: Include accepts in language?
+              None,
+              None,
+              VerificationHints(predHints),
+              backgroundAxioms)
+
+      val mitl_strings = mitl_specs.map(m =>"MITL_SPEC" + m.string_ + ";").toSeq
+      if (!mitl_strings.isEmpty) {      
+          val rank_strings = rank_funcs.map(r =>"RANKING_FUNCTION " + r.string_ + ";").toSeq
+            
+          val mitl_context = MITLContext(
+            mitl_strings ++ rank_strings, scope.GlobalVars.vars.map(_.name).toSeq
+          )
+
+          val (encodedTransducers, output) = TimedTransducerEncoder.encodeTransducerEquation(
+            MITLTransducerTranslator.mitlTranslation(
+              MITL.nf(mitl_context.mitls.head) //FIXME: Not only head
+          ))
+
+          val (mitlSignalSystem, signalToIdx) = TimedTransducerEncoder.toSignalSystem(
+            encodedTransducers, output
+          )
+          // map from signal index to atomic proposition,
+          // account for that we will have program vars in the first indices
+          val idxToAP = mitl_context.apMap.map{case (s, ap) => 
+            (signalToIdx(s) + programSignalSystem.globalVarNum - 1, ap)
+          }.toMap
+          val combined = programSignalSystem.combine(mitlSignalSystem)
+          val withAPs = combined.addAtomicPropositions(idxToAP)
+          val withRanks = withAPs.transformAcceptsToEmptiness(mitl_context.ranks)
+
+
+          withRanks
+          // withAPs
+      } else {
+        programSignalSystem
+      }
     } else if (useTime) {
       TimedSystem(processes.toList,
                   if (singleThreaded) 1 else scope.GlobalVars.size,
@@ -3425,7 +3474,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                loopInvariants.map(_._2._1.pred).toList)
  */
   }
-
+  
   def getRichClause(clause : Clause) : Option[CCClause] = {
     clauseToRichClause.values.find(richClause =>
       richClause.clause == clause ||
