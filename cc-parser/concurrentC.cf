@@ -19,94 +19,10 @@ Global. External_declaration ::= Dec ;
 Chan.   External_declaration ::= Chan_def ;
 Sigs.   External_declaration ::= Sigs_def ;
 Ignored.External_declaration ::= IgnoredDecl;
-Mitl_Spec. External_declaration ::=  "MITL_SPEC" Mitl_Formula ";" ;
-Rank_Func. External_declaration ::= 
-  "RANKING" Mitl_Op_Rank Exp ";" ;
-
--- =========================
--- Arithmetic expressions
--- =========================
 
 
--- =========================
--- MITL Formula (with precedence)
--- =========================
-
--- Lowest precedence: IFF
-MF_Iff.    Mitl_Formula ::= Mitl_Formula "<=>" Mitl_Formula1 ;
-MF_base.   Mitl_Formula ::= Mitl_Formula1 ;
-
--- Implication
-MF_Imp.    Mitl_Formula1 ::= Mitl_Formula1 "==>" Mitl_Formula2 ;
-MF_impbase.Mitl_Formula1 ::= Mitl_Formula2 ;
-
--- OR
-MF_Or.     Mitl_Formula2 ::= Mitl_Formula2 "|||" Mitl_Formula3 ;
-MF_orbase. Mitl_Formula2 ::= Mitl_Formula3 ;
-
--- AND
-MF_And.    Mitl_Formula3 ::= Mitl_Formula3 "&&&" Mitl_Formula4 ;
-MF_andbase.Mitl_Formula3 ::= Mitl_Formula4 ;
-
--- Temporal binary (U, S)
-MF_BinOp.  Mitl_Formula4 ::= Mitl_Formula4 Mitl_BinOp Mitl_Formula5 ;
-MF_binbase.Mitl_Formula4 ::= Mitl_Formula5 ;
-
--- Unary level
-MF_Not.    Mitl_Formula5 ::= "!!" Mitl_Formula5 ;
-MF_notbase.   Mitl_Formula5 ::= Mitl_Formula6 ; 
-
--- Mitl Atomic formulas
-MF_UnOp. Mitl_Formula6 ::= Mitl_UnOp Mitl_Formula7 ;
-MF_unopbase. Mitl_Formula6 ::= Mitl_Formula7 ;
-
--- Parentheses
-MF_Paren.  Mitl_Formula7 ::= "(" Mitl_Formula ")" ;
-MF_Exp.    Mitl_Formula7 ::= "{" Exp "}"; --Using C expressions as atomic propositions, for now
-
--- Boolean constants
-
-
-
--- Mitl Comparisons 
--- MF_Eq.     Mitl_Formula6 ::= Mitl_Exp "==" Mitl_Exp ;
--- MF_Neq.    Mitl_Formula6 ::= Mitl_Exp "!=" Mitl_Exp ;
--- MF_Lt.     Mitl_Formula6 ::= Mitl_Exp "<"  Mitl_Exp ;
--- MF_Le.     Mitl_Formula6 ::= Mitl_Exp "<=" Mitl_Exp ;
--- MF_Gt.     Mitl_Formula6 ::= Mitl_Exp ">"  Mitl_Exp ;
--- MF_Ge.     Mitl_Formula6 ::= Mitl_Exp ">=" Mitl_Exp ;
-
-NoRank. Mitl_Op_Rank ::= ;
-Rank. Mitl_Op_Rank ::= "<" UnboundedInteger ">" ;
-
-Mitl_UnOp_def. Mitl_UnOp ::= Mitl_Op_Rank Mitl_UnOp_Raw ;
-
-
-Mitl_UnOp_Future. Mitl_UnOp_Raw ::= "F";
-Mitl_UnOp_Future_Int. Mitl_UnOp_Raw ::= "F" "@" Mitl_Interval ;
-Mitl_Unop_Global. Mitl_UnOp_Raw ::= "G" ;
-Mitl_Unop_Global_Int. Mitl_UnOp_Raw ::= "G" "@" Mitl_Interval ;
-Mitl_UnOp_Past. Mitl_UnOp_Raw ::= "P" ;
-Mitl_UnOp_Past_Int. Mitl_UnOp_Raw ::= "P" "@" Mitl_Interval ;
-Mitl_UnOp_Hist. Mitl_UnOp_Raw ::= "H" ;
-Mitl_UnOp_Hist_Int. Mitl_UnOp_Raw ::= "H" "@" Mitl_Interval ;
-
-Mitl_BinOp_def. Mitl_BinOp ::= Mitl_Op_Rank Mitl_BinOp_Raw ;
-
-Mitl_BinOp_Until. Mitl_BinOp_Raw ::= "U" ;
-Mitl_BinOp_Until_Int. Mitl_BinOp_Raw ::= "U" "@" Mitl_Interval ;
-Mitl_BinOp_Since. Mitl_BinOp_Raw ::= "S" ;
-Mitl_BinOp_Since_Int. Mitl_BinOp_Raw ::= "S" "@" Mitl_Interval ;
-
-
-
-Mitl_Interval_open. Mitl_Interval ::= "(" Mitl_Bound "," Mitl_Bound ")" ;
-Mitl_Interval_closed. Mitl_Interval ::= "[" Mitl_Bound "," Mitl_Bound "]" ;
-Mitl_Interval_leftopen. Mitl_Interval ::= "(" Mitl_Bound "," Mitl_Bound "]" ;
-Mitl_Interval_rightopen. Mitl_Interval ::= "[" Mitl_Bound "," Mitl_Bound ")" ;
-
-BoundInt.   Mitl_Bound ::= Constant ;
-BoundInf.   Mitl_Bound ::= "infty" ;
+Mitl_Spec. External_declaration ::= "MITL_SPEC" String ";" ;
+Rank_Func. External_declaration ::= "RANKING" String ";" ;
 
 
 -- following can be left in source after preprocessing, simply ignore them.
