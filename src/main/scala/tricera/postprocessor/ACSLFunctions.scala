@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
- *               2025 Zafer Esen. All rights reserved.
+ *               2025-2026 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -51,9 +51,20 @@ object ACSLExpression {
   val arrowOldPointer =
     new IFunction("arrowOldPointer", 2, false, false) // \old(p)->a
   val oldArrow = new IFunction("oldArrow", 2, false, false) // \old(p->a)
+  val arrayAccess = new IFunction("arrayAccess", 2, false, false) // a[i]
+  val arrayAccessOldPointer =
+    new IFunction("arrayAccessOldPointer", 2, false, false) // \old(a)[i]
+  val oldArrayAccess =
+    new IFunction("oldArrayAccess", 2, false, false) // \old(a[i])
+  val arrayFieldAccess =
+    new IFunction("arrayFieldAccess", 2, false, false) // a[i].f, \old(a)[i].f
+  val oldArrayFieldAccess =
+    new IFunction("oldArrayFieldAccess", 2, false, false) // \old(a[i].f)
   val separated = new Predicate("\\separated", 2) // \separated(p1, p2)
 
-  val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer, oldArrow)
+  val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer,
+                      oldArrow, arrayAccess, arrayAccessOldPointer,
+                      oldArrayAccess, arrayFieldAccess, oldArrayFieldAccess)
   val predicates = Set(valid, separated)
 
   def fun2Identifier(fun : IFunction) = fun.name.split("::").last
@@ -63,6 +74,25 @@ object ACSLExpression {
       pointer: ProgVarProxy
   ) = {
     IFunApp(derefFunction, Seq(IConstant(pointer)))
+  }
+
+  def arrayAccessFunApp(
+      arrayFunction: IFunction,
+      array: ProgVarProxy,
+      index: ITerm
+  ): IFunApp = {
+    IFunApp(arrayFunction, Seq(IConstant(array), index))
+  }
+
+  def arrayFieldAccessFunApp(
+      fieldFunction: IFunction,
+      arrayApp: IFunApp,
+      selector: MonoSortedIFunction
+  ): IFunApp = {
+    IFunApp(
+      fieldFunction,
+      Seq(arrayApp, IConstant(new ConstantTerm(fun2Identifier(selector))))
+    )
   }
 
   def arrowFunApp(
@@ -115,6 +145,9 @@ def separatedPointers(pointerEquivs : ValSet) : IFormula = {
       case _ => IBoolLit(true)
     }
   }
+
+  val functionsSorted  : Seq[IFunction] = functions.toSeq.sortBy(_.name)
+  val predicatesSorted : Seq[Predicate] = predicates.toSeq.sortBy(_.name)
 }
 
 object ACSLFunction {

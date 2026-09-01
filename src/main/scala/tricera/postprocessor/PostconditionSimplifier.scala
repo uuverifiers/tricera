@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
- *               2025 Zafer Esen. All rights reserved.
+ *               2025-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -42,7 +42,7 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.{Conj, Disj, and, i}
+import IExpression.{Conj, Disj, and, i, or}
 import ap.SimpleAPI.ProverStatus
 import ap.SimpleAPI.TimeoutException
 import ap.theories._
@@ -67,18 +67,48 @@ object PostconditionSimplifier extends ResultProcessor {
       val newInvs = FunctionInvariants(
         id, isSrcAnnotated, preCondition,
         PostCondition(Invariant(
-          simplify(postInv.expression, preCondition.invariant.expression),
+          simplify(postInv.expression,
+                   asOldState(preCondition.invariant.expression)),
           postInv.heapInfo, postInv.sourceInfo)),
         loopInvariants)
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
 
+  // deref(p) in pre == oldDeref(p) in post
+  private def asOldState(precondition : IFormula) : IFormula =
+    OldStateVisitor.visit(precondition, ()).asInstanceOf[IFormula]
+
+  private object OldStateVisitor extends CollectingVisitor[Unit, IExpression] {
+    override def postVisit(t      : IExpression,
+                           arg    : Unit,
+                           subres : Seq[IExpression]) : IExpression =
+      t update subres match {
+        case IFunApp(fun, args) if fun == ACSLExpression.deref =>
+          IFunApp(ACSLExpression.oldDeref, args)
+        case updated => updated
+      }
+  }
+
+  // Drop !pre in !pre | Q in post
+  private def dropPreconditionGuard(postcondition : IFormula,
+                                    precondition  : IFormula) : IFormula = {
+    val preConjs = LineariseVisitor(precondition, IBinJunctor.And).toSet
+    val kept = LineariseVisitor(postcondition, IBinJunctor.Or).filterNot {
+      case INot(f) =>
+        LineariseVisitor(f, IBinJunctor.And).forall(preConjs.contains)
+      case _ => false
+    }
+    if (kept.isEmpty) postcondition else or(kept)
+  }
+
   private def simplify(postcondition : IFormula,
                        precondition  : IFormula) : IFormula = {
 
     val postConjs =
-      LineariseVisitor(Transform2NNF(postcondition), IBinJunctor.And)
+      LineariseVisitor(
+        Transform2NNF(dropPreconditionGuard(postcondition, precondition)),
+        IBinJunctor.And)
     // The reason we partition the conjuncts based on heap operations is that we
     // would like to preserve non-heap conjuncts even if they are implied by a
     // formula involving heap operations.
@@ -89,7 +119,8 @@ object PostconditionSimplifier extends ResultProcessor {
     // using non-heap conjuncts though.
     val (postHeapConjs, otherConjs) =
       postConjs.partition(c => HeapFunDetector(c))
-    val simpHeap  = simplifyHelper(and(postHeapConjs), precondition)
+    val simpHeap  = simplifyHelper(and(postHeapConjs),
+                                   precondition &&& and(otherConjs))
     simpHeap &&& and(otherConjs)
   }
 
@@ -123,8 +154,8 @@ object PostconditionSimplifier extends ResultProcessor {
       // check if context && !formula is UNSAT
       val combinedFormula = context &&& !formula
       addConstants(SymbolCollector constantsSorted combinedFormula)
-      addRelations(ACSLExpression.predicates)
-      ACSLExpression.functions.foreach(f => addFunction(f))
+      addRelations(ACSLExpression.predicatesSorted)
+      ACSLExpression.functionsSorted.foreach(f => addFunction(f))
 
       val theoryCollector = new TheoryCollector
       theoryCollector(combinedFormula)
