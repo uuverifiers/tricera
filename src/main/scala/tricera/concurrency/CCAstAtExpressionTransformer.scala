@@ -191,7 +191,18 @@ object CCAstAtExpressionTransformer {
     val initializer = new InitExpr(copiedExpr)
 
     val directDeclarator = new Name(varName)
-    val declarator = new NoPointer(directDeclarator)
+    val declarator = T match {
+      case et: ExtendedType => et.abstract_declarator_ match {
+        case ps: PointerStart =>
+          new BeginPointer(ps.pointer_.accept(copyVisitor, ()), directDeclarator)
+        case _ =>
+          throw new IllegalArgumentException(
+            s"${tricera.Util.getLineString(initExpr)}: " +
+            s"Unsupported cast type in a $atExpressionName call; only scalar " +
+            "and pointer types are supported.")
+      }
+      case _: PlainType => new NoPointer(directDeclarator)
+    }
     val initDeclarator = new InitDecl(declarator, initializer)
     val listInitDeclarator = new ListInit_declarator()
     listInitDeclarator.add(initDeclarator)

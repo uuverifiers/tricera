@@ -2,7 +2,9 @@
 
 
 
-TESTS="simple-01-false.c simple-01-true.c at-old-01-false.c at-old-01-true.c"
+TESTS="simple-01-false.c simple-01-true.c at-old-01-false.c at-old-01-true.c \
+       at-ptr-01-true.c at-ptr-01-false.c at-ptr-02-true.c at-ptr-02-false.c \
+       at-old-ptr-01-true.c at-old-ptr-01-false.c at-old-ptr-02-false.c"
 
 for name in $TESTS; do
     echo
