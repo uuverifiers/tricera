@@ -1,0 +1,7 @@
+// \at(x, Init) is not yet supported
+int main(void) {
+  int x = 5;
+  x = 10;
+  /*@ assert \at(x, Init) == 5; @*/
+  return 0;
+}

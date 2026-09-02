@@ -1,5 +1,5 @@
 -- Copyright (c) 2021-2022 Pontus Ernstedt
---                    2023 Zafer Esen. All rights reserved.
+--               2023-2026 Zafer Esen. All rights reserved.
 --
 -- Redistribution and use in source and binary forms, with or without
 -- modification, are permitted provided that the following conditions are met:
@@ -27,7 +27,7 @@
 -- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- Parser for (subset of) ACSL.
--- Figure references are to ACSL Manual:
+-- Figure references are to ACSL Manual 1.23:
 -- https://frama-c.com/download/acsl.pdf
 
 -- This grammar merges Predicate and Term into Expr to avoid conflicts.
@@ -36,6 +36,13 @@
 AnnotContract.  Annotation ::= "/*@" FunctionContract "*/";
 AnnotAssertion. Annotation ::= "/*@" Assertion "*/";
 LoopAnnot.      Annotation ::= "/*@" LoopInvariant "*/";
+AnnotPredicate. Annotation ::= "/*@" PredicateDef "*/";
+
+PredWithParams. PredicateDef ::= "predicate" Id "{" [Id] "}" "(" [PredParam] ")" "=" Expr ";" ;
+PredNoParams.   PredicateDef ::= "predicate" Id "{" [Id] "}" "=" Expr ";" ;
+
+APredParam. PredParam ::= TypeName VarIdent ;
+separator nonempty PredParam "," ;
 
 entrypoints Annotation, FunctionContract, Assertion, LoopInvariant;
 
@@ -44,7 +51,7 @@ RegularAssertion. Assertion ::= AssertionKind Expr ;
 _.                Assertion ::= Assertion ";"  ;
 -- BehaviourAssertion. Assertion ::= for id ... (see Figure 2.9 in the ACSL standard)
 
----- Contracts (2.6) ---------------------------------------
+---- Contracts (Figure 2.6) ---------------------------------------
 Contract. FunctionContract ::= [RequiresClause] MaybeTerminatesClause MaybeDecreasesClause [SimpleClause] [NamedBehavior] [CompletenessClause] ;
 
 Assert.            AssertionKind ::= "assert" ;
@@ -74,7 +81,8 @@ SimpleClauseEnsures. SimpleClause ::= EnsuresClause ;
 -- SimpleClauseAbrupt.     SimpleClause ::= AbruptClause ;
 separator SimpleClause "" ;
 
-AnAssignsClause. AssignsClause ::= "assigns" Locations ";" ;
+AnAssignsClause.     AssignsClause ::= "assigns" Locations ";" ;
+AnAssignsClauseFrom. AssignsClause ::= "assigns" Locations "\\from" Locations ";" ;
 
 LocationsSome.    Locations ::= [Location] ;
 LocationsNothing. Locations ::= "\\nothing" ;
@@ -176,7 +184,10 @@ EFieldFunMod. Expr21 ::= "{" Expr21 "\\with" "." Id "=" Expr22 "}" ;
 
 EApplication. Expr22 ::= Id "(" [Expr2] ")" ;
 EOld.         Expr22 ::= "\\old" "(" Expr2 ")" ;
+EAt.          Expr22 ::= "\\at" "(" Expr2 "," Id ")" ;
 EValid.       Expr22 ::= "\\valid" "(" [Location] ")" ;
+EValidRead.   Expr22 ::= "\\valid_read" "(" [Location] ")" ;
+ESeparated.   Expr22 ::= "\\separated" "(" [Location] ")" ;
 
 ELit.         Expr23 ::= Lit ;
 EIdent.       Expr23 ::= Id ;
@@ -302,4 +313,4 @@ OldFuncDec.  CDirectDeclarator ::= CDirectDeclarator "(" ")" ;
 position token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
 separator Id "," ;
 
-token UnboundedInteger ('0' | (["123456789"] digit *));
+token UnboundedInteger (('0' ('x' | 'X') (digit | ["abcdefABCDEF"]) +) | '0' | (["123456789"] digit *));

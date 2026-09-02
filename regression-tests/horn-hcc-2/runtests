@@ -37,3 +37,12 @@ done
 echo
 echo hints4.hcc
 $TRI_CMD -log:1 -abstract:off "$@" hints4.hcc 2>&1 | grep 'SAFE\|CEGAR iterations'
+
+TESTS="switch-scoped-decl.hcc switch-scoped-decl-uninit.hcc \
+       switch-scoped-decl-init.hcc switch-scoped-decl-fallthrough.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -E 'SAFE|UNSAFE'
+done

@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB
+ *               2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -167,6 +168,21 @@ class CCAstTypeAnnotationVisitor extends ComposVisitor[CCAstTypeAnnotationData] 
 
     withScope(funcName) {
       super.visit(func, symTab)
+    }
+  }
+
+  /**
+    Add an entry in the symbol table for a function declared with a contract.
+  */
+  override def visit(dec: AnnotatedFuncDeclarator, symTab: CCAstTypeAnnotationData): External_declaration = {
+    val funcName = dec.declarator_.accept(getName, ())
+    val decSpecifiers = copyAst(dec.listdeclaration_specifier_)
+    val initDeclarator = new OnlyDecl(dec.declarator_.accept(copyAst, ()))
+
+    symTab.put(funcName, CCAstDeclaration(decSpecifiers, initDeclarator))
+
+    withScope(funcName) {
+      super.visit(dec, symTab)
     }
   }
 

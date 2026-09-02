@@ -1,0 +1,12 @@
+/*@
+  requires x >= 0;
+  ensures \result == 2;
+*/
+int foo(int x);
+
+
+void main()
+{
+  int a = 1;
+  foo(a);
+}

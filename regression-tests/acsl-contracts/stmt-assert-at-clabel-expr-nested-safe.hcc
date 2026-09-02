@@ -1,0 +1,10 @@
+// \at over a nested arithmetic expression
+int main(void) {
+  int x = 3;
+  int y = 4;
+L:
+  x = 100;
+  y = 200;
+  /*@ assert \at((x + y) * 2, L) == 14; @*/
+  return 0;
+}

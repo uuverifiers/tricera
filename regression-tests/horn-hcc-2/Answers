@@ -281,3 +281,15 @@ SAFE
 hints4.hcc
 CEGAR iterations:                                      0
 SAFE
+
+switch-scoped-decl.hcc
+SAFE
+
+switch-scoped-decl-uninit.hcc
+UNSAFE
+
+switch-scoped-decl-init.hcc
+UNSAFE
+
+switch-scoped-decl-fallthrough.hcc
+SAFE

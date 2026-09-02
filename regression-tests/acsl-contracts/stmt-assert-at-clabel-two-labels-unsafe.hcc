@@ -1,0 +1,13 @@
+
+
+int main(void) {
+  int x = 3;
+  int y = 0;
+L1:
+  x = 100;
+  y = 4;
+L2:
+  y = 200;
+  /*@ assert \at(x, L1) == 4 && \at(y, L2) == 3; @*/
+  return 0;
+}

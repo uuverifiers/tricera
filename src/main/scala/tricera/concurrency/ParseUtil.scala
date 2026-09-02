@@ -78,7 +78,7 @@ object ParseUtil {
         case p: Progr =>
           val funcExtDecl = p.listexternal_declaration_.getFirst.asInstanceOf[Afunc]
           val funcDef = funcExtDecl.function_def_
-          val body = CCReader.FuncDef(funcDef).body.asInstanceOf[ScompTwo]
+          val body = CCReader.FuncDef(funcDef).body.get.asInstanceOf[ScompTwo]
 
           if (body.liststm_.size != 1) {
             throw new Exception(
@@ -110,7 +110,7 @@ object ParseUtil {
       parser.pProgram() match {
         case p: Progr =>
           val func = p.listexternal_declaration_.getFirst.asInstanceOf[Afunc].function_def_
-          val body = CCReader.FuncDef(func).body.asInstanceOf[ScompTwo]
+          val body = CCReader.FuncDef(func).body.get.asInstanceOf[ScompTwo]
           val stmt = body.liststm_.getFirst.asInstanceOf[ExprS]
           stmt.expression_stm_.asInstanceOf[SexprTwo].exp_
       }

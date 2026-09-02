@@ -1,0 +1,10 @@
+// \at over a ternary expression
+int main(void) {
+  int x = 10;
+  int y = 4;
+L:
+  x = 1;
+  /*@ assert \at(x > y ? x : y, L) == 4; @*/
+  return 0;
+}
+

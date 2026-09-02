@@ -1,0 +1,9 @@
+
+
+int f(int x) {
+L:
+  x = x + 100;
+  /*@ assert \at(x, L) + 100 == x; @*/
+  return x;
+}
+void main(void) { f(7); }

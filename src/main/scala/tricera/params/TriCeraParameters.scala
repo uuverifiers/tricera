@@ -111,23 +111,28 @@ class TriCeraParameters extends GlobalParameters {
   var determinizeInput : Boolean = false
   var invEncoding      : Option[String] = None
 
+  var slice            : Boolean = false
+
   var heapModel : TriCeraParameters.HeapModel = TriCeraParameters.NativeHeap
 
   var devMode : Boolean = false
   var printDebugMessages : Boolean = false
+  var printDebugHeapTypes : Boolean = false
 
   var displayACSL = false
   var inferLoopInvariants = false
   var fullSolutionOnAssert = true
+  var smoke = false
 
   override def needFullSolution: Boolean =
     (assertions && fullSolutionOnAssert) ||
       displaySolutionProlog || displaySolutionSMT || displayACSL || log ||
-      inferLoopInvariants
+      inferLoopInvariants || smoke
 
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
     that.arithMode = this.arithMode
+    that.smoke = this.smoke
   }
 
   override def clone: TriCeraParameters = {
@@ -173,6 +178,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
+    case "-smoke" :: rest => smoke = true; parseArgs(rest)
 
     case "-heapModel:native" :: rest =>
       heapModel = TriCeraParameters.NativeHeap
@@ -320,6 +326,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-debug" :: rest => printDebugMessages = true; parseArgs(rest)
+    case "-debugHeapTypes" :: rest => printDebugHeapTypes = true; parseArgs(rest)
     case "-varLines" :: rest => showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-sym" :: rest      =>
       symexEngine = GlobalParameters.SymexEngine.BreadthFirstForward
@@ -347,6 +354,8 @@ class TriCeraParameters extends GlobalParameters {
 
     case "-forceNondetInit"  :: rest => forceNondetInit = true; parseArgs(rest)
 
+    case "-slice"            :: rest => slice = true; parseArgs(rest)
+
     case arg :: rest if Set("-v", "--version").contains(arg) =>
       println(version); false
     case arg :: rest if Set("-h", "--help").contains(arg) =>
@@ -369,6 +378,7 @@ class TriCeraParameters extends GlobalParameters {
     |-ssol              Show solution in SMT-LIB format
     |-inv               Try to infer loop invariants
     |-acsl              Print inferred ACSL annotations
+    |-smoke             Warn about assertions whose program point is unreachable (vacuously verified)
     |-log:n             Display progress based on verbosity level n (0 <= n <= 3)
     |                     1: Statistics only
     |                     2: Include invariants
@@ -384,6 +394,7 @@ class TriCeraParameters extends GlobalParameters {
     |-cppLight          Same as -cpp but does not include system header files and builtin macros.
     |                   I.e., -nostdinc -undef
     |-forceNondetInit   Initialize static and global variables to non-deterministic values.
+    |-slice             Remove functions, globals and types unreachable from the entry point before encoding.
 
     |Checked properties:
     |-reachsafety       Enables checking of explicitly specified properties via assert statements.

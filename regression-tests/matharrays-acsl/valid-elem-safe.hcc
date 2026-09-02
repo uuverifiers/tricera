@@ -1,0 +1,9 @@
+// the address of a global array element is valid iff the index is in bounds
+int g[5];
+/*@ requires \valid(&g[f2]);
+    assigns \nothing; @*/
+extern void f1(int f2);
+int main(void) {
+  f1(3);
+  return 0;
+}

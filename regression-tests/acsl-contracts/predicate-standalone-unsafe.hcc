@@ -1,0 +1,8 @@
+/*@ predicate P{L}(int x) = x > 0; */
+
+/*@ ghost int garr[5]; */
+
+/*@ ensures \result == 1; */
+int f(void){ return 0; }
+
+int main(void){ f(); return 0; }

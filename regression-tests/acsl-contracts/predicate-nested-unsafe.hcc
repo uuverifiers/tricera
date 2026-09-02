@@ -1,0 +1,8 @@
+/*@ predicate Pos{L}(int x) = x > 0; */
+/*@ predicate Both{L}(int x, int y) = Pos(x) && Pos(y); */
+
+/*@ requires Both(a, b);
+  @ ensures  \result > 10; */
+int sum(int a, int b) { return a + b; }
+
+int main(void) { return 0; }

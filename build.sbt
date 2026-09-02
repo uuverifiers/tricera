@@ -44,7 +44,7 @@ lazy val acslParser = (project in file("acsl-parser")).
 
 // On mistmatch with version stamp, tri-pp will be redownloaded.
 // Delete version stamp to use custom tri-pp.
-lazy val triPpVersion = "v0.3.0"
+lazy val triPpVersion = "v0.3.3"
 
 def triPpAsset: String = {
   val os   = sys.props.getOrElse("os.name", "").toLowerCase

@@ -1,0 +1,10 @@
+
+
+int f(int x) {
+  x = 8;
+L:
+  x = 12;
+  /*@ assert \at(x, Pre) == 7 && \at(x, L) == 8 && \at(x, Here) == 12; @*/
+  return x;
+}
+void main(void) { f(7); }

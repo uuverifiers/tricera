@@ -34,6 +34,10 @@ import concurrent_c.Absyn._
 
 import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 import scala.jdk.CollectionConverters._
+import tricera.concurrency.ccreader.CCExceptions.UnsupportedCFragmentException
+import tricera.parsers.AnnotationParser
+import tricera.parsers.AnnotationParser.MaybeACSLAnnotation
+import tricera.parsers.CommentPreprocessor.annotationMarker
 
 private object CCAstUtils {
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
@@ -54,6 +58,7 @@ private object CCAstUtils {
     //   more refined will require more exlaborate data flow
     //   analysis.
     exp match {
+      case x: Etypeconv => isStackPtr(x.exp_)
       case x: Epreop =>
           x.unary_operator_ match {
               case _: Address => true
@@ -137,29 +142,49 @@ object CallSiteTransform {
   // with something existing in the original source.
   private val separator = "\u001F"
 
+  private val getFunctionAnnotation = new CCAstGetFunctionAnnotationVisitor
+
   def apply(
     ptrTransformer: CCAstStackPtrArgToGlobalTransformer,
     funcDef: Function_def,
     callSite: Efunkpar): CallSiteTransform = {
-    new CallSiteTransform(ptrTransformer, funcDef, copyAst(callSite.listexp_), callSite)
+    new CallSiteTransform(
+      ptrTransformer,
+      funcDef.accept(getFunctionDeclaration, ()),
+      getFunctionAnnotation(funcDef),
+      Some(funcDef.accept(getFunctionBody, ())),
+      copyAst(callSite.listexp_), callSite)
+  }
+
+  def apply(
+    ptrTransformer: CCAstStackPtrArgToGlobalTransformer,
+    funcDecl: AnnotatedFuncDeclarator,
+    callSite: Efunkpar): CallSiteTransform = {
+    new CallSiteTransform(
+      ptrTransformer,
+      funcDecl.accept(getFunctionDeclaration, ()),
+      getFunctionAnnotation(funcDecl),
+      None,
+      copyAst(callSite.listexp_), callSite)
   }
 }
 
 class CallSiteTransform(
   stackPtrTransformer:CCAstStackPtrArgToGlobalTransformer,
-  originalDef: Function_def,
+  declaration: (ListDeclaration_specifier, Init_declarator),
+  annotations: ListAnnotation,
+  body: Option[Compound_stm],
   args: ListExp,
   callSite: SourceInfoProvider) {
   import CallSiteTransform._
   import CCAstUtils.isStackPtr
 
-  private val getAnnotations = new CCAstGetFunctionAnnotationVisitor
   // generated nodes get the location of the call site that caused them
   // nodes copied from the source keep their locations
   private val setMissingLocation = new CCAstSetMissingLocationVisitor(callSite)
 
   private val (specifiers, declarator) = {
-    val (spec, dec) = originalDef.accept(getFunctionDeclaration, ())
+    val (spec, dec) = declaration
     (spec, dec.accept(getDeclarator, ()))
   }
   private val params = declarator.accept(getParameters, ())
@@ -173,11 +198,66 @@ class CallSiteTransform(
   }
 
   val originalFuncName = declarator.accept(getName, ())
+
+  private def addressString(arg : Exp) : String = arg match {
+    case tc : Etypeconv => addressString(tc.exp_)
+    case e              => new PrettyPrinterNonStatic().print(e)
+  }
+
+  private val removedArgs : Seq[Exp] =
+    params.asScala.zip(args.asScala)
+      .filter({ case (_, a) => isStackPtr(a) }).map(_._2).toSeq
+
+  private val firstParamWithSameAddress : Map[String, String] = {
+    val firstForAddress = MHashMap[String, String]()
+    removedParams.asScala.zip(removedArgs).map({ case (p, a) =>
+      val nm = p.accept(getName, ())
+      (nm, firstForAddress.getOrElseUpdate(addressString(a), nm))
+    }).toMap
+  }
+
   val suffix = {
-    args.asScala.zipWithIndex
-      .withFilter({ case (arg, index) => isStackPtr(arg)})
-      .map({ case (arg, index) => f"_${index}"})
-      .reduce((a,b) => a+b)      
+    val stackPtrArgs =
+      args.asScala.zipWithIndex.filter({ case (a, _) => isStackPtr(a) }).toSeq
+    stackPtrArgs.map({ case (a, i) =>
+      val owner = stackPtrArgs.find({ case (a2, _) => addressString(a2) == addressString(a) }).get._2
+      f"_${owner}"
+    }).reduce(_ + _)
+  }
+
+  // The variable an address is taken of, when that address is a plain
+  // `&<var/field/index>` with no pointer dereference; None otherwise (a `*`/`->`
+  // is involved, or the argument is itself a pointer, so we cannot tell)
+  private def addressBase(arg : Exp) : Option[String] = arg match {
+    case tc : Etypeconv => addressBase(tc.exp_)
+    case pre : Epreop if pre.unary_operator_.isInstanceOf[Address] =>
+      lvalueBase(pre.exp_)
+    case _              => None
+  }
+  private def lvalueBase(lv : Exp) : Option[String] = lv match {
+    case v : Evar         => Some(v.cident_)
+    case v : EvarWithType => Some(v.cident_)
+    case s : Eselect      => lvalueBase(s.exp_)
+    case a : Earray       => lvalueBase(a.exp_1)
+    case _                => None
+  }
+
+  private def mustAlias(a : Exp, b : Exp) : Boolean =
+    addressString(a) == addressString(b)
+
+  private def mayAlias(a : Exp, b : Exp) : Boolean =
+    (addressBase(a), addressBase(b)) match {
+      case (Some(x), Some(y)) => x == y
+      case _                  => true
+    }
+
+  def rejectIfArgsMayAlias() : Unit = {
+    for (Seq(a, b) <- removedArgs.combinations(2).toSeq
+         if mayAlias(a, b) && !mustAlias(a, b))
+      throw new UnsupportedCFragmentException(
+        s"Cannot decide whether the stack-pointer arguments to contract " +
+        s"function '$originalFuncName' may alias. Pass the same lvalue, or " +
+        s"distinct simple variables/fields, to its pointer parameters.")
   }
 
   def getAstAdditions(): AstAddition = {
@@ -193,10 +273,31 @@ class CallSiteTransform(
   }
 
   def shouldInferContract()
-    : Boolean = getAnnotations(originalDef)
+    : Boolean = annotations
       .asScala.toList.map({case a: Annot1 => a.annotationstring_}) match {
         case head::tail if (head == addAnnotationMarkers("contract")) => true
         case _ => false
+    }
+
+  def hasExplicitContract() : Boolean = explicitContractText.isDefined
+
+  private def explicitContractText : Option[String] =
+    annotations.asScala.toList.collect {
+      case a : Annot1 =>
+        a.annotationstring_.stripPrefix(annotationMarker).stripSuffix(annotationMarker)
+    }.find(c => AnnotationParser(c).exists(_.isInstanceOf[MaybeACSLAnnotation]))
+
+  def paramToGlobalName : Map[String, String] =
+    removedParams.asScala.map { p =>
+      val n = p.accept(getName, ())
+      (n, toGlobalVariableName(originalFuncName)(firstParamWithSameAddress.getOrElse(n, n)))
+    }.toMap
+
+  private def transformedContractAnnotation() : String =
+    if (shouldInferContract()) addAnnotationMarkers("contract")
+    else explicitContractText match {
+      case Some(clauses) => addAnnotationMarkers(clauses)
+      case None          => ""
     }
 
   private def wrapIdentifier(id: String) = {
@@ -228,7 +329,6 @@ class CallSiteTransform(
     val transDec = transformedDeclaration()
     if (!knownAdditions.transformedFunctionDefinitions.contains(transDec.getId())) {
       val wrapperDec = wrapperDeclaration()
-      val (body, transforms) = createTransformedBody(originalDef.accept(getFunctionBody, ()))
 
       def withLocations(decl: External_declaration) = {
         decl.accept(setMissingLocation, ())
@@ -237,17 +337,26 @@ class CallSiteTransform(
       val globals = globalVariableDeclarations()
       globals.asScala.foreach(_.accept(setMissingLocation, ()))
 
+      val (transformedDefinition, transforms) = body match {
+        case Some(originalBody) =>
+          val (transformedBody, ts) = createTransformedBody(originalBody)
+          (transDec.toAfunc(transformedContractAnnotation(), transformedBody), ts)
+        case None =>
+          (transDec.toAnnotatedFuncDeclarator(transformedContractAnnotation()),
+           new CallSiteTransforms)
+      }
+
       knownAdditions += AstAddition(
         withLocations(wrapperDec.toGlobal()),
         withLocations(wrapperDec.toAfunc(createWrapperBody())),
         withLocations(transDec.toGlobal()),
-        withLocations(transDec.toAfunc(
-          if (shouldInferContract()) {addAnnotationMarkers("contract")} else {""},
-          body)),
+        withLocations(transformedDefinition),
         globals,
         globalVariableIdsToParameterIds(),
         MHashMap((transDec.getId() -> originalFuncName)),
-        MHashMap((originalFuncName -> params.asScala.map(p => p.accept(getName,())).toList))
+        MHashMap((originalFuncName -> params.asScala.map(p => p.accept(getName,())).toList)),
+        if (hasExplicitContract()) MHashMap((transDec.getId() -> paramToGlobalName))
+        else MHashMap[String, Map[String, String]]()
       )
 
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))
@@ -277,8 +386,8 @@ class CallSiteTransform(
 
   private def globalVariableDeclarations(): ListExternal_declaration = {
     val globals = new ListExternal_declaration
-    for (param <- removedParams.asScala) {
-      globals.add(toGlobalDeclaration(param).toGlobal())
+    for (g <- removedParams.asScala.map(toGlobalDeclaration).distinctBy(_.getId())) {
+      globals.add(g.toGlobal())
     }
     globals
   }
@@ -291,7 +400,8 @@ class CallSiteTransform(
 
   private def toGlobalDeclaration(param: Parameter_declaration) = {
     param
-      .accept(rename, toGlobalVariableName(originalFuncName)(_))
+      .accept(rename, (n : String) =>
+        toGlobalVariableName(originalFuncName)(firstParamWithSameAddress.getOrElse(n, n)))
       .accept(removePointer, ())
       .accept(toCCAstDeclaration, ())
   }
@@ -384,6 +494,7 @@ class CallSiteTransform(
     def composeBody() = {
       val paramGlobalPairs = removedParams.asScala.map(p => (p.accept(toCCAstDeclaration,()), toGlobalDeclaration(p)))
       val savedGlobalPairs = paramGlobalPairs.map({ case (p, g) => (g.withId(savedIdentifier(g.getId())), g)})
+        .distinctBy({ case (_, g) => g.getId() })
       val body = new ListStm
   
       for ((saved, global) <- savedGlobalPairs) {
@@ -429,7 +540,8 @@ object AstAddition {
     introducedGlobalVariables: ListExternal_declaration,
     globalVariableIdToParameterId: MHashMap[String, String],
     transformedFunctionIdToOriginalId: MHashMap[String, String],
-    originalFunctionIdToParamterIds: MHashMap[String, List[String]]): AstAddition = {
+    originalFunctionIdToParamterIds: MHashMap[String, List[String]],
+    transformedFunctionIdToParamToGlobal: MHashMap[String, Map[String, String]]): AstAddition = {
     val addition = new AstAddition
     addition.transformedFunctionDefinitions.put(transformedDefinition.accept(getName, ()), transformedDefinition)
     addition.transformedFunctionDeclarations.put(transformedDeclaration.accept(getName, ()), transformedDeclaration)
@@ -439,6 +551,7 @@ object AstAddition {
     addition.globalVariableIdToParameterId ++= globalVariableIdToParameterId
     addition.transformedFunctionIdToOriginalId ++= transformedFunctionIdToOriginalId
     addition.originalFunctionIdToParamterIds ++= originalFunctionIdToParamterIds
+    addition.transformedFunctionIdToParamToGlobal ++= transformedFunctionIdToParamToGlobal
     addition
   }
 }
@@ -451,7 +564,8 @@ class AstAddition(
   val introducedGlobalVariables: MHashMap[String, External_declaration] = MHashMap[String, External_declaration](),
   val globalVariableIdToParameterId: MHashMap[String, String] = MHashMap[String, String](),
   val transformedFunctionIdToOriginalId: MHashMap[String, String] = MHashMap[String, String](),
-  val originalFunctionIdToParamterIds: MHashMap[String, List[String]] = MHashMap[String, List[String]]()) {
+  val originalFunctionIdToParamterIds: MHashMap[String, List[String]] = MHashMap[String, List[String]](),
+  val transformedFunctionIdToParamToGlobal: MHashMap[String, Map[String, String]] = MHashMap[String, Map[String, String]]()) {
 
   def +(that: AstAddition) = {
     new AstAddition(
@@ -462,7 +576,8 @@ class AstAddition(
       this.introducedGlobalVariables ++ that.introducedGlobalVariables,
       this.globalVariableIdToParameterId ++ that.globalVariableIdToParameterId,
       this.transformedFunctionIdToOriginalId ++ that.transformedFunctionIdToOriginalId,
-      this.originalFunctionIdToParamterIds ++ that.originalFunctionIdToParamterIds)
+      this.originalFunctionIdToParamterIds ++ that.originalFunctionIdToParamterIds,
+      this.transformedFunctionIdToParamToGlobal ++ that.transformedFunctionIdToParamToGlobal)
   }
 
   def +=(that: AstAddition) = {
@@ -474,6 +589,7 @@ class AstAddition(
     this.globalVariableIdToParameterId ++= that.globalVariableIdToParameterId
     this.transformedFunctionIdToOriginalId ++= that.transformedFunctionIdToOriginalId
     this.originalFunctionIdToParamterIds ++= that.originalFunctionIdToParamterIds
+    this.transformedFunctionIdToParamToGlobal ++= that.transformedFunctionIdToParamToGlobal
     this
   }
 }
@@ -532,7 +648,9 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
   private val getName = new CCAstGetNameVistor
   private val copyAst = new CCAstCopyVisitor
   private val fillFuncDefs = new CCAstFillFuncDef
+  private val fillFuncDecls = new CCAstFillFuncDecl
   private val functionDefinitions = new MHashMap[String, Function_def]
+  private val functionDeclarations = new MHashMap[String, AnnotatedFuncDeclarator]
 
   /* Program */
   override def visit(progr: Progr, callSiteTransforms: CallSiteTransforms): Program = {
@@ -551,6 +669,7 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
     }
 
     progr.accept(fillFuncDefs, functionDefinitions)
+    progr.accept(fillFuncDecls, functionDeclarations)
     val declarations = processExternalDeclarations(progr.listexternal_declaration_, callSiteTransforms)
 
     if (callSiteTransforms.nonEmpty) {
@@ -568,28 +687,38 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
   
 
   override def visit(callSite: Efunkpar, transforms: CallSiteTransforms): Exp = {
+    val funcName = callSite.accept(getName, ())
+
+    def transformCall(tform: CallSiteTransform, untransformed: => Exp): Exp =
+      if (tform.shouldInferContract() || tform.hasExplicitContract()) {
+        tform.rejectIfArgsMayAlias()
+        transforms += tform
+        tform.wrapperInvocation()
+      } else {
+        untransformed
+      }
+
     (callSite.listexp_.asScala.find(CCAstUtils.isStackPtr),
-     functionDefinitions.get(callSite.accept(getName, ()))) match {
-      case (Some(_), Some(funcDef)) => 
+     functionDefinitions.get(funcName),
+     functionDeclarations.get(funcName)) match {
+      case (Some(_), Some(funcDef), _) =>
         val exp = super.visit(callSite, transforms)
         // TODO: This will not work if function is invoked through
         //   a pointer. Then we don't know the name of the function
         //   being invoked. Therefore we can't create/invoke a
         //   transformed function.
-        val tform = CallSiteTransform(this, funcDef, callSite)
-        if (tform.shouldInferContract()) {
-          transforms += tform
-          tform.wrapperInvocation()
-        } else {
-          exp
-        }
-      case (Some(_), None) =>
+        transformCall(CallSiteTransform(this, funcDef, callSite), exp)
+      case (Some(_), None, Some(funcDecl)) =>
+        // bodyless callee: stays bodyless so the contract is assumed, not checked
+        val exp = super.visit(callSite, transforms)
+        transformCall(CallSiteTransform(this, funcDecl, callSite), exp)
+      case (Some(_), None, None) =>
         // We are missing the function definition for the function
         // at the callsite. This could be either because it is a
         // library function or because it is a predicate defined in
         // $...$ comment syntax used as argument to assume/assert.
         // Either way we can't transform and rewrite the function.
-        super.visit(callSite, transforms) 
+        super.visit(callSite, transforms)
       case _ =>
         super.visit(callSite, transforms)
     }

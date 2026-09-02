@@ -1,0 +1,7 @@
+/*@ ensures \result == (int)100; */
+int f();
+
+void main() {
+  int r = f();
+  assert(r == 100);
+}

@@ -33,6 +33,47 @@ TESTS="contract1.hcc  \
        global-post-unsafe.hcc \
        global-old-safe.hcc \
        global-old-unsafe.hcc \
+       global-at-safe.hcc \
+       global-at-unsafe.hcc \
+       global-from-safe.hcc \
+       global-from-unsafe.hcc \
+       quant-forall-safe.hcc \
+       quant-forall-unsafe.hcc \
+       quant-exists-safe.hcc \
+       cast-safe.hcc \
+       cast-unsafe.hcc \
+       cast-modular-safe.hcc \
+       separated-safe.hcc \
+       separated-unsafe.hcc \
+       separated-three-safe.hcc \
+       global-array-contract-safe.hcc \
+       valid-array-safe.hcc \
+       valid-array-unsafe.hcc \
+       valid-array-ensures-safe.hcc \
+       typedef-annotation-safe.hcc \
+       from-warning-body.hcc \
+       from-warning-bodyless.hcc \
+       valid-read-safe.hcc \
+       valid-read-unsafe.hcc \
+       predicate-standalone-safe.hcc \
+       predicate-standalone-unsafe.hcc \
+       predicate-apply-safe.hcc \
+       predicate-apply-unsafe.hcc \
+       predicate-nested-safe.hcc \
+       predicate-nested-unsafe.hcc \
+       predicate-assert-safe.hcc \
+       predicate-assert-unsafe.hcc \
+       named-assert-safe.hcc \
+       named-assert-unsafe.hcc \
+       named-string-assert-safe.hcc \
+       enum-constant-contract-safe.hcc \
+       enum-constant-contract-unsafe.hcc \
+       enum-constant-assert-safe.hcc \
+       enum-constant-assert-unsafe.hcc \
+       assigns-array-safe.hcc \
+       assigns-array-unsafe.hcc \
+       hex-literal-safe.hcc \
+       hex-literal-unsafe.hcc \
        global-assigns-frame-safe.hcc \
        global-assigns-frame-unsafe.hcc \
        global-void-return-safe.hcc \
@@ -42,7 +83,97 @@ TESTS="contract1.hcc  \
        struct-field-access-1-true.hcc \
        struct-field-access-2-false.hcc \
        struct-field-access-3-true.hcc \
-       struct-field-access-4-false.hcc"
+       struct-field-access-4-false.hcc \
+       ternary-pred-safe.hcc \
+       ternary-pred-unsafe.hcc \
+       stmt-assert-flow-safe.hcc \
+       stmt-assert-flow-unsafe.hcc \
+       stmt-assert-untranslatable-error.hcc \
+       stmt-assert-pre-safe.hcc \
+       stmt-assert-pre-unsafe.hcc \
+       stmt-assert-inlined-param-safe.hcc \
+       stmt-assert-inlined-param-unsafe.hcc \
+       stmt-assert-here-safe.hcc \
+       stmt-assert-here-unsafe.hcc \
+       stmt-assert-arith-bare-safe.hcc \
+       stmt-assert-arith-bare-unsafe.hcc \
+       stmt-assert-arith-bare-minus-safe.hcc \
+       stmt-assert-arith-bare-minus-unsafe.hcc \
+       stmt-assert-shadow-safe.hcc \
+       stmt-assert-shadow-unsafe.hcc \
+       stmt-assert-at-clabel-safe.hcc \
+       stmt-assert-at-clabel-unsafe.hcc \
+       stmt-assert-at-clabel-param-safe.hcc \
+       stmt-assert-at-clabel-param-unsafe.hcc \
+       stmt-assert-at-clabel-loop-safe.hcc \
+       stmt-assert-at-clabel-loop-unsafe.hcc \
+       stmt-assert-at-clabel-loop-error.hcc \
+       stmt-assert-at-clabel-array-error.hcc \
+       stmt-assert-at-clabel-distinct-safe.hcc \
+       stmt-assert-at-clabel-distinct-unsafe.hcc \
+       stmt-assert-old-error.hcc \
+       stmt-assert-at-clabel-undefined-error.hcc \
+       stmt-assert-at-clabel-forward-error.hcc \
+       stmt-assert-at-clabel-exited-block-error.hcc \
+       stmt-assert-at-clabel-post-error.hcc \
+       stmt-assert-at-clabel-goto-safe.hcc \
+       stmt-assert-at-clabel-goto-unsafe.hcc \
+       stmt-assert-at-clabel-goto-between-safe.hcc \
+       stmt-assert-at-clabel-goto-between-unsafe.hcc \
+       stmt-assert-at-clabel-bypass-goto-unsafe.hcc \
+       stmt-assert-at-clabel-bypass-case-unsafe.hcc \
+       stmt-assert-at-clabel-if-arm-unsafe.hcc \
+       stmt-assert-at-clabel-struct-field-safe.hcc \
+       stmt-assert-at-clabel-struct-field-unsafe.hcc \
+       stmt-assert-at-clabel-array-elem-safe.hcc \
+       stmt-assert-at-clabel-array-elem-unsafe.hcc \
+       stmt-assert-at-clabel-two-labels-safe.hcc \
+       stmt-assert-at-clabel-two-labels-unsafe.hcc \
+       stmt-assert-pre-contract-error.hcc \
+       stmt-assert-result-error.hcc \
+       stmt-assert-at-init-error.hcc \
+       stmt-assert-at-loopentry-error.hcc \
+       stmt-assert-at-loopcurrent-error.hcc \
+       stmt-assert-at-clabel-bodylocal-safe.hcc \
+       stmt-assert-at-clabel-bodylocal-unsafe.hcc \
+       stmt-assert-at-clabel-midbody-local-safe.hcc \
+       stmt-assert-at-clabel-midbody-local-unsafe.hcc \
+       stmt-assert-at-clabel-loop-local-safe.hcc \
+       stmt-assert-at-clabel-loop-local-unsafe.hcc \
+       stmt-assert-at-clabel-sibling-decl-safe.hcc \
+       stmt-assert-at-clabel-sibling-decl-unsafe.hcc \
+       stmt-assert-at-clabel-shadow-safe.hcc \
+       stmt-assert-at-clabel-shadow-unsafe.hcc \
+       stmt-assert-at-clabel-decl-after-label-error.hcc \
+       stmt-assert-at-clabel-expr-arith-safe.hcc \
+       stmt-assert-at-clabel-expr-arith-unsafe.hcc \
+       stmt-assert-at-clabel-expr-array-safe.hcc \
+       stmt-assert-at-clabel-expr-array-unsafe.hcc \
+       stmt-assert-at-clabel-expr-struct-safe.hcc \
+       stmt-assert-at-clabel-expr-struct-unsafe.hcc \
+       stmt-assert-at-clabel-expr-nested-safe.hcc \
+       stmt-assert-at-clabel-expr-nested-unsafe.hcc \
+       stmt-assert-at-clabel-expr-ternary-safe.hcc \
+       stmt-assert-at-clabel-expr-ternary-unsafe.hcc \
+       stmt-assert-at-clabel-relation-safe.hcc \
+       stmt-assert-at-clabel-relation-unsafe.hcc \
+       stmt-assert-at-clabel-struct-safe.hcc \
+       stmt-assert-at-clabel-struct-unsafe.hcc \
+       stmt-assert-at-clabel-pointer-safe.hcc \
+       stmt-assert-at-clabel-pointer-unsafe.hcc \
+       stmt-assert-at-clabel-char-safe.hcc \
+       stmt-assert-at-clabel-char-unsafe.hcc \
+       stmt-assert-at-clabel-uint-safe.hcc \
+       stmt-assert-at-clabel-uint-unsafe.hcc \
+       stmt-admit-assumed-safe.hcc \
+       stmt-admit-frame-unsafe.hcc \
+       stmt-check-obligation-unsafe.hcc \
+       stmt-check-holds-safe.hcc \
+       stmt-assert-at-clabel-ptr-deref-safe.hcc \
+       stmt-assert-at-clabel-ptr-deref-unsafe.hcc \
+       stmt-assert-at-clabel-ptrptr-deref-safe.hcc \
+       stmt-assert-at-clabel-ptrptr-deref-unsafe.hcc \
+       stmt-assert-pre-ptr-deref-unsafe.hcc"
 
 for name in $TESTS; do
     echo

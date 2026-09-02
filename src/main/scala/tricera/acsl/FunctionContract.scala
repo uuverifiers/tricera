@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2021-2022 Pontus Ernstedt
- *                    2023 Zafer Esen. All rights reserved.
+ *               2023-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -42,7 +42,10 @@ class FunctionContract(
   val assignsAssert : IFormula,
   val assignsAssume : IFormula,
   val srcInfo       : SourceInfo,
-  val postSrcInfo   : SourceInfo) extends ParsedAnnotation {
+  val postSrcInfo   : SourceInfo,
+  val preClauses  : Seq[(Option[String], IFormula)] = Seq(),
+  val postClauses : Seq[(Option[String], IFormula)] = Seq())
+  extends ParsedAnnotation {
   override def toString : String = {
     s"""|requires ${ap.SimpleAPI.pp(pre)}
         |ensures  ${ap.SimpleAPI.pp(post)}
@@ -53,6 +56,8 @@ class FunctionContract(
 }
 
 case class StatementAnnotation(f        : IFormula,
-                               isAssert : Boolean) extends ParsedAnnotation
+                               isAssert : Boolean,
+                               name     : Option[String] = None)
+  extends ParsedAnnotation
 
 case class LoopAnnotation(invariant : IFormula) extends ParsedAnnotation

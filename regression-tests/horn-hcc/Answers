@@ -381,11 +381,7 @@ preprocess-1.c
 SAFE
 
 preprocess-2-assert.c
-Warning: type _Bool not supported, assuming int
-Warning: type _Bool not supported, assuming int
 UNSAFE
 
 preprocess-3-assert.c
-Warning: type _Bool not supported, assuming int
-Warning: type _Bool not supported, assuming int
 SAFE

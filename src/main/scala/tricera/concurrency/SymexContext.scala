@@ -67,6 +67,7 @@ trait SymexContext {
   def sortGetterMap     : Map[Sort, MonoSortedIFunction]
   def sortWrapperMap    : Map[Sort, MonoSortedIFunction]
   def sortCtorIdMap     : Map[Sort, Int]
+  def forceHeapObjectWrappers(typs : Iterable[CCType]) : Nothing
   def objectGetters     : scala.Seq[MonoSortedIFunction]
   def defObj            : IFunction
 

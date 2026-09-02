@@ -136,9 +136,28 @@ Inferred ACSL annotations
 SAFE
 
 qualified-heapptr-to-stackptr.c
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
-(error "Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9")
-Other Error: Type qualified pointers are currently not supported: tricera.concurrency.concurrent_c.Absyn.PointQualPoint@9f9
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                             main11_3(heap.empty, heap.null, heap.null)                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                  |                                                                                                  
+                                                                                                  |                                                                                                  
+                                                                                                  V                                                                                                  
+ main14_3_10(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(47))), O_int(42))), heap.addr(1), heap.addr(2), heap.addr(1), heap.addr(2), 3, 4, heap.null, heap.null) 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                  |                                                                                                  
+                                                                                                  |                                                                                                  
+                                                                                                  V                                                                                                  
+                    main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(47))), O_int(42))), heap.null, heap.null, heap.addr(2), heap.addr(1))                     
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+                    main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(47))), O_int(42))), heap.null, heap.null, heap.addr(2), heap.addr(1))                     
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main_2(@h, globalswap_0_1x:14, globalswap_0_1y:14, a:11, b:12), get_int(heap.read(@h, a:11)) != 42 | get_int(heap.read(@h, b:12)) != 0. (line:15 col:3) (property: user-assertion)
+
+UNSAFE
 
 multi-arg-1.c
 
@@ -165,6 +184,52 @@ Inferred ACSL annotations
 ================================================================================
 
 SAFE
+
+alias-share-safe.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f */
+/*@
+  requires \valid(q) && *q == 0;
+  ensures \result == 2 && \valid(q) && *q == 2 && \old(*q) == 0;
+*/
+================================================================================
+
+SAFE
+
+alias-share-unsafe.c
+
+--------------------------------------
+Init:
+      main9_5(heap.empty, 0, 0)       
+--------------------------------------
+                  |                   
+                  |                   
+                  V                   
+ main9_5_8(heap.empty, 0, 0, 2, 2, 0) 
+--------------------------------------
+                  |                   
+                  |                   
+                  V                   
+        main(heap.empty, 0, 2)        
+--------------------------------------
+Final:
+        main(heap.empty, 0, 2)        
+--------------------------------------
+Failed assertion:
+false :- main(@h, globalf_0_0p:9, x:8), x:8 != 1. (line:11 col:5) (property: user-assertion)
+
+UNSAFE
+
+alias-reject-overlap.c
+UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
+
+alias-reject-array.c
+UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
+
+alias-reject-deref.c
+UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
 
 struct-field-read.c
 

@@ -1,0 +1,7 @@
+/*@ predicate Pos{L}(int x) = \at(x, L) > 0; */
+
+int main(void) {
+  int a = 5;
+  //@ assert Pos(a);
+  return 0;
+}

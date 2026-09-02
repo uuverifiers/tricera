@@ -1,0 +1,18 @@
+// \at over a whole struct
+struct S {
+  int f;
+  int g;
+};
+int main(void) {
+  struct S s;
+  struct S t;
+  s.f = 5;
+  s.g = 9;
+  t.f = 5;
+  t.g = 9;
+L:
+  s.f = 100;
+  /*@ assert \at(s, L) == t; @*/
+  return 0;
+}
+

@@ -1,0 +1,15 @@
+// \at over a composite of struct fields
+struct S {
+  int f;
+  int g;
+};
+int main(void) {
+  struct S s;
+  s.f = 5;
+  s.g = 9;
+L:
+  s.f = 100;
+  /*@ assert \at(s.f + s.g, L) == 15; @*/
+  return 0;
+}
+

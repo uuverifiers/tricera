@@ -51,8 +51,9 @@ package object properties {
     override def toString : String = "unreach-call"
   }
 
-  case object UserAssertion extends Property {
-    override def toString : String = "user-assertion"
+  case class UserAssertion(name : Option[String] = None) extends Property {
+    override def toString : String =
+      "user-assertion" + name.map(n => s": $n").getOrElse("")
   }
 
   /**
@@ -60,10 +61,12 @@ package object properties {
    * call sites respectively.
    */
   case class FunctionPrecondition(funName : String,
-                                  srcInfo : Option[SourceInfo])
+                                  srcInfo : Option[SourceInfo],
+                                  clauseName : Option[String] = None)
     extends Property {
     override def toString : String = {
-      s"precondition of function $funName" +
+      s"precondition${clauseName.map(n => s" $n").getOrElse("")}" +
+      s" of function $funName" +
       (srcInfo match {
         case Some(info) => s" asserted at ${info.line}:${info.col}."
         case None       => ""
@@ -72,10 +75,12 @@ package object properties {
   }
 
   case class FunctionPostcondition(funName : String,
-                                   srcInfo : Option[SourceInfo])
+                                   srcInfo : Option[SourceInfo],
+                                   clauseName : Option[String] = None)
     extends Property {
     override def toString : String = {
-      s"postcondition of function $funName" +
+      s"postcondition${clauseName.map(n => s" $n").getOrElse("")}" +
+      s" of function $funName" +
       (srcInfo match {
         case Some(info) => s" asserted at ${info.line}:${info.col}."
         case None       => ""

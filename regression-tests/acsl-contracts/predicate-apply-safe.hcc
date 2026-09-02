@@ -1,0 +1,7 @@
+/*@ predicate Pos{L}(int x) = \at(x, L) > 0; */
+
+/*@ requires Pos(x);
+  @ ensures  Pos(\result); */
+int id(int x) { return x; }
+
+int main(void) { return 0; }

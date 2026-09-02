@@ -63,6 +63,14 @@ case class CCTerm(t               : ITerm,
           throw NeedsTimeException
         CCTerm.fromTerm(CCReader.GTU.term * toTerm, CCDuration, srcInfo)
       }
+      case (_: CCArithType, CCMathInt) =>
+        CCTerm.fromTerm(toTerm, CCMathInt, srcInfo)
+      case (CCMathInt, _: CCArithType) =>
+        newType cast this
+      case (_: CCIntEnum, _: CCArithType) =>
+        newType cast this
+      case (_: CCArithType, _: CCIntEnum) =>
+        CCTerm.fromTerm(toTerm, newType, srcInfo)
       case (_, CCVoid) => this
       // todo: do not do anything for casts to void?
       case (_: CCArithType, newType: CCHeapPointer) =>
@@ -79,6 +87,9 @@ case class CCTerm(t               : ITerm,
           "Cannot cast pointer type to arithmetic type.")
       case (oldType: CCHeapPointer, newType: CCHeapPointer) =>
         newType cast this
+      case (oldType: CCStackPointer, newType: CCHeapPointer)
+          if oldType.typ == newType.typ =>
+        this
       case _ =>
         throw new UnsupportedCastException(
           "do not know how to convert " + typ + " to " + newType +
@@ -116,6 +127,11 @@ object CCTerm {
         (a convertToType CCDuration, b)
       case (CCDuration, _: CCArithType) =>
         (a, b convertToType CCDuration)
+
+      case (CCMathInt, _: CCArithType) =>
+        (a, b convertToType CCMathInt)
+      case (_: CCArithType, CCMathInt) =>
+        (a convertToType CCMathInt, b)
 
       case (_: CCHeapArrayPointer, _ : CCArithType) =>
         (a, b) // pointer arithmetic, do not unify
