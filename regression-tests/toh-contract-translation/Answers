@@ -192,7 +192,7 @@ Inferred ACSL annotations
 /* contract for f */
 /*@
   requires \valid(q) && *q == 0;
-  ensures \valid(q) && (\old(*q) != 0 || (\result == 2 && *q == 2));
+  ensures \result == 2 && \valid(q) && *q == 2 && \old(*q) == 0;
 */
 ================================================================================
 
