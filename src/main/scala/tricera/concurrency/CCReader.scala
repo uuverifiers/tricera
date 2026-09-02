@@ -2864,7 +2864,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       override def isHeapEnabled : Boolean = modelHeap
       override def getHeap : HeapTheoryObject =
         if (modelHeap) heap
-        else throw new TranslationException("getHeap called with no heap!")
+        else throw NeedsHeapModelException
       override def getHeapTerm : ITerm =
         if (modelHeap) {
           val heapVar = heapModel.get match {
@@ -2873,7 +2873,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               "Heap in ACSL only supported using the theory of heaps.")
           }
           symex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
-        } else throw new TranslationException("getHeapTerm called with no heap!")
+        } else throw NeedsHeapModelException
       override def getOldHeapTerm : ITerm =
         throw new TranslationException(
           "\\old/pre-state heap is not available in statement annotations.")
@@ -2934,6 +2934,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           val t = boolToInt(
             try translator.translate(eat.expr_)
             catch {
+              case NeedsHeapModelException => throw NeedsHeapModelException
               case e : Throwable => throw new TranslationException(
                 getLineString(Some(srcInfo)) +
                 "Failed to capture the expression for a labelled state in a " +
@@ -3177,6 +3178,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           val assumed =
             try{translate(stm.annotation_, entry)}
             catch {
+              case NeedsHeapModelException => throw NeedsHeapModelException
               case e : Exception =>
                 throw new TranslationException(
                   getLineString(Some(getSourceInfo(stm))) +

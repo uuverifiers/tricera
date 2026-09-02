@@ -1,0 +1,11 @@
+// deref of a pointer captured at a label reads the current heap
+#include <stdlib.h>
+int main(void) {
+  int *p;
+  p = malloc(sizeof(int));
+  *p = 3;
+L:
+  p = 0;
+  /*@ assert *\at(p, L) == 3; @*/
+  return 0;
+}

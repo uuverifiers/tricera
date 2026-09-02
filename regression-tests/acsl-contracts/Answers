@@ -512,3 +512,18 @@ UNSAFE
 
 stmt-check-holds-safe.hcc
 SAFE
+
+stmt-assert-at-clabel-ptr-deref-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-ptr-deref-unsafe.hcc
+UNSAFE
+
+stmt-assert-at-clabel-ptrptr-deref-safe.hcc
+SAFE
+
+stmt-assert-at-clabel-ptrptr-deref-unsafe.hcc
+UNSAFE
+
+stmt-assert-pre-ptr-deref-unsafe.hcc
+UNSAFE

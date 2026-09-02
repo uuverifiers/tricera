@@ -1,0 +1,8 @@
+// heap access appearing only in an annotation enables the heap model
+int x;
+int *p;
+
+int main(void) {
+  /*@ assert *\at(p, Pre) == x; @*/
+  return 0;
+}
