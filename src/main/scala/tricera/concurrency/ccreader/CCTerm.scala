@@ -63,6 +63,10 @@ case class CCTerm(t               : ITerm,
           throw NeedsTimeException
         CCTerm.fromTerm(CCReader.GTU.term * toTerm, CCDuration, srcInfo)
       }
+      case (_: CCArithType, CCMathInt) =>
+        CCTerm.fromTerm(toTerm, CCMathInt, srcInfo)
+      case (CCMathInt, _: CCArithType) =>
+        newType cast this
       case (_, CCVoid) => this
       // todo: do not do anything for casts to void?
       case (_: CCArithType, newType: CCHeapPointer) =>
@@ -116,6 +120,11 @@ object CCTerm {
         (a convertToType CCDuration, b)
       case (CCDuration, _: CCArithType) =>
         (a, b convertToType CCDuration)
+
+      case (CCMathInt, _: CCArithType) =>
+        (a, b convertToType CCMathInt)
+      case (_: CCArithType, CCMathInt) =>
+        (a convertToType CCMathInt, b)
 
       case (_: CCHeapArrayPointer, _ : CCArithType) =>
         (a, b) // pointer arithmetic, do not unify

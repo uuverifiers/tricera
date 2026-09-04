@@ -52,9 +52,16 @@ class CCScope {
       size - 1
     }
     def size : Int = vars.size
+
     def lastIndexWhere(name : String, enclosingFunction : String) : Int =
+      vars lastIndexWhere(v => v.name == name && !v.isGhost &&
+                               (!v.isStatic || v.enclosingFunctionName.get == enclosingFunction))
+
+    // lookup that also includes ghost variables
+    def lastIndexWhereIncludingGhost(name : String, enclosingFunction : String) : Int =
       vars lastIndexWhere(v => v.name == name &&
                                (!v.isStatic || v.enclosingFunctionName.get == enclosingFunction))
+
     def lastIndexWhere(v : CCVar) : Int = vars lastIndexWhere(_ == v)
     def contains (c : ConstantTerm) : Boolean = vars exists(_.term == c)
     def iterator : Iterator[CCVar] = vars.toSeq.iterator
@@ -108,6 +115,8 @@ class CCScope {
      *       which are stored as globals, after the globals.
      *       Note that static variables should only be accessible from
      *       enclosing functions where they were declared in.
+     *       Ghost variables are filtered out so that they remain
+     *       invisible to regular C code; use `lookupAnyVarNoException` instead.
      */
     LocalVars.lastIndexWhere(name, enclosingFunction) match {
       case -1 => GlobalVars.lastIndexWhere(name, enclosingFunction)
@@ -124,6 +133,41 @@ class CCScope {
         }
       } else name
     lookupVarNoException(actualName, enclosingFunction)
+  }
+
+  /**
+   * Name lookup that also includes ghost variables.
+   */
+  def lookupAnyVarNoException(name : String, enclosingFunction : String)
+  : Int = {
+    LocalVars.lastIndexWhereIncludingGhost(name, enclosingFunction) match {
+      case -1 => GlobalVars.lastIndexWhereIncludingGhost(name, enclosingFunction)
+      case i  => i + GlobalVars.size
+    }
+  }
+
+  /**
+   * A ghost variable must not clash with any C variable in scope.
+   */
+  def checkGhostNameClash(v : CCVar,
+                          enclosingFunction : String) : Unit = {
+    val otherIdx = lookupAnyVarNoException(v.name, enclosingFunction)
+    if (otherIdx >= 0) {
+      val other =
+        if (otherIdx < GlobalVars.size) GlobalVars.vars(otherIdx)
+        else LocalVars.vars(otherIdx - GlobalVars.size)
+      val ghostIsNew  = v.isGhost
+      val ghostExists = other.isGhost
+      if (ghostIsNew != ghostExists) {
+        val (ghost, real) = if (ghostIsNew) (v, other) else (other, v)
+        val ghostLine = ghost.srcInfo.map(_.line.toString).getOrElse("?")
+        val realLine  = real.srcInfo.map(_.line.toString).getOrElse("?")
+        throw new CCExceptions.TranslationException(
+          s"Ghost variable `${ghost.name}` (line $ghostLine) clashes " +
+          s"with a regular C variable of the same name (line $realLine). " +
+          s"ACSL requires ghost and real names to be disjoint.")
+      }
+    }
   }
 
   def allFormalVars : scala.Seq[CCVar] =
