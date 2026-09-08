@@ -71,7 +71,7 @@ SimpleClauseEnsures. SimpleClause ::= EnsuresClause ;
 -- FIXME: AllocationClause and AbruptClause are referenced but not defined in
 --        the BNF of 2.6 (but later on). Skipping for now.
 -- SimpleClauseAllocation. SimpleClause ::= AllocationClause ;
--- SimpleClauseAbrupt.     SimpleClause ::= AbruptClause ;
+SimpleClauseAbrupt.  SimpleClause ::= AbruptClause ;
 separator SimpleClause "" ;
 
 AnAssignsClause. AssignsClause ::= "assigns" Locations ";" ;
@@ -83,6 +83,14 @@ ALocation. Location ::= TSet ;
 separator nonempty Location "," ;
 
 AnEnsuresClause. EnsuresClause ::= MaybeClauseKind "ensures" Expr ";" ;
+
+AbruptClauseThrows.  AbruptClause ::= ThrowsClause ;
+
+ThrowsClauseEmpty. ThrowsClause ::= "throws" Expr ";" ;
+ThrowsClauseTypes. ThrowsClause ::= "throws" "{" [ExceptionType] "}" Expr ";" ;
+
+AnExceptionType. ExceptionType ::= CTypeName ;
+separator nonempty ExceptionType "," ;
 
 ANamedBehavior. NamedBehavior ::= "behavior" Id ":" BehaviorBody ;
 terminator NamedBehavior "" ;
