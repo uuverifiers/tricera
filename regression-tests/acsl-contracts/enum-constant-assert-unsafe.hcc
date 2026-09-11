@@ -1,0 +1,7 @@
+enum { EE = 5 };
+
+int main(void){
+  int x = 4;
+  /*@ assert x == EE; */
+  return 0;
+}

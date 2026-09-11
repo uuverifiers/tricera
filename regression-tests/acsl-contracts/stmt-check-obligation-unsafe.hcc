@@ -1,0 +1,6 @@
+
+int main(void) {
+  int x;
+  /*@ check x == 5; @*/
+  return 0;
+}

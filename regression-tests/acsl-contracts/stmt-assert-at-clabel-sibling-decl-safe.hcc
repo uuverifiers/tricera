@@ -1,0 +1,16 @@
+// two captures of the same name, each resolving to its own sibling declaration
+int main(void) {
+  {
+    int y = 1;
+L1:
+    y = y + 1;
+    /*@ assert \at(y, L1) + 1 == y; @*/
+  }
+  {
+    long y = 2;
+L2:
+    y = y + 1;
+    /*@ assert \at(y, L2) + 1 == y; @*/
+  }
+  return 0;
+}

@@ -1,0 +1,12 @@
+
+valid-elem-safe.hcc
+SAFE
+
+valid-elem-unsafe.hcc
+UNSAFE
+
+assigns-elem-frame-safe.hcc
+SAFE
+
+assigns-elem-frame-unsafe.hcc
+UNSAFE

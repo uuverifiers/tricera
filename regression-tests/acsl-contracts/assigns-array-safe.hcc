@@ -1,0 +1,11 @@
+int g[5];
+
+/*@ assigns g[2]; */
+void f(void);
+
+int main(void){
+  g[0] = 7;
+  f();
+  /*@ assert g[0] == 7; */
+  return 0;
+}

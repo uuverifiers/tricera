@@ -1,0 +1,15 @@
+
+
+struct S {
+  int f;
+  int g;
+};
+int main(void) {
+  struct S s;
+  s.f = 5;
+  s.g = 9;
+L:
+  s.f = 10;
+  /*@ assert \at(s.f, L) == 5; @*/
+  return 0;
+}

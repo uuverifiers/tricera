@@ -10,3 +10,24 @@ UNSAFE
 
 at-old-01-true.c
 SAFE
+
+at-ptr-01-true.c
+SAFE
+
+at-ptr-01-false.c
+UNSAFE
+
+at-ptr-02-true.c
+SAFE
+
+at-ptr-02-false.c
+UNSAFE
+
+at-old-ptr-01-true.c
+SAFE
+
+at-old-ptr-01-false.c
+UNSAFE
+
+at-old-ptr-02-false.c
+UNSAFE

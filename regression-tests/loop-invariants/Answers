@@ -54,3 +54,8 @@ Inferred ACSL annotations
 ================================================================================
 
 SAFE
+
+loop-invariant-unsupported.c
+tricera.concurrency.ccreader.CCExceptions$TranslationException: At (3:3)): explicit loop invariants are not yet supported
+(error "At (3:3)): explicit loop invariants are not yet supported")
+Other Error: At (3:3)): explicit loop invariants are not yet supported

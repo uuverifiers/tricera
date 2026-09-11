@@ -1,0 +1,11 @@
+// \at(x, LoopCurrent) is not yet supported
+int main(void) {
+  int x = 0;
+  int i = 0;
+  while (i < 3) {
+    x = x + 1;
+    /*@ assert \at(x, LoopCurrent) == x; @*/
+    i = i + 1;
+  }
+  return 0;
+}

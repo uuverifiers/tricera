@@ -1,0 +1,5 @@
+int main(void) {
+  int x = 0;
+  //@ assert \forall integer x; x == 0;
+  return 0;
+}

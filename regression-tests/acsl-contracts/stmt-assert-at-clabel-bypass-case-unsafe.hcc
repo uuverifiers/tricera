@@ -1,0 +1,13 @@
+// the case dispatch skips L, the capture is unconstrained like an uninitialized read
+int main(void) {
+  int x = 1;
+  switch (1) {
+    case 0:
+L:
+      x = 2;
+    case 1:
+      /*@ assert \at(x, L) == 2; @*/
+      break;
+  }
+  return 0;
+}

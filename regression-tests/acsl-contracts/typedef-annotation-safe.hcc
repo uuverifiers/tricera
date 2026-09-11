@@ -1,0 +1,9 @@
+typedef int myint;
+
+/*@ ghost myint gv; */
+
+/*@ requires x > 0;
+    ensures \result == (myint)x; */
+int inc(int x){ return x; }
+
+int main(void){ inc(5); return 0; }

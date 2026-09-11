@@ -20,3 +20,11 @@ for name in $TESTS; do
     $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
+TESTS="enum-cast-unsigned.hcc enum-cast-unsigned-unsafe.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -E 'SAFE|UNSAFE'
+done
+

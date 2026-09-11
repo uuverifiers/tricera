@@ -1,0 +1,9 @@
+int g[5];
+
+/*@ ensures \valid(&g[0]); */
+void f(void);
+
+int main(void) {
+  f();
+  return 0;
+}

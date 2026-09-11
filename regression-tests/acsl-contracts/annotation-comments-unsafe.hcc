@@ -1,0 +1,33 @@
+/*@
+  @ // A predicate with a leading comment.
+  @ predicate Nonzero(int value) = value != 0; // A trailing comment.
+*/
+
+/*@
+  // Return the supplied value.
+  requires value == 4; // The caller supplies four.
+  ensures \result == 4; // The result is four.
+*/
+int id(int value) {
+  return value;
+}
+
+int main(void) {
+  int x = id(4);
+  /*@ ghost int g = x; // A comment before the ghost closing delimiter. */
+  //@ assert g == 4; // The ghost initializer is preserved.
+  /*@
+    @ // A comment-only annotation.
+  @*/
+  //@ // Another comment-only annotation.
+  /*@
+    assert "https://example.test": Nonzero(x); // Keep the quoted slashes.
+  */
+  /*@ assert x / 2 == 2; // Keep the division and closing delimiter. */
+  //@ assert x == 4; // A comment inside a line annotation.
+  /*@
+    // assert \false;
+    //@ assert x == 5; // A nested annotation is still checked.
+  */
+  return 0;
+}

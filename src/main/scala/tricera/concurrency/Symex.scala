@@ -264,8 +264,14 @@ class Symex private (context        : SymexContext,
         structType.getFieldTerm(structVal, ptrType.fieldAddress)
     }
 
-  private def setValue(name : String, t : CCTerm, enclosingFunction : String) : Unit =
-    setValue(scope.lookupVar(name, enclosingFunction), t)
+  private def setValue(name : String, t : CCTerm, enclosingFunction : String)
+                      (implicit evalCtx : EvalContext) : Unit = {
+    val idx = scope.lookupAnyVarNoException(name, enclosingFunction)
+    if (evalCtx.ghostMode && idx >= 0 && !getVar(idx).isGhost)
+      throw new TranslationException(
+        s"Ghost code cannot modify non-ghost variable `$name`.")
+    setValue(idx, t)
+  }
   private def setValue(ind: Int, t : CCTerm) : Unit = {
     val actualInd = getValue(ind, false).typ match {
       case stackPtr: CCStackPointer => stackPtr.targetInd
@@ -275,6 +281,16 @@ class Symex private (context        : SymexContext,
     touchedGlobalState =
       touchedGlobalState || actualInd < scope.GlobalVars.size || !scope.freeFromGlobal(t)
   }
+
+  def setGhostValue(name : String, t : CCTerm,
+                    enclosingFunction : String) : Unit =
+    setValue(scope.lookupAnyVarNoException(name, enclosingFunction), t)
+
+  private def varLookup(name : String, evalCtx : EvalContext) : Int =
+    if (evalCtx.ghostVisible)
+      scope.lookupAnyVarNoException(name, evalCtx.enclosingFunctionName)
+    else
+      scope.lookupVarNoException(name, evalCtx.enclosingFunctionName)
 
   private def getVar(ind: Int): CCVar = {
     if (ind < scope.GlobalVars.size) scope.GlobalVars.vars(ind)
@@ -307,12 +323,19 @@ class Symex private (context        : SymexContext,
         (context.printer print exp))
   }
 
+  private def lookupTypeOf(name              : String,
+                           enclosingFunction : String) : Option[CCType] = {
+    val idx = scope.lookupAnyVarNoException(name, enclosingFunction)
+    if (idx < 0) None
+    else Some(getValue(idx, false).typ)
+  }
+
   private def isClockVariable(exp : Exp, enclosingFunction : String)
   : Boolean = exp match {
-    case exp : Evar => getValue(exp.cident_,
-                                enclosingFunction).typ == CCClock
-    case exp : EvarWithType => getValue(exp.cident_,
-                                        enclosingFunction).typ == CCClock
+    case exp : Evar =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCClock)
+    case exp : EvarWithType =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCClock)
     case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
     case exp =>
       throw new TranslationException(getLineString(exp) +
@@ -322,10 +345,10 @@ class Symex private (context        : SymexContext,
 
   private def isDurationVariable(exp : Exp, enclosingFunction : String)
   : Boolean = exp match {
-    case exp : Evar => getValue(exp.cident_,
-                                enclosingFunction).typ == CCDuration
-    case exp : EvarWithType => getValue(exp.cident_,
-                                        enclosingFunction).typ == CCDuration
+    case exp : Evar =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCDuration)
+    case exp : EvarWithType =>
+      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCDuration)
     case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
     case exp =>
       throw new TranslationException(getLineString(exp) +
@@ -738,6 +761,14 @@ class Symex private (context        : SymexContext,
       val pointerVal =
         eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
       if (isHeapPointer(pointerVal)) {
+        if (evalCtx.ghostMode) {
+          val ptrName = asLValue(pointerExp)
+          val ptrIdx = scope.lookupAnyVarNoException(
+            ptrName, evalCtx.enclosingFunctionName)
+          if (ptrIdx >= 0 && !getVar(ptrIdx).isGhost)
+            throw new TranslationException(
+              s"Ghost code cannot write through non-ghost pointer `$ptrName`.")
+        }
         val cellTyp = pointerVal.typ match {
           case p : CCHeapPointer => p.typ
           case other             => other
@@ -814,7 +845,11 @@ class Symex private (context        : SymexContext,
     handlingFunContractArgs : Boolean = false,
     lhsIsArrayPointer       : Boolean = false,
     enclosingFunctionName   : String = "",
-    nestedCallDepth         : Int = 0) {
+    nestedCallDepth         : Int = 0,
+    // for making ghost vars visible, for example to assert & assume statements
+    ghostVisible            : Boolean = false,
+    // inside a ghost body: writes to non-ghost state are rejected
+    ghostMode               : Boolean = false) {
     def withLhsIsArrayPointer(set : Boolean) : EvalContext =
       copy(lhsIsArrayPointer = set)
     def withEvaluatingLHS(set : Boolean) : EvalContext =
@@ -823,6 +858,10 @@ class Symex private (context        : SymexContext,
       copy(handlingFunContractArgs = set)
     def withFunctionName(name : String) : EvalContext =
       copy(enclosingFunctionName = name)
+    def withGhostVisible(set : Boolean) : EvalContext =
+      copy(ghostVisible = set)
+    def withGhostMode(set : Boolean) : EvalContext =
+      copy(ghostMode = set)
     def incrementCallDepth : EvalContext =
       copy(nestedCallDepth = nestedCallDepth + 1)
   }
@@ -839,8 +878,7 @@ class Symex private (context        : SymexContext,
       case Some(wrapper) =>
         CCTerm.fromTerm(wrapper(term.toTerm), CCHeapObject(context.heap), term.srcInfo)
       case None =>
-        throw new TranslationException(
-          s"No constructor found to make ${term.typ} a heap object!")
+        context.forceHeapObjectWrappers(Seq(term.typ))
     }
 
   private def callFunction(name    : String,
@@ -1254,12 +1292,14 @@ class Symex private (context        : SymexContext,
           topVal.toTerm match {
             case fieldFun: IFunApp
               if !(context.objectGetters contains fieldFun.fun) &&
-                 (context.heap.userHeapSelectors exists(_ contains fieldFun.fun)) => // an ADT
+                 context.structDefs.values.exists(_.sels.exists(_._1 == fieldFun.fun)) => // struct field selector
               val (fieldNames, rootTerm) = getFieldInfo(fieldFun)
               rootTerm match {
                 case Left(c) =>
                   val rootInd: Int = scope.lookupVar(c.name, evalCtx.enclosingFunctionName)
                   val structType = getValue(rootInd, false).typ.asInstanceOf[CCStruct]
+                  if (!(context.heap.userHeapSelectors exists(_ contains fieldFun.fun)))
+                    context.forceHeapObjectWrappers(Seq(structType))
                   assert(rootInd > -1 && rootInd < values.size - 1) // todo
                   val ptr = CCStackPointer(rootInd, popVal.typ, structType.getFieldAddress(fieldNames))
                   pushVal(CCTerm.fromTerm(IExpression.Int2ITerm(rootInd), ptr, srcInfo)) //we don't care about the value
@@ -1361,7 +1401,7 @@ class Symex private (context        : SymexContext,
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "abort" =>
           /** Treat abort as assert(0). */
-          assertProperty(false, srcInfo, properties.UserAssertion)
+          assertProperty(false, srcInfo, properties.UserAssertion())
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "$HEAP_TYPE_DEFAULT" =>
           /** A builtin to access the default object of the heap */
@@ -1376,10 +1416,11 @@ class Symex private (context        : SymexContext,
       val srcInfo = Some(getSourceInfo(exp))
       GetId.orString(exp) match {
         case "assert" | "static_assert" if exp.listexp_.size == 1 =>
+          val specCtx = evalCtx.withGhostVisible(true)
           val property = exp.listexp_.asScala.head match {
             case a : Efunkpar
               if context.uninterpPredDecls contains(GetId.orString(a)) =>
-              val args = a.listexp_.asScala.map(exp => atomicEval(exp, evalCtx))
+              val args = a.listexp_.asScala.map(exp => atomicEval(exp, specCtx))
               if(args.exists(a => a.typ.isInstanceOf[CCStackPointer])) {
                 throw new TranslationException(
                   getLineStringShort(srcInfo) + " Unsupported operation: " +
@@ -1390,37 +1431,38 @@ class Symex private (context        : SymexContext,
             case interpPred : Efunkpar
               if context.interpPredDefs contains(GetId.orString(interpPred)) =>
               val args    = interpPred.listexp_.asScala.map(
-                exp => atomicEval(exp, evalCtx)).map(_.toTerm)
+                exp => atomicEval(exp, specCtx)).map(_.toTerm)
               val formula = context.interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.toFormula, (args.toList, 0))
             case _ =>
-              atomicEvalFormula(exp.listexp_. asScala.head, evalCtx).toFormula
+              atomicEvalFormula(exp.listexp_. asScala.head, specCtx).toFormula
           }
-          assertProperty(property, srcInfo, properties.UserAssertion)
+          assertProperty(property, srcInfo, properties.UserAssertion())
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "exit" if exp.listexp_.size == 1 =>
           addGuard(IBoolLit(false))
           pushVal(CCTerm.fromFormula(false, CCInt, srcInfo))
         case "assume" if exp.listexp_.size == 1 =>
+          val specCtx = evalCtx.withGhostVisible(true)
           val property = exp.listexp_.asScala.head match {
             case a : Efunkpar
               if context.uninterpPredDecls contains(GetId.orString(a)) =>
-              val args = a.listexp_.asScala.map(exp => atomicEval(exp, evalCtx))
+              val args = a.listexp_.asScala.map(exp => atomicEval(exp, specCtx))
                           .map(_.toTerm).toSeq
               val pred = context.uninterpPredDecls(GetId.orString(a))
               context.atom(pred, args)
             case interpPred : Efunkpar
               if context.interpPredDefs contains (GetId.orString(interpPred)) =>
               val args = interpPred.listexp_.asScala.map(
-                exp => atomicEval(exp, evalCtx)).map(_.toTerm)
+                exp => atomicEval(exp, specCtx)).map(_.toTerm)
               val formula = context.interpPredDefs(GetId.orString(interpPred))
               // the formula refers to pred arguments as IVariable(index)
               // we need to subsitute those for the actual arguments
               VariableSubstVisitor(formula.toFormula, (args.toList, 0))
             case _ =>
-              atomicEvalFormula(exp.listexp_.asScala.head, evalCtx).toFormula
+              atomicEvalFormula(exp.listexp_.asScala.head, specCtx).toFormula
           }
           addGuard(property)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
@@ -1638,7 +1680,7 @@ class Symex private (context        : SymexContext,
           pushVal(CCTerm.fromTerm(context.heap.defaultObject,
                                   CCHeapObject(context.heap), Some(getSourceInfo(exp))))
         case _ =>
-          pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+          pushVal(varLookup(name, evalCtx) match {
                     case -1 =>
                       (context.enumeratorDefs get name) match {
                         case Some(e) => e
@@ -1654,7 +1696,7 @@ class Symex private (context        : SymexContext,
     case exp : EvarWithType =>
       // todo: Unify with Evar, they should always be treated the same.
       val name = exp.cident_
-      pushVal(scope.lookupVarNoException(name, evalCtx.enclosingFunctionName) match {
+      pushVal(varLookup(name, evalCtx) match {
                 case -1 =>
                   (context.enumeratorDefs get name) match {
                     case Some(e) => e
@@ -1754,7 +1796,10 @@ class Symex private (context        : SymexContext,
 //          assert(!(pointerArgs exists (_.isInstanceOf[CCStackPointer])),
 //                 "function contracts do not support pointer arguments yet")
 
-        val funDef = context.functionDefs(name)
+        val funReturnType = context.functionDefs.get(name) match {
+          case Some(funDef) => context.getType(funDef)
+          case None         => context.functionDecls(name)._2
+        }
 
         var argTerms : List[ITerm] = List()
         for (_ <- 0 until argCount)
@@ -1779,7 +1824,7 @@ class Symex private (context        : SymexContext,
 
         val prePredArgs : scala.Seq[ITerm] = globals ++ argTerms
 
-        val resVar : scala.Seq[CCVar] = scope.getResVar(context.getType(funDef))
+        val resVar : scala.Seq[CCVar] = scope.getResVar(funReturnType)
         val postPredArgs : scala.Seq[ITerm] =
           prePredArgs ++ postGlobalVars ++ resVar.map(c => IConstant(c.term))
 

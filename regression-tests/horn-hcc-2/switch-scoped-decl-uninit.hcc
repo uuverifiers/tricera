@@ -1,0 +1,14 @@
+void main() {
+  int x;
+  int out = 0;
+  switch (x) {
+    int v;
+    case 1:
+      out = v;
+      break;
+    default:
+      out = 0;
+      break;
+  }
+  assert(out == 0);
+}

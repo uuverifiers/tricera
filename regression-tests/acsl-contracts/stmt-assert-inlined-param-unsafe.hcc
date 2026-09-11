@@ -1,0 +1,7 @@
+void callee(int x) {
+  /*@ assert x == 0; @*/
+}
+void main(void) {
+  callee(1);
+}
+

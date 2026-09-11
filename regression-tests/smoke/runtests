@@ -1,0 +1,13 @@
+#!/bin/sh
+
+
+
+TESTS="reachable.hcc \
+       vacuous-branch.hcc \
+       vacuous-contract.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD "$@" $name 2>&1 | grep -v '^[[:space:]]*at '
+done

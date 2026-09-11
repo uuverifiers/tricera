@@ -102,10 +102,10 @@ Init:
                                                    |                                                   
                                                    |                                                   
                                                    V                                                   
- main7_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.addr(1)) 
+ main7_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.null, heap.addr(1), heap.addr(1)) 
 -------------------------------------------------------------------------------------------------------
 Final:
- main7_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.addr(1)) 
+ main7_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.null, heap.addr(1), heap.addr(1)) 
 -------------------------------------------------------------------------------------------------------
 Failed assertion:
 false :- main7_3(@h, @v_cleanup, x:6, y:7), !is_O_S(heap.read(@h, y:7)). (line:8 col:3) (property: valid-deref)
@@ -152,10 +152,10 @@ Init:
                                                  |                                                  
                                                  |                                                  
                                                  V                                                  
- main3_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.null) 
+ main3_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.null, heap.addr(1), heap.null) 
 ----------------------------------------------------------------------------------------------------
 Final:
- main3_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.null, heap.addr(1), heap.null) 
+ main3_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.null, heap.addr(1), heap.null) 
 ----------------------------------------------------------------------------------------------------
 Failed assertion:
 false :- main3_3(@h, @v_cleanup, x:2, y:3), !is_O_Addr(heap.read(@h, y:3)). (line:4 col:3) (property: valid-deref)
@@ -177,7 +177,7 @@ Init:
                                              |                                             
                                              |                                             
                                              V                                             
- main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(9))), heap.null, heap.addr(1)) 
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(8))), heap.null, heap.addr(1)) 
 -------------------------------------------------------------------------------------------
                                              |                                             
                                              |                                             
@@ -188,7 +188,7 @@ Final:
     main(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1))     
 -------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main(@h, @v_cleanup, a:2), !is_O_Int(heap.read(@h, a:2)). (line:4 col:3) (property: valid-deref)
+false :- main(@h, @v_cleanup, a:2), !is_O_int(heap.read(@h, a:2)). (line:4 col:3) (property: valid-deref)
 
 UNSAFE
 
@@ -202,7 +202,7 @@ Init:
                                              |                                             
                                              |                                             
                                              V                                             
- main5_6_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(9))), heap.null, heap.addr(1)) 
+ main5_6_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(8))), heap.null, heap.addr(1)) 
 -------------------------------------------------------------------------------------------
                                              |                                             
                                              |                                             
@@ -213,7 +213,7 @@ Final:
     main(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1))     
 -------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main(@h, @v_cleanup, a:4), !is_O_Int(heap.read(@h, a:4)). (line:7 col:3) (property: valid-deref)
+false :- main(@h, @v_cleanup, a:4), !is_O_int(heap.read(@h, a:4)). (line:7 col:3) (property: valid-deref)
 
 UNSAFE
 
@@ -229,7 +229,7 @@ Init:
                                                   |                                                  
                                                   |                                                  
                                                   V                                                  
-      main4_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(9))), heap.null, heap.addr(1))      
+      main4_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(8))), heap.null, heap.addr(1))      
 -----------------------------------------------------------------------------------------------------
                                                   |                                                  
                                                   |                                                  
@@ -240,7 +240,7 @@ Final:
  main6_3(heap.heapAddrPair_1(heap.alloc(heap.empty, defObj)), heap.null, heap.addr(1), heap.addr(1)) 
 -----------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main6_3(@h, @v_cleanup, a:4, b:6), !is_O_Int(heap.read(@h, b:6)). (line:7 col:3) (property: valid-deref)
+false :- main6_3(@h, @v_cleanup, a:4, b:6), !is_O_int(heap.read(@h, b:6)). (line:7 col:3) (property: valid-deref)
 
 UNSAFE
 
@@ -284,13 +284,13 @@ Init:
                                        |                                        
                                        |                                        
                                        V                                        
- main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.addr(1)) 
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.addr(1)) 
 --------------------------------------------------------------------------------
 Final:
- main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Int(0))), heap.addr(1)) 
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.addr(1)) 
 --------------------------------------------------------------------------------
 Failed assertion:
-false :- main2_3_1(@h, x:2), getInt(heap.read(@h, x:2)) != 42. (line:3 col:3) (property: user-assertion)
+false :- main2_3_1(@h, x:2), get_int(heap.read(@h, x:2)) != 42. (line:3 col:3) (property: user-assertion)
 
 UNSAFE
 

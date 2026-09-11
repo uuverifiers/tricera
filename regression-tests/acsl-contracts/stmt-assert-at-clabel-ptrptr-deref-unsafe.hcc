@@ -1,0 +1,12 @@
+#include <stdlib.h>
+int **pp;
+
+int main(void) {
+  pp = malloc(sizeof(int *));
+  *pp = malloc(sizeof(int));
+  **pp = 3;
+L:
+  **pp = 4;
+  /*@ assert **\at(pp, L) == 3; @*/
+  return 0;
+}

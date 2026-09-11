@@ -1,0 +1,14 @@
+#!/bin/sh
+
+
+
+TESTS="valid-elem-safe.hcc \
+       valid-elem-unsafe.hcc \
+       assigns-elem-frame-safe.hcc \
+       assigns-elem-frame-unsafe.hcc"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD "$@" $name 2>&1 | grep -v '^[[:space:]]*at '
+done

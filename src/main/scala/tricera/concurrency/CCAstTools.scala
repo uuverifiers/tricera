@@ -108,6 +108,15 @@ class CCAstDeclaration(d: ListDeclaration_specifier, i: Init_declarator, e: List
     }
   }
 
+  def toAnnotatedFuncDeclarator(annotation: String): AnnotatedFuncDeclarator = {
+    val annotations = new ListAnnotation
+    annotations.add(new Annot1(annotation))
+    new AnnotatedFuncDeclarator(
+      annotations,
+      copyAst(declarationSpecifiers),
+      initDeclarator.accept(getDeclarator, ()))
+  }
+
   def toDeclarators(initializer: Option[Initializer] = None): Declarators = {
     val initDecls = new ListInit_declarator
     initializer match {
@@ -160,6 +169,7 @@ class CCAstGetNameVistor extends AbstractVisitor[String, Unit] {
     override def visit(ext: Afunc, arg: Unit): String = { ext.function_def_.accept(this, arg) }
     override def visit(ext: Athread, arg: Unit): String = { ext.thread_def_.accept(this, arg) }
     override def visit(ext: Global, arg: Unit): String = { ext.dec_.accept(this, arg) }
+    override def visit(ext: AnnotatedFuncDeclarator, arg: Unit): String = { ext.declarator_.accept(this, arg) }
     override def visit(ext: Chan, arg: Unit): String = { ext.chan_def_.accept(this, arg) }
 
     /* Function_def */
@@ -251,16 +261,20 @@ class CCAstCopyVisitor extends ComposVisitor[Unit] {
   */
 class CCAstGetFunctionDeclarationVistor extends AbstractVisitor[(ListDeclaration_specifier, Init_declarator), Unit] {
   val copyAst = new CCAstCopyVisitor
+  /* External_declaration */
+  override def visit(ext: AnnotatedFuncDeclarator, arg: Unit) = {
+    (copyAst(ext.listdeclaration_specifier_), new OnlyDecl(ext.declarator_.accept(copyAst, arg)));
+  }
   /* Function_def */
-  override def visit(defn: AnnotatedFunc, arg: Unit) = { 
+  override def visit(defn: AnnotatedFunc, arg: Unit) = {
     (copyAst(defn.listdeclaration_specifier_), new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
   }
   override def visit(defn: NewFuncInt, arg: Unit) = {
     val declarationSpecifiers = new ListDeclaration_specifier
     declarationSpecifiers.add(new Type(new Tint))
-    (declarationSpecifiers, new OnlyDecl(defn.declarator_.accept(copyAst, arg))); 
+    (declarationSpecifiers, new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
   }
-  override def visit(defn: NewFunc, arg: Unit) = { 
+  override def visit(defn: NewFunc, arg: Unit) = {
     (copyAst(defn.listdeclaration_specifier_), new OnlyDecl(defn.declarator_.accept(copyAst, arg)));
   }
 }
@@ -272,6 +286,10 @@ class CCAstGetFunctionAnnotationVisitor extends AbstractVisitor[ListAnnotation, 
   val copyAst = new CCAstCopyVisitor
 
   def apply(defn: Function_def) = defn.accept(this, ())
+  def apply(extDecl: External_declaration) = extDecl.accept(this, ())
+
+  /* External_declaration */
+  override def visit(ext: AnnotatedFuncDeclarator, arg: Unit) = { copyAst(ext.listannotation_) }
 
   /* Function_def */
   override def visit(defn: AnnotatedFunc, arg: Unit) = { copyAst(defn.listannotation_) }
@@ -507,4 +525,39 @@ class CCAstFillFuncDef extends AbstractVisitor[Unit, MHashMap[String, Function_d
   override def visit(ext: Athread, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Global, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
   override def visit(ext: Chan, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: Ignored, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: GhostExternal, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: AnnotatedFuncDeclarator, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+  override def visit(ext: PredicateExternal, fdefs: FuncDefs): Unit = { /* Do nothing*/ }
+}
+
+/**
+  * Visitor to fill the given map with bodyless annotated
+  * function declarations
+  */
+class CCAstFillFuncDecl extends AbstractVisitor[Unit, MHashMap[String, AnnotatedFuncDeclarator]] {
+  type FuncDecls = MHashMap[String, AnnotatedFuncDeclarator]
+
+  private val getName = new CCAstGetNameVistor
+  private val copyAst = new CCAstCopyVisitor
+
+  /* Program */
+  override def visit(progr: Progr, fdecls: FuncDecls): Unit = {
+    progr.listexternal_declaration_.asScala.foreach(ext => ext.accept(this, fdecls))
+  }
+
+  /* External_declaration */
+  override def visit(ext: AnnotatedFuncDeclarator, fdecls: FuncDecls): Unit = {
+    fdecls.put(
+      ext.accept(getName, ()),
+      ext.accept(copyAst, ()).asInstanceOf[AnnotatedFuncDeclarator])
+  }
+
+  override def visit(ext: Afunc, fdecls: FuncDecls): Unit = { /* Do nothing*/ }
+  override def visit(ext: Athread, fdecls: FuncDecls): Unit = { /* Do nothing*/ }
+  override def visit(ext: Global, fdecls: FuncDecls): Unit = { /* Do nothing*/ }
+  override def visit(ext: Chan, fdecls: FuncDecls): Unit = { /* Do nothing*/ }
+  override def visit(ext: Ignored, fdecls: FuncDecls): Unit = { /* Do nothing*/ }
+  override def visit(ext: GhostExternal, fdecls: FuncDecls): Unit = { /* Do nothing*/ }
+  override def visit(ext: PredicateExternal, fdecls: FuncDecls): Unit = { /* Do nothing*/ }
 }

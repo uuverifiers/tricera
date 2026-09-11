@@ -1,0 +1,9 @@
+// \result is contract-only
+int f(int x) {
+  x = x + 1;
+  /*@ assert \result == x; @*/
+  return x;
+}
+void main(void) {
+  f(7);
+}

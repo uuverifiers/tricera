@@ -1,0 +1,10 @@
+// Conflating the C-label L with Here would make this SAFE (unsound)
+
+int f(int x) {
+  x = 8;
+L:
+  x = 12;
+  /*@ assert \at(x, L) == 12; @*/
+  return x;
+}
+void main(void) { f(7); }

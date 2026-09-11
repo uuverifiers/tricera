@@ -51,6 +51,28 @@ SAFE
 cast-stack-heap-01.c
 SAFE
 
+cast-stack-heap-field-safe.c
+SAFE
+
+cast-stack-heap-field-unsafe.c
+
+---------------
+Init:
+ main5_3(S(0)) 
+---------------
+       |       
+       |       
+       V       
+ main_1(S(5))  
+---------------
+Final:
+ main_1(S(5))  
+---------------
+Failed assertion:
+false :- main_1(v:4), S::x(v:4) != 6. (line:7 col:3) (property: user-assertion)
+
+UNSAFE
+
 ptrptr-bug-1.c
 SAFE
 

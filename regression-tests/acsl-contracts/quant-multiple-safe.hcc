@@ -1,0 +1,4 @@
+int main(void) {
+  //@ assert \exists integer x, y; x != y;
+  return 0;
+}

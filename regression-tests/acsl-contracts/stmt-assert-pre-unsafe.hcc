@@ -1,0 +1,8 @@
+int f(int x) {
+  x = 99;
+  /*@ assert \at(x, Pre) == 99; @*/
+  return x;
+}
+void main(void) {
+  f(7);
+}

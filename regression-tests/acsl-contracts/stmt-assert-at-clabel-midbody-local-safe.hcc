@@ -1,0 +1,10 @@
+// \at over a local declared after the first statement
+int main(void) {
+  int x = 0;
+  x = x + 1;
+  int y = 5;
+L:
+  y = y + 1;
+  /*@ assert \at(y, L) + 1 == y; @*/
+  return 0;
+}

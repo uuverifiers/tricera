@@ -46,7 +46,7 @@ import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 import scala.collection.mutable.{ArrayBuffer, Stack, HashMap => MHashMap,
   HashSet => MHashSet}
 import tricera.Util._
-import tricera.acsl.{ACSLTranslator, FunctionContract}
+import tricera.acsl.{ACSLRewriter, ACSLTranslator, FunctionContract}
 import tricera.concurrency.ccreader._
 import tricera.HeapInfo
 import tricera.params.TriCeraParameters
@@ -67,6 +67,9 @@ import scala.collection.mutable
 object CCReader {
   private[concurrency] var useTime = false
   private[concurrency] var modelHeap = false
+  // heap-reaching types with no wrapper on an earlier attempt
+  private[concurrency] val forcedObjectWrapperTypes = new mutable.LinkedHashMap[Sort, CCType]
+  private val warnedFunctionNames = new MHashSet[String]
 
   // Reserve two variables for time
   private[concurrency] val GT  = new CCVar("_GT", None, CCClock, GlobalStorage)
@@ -89,16 +92,36 @@ object CCReader {
     } else {
       prog
     }
+
+    // Eliminate $at expressions.
     val atCallTransformedProg = CCAstAtExpressionTransformer.transform(exceptionTransformedProg)
+
+    // Add type annotations to identifiers in the AST (some later stages rely on this).
     val typeAnnotProg = CCAstTypeAnnotator(atCallTransformedProg)
-    val (transformedCallsProg, callSiteTransforms) =
+
+    // Replace stack pointers in function arguments with globals.
+    val (transformedCallsProg0, callSiteTransforms) =
       CCAstStackPtrArgToGlobalTransformer(typeAnnotProg, entryFunction)
 
+    val funcParamToGlobalMaps : Map[String, Map[String, String]] =
+      if (callSiteTransforms.isEmpty) Map.empty
+      else callSiteTransforms.map(_.getAstAdditions()).reduce(_ += _)
+             .transformedFunctionIdToParamToGlobal.toMap
+
+    // Slice unused declarations and types.
+    val transformedCallsProg =
+      if (TriCeraParameters.get.slice)
+        CCAstSlicer(transformedCallsProg0, entryFunction)
+      else transformedCallsProg0
+
     var reader : CCReader = null
+    forcedObjectWrapperTypes.clear()
+    warnedFunctionNames.clear()
     while (reader == null)
       try {
         reader = new CCReader(
-          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames)
+          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames,
+          funcParamToGlobalMaps)
       } catch {
         case NeedsTimeException => {
           warn("enabling time")
@@ -106,6 +129,9 @@ object CCReader {
         }
         case NeedsHeapModelException => {
           modelHeap = true
+        }
+        case NeedsObjectWrapperException => {
+          // the missing type was recorded in forcedObjectWrapperTypes
         }
       }
     (reader, modelHeap, callSiteTransforms)
@@ -169,7 +195,7 @@ object CCReader {
                          val postPredACSLArgNames : scala.Seq[String],
                          val heapModel : Option[HeapModel])
 
-  case class FuncDef(body : Compound_stm,
+  case class FuncDef(body : Option[Compound_stm],
                      decl : Declarator,
                      sourceInfo : SourceInfo,
                      declSpecs : Option[ListDeclaration_specifier] = None,
@@ -181,19 +207,30 @@ object CCReader {
     def apply(funDef : Function_def) : FuncDef = {
       funDef match {
         case f : NewFunc =>
-          FuncDef(f.compound_stm_, f.declarator_,
+          FuncDef(Some(f.compound_stm_), f.declarator_,
                   getSourceInfo(f),
                   Some(f.listdeclaration_specifier_),
                   Nil)
         case f : NewFuncInt =>
-          FuncDef(f.compound_stm_, f.declarator_,
+          FuncDef(Some(f.compound_stm_), f.declarator_,
                   getSourceInfo(f), None,
                   f.listannotation_.asScala.toSeq)
         case f : AnnotatedFunc =>
-          FuncDef(f.compound_stm_, f.declarator_,
+          FuncDef(Some(f.compound_stm_), f.declarator_,
                   getSourceInfo(f),
                   Some(f.listdeclaration_specifier_),
                   f.listannotation_.asScala.toSeq)
+      }
+    }
+    def apply(extDecl : External_declaration) : FuncDef = {
+      extDecl match {
+        case af : Afunc => FuncDef(af.function_def_)
+        case a : AnnotatedFuncDeclarator =>
+          FuncDef(None, a.declarator_,
+            getSourceInfo(a.declarator_),
+            Some(a.listdeclaration_specifier_),
+            a.listannotation_.asScala.toSeq
+          )
       }
     }
   }
@@ -226,7 +263,9 @@ object CCReader {
 class CCReader private (prog              : Program,
                         entryFunction     : String,
                         propertiesToCheck : Set[properties.Property],
-                        inputVarNames     : scala.Seq[String]) {
+                        inputVarNames     : scala.Seq[String],
+                        funcParamToGlobalMaps : Map[String, Map[String, String]] =
+                          Map.empty) {
 
   import CCReader._
 
@@ -247,7 +286,7 @@ class CCReader private (prog              : Program,
     override def usingInitialPredicates : Boolean =
       CCReader.this.usingInitialPredicates
     override def warnedFunctionNames : MHashSet[String] =
-      CCReader.this.warnedFunctionNames
+      CCReader.warnedFunctionNames
 
     // --- Data & Type Mappings ---
     override def predCCPredMap : MHashMap[Predicate, CCPredicate] =
@@ -276,6 +315,8 @@ class CCReader private (prog              : Program,
       CCReader.this.sortWrapperMap
     override def sortCtorIdMap : Map[Sort, Int] =
       CCReader.this.sortCtorIdMap
+    override def forceHeapObjectWrappers(typs : Iterable[CCType]) : Nothing =
+      CCReader.this.forceHeapObjectWrappers(typs)
     override def objectGetters : scala.Seq[MonoSortedIFunction] =
       CCReader.this.objectGetters
     override def defObj : IFunction =
@@ -361,7 +402,6 @@ class CCReader private (prog              : Program,
 
   private val functionDefs  = new MHashMap[String, Function_def]
   private val functionDecls = new MHashMap[String, (Direct_declarator, CCType)]
-  private val warnedFunctionNames = new MHashSet[String]
   private val functionContexts = new MHashMap[String, FunctionContext]
   private val functionPostOldArgs = new MHashMap[String, scala.Seq[CCVar]]
   private val functionClauses =
@@ -375,6 +415,8 @@ class CCReader private (prog              : Program,
 
   private val uninterpPredDecls     = new MHashMap[String, CCPredicate]
   private val interpPredDefs        = new MHashMap[String, CCTerm]
+  private val acslPredicateDefs     =
+    new MHashMap[String, ACSLTranslator.PredicateDef]
   private val loopInvariants        =
     new MHashMap[String, (CCPredicate, SourceInfo)]
 
@@ -417,6 +459,12 @@ class CCReader private (prog              : Program,
     new ArrayBuffer[(ParametricEncoder.Process, ParametricEncoder.Replication)]
 
   private val assertionClauses = new ArrayBuffer[CCAssertionClause]
+
+  def assertionSites
+    : scala.Seq[(scala.Seq[ap.terfor.preds.Predicate],
+                 Option[SourceInfo], properties.Property)] =
+    assertionClauses.map(
+      c => (c.clause.body.map(_.pred), c.srcInfo, c.property)).toSeq
   private val timeInvariants = new ArrayBuffer[Clause]
 
   private val clauses =
@@ -585,7 +633,12 @@ class CCReader private (prog              : Program,
       case compound: ScompTwo =>
         val stmsIt = ap.util.PeekIterator(compound.liststm_.asScala.iterator)
         while (stmsIt.hasNext) stmsIt.next match {
-          case dec: DecS => collectStructDefs(dec.dec_)
+          case dec : DecS     => collectStructDefs(dec.dec_)
+          case g   : GhostStm =>
+            for (s <- g.liststm_.asScala) s match {
+              case dec : DecS => collectStructDefs(dec.dec_)
+              case _          =>
+            }
           case _ =>
         }
     }
@@ -602,7 +655,7 @@ class CCReader private (prog              : Program,
     decl match {
       case decl: Global => collectStructDefs(decl.dec_)
       case fun: Afunc =>
-        val comp = FuncDef(fun.function_def_).body
+        val comp = FuncDef(fun.function_def_).body.get
         collectStructDefsFromComp(comp)
       case thread : Athread =>
         val comp = thread.thread_def_ match {
@@ -610,10 +663,16 @@ class CCReader private (prog              : Program,
           case t : ParaThread => t.compound_stm_
         }
         collectStructDefsFromComp(comp)
+      case g : GhostExternal =>
+        for (inner <- g.listexternal_declaration_.asScala) inner match {
+          case d : Global => collectStructDefs(d.dec_)
+          case _          =>
+        }
       case _ =>
     }
 
   import ap.theories.{Heap => HeapTheoryObject}
+  import ap.theories.ADT
 
   def defObjCtor(objectCtors : scala.Seq[IFunction]) : ITerm = objectCtors.last()
   val ObjSort = HeapTheoryObject.ADTSort(0)
@@ -624,43 +683,122 @@ class CCReader private (prog              : Program,
     else
       HeapModel.ModelType.TheoryOfHeaps
 
-  val structCtorSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
-    (for ((struct, i) <- structInfos zipWithIndex) yield {
-      if(struct.fieldInfos isEmpty) warn(
-        s"Struct ${struct.name} was declared, but never defined, " +
-          "or it has no fields.")
-      val ADTFieldList : scala.Seq[(String, HeapTheoryObject.CtorArgSort)] =
-        for(FieldInfo(rawFieldName, fieldType, ptrDepth) <-
-              struct.fieldInfos) yield
-          (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
-            if (ptrDepth > 0) {
-              HeapModel.pointerFieldCtorSort(heapModelType)
-            } else { fieldType match {
-              case Left(ind) => HeapTheoryObject.ADTSort(ind + 1)
-              case Right(typ) =>
-                typ match {
-                  case _ : CCHeapArrayPointer => HeapTheoryObject.AddrRangeSort
-                  case _ => HeapTheoryObject.OtherSort(typ.toSort)
-                }
-            }
-            })
-      (struct.name, HeapTheoryObject.CtorSignature(ADTFieldList, HeapTheoryObject.ADTSort(i+1)))
-    }).toList
+  val programInfo : ProgramInfo =
+    new CCAstProgramInfoCollector(structInfos.toSeq, e => sizeofUsedType(e),
+                                  s => declSpecUsedType(s)).apply(prog)
+  tricera.Util.printlnDebugHeapTypes("program info: needs heap = " + programInfo.needsHeap +
+    ", heap types: {" + programInfo.heapTypes.map(_.toString).toList.sorted.mkString(", ") + "}")
 
-  // todo: only add types that exist in the program - should also add machine arithmetic types
-  val predefSignatures =
-    List(("O_Int", HeapTheoryObject.CtorSignature(List(("getInt", HeapTheoryObject.OtherSort(CCInt.toSort))), ObjSort)),
-         ("O_UInt", HeapTheoryObject.CtorSignature(List(("getUInt", HeapTheoryObject.OtherSort(CCUInt.toSort))), ObjSort))) ++
+  private val forcedScalarTypes : List[CCType] =
+    CCReader.forcedObjectWrapperTypes.values.toList.filterNot(t =>
+      t.isInstanceOf[CCStruct] || t.isInstanceOf[CCStructField])
+  private val forcedStructNames : Set[String] =
+    CCReader.forcedObjectWrapperTypes.values.collect {
+      case s : CCStruct      => s.shortName
+      case f : CCStructField => f.structName
+    }.toSet
+
+  // scalar heap object wrapper, one per sort
+  private def scalarWrapper(t : CCType) : (String, HeapTheoryObject.CtorSignature) =
+    ("O_" + t.shortName, HeapTheoryObject.CtorSignature(
+      List(("get_" + t.shortName, HeapTheoryObject.OtherSort(t.toSort))), ObjSort))
+
+  // the scalar types the program puts on the heap
+  val predefSignatures = {
+    val seen = new MHashSet[Sort]
+    (programInfo.heapTypes.toList.collect { case UsedType.Scalar(t) => t } ++
+       forcedScalarTypes)
+      .filter(t => seen.add(t.toSort)).map(scalarWrapper) ++
     HeapModel.addressWrapperSignatures(heapModelType, ObjSort)
+  }
 // Make sure that we have one object sort per sort
 private val ctorObjSorts =
   predefSignatures.flatMap(s => s._2.arguments.map(_._2))
 assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
 
+  // heap structs get O_<struct> wrappers
+  private val heapStructNames : Set[String] =
+    programInfo.heapTypes.collect { case UsedType.Struct(n) => n } ++ forcedStructNames
+
+  // structInfos indices of the structs kept in the heap object ADT
+  private val heapGroupIndices : Set[Int] = {
+    // put on the heap, or has a heap pointer field
+    val direct = structInfos.indices.filter { i =>
+      heapStructNames(structInfos(i).name) ||
+      structInfos(i).fieldInfos.exists(f =>
+        f.ptrDepth > 0 || f.typ.toOption.exists(_.isInstanceOf[CCHeapArrayPointer]))
+    }.toSet
+
+    // i ~ j when struct i has struct j as an inline (non-pointer) field
+    val nesting : Map[Int, Set[Int]] = {
+      val es = for {
+        i <- structInfos.indices
+        FieldInfo(_, Left(j), d) <- structInfos(i).fieldInfos if d == 0
+      } yield i -> j.intValue
+      (es ++ es.map(_.swap)).groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap
+    }
+
+    @scala.annotation.tailrec
+    def close(g : Set[Int]) : Set[Int] = {
+      val grown = g ++ g.flatMap(nesting.getOrElse(_, Set.empty))
+      if (grown == g) g else close(grown)
+    }
+    close(direct)
+  }
+  tricera.Util.printlnDebugHeapTypes("heap-group structs: {" +
+    heapGroupIndices.toSeq.sorted.map(structInfos(_).name).mkString(", ") + "}, standalone: {" +
+    structInfos.indices.filterNot(heapGroupIndices).map(structInfos(_).name).mkString(", ") + "}")
+
+  // each struct's position within its own ADT
+  private val heapGroupOrder  : Seq[Int]      = structInfos.indices.filter(heapGroupIndices)
+  private val standaloneOrder : Seq[Int]      = structInfos.indices.filterNot(heapGroupIndices)
+  private val toHeapPos       : Map[Int, Int] = heapGroupOrder.zipWithIndex.toMap
+  private val toStandalonePos : Map[Int, Int] = standaloneOrder.zipWithIndex.toMap
+
+  for (struct <- structInfos if struct.fieldInfos.isEmpty)
+    warn(s"Struct ${struct.name} was declared, but never defined, or it has no fields.")
+
+  // heap-group structs only; HeapObject is sort 0, so position p is ADTSort(p+1)
+  val structCtorSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
+    (for (i <- heapGroupOrder) yield {
+      val struct = structInfos(i)
+      val fields : scala.Seq[(String, HeapTheoryObject.CtorArgSort)] =
+        for (FieldInfo(rawFieldName, fieldType, ptrDepth) <- struct.fieldInfos) yield
+          (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
+            if (ptrDepth > 0) HeapModel.pointerFieldCtorSort(heapModelType)
+            else fieldType match {
+              case Left(ind)  => HeapTheoryObject.ADTSort(toHeapPos(ind.intValue) + 1)
+              case Right(typ) => typ match {
+                case _ : CCHeapArrayPointer => HeapTheoryObject.AddrRangeSort
+                case _                      => HeapTheoryObject.OtherSort(typ.toSort)
+              }
+            })
+      (struct.name,
+        HeapTheoryObject.CtorSignature(fields, HeapTheoryObject.ADTSort(toHeapPos(i) + 1)))
+    }).toList
+
+  // non-heap structs
+  private val standaloneADT : Option[ADT] =
+    if (standaloneOrder.isEmpty) None
+    else Some(new ADT(
+      standaloneOrder.map(structInfos(_).name).toList,
+      (for (i <- standaloneOrder) yield {
+        val struct = structInfos(i)
+        val fields =
+          for (FieldInfo(rawFieldName, fieldType, _) <- struct.fieldInfos) yield
+            (CCStruct.rawToFullFieldName(struct.name, rawFieldName),
+              fieldType match {
+                case Left(ind)  => ADT.ADTSort(toStandalonePos(ind.intValue))
+                case Right(typ) => ADT.OtherSort(typ.toSort)
+              })
+        (struct.name, ADT.CtorSignature(fields.toList, ADT.ADTSort(toStandalonePos(i))))
+      }).toList,
+      ADT.TermMeasure.Size))
+
   val wrapperSignatures : List[(String, HeapTheoryObject.CtorSignature)] =
     predefSignatures ++
-      (for ((name, signature) <- structCtorSignatures) yield {
+      (for ((name, signature) <- structCtorSignatures if heapStructNames(name)) yield {
         ("O_" + name,
           HeapTheoryObject.CtorSignature(List(("get" + name, signature.result)), ObjSort))
       })
@@ -684,17 +822,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   def getHeapInfo = if (modelHeap) Some(HeapInfo(heap, heapModel.get)) else None
 
-  private val structCtorsOffset = predefSignatures.size
   val defObj = heap.userHeapConstructors.last
-  val structCount = structInfos.size
-  val objectWrappers = heap.userHeapConstructors.take(structCount+structCtorsOffset)
+  val heapStructCount = heapGroupOrder.size
+  // number of object wrappers, used to slice out the struct ctors
+  private val wrapperCount = wrapperSignatures.size
+  val objectWrappers = heap.userHeapConstructors.take(wrapperCount)
   val objectGetters =
-    for (sels <- heap.userHeapSelectors.take(structCount+structCtorsOffset)
+    for (sels <- heap.userHeapSelectors.take(wrapperCount)
          if sels.nonEmpty) yield sels.head
-  val structCtors = heap.userHeapConstructors.slice(structCtorsOffset+structCount,
-    structCtorsOffset+2*structCount)
-  val structSels = heap.userHeapSelectors.slice(structCtorsOffset+structCount,
-    structCtorsOffset+2*structCount)
+  val structCtors = heap.userHeapConstructors.slice(wrapperCount, wrapperCount+heapStructCount)
+  val structSels = heap.userHeapSelectors.slice(wrapperCount, wrapperCount+heapStructCount)
 
   val objectSorts : scala.IndexedSeq[Sort] =
     objectGetters.toIndexedSeq.map(f => f.resSort)
@@ -707,13 +844,21 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   val wrapperSortMap : Map[MonoSortedIFunction, Sort] =
     sortWrapperMap.map(_.swap)
   val sortCtorIdMap : Map[Sort, Int] =
-    objectSorts.zip(0 until structCount+structCtorsOffset).toMap
+    objectSorts.zip(0 until wrapperCount).toMap
+
+  // todo: get rid of this
+  def forceHeapObjectWrappers(typs : Iterable[CCType]) : Nothing = {
+    val fresh = typs.filter(t => CCReader.forcedObjectWrapperTypes.put(t.toSort, t).isEmpty).toList
+    if (fresh.nonEmpty) throw NeedsObjectWrapperException
+    else throw new TranslationException(
+      "no heap object wrapper for " + typs.map(_.shortName).mkString(", "))
+  }
 
   private val heapModelFactory : HeapModelFactory =
     HeapModel.factory(heapModelType, symexContext, scope)
 
   for (((ctor, sels), i) <- structCtors zip structSels zipWithIndex) {
-    val curStruct = structInfos(i)
+    val curStruct = structInfos(heapGroupOrder(i))
     val fieldInfos = curStruct.fieldInfos
     val fieldsWithType = for (j <- fieldInfos.indices) yield {
       val fullFieldName =
@@ -734,6 +879,44 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         heapModelFactory.makePointer(actualType)
       else actualType})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
+  }
+
+  standaloneADT.foreach { adt =>
+    for ((origIdx, k) <- standaloneOrder.zipWithIndex) {
+      val curStruct = structInfos(origIdx)
+      val ctor = adt.constructors(k).asInstanceOf[MonoSortedIFunction]
+      val sels = adt.selectors(k).map(_.asInstanceOf[MonoSortedIFunction])
+      val fieldsWithType = for (j <- curStruct.fieldInfos.indices) yield {
+        val fullFieldName =
+          CCStruct.rawToFullFieldName(curStruct.name, curStruct.fieldInfos(j).name)
+        assert(sels(j).name == fullFieldName)
+        (sels(j), curStruct.fieldInfos(j).typ match {
+          case Left(ind)  => CCStructField(structInfos(ind).name, structDefs)
+          case Right(typ) => typ
+        })
+      }
+      structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
+    }
+  }
+
+  // resolve a malloc's sizeof(T) to the used type
+  private def sizeofUsedType(e : Ebytestype) : Option[UsedType] =
+    e.type_name_ match {
+      case p : PlainType =>
+        val specs = p.listspec_qual_.asScala.collect {
+          case ts : TypeSpec => ts.type_specifier_ }.toList
+        specs.collectFirst { case s : Tstruct => UsedType.Struct(getStructName(s)) }
+          .orElse(try Some(UsedType.Scalar(getType(e)))
+                  catch { case _ : Throwable => None })
+      case _ : ExtendedType => None // pointer target: stored as an address
+    }
+
+  // resolve an array declaration's element type to the used type
+  private def declSpecUsedType(specs : ListDeclaration_specifier) : Option[UsedType] = {
+    val tspecs = specs.asScala.collect { case t : Type => t.type_specifier_ }.toList
+    tspecs.collectFirst { case s : Tstruct => UsedType.Struct(getStructName(s)) }
+      .orElse(try Some(UsedType.Scalar(getType(specs)))
+              catch { case _ : Throwable => None })
   }
 
   private val globalVars : scala.Seq[CCVarDeclaration] =
@@ -801,7 +984,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
    */
   private val globalExitPred = newPred("exit", scope.allFormalVars, None)
 
-  //////////////////////////////////////////////////////////////////////////////
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
     // generous than actual C semantics, where declarations
@@ -820,6 +1002,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case decl : Global =>
           collectVarDecls(decl.dec_, true, values, "", false)
 
+        case decl : AnnotatedFuncDeclarator =>
+          val funDec = collectAnnotatedFuncDecl(decl)
+          functionDecls.put(funDec.name, (funDec.directDecl, funDec.typ))
+
         case decl : Chan =>
           for (name <- decl.chan_def_.asInstanceOf[AChan].listcident_.asScala) {
             if (channels contains name)
@@ -837,6 +1023,24 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           functionDefs.put(name, decl.function_def_)
         }
 
+        case decl : GhostExternal =>
+          for (inner <- decl.listexternal_declaration_.asScala) inner match {
+            case g : Global =>
+              collectVarDecls(g.dec_, isGlobal = true, values, "",
+                              collectOnlyLocalStatic = false,
+                              isGhost = true)
+            case other =>
+              warn("Unsupported construct inside ghost block at file scope: " +
+                   other.getClass.getSimpleName)
+          }
+
+        case decl : PredicateExternal =>
+          val pdef = ACSLTranslator.parsePredicateDef(
+            "/*@" + decl.predicatestring_
+              .stripPrefix(Literals.predicateOpenMarker)
+              .stripSuffix(Literals.predicateCloseMarker) + "*/")
+          acslPredicateDefs.put(pdef.name, pdef)
+
         case _ => // nothing
       }
 
@@ -850,7 +1054,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       val funNameAndBody : Option[(String, Compound_stm)] = decl match {
         case decl : Afunc =>
           val funcDef = FuncDef(decl.function_def_)
-          Some(funcDef.name, funcDef.body)
+          Some(funcDef.name, funcDef.body.get)
         case decl : Athread =>
           val name = getName(decl.thread_def_)
           val body = decl.thread_def_ match {
@@ -898,8 +1102,18 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
     globalPreconditions = globalPreconditions &&& values.getGuard
 
+    // distribute the same source info to all annotations
+    // todo: can we be more fine-grained? e.g., to pinpoint which post-condition is failing
+     
+    def distributeSourceToAnnots(fun : FuncDef, annots : Seq[Annotation]) = {
+      implicit def flattenAnnotationInfos(pair: (Seq[AnnotationInfo], SourceInfo)) :
+      Iterable[(AnnotationInfo, SourceInfo)] = pair._1.map(info => (info, pair._2))
+      (fun, (for (annot <- annots) yield {
+        (AnnotationParser(annot), getSourceInfo(annot))
+      }).flatten)
+    }
     // todo: what about functions without definitions? replace Afunc type
-    val functionAnnotations : Map[Afunc, scala.Seq[(AnnotationInfo, SourceInfo)]] =
+    val functionAnnotations : Map[FuncDef, scala.Seq[(AnnotationInfo, SourceInfo)]] =
       prog.asInstanceOf[Progr].listexternal_declaration_.asScala.collect {
         case f : Afunc  =>
           val annots : scala.Seq[Annotation] = f.function_def_ match {
@@ -907,50 +1121,42 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case f: NewFuncInt    => f.listannotation_.asScala.toList
             case _: NewFunc       => Nil
           }
-          // distribute the same source info to all annotations
-          // todo: can we be more fine-grained? e.g., to pinpoint which post-condition is failing
-          implicit def flattenAnnotationInfos(
-            pair: (scala.Seq[AnnotationInfo], SourceInfo)) :
-          Iterable[(AnnotationInfo, SourceInfo)] =
-            pair._1.map(info => (info, pair._2))
-
-          (f, (for (annot <- annots) yield {
-            (AnnotationParser(annot), getSourceInfo(annot))
-          }).toSeq.flatten)
+          distributeSourceToAnnots(FuncDef(f), annots)
+        case a : AnnotatedFuncDeclarator =>
+            distributeSourceToAnnots(FuncDef(a), a.listannotation_.asScala.toList)
       }.toMap
 
     // functions for which contracts should be generated
     // todo: generate contracts for ACSL annotated funs
-    val contractFuns : scala.Seq[Afunc] =
+    val contractFuns : scala.Seq[FuncDef] =
       functionAnnotations.filter(_._2.exists(_._1 == ContractGen)).keys.toSeq
 
-    val funsThatMightHaveACSLContracts : Map[Afunc, scala.Seq[(AnnotationInfo, SourceInfo)]] =
+    val funsThatMightHaveACSLContracts : Map[FuncDef, scala.Seq[(AnnotationInfo, SourceInfo)]] =
       functionAnnotations.filter(_._2.exists(_._1.isInstanceOf[MaybeACSLAnnotation]))
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
-      val funDef = FuncDef(fun.function_def_)
       scope.LocalVars.pushFrame
-      pushArguments(fun.function_def_)
+      pushArguments(fun)
       val functionParams = scope.LocalVars getVarsInTopFrame
 
       val oldVars = scope.allFormalVars map (v =>
         new CCVar(v.name + Literals.preExecSuffix, v.srcInfo, v.typ, v.storage))
       // the pre-condition: f_pre(preOldVars)
-      val prePred = newPred(funDef.name + Literals.predPreSuffix, oldVars,
-        Some(getSourceInfo(fun)))
+      val prePred = newPred(fun.name + Literals.predPreSuffix, oldVars,
+        Some(fun.sourceInfo))
 
       // the post-condition: f_post(oldVars, postGlobalVars, postResVar)
       // we first pass all current vars in context as old vars (oldVars)
       // then we pass all effected output vars (which are globals + resVar)
       val postGlobalVars = scope.GlobalVars.vars map (v =>
         new CCVar(v.name + Literals.postExecSuffix, v.srcInfo, v.typ, v.storage))
-      val postResVar = getType(fun.function_def_) match {
+      val postResVar = getType(fun) match {
         case CCVoid => None
-        case _ => Some(new CCVar(funDef.name + Literals.resultExecSuffix,
-          Some(funDef.sourceInfo), getType(fun.function_def_), AutoStorage)) // todo: clean this (and similar code) up a bit
+        case _ => Some(new CCVar(fun.name + Literals.resultExecSuffix,
+          Some(fun.sourceInfo), getType(fun), AutoStorage)) // todo: clean this (and similar code) up a bit
       }
       val postVars = oldVars ++ postGlobalVars ++ postResVar
-      functionPostOldArgs.put(funDef.name, oldVars)
+      functionPostOldArgs.put(fun.name, oldVars)
 
       val prePredArgACSLNames = scope.allFormalVars map (_.name)
       val postPredACSLArgNames =
@@ -963,8 +1169,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       val postGlobalVarsMap: Map[String, CCVar] =
         (scope.GlobalVars.vars.map(_ name) zip postGlobalVars).toMap
 
-      val postPred = newPred(funDef.name + Literals.predPostSuffix, postVars,
-        Some(getSourceInfo(fun))) // todo: end line of fun?
+      val postPred = newPred(fun.name + Literals.predPostSuffix, postVars,
+        Some(fun.sourceInfo)) // todo: end line of fun?
 
       scope.LocalVars.popFrame
 
@@ -982,13 +1188,20 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
         def getResultVar: Option[CCVar] = postResVar
 
+        override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
+          CCReader.this.enumeratorDefs
+
+        override def acslPredicateDefs
+            : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
+          CCReader.this.acslPredicateDefs
+
         def isHeapEnabled: Boolean = modelHeap
 
         def getHeap: Heap =
           if (modelHeap) heap else throw NeedsHeapModelException
 
         private def getHeapModel: HeapModel =
-          if (modelHeap) functionContexts(funDef.name).heapModel.get
+          if (modelHeap) functionContexts(fun.name).heapModel.get
           else throw NeedsHeapModelException
 
         // TODO: these need to be adapted for the new heap model interface
@@ -1029,7 +1242,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           structDefs.values.map(struct => (struct.ctor, struct)).toMap
         }
 
-        override val annotationBeginSourceInfo : SourceInfo = getSourceInfo(fun)
+        override val annotationBeginSourceInfo : SourceInfo = fun.sourceInfo
 
         override val annotationNumLines : Int = // todo: this is currently incorrect - to be fixed!
           functionAnnotations(fun).head._1 match {
@@ -1040,19 +1253,32 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
       val funContext = new FunctionContext(prePred, postPred,
         new ReaderFunctionContext, prePredArgACSLNames, postPredACSLArgNames, heapModel)
-      functionContexts += ((funDef.name, funContext))
+      functionContexts += ((fun.name, funContext))
     }
 
-    val annotatedFuns : Map[Afunc, FunctionContract] =
+    val annotatedFuns : Map[FuncDef, FunctionContract] =
       for ((fun, annots) <- funsThatMightHaveACSLContracts;
         (annot, srcInfo) <- annots if annot.isInstanceOf[MaybeACSLAnnotation]) yield {
 
-        val name = getName(fun.function_def_)
+        val name = fun.name
         val funContext = functionContexts(name)
         val possibleACSLAnnotation = annot.asInstanceOf[MaybeACSLAnnotation]
+        val astTransform : tricera.acsl.Absyn.Annotation => tricera.acsl.Absyn.Annotation =
+          funcParamToGlobalMaps.get(name) match {
+            case Some(paramToGlobal) =>
+              ann => ACSLRewriter.rewrite(ann, ACSLRewriter.globalizeParams(paramToGlobal))
+            case None => identity
+          }
         // todo: try / catch and print msg?
         val contract = ACSLTranslator.translateACSL(
-          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext)
+          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext,
+          astTransform)
+
+        if (fun.body.isDefined &&
+            possibleACSLAnnotation.annot.contains("\\from"))
+          Util.warn(
+            s"TriCera does not check \\from dependency clauses; the \\from " +
+            s"in the contract of function '$name' is ignored.")
 
         prePredsToReplace.add(funContext.prePred.pred)
         postPredsToReplace.add(funContext.postPred.pred)
@@ -1068,64 +1294,59 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     // ... and generate clauses for those functions
     for (f <- (contractFuns ++ annotatedFuns.keys).distinct) {
       import HornClauses._
-
-      val funDef = FuncDef(f.function_def_)
-      val name = funDef.name
-      val typ = getType(f.function_def_)
-      val funContext = functionContexts(name)
-      val (prePred, postPred) = (funContext.prePred, funContext.postPred)
-      setPrefix(name)
-
-      scope.LocalVars.pushFrame
-      val stm = pushArguments(f.function_def_)
-
-      val prePredArgs = scope.allFormalVarTerms.toList
-
-      for (v <- functionPostOldArgs(name)) scope.LocalVars addVar v
-
-      val entryPred = newPred(Nil, Some(getSourceInfo(f)))
-
-      val resVar = scope.getResVar(typ)
-      val exitPred = newPred(resVar, Some(getLastSourceInfo(funDef.body)))
-
-      output(addRichClause(
-        entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
-        Some(funDef.sourceInfo)))// todo: correct source info?
-
-      val translator = FunctionTranslator(exitPred, name)
-      val finalPred = typ match {
-        case CCVoid =>
-          translator.translateNoReturn(stm, entryPred)
-          exitPred
-        case _          =>
-          translator.translateWithReturn(stm, entryPred)
+      f.body match {
+        case Some(b) => { //Body exists, create clauses
+          val name = f.name
+          val typ = getType(f)
+          val funContext = functionContexts(name)
+          val (prePred, postPred) = (funContext.prePred, funContext.postPred)
+          setPrefix(name)
+          scope.LocalVars.pushFrame
+          val stm = pushArguments(f).get
+          val prePredArgs = scope.allFormalVarTerms.toList
+          for (v <- functionPostOldArgs(name)) scope.LocalVars addVar v
+          val entryPred = newPred(Nil, Some(f.sourceInfo))
+          val resVar = scope.getResVar(typ)
+          val exitPred = newPred(resVar, Some(getLastSourceInfo(b)))
+          output(addRichClause(
+            entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
+            Some(f.sourceInfo)))// todo: correct source info?
+          val translator = FunctionTranslator(exitPred, name)
+          if (bodyCaptures(stm).nonEmpty)
+            throw new TranslationException(getLineString(Some(f.sourceInfo)) +
+              "\\at(e, Pre) or \\at(e, C-label) in a statement annotation is not yet " +
+              "supported in a function with a contract; use \\at(e, Here), or remove " +
+              "the contract so the function is inlined")
+          val finalPred = typ match {
+            case CCVoid =>
+              translator.translateNoReturn(stm, entryPred)
+              exitPred
+            case _          =>
+              translator.translateWithReturn(stm, entryPred)
+          }
+          val globalVarTerms : scala.Seq[ITerm] = scope.GlobalVars.formalVarTerms
+          val postArgs : scala.Seq[ITerm] = (scope.allFormalVarTerms drop prePredArgs.size) ++
+            globalVarTerms ++ resVar.map(v => IConstant(v.term)).toSeq
+          output(addRichClause(
+            postPred(postArgs) :-
+            exitPred(scope.allFormalVarTerms ++ resVar.map(v => IConstant(v.term))),
+            Some(f.sourceInfo) // todo: get last line number of function
+          ))
+          if (timeInvariants nonEmpty)
+            throw new TranslationException(
+            "Contracts cannot be used for functions with time invariants")
+          if (clauses exists (_._2 != ParametricEncoder.NoSync))
+            throw new TranslationException(
+            "Contracts cannot be used for functions using communication channels")
+          functionClauses.put(name, functionClauses.getOrElse(name, Nil) ++ clauses)
+          functionAssertionClauses.put(name,
+          functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
+          clauses.clear
+          assertionClauses.clear
+          scope.LocalVars popFrame
+        }
+        case None => //No body so no clauses to create
       }
-
-      val globalVarTerms : scala.Seq[ITerm] = scope.GlobalVars.formalVarTerms
-      val postArgs : scala.Seq[ITerm] = (scope.allFormalVarTerms drop prePredArgs.size) ++
-        globalVarTerms ++ resVar.map(v => IConstant(v.term)).toSeq
-
-      output(addRichClause(
-        postPred(postArgs) :-
-          exitPred(scope.allFormalVarTerms ++ resVar.map(v => IConstant(v.term))),
-        Some(funDef.sourceInfo) // todo: get last line number of function
-      ))
-
-      if (timeInvariants nonEmpty)
-        throw new TranslationException(
-          "Contracts cannot be used for functions with time invariants")
-      if (clauses exists (_._2 != ParametricEncoder.NoSync))
-        throw new TranslationException(
-          "Contracts cannot be used for functions using communication channels")
-
-      functionClauses.put(name, functionClauses.getOrElse(name, Nil) ++ clauses)
-      functionAssertionClauses.put(name,
-        functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
-
-      clauses.clear
-      assertionClauses.clear
-
-      scope.LocalVars popFrame
     }
 
     // then translate the threads
@@ -1187,11 +1408,15 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
 
           val exitVar = scope.getResVar(returnType)
-          val exitPred = newPred(exitVar, Some(getLastSourceInfo(f.body)))
+          val exitPred = newPred(exitVar, f.body.map(getLastSourceInfo))
 
-          val stm = pushArguments(funDef)
+          val stm = pushArguments(f).getOrElse {
+            throw new TranslationException("Entry function must have a body")
+          } 
 
           val translator = FunctionTranslator(exitPred, f.name)
+          // entry parameters, needed by setupLabelCaptures to resolve captured expressions
+          translator.setParams(scope.LocalVars.getVarsInTopFrame)
 
           /**
            * There can be various ways out of a function. If a function has a
@@ -1317,6 +1542,25 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                    maybeInitializer : Option[Initializer],
                                    hints            : scala.Seq[Annotation],
                                    sourceInfo       : SourceInfo)
+
+  private def collectAnnotatedFuncDecl(annFunDecl : AnnotatedFuncDeclarator)
+      : CCFunctionDeclaration = {
+    val specType = getType(annFunDecl.listdeclaration_specifier_)
+    val name = getName(annFunDecl.declarator_)
+    val (typeWithPtrs, directDecl) = annFunDecl.declarator_ match {
+      case decl: NoPointer =>
+        (specType, decl.direct_declarator_)
+      case decl: BeginPointer =>
+        (getPtrType(decl.pointer_, specType), decl.direct_declarator_)
+    }
+    directDecl match {
+      case _: NewFuncDec | _: OldFuncDec =>
+        CCFunctionDeclaration(name, typeWithPtrs, directDecl,
+          getSourceInfo(annFunDecl.declarator_))
+      case _ => throw new TranslationException(
+        "annotated declarations can only be function declarations")
+    }
+  }
 
   /**
    * @param dec               The declaration to collect from.
@@ -1505,7 +1749,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                               isGlobal               : Boolean,
                               values                 : Symex,
                               enclosingFuncName      : String = "",
-                              collectOnlyLocalStatic : Boolean) : Unit = {
+                              collectOnlyLocalStatic : Boolean,
+                              isGhost                : Boolean = false) : Unit = {
     if(collectOnlyLocalStatic)
       assert(enclosingFuncName nonEmpty)
     val decls = collectVarDecls(dec, isGlobal || collectOnlyLocalStatic)
@@ -1532,7 +1777,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           throw NeedsHeapModelException
 
         val storage = {
-          if (isGlobal) GlobalStorage // ignore static in globals
+          if (isGhost)
+            GhostStorage(if (isGlobal) None else Some(enclosingFuncName))
+          else if (isGlobal) GlobalStorage // ignore static in globals
           else if (varDec.isStatic) StaticStorage(enclosingFuncName)
           else AutoStorage
         }
@@ -1563,10 +1810,15 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                   case _ => init.exp_
                 }
 
-                val evalContext =
-                  if (varDec.typ.isInstanceOf[CCHeapArrayPointer])
-                    values.EvalContext().withLhsIsArrayPointer(true).withFunctionName(enclosingFuncName)
-                  else values.EvalContext().withFunctionName(enclosingFuncName)
+                val evalContext = {
+                  val base =
+                    if (varDec.typ.isInstanceOf[CCHeapArrayPointer])
+                      values.EvalContext().withLhsIsArrayPointer(true)
+                    else values.EvalContext()
+                  base.withFunctionName(enclosingFuncName)
+                      .withGhostVisible(isGhost)
+                      .withGhostMode(isGhost)
+                }
                 val res = values.eval(actualInitExp)(
                   values.EvalSettings(), evalContext)
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
@@ -1642,6 +1894,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
 
         // do not use actualType below, take from lhsVar
+
+        scope.checkGhostNameClash(actualLhsVar, enclosingFuncName)
 
         if (isGlobal || collectOnlyLocalStatic) {
           scope.GlobalVars addVar actualLhsVar
@@ -2157,6 +2411,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 throw NeedsHeapModelException
               typ = CCHeapObject(heap)
             }
+            case _ : Tmathint =>
+              typ = CCMathInt
+            case _ : Tbool =>
+              typ = CCBool
             case x => {
               warn("type " + (printer print x) +
                    " not supported, assuming int")
@@ -2165,16 +2423,18 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
     typ
   }
-
-  private def getType(functionDef : Function_def) : CCType = {
-    val f = FuncDef(functionDef)
-    val typ = f.declSpecs match {
+  private def getType(f: FuncDef) : CCType = {
+      val typ = f.declSpecs match {
       case Some(listDeclSpecs) =>
         getType(listDeclSpecs)
       case None => CCInt
     }
     if(f.decl.isInstanceOf[BeginPointer]) heapModelFactory.makePointer(typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
     else typ
+  }
+  private def getType(functionDef : Function_def) : CCType = {
+    val f = FuncDef(functionDef)
+    getType(f)
   }
 
   private def translateClockValue(expr : CCTerm) : CCTerm = {
@@ -2237,6 +2497,164 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   private def atom(ccPred : CCPredicate) : IAtom =
     atom(ccPred, ccPred.argVars.map(_.term))
 
+  // text of each statement annotation. bodyStmtAnnotations gathers them over a
+  // function body to find every captured \at(e, label) ref
+  private def stmtAnnotations(annot : Annotation) : scala.Seq[String] =
+    AnnotationParser(annotationStringExtractor(annot)).collect {
+      case MaybeACSLAnnotation(a, _) => a
+    }
+
+  private def bodyStmtAnnotations(stm : Stm) : scala.Seq[String] = stm match {
+    case s : LabelS         => bodyStmtAnnotations(s.labeled_stm_)
+    case s : CompS          => bodyStmtAnnotations(s.compound_stm_)
+    case s : SelS           => bodyStmtAnnotations(s.selection_stm_)
+    case s : IterS          => bodyStmtAnnotations(s.iter_stm_)
+    case s : AtomicS        => bodyStmtAnnotations(s.atomic_stm_)
+    case s : AnnotationS    => stmtAnnotations(s.annotation_)
+    case s : AnnotatedIterS =>
+      stmtAnnotations(s.annotation_) ++ bodyStmtAnnotations(s.iter_stm_)
+    case s : GhostStm       => s.liststm_.asScala.toSeq.flatMap(bodyStmtAnnotations)
+    case _                  => Nil
+  }
+  private def bodyStmtAnnotations(stm : Labeled_stm) : scala.Seq[String] = stm match {
+    case s : SlabelOne   => bodyStmtAnnotations(s.stm_)
+    case s : SlabelTwo   => bodyStmtAnnotations(s.stm_)
+    case s : SlabelThree => bodyStmtAnnotations(s.stm_)
+  }
+  private def bodyStmtAnnotations(stm : Compound_stm) : scala.Seq[String] = stm match {
+    case _ : ScompOne => Nil
+    case s : ScompTwo => s.liststm_.asScala.toSeq.flatMap(bodyStmtAnnotations)
+  }
+  private def bodyStmtAnnotations(stm : Selection_stm) : scala.Seq[String] = stm match {
+    case s : SselOne   => bodyStmtAnnotations(s.stm_)
+    case s : SselTwo   => bodyStmtAnnotations(s.stm_1) ++ bodyStmtAnnotations(s.stm_2)
+    case s : SselThree => bodyStmtAnnotations(s.stm_)
+  }
+  private def bodyStmtAnnotations(stm : Iter_stm) : scala.Seq[String] = stm match {
+    case s : SiterOne   => bodyStmtAnnotations(s.stm_)
+    case s : SiterTwo   => bodyStmtAnnotations(s.stm_)
+    case s : SiterThree => bodyStmtAnnotations(s.stm_)
+    case s : SiterFour  => bodyStmtAnnotations(s.stm_)
+  }
+  private def bodyStmtAnnotations(stm : Atomic_stm) : scala.Seq[String] = stm match {
+    case s : SatomicOne => bodyStmtAnnotations(s.stm_)
+    case s : SatomicTwo => bodyStmtAnnotations(s.stm_)
+  }
+
+  // the distinct captured \at(e, label) nodes across a function body
+  private def bodyCaptures(body : Compound_stm) : scala.Seq[tricera.acsl.Absyn.EAt] =
+    bodyStmtAnnotations(body).flatMap { annot =>
+      val parsed =
+        try Some(ACSLTranslator.parseToAST("/*@" + annot + "*/"))
+        catch { case _ : Throwable => None }
+      parsed match {
+        case Some(ast) =>
+          val collector = new ACSLTranslator.CaptureCollector
+          ast.accept(collector, ())
+          collector.found.toSeq
+        case None => Nil
+      }
+    }.distinct
+
+  // every C-label defined in the body
+  private def collectLabels(body : Compound_stm) : Set[String] = {
+    val all = scala.collection.mutable.Set.empty[String]
+    def stm(s : Stm) : Unit = s match {
+      case s : LabelS     => labeled(s.labeled_stm_)
+      case s : CompS      => comp(s.compound_stm_)
+      case s : SelS       => sel(s.selection_stm_)
+      case s : IterS      => iter(s.iter_stm_)
+      case s : AtomicS    => atomic(s.atomic_stm_)
+      case s : AnnotatedIterS => iter(s.iter_stm_)
+      case s : GhostStm   => s.liststm_.asScala.foreach(stm)
+      case _              =>
+    }
+    def labeled(s : Labeled_stm) : Unit = s match {
+      case s : SlabelOne   => all += s.cident_; stm(s.stm_)
+      case s : SlabelTwo   => stm(s.stm_)
+      case s : SlabelThree => stm(s.stm_)
+    }
+    def comp(s : Compound_stm) : Unit = s match {
+      case _ : ScompOne =>
+      case s : ScompTwo => s.liststm_.asScala.foreach(stm)
+    }
+    def sel(s : Selection_stm) : Unit = s match {
+      case s : SselOne   => stm(s.stm_)
+      case s : SselTwo   => stm(s.stm_1); stm(s.stm_2)
+      case s : SselThree => stm(s.stm_)
+    }
+    def iter(s : Iter_stm) : Unit = s match {
+      case s : SiterOne   => stm(s.stm_)
+      case s : SiterTwo   => stm(s.stm_)
+      case s : SiterThree => stm(s.stm_)
+      case s : SiterFour  => stm(s.stm_)
+    }
+    def atomic(s : Atomic_stm) : Unit = s match {
+      case s : SatomicOne => stm(s.stm_)
+      case s : SatomicTwo => stm(s.stm_)
+    }
+    comp(body)
+    all.toSet
+  }
+
+  // for each C-label, the declared types of the body locals visible at it
+  private def labelDeclaredTypes(body : Compound_stm)
+    : Map[String, Map[String, CCType]] = {
+    val result = scala.collection.mutable.Map.empty[String, Map[String, CCType]]
+    var scopes = List.empty[scala.collection.mutable.Map[String, CCType]]
+    def inScope(a : => Unit) : Unit = {
+      scopes = scala.collection.mutable.Map.empty[String, CCType] :: scopes
+      try a finally scopes = scopes.tail
+    }
+    def dec(d : Dec) : Unit =
+      try {
+        for (decl <- collectVarDecls(d, isGlobal = false)) decl match {
+          case v : CCVarDeclaration => scopes.head(v.name) = v.typ
+          case _ =>
+        }
+      } catch { case _ : Throwable => }
+    def stm(s : Stm) : Unit = s match {
+      case s : LabelS     => labeled(s.labeled_stm_)
+      case s : CompS      => comp(s.compound_stm_)
+      case s : SelS       => sel(s.selection_stm_)
+      case s : IterS      => iter(s.iter_stm_)
+      case s : AtomicS    => atomic(s.atomic_stm_)
+      case s : AnnotatedIterS => iter(s.iter_stm_)
+      case s : DecS       => dec(s.dec_)
+      case s : GhostStm   => s.liststm_.asScala.foreach(stm)
+      case _              =>
+    }
+    def labeled(s : Labeled_stm) : Unit = s match {
+      case s : SlabelOne   =>
+        result(s.cident_) =
+          scopes.reverse.foldLeft(Map.empty[String, CCType])(_ ++ _)
+        stm(s.stm_)
+      case s : SlabelTwo   => stm(s.stm_)
+      case s : SlabelThree => stm(s.stm_)
+    }
+    def comp(s : Compound_stm) : Unit = s match {
+      case _ : ScompOne =>
+      case s : ScompTwo => inScope { s.liststm_.asScala.foreach(stm) }
+    }
+    def sel(s : Selection_stm) : Unit = s match {
+      case s : SselOne   => stm(s.stm_)
+      case s : SselTwo   => stm(s.stm_1); stm(s.stm_2)
+      case s : SselThree => stm(s.stm_)
+    }
+    def iter(s : Iter_stm) : Unit = s match {
+      case s : SiterOne   => stm(s.stm_)
+      case s : SiterTwo   => stm(s.stm_)
+      case s : SiterThree => stm(s.stm_)
+      case s : SiterFour  => stm(s.stm_)
+    }
+    def atomic(s : Atomic_stm) : Unit = s match {
+      case s : SatomicOne => stm(s.stm_)
+      case s : SatomicTwo => stm(s.stm_)
+    }
+    comp(body)
+    result.toMap
+  }
+
   //////////////////////////////////////////////////////////////////////////////
 
   private def inlineFunction(functionDef : Function_def,
@@ -2246,7 +2664,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                              isNoReturn : Boolean,
                              functionName : String) : Unit = {
     scope.LocalVars pushFrame
-    val stm = pushArguments(functionDef, args)
+    val stm = pushArguments(FuncDef(functionDef), args).getOrElse {
+      throw new TranslationException("Only functions with bodies can be inlined.")
+    }
 
     // this might be an inlined function in an expression where we need to
     // carry along other terms that were generated in the expression, so this
@@ -2255,13 +2675,17 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
     val isInjected = injectedFunctionNames contains functionName
     val translator = FunctionTranslator(exit, functionName)
+    // entry parameters, needed by setupLabelCaptures to resolve captured expressions
+    translator.setParams(scope.LocalVars.getVarsInTopFrame)
+    val bodyEntry =
+      translator.setupLabelCaptures(stm, entry, getSourceInfo(stm))
     val finalPred =
       if (isInjected) inInjectedCode {
-        if (isNoReturn) { translator.translateNoReturn(stm, entry); exit }
-        else translator.translateWithReturn(stm, entry)
+        if (isNoReturn) { translator.translateNoReturn(stm, bodyEntry); exit }
+        else translator.translateWithReturn(stm, bodyEntry)
       } else {
-        if (isNoReturn) { translator.translateNoReturn(stm, entry); exit }
-        else translator.translateWithReturn(stm, entry)
+        if (isNoReturn) { translator.translateNoReturn(stm, bodyEntry); exit }
+        else translator.translateWithReturn(stm, bodyEntry)
       }
     scope.LocalVars popFrame
   }
@@ -2276,7 +2700,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     decl match {
       case pp : PointPoint =>
         heapModelFactory.makePointer(createHeapPointerHelper(pp.pointer_, typ))
-      case p : Point       =>
+      case pp : PointQualPoint => // ignoring qualifiers (const/volatile)
+        heapModelFactory.makePointer(createHeapPointerHelper(pp.pointer_, typ))
+      case _ : Point | _ : PointQual =>
         heapModelFactory.makePointer(typ)
       case _ => throw new TranslationException(
         s"Type qualified pointers are currently not supported: $decl")
@@ -2310,9 +2736,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   }
 
   // todo: refactor this to separate parsing and pushing
-  private def pushArguments(functionDef : Function_def,
-                            pointerArgs : List[CCType] = Nil) : Compound_stm = {
-    val f = FuncDef(functionDef)
+  private def pushArguments(f : FuncDef,
+                            pointerArgs : List[CCType] = Nil) : Option[Compound_stm] = {
     val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
@@ -2383,6 +2808,190 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   private class FunctionTranslator private (returnPred   : Option[CCPredicate],
                                             functionName : String) {
+    private var inGhostMode : Boolean = false
+
+    private var entryParams     : scala.Seq[CCVar] = Nil
+    private var captureNames    : Map[tricera.acsl.Absyn.EAt, String] = Map.empty
+    // C-label -> (capture-var, e) pairs at the label
+    private var labelCaptures   : Map[String, scala.Seq[(String, tricera.acsl.Absyn.Expr)]] =
+      Map.empty
+    private var definedLabels   : Set[String] = Set.empty
+
+    def setParams(params : scala.Seq[CCVar]) : Unit = entryParams = params
+
+    // resolves names/heap for a statement annotation against one symex state (a
+    // label to capture, or the assert site). resolvableNames limits visible names,
+    // declaredTypes supplies types for names outside that limit
+    private class StatementContext(symex           : Symex,
+                                   srcInfo         : SourceInfo,
+                                   resolvableNames : Option[Set[String]] = None,
+                                   declaredTypes   : Map[String, CCType] = Map.empty)
+        extends ACSLTranslator.StatementAnnotationContext {
+      override def getTermInScope(name : String) : Option[CCTerm] =
+        declaredTypes.get(name) match {
+          case Some(t) =>
+            Some(CCTerm.fromTerm(new CCVar(name, None, t, AutoStorage).term, t,
+                                 None))
+          case None if resolvableNames.exists(!_.contains(name)) => None
+          case None =>
+            // annotations see ghost variables too, unlike regular C code
+            scope.lookupAnyVarNoException(name, functionName) match {
+              case -1 => None
+              case i  => Some(symex.getValues(i))
+            }
+        }
+      override def enumeratorDefs : scala.collection.Map[String, CCTerm] =
+        CCReader.this.enumeratorDefs
+      override def acslPredicateDefs
+          : scala.collection.Map[String, ACSLTranslator.PredicateDef] =
+        CCReader.this.acslPredicateDefs
+      override def getGlobals : scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
+      override def sortWrapper(s : Sort) : Option[IFunction] = sortWrapperMap get s
+      override def sortGetter(s : Sort) : Option[IFunction] = sortGetterMap get s
+      override def wrapperSort(wrapper : IFunction) : Option[Sort] = wrapper match {
+        case w : MonoSortedIFunction => wrapperSortMap.get(w)
+        case _ => None
+      }
+      override def getterSort(getter : IFunction) : Option[Sort] = getter match {
+        case g : MonoSortedIFunction => getterSortMap.get(g)
+        case _ => None
+      }
+      override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
+      override def getTypOfPointer(t : CCType) : CCType = t match {
+        case p : CCHeapPointer => p.typ
+        case t => t
+      }
+      override def isHeapEnabled : Boolean = modelHeap
+      override def getHeap : HeapTheoryObject =
+        if (modelHeap) heap
+        else throw NeedsHeapModelException
+      override def getHeapTerm : ITerm =
+        if (modelHeap) {
+          val heapVar = heapModel.get match {
+            case m : HeapTheoryModel => m.heapVar
+            case _ => throw new TranslationException(
+              "Heap in ACSL only supported using the theory of heaps.")
+          }
+          symex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
+        } else throw NeedsHeapModelException
+      override def getOldHeapTerm : ITerm =
+        throw new TranslationException(
+          "\\old/pre-state heap is not available in statement annotations.")
+      override val getStructMap : Map[IFunction, CCStruct] =
+        structDefs.values.map((struct : CCStruct) => (struct.ctor, struct)).toMap
+      override val annotationBeginSourceInfo : SourceInfo = srcInfo
+      override val annotationNumLines : Int = 1
+    }
+
+    private def isArrayType(t : CCType) : Boolean = t match {
+      case _ : CCArray | _ : CCHeapArrayPointer => true
+      case _ => false
+    }
+
+    // a CCBool capture variable holds an int term, but toFormula tests a CCBool
+    // against BoolADT.True. A CCInt capture instead asserts as term != 0
+    private def boolToInt(t : CCTerm) : CCTerm =
+      if (t.typ == CCBool) CCTerm.fromTerm(t.toTerm, CCInt, t.srcInfo) else t
+
+    // declares a capture variable at entry for each \at(e, label)
+    def setupLabelCaptures(body    : Compound_stm,
+                           entry   : CCPredicate,
+                           srcInfo : SourceInfo) : CCPredicate = {
+      val captures = bodyCaptures(body).zipWithIndex.map {
+        case (eat, i) => (eat, Literals.captureVarPrefix + i)
+      }
+      captureNames = captures.toMap
+      definedLabels = collectLabels(body)
+      labelCaptures = captures.collect {
+        case (eat, name) if ACSLTranslator.Label(eat.id_).isInstanceOf[
+                              ACSLTranslator.Label.CLabel] =>
+          (eat.id_, (name, eat.expr_))
+      }.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
+
+      if (captures.isEmpty) entry
+      else {
+        val entrySymex = Symex(symexContext, scope, entry, heapModel)
+        val entryDefined =
+          (entryParams.map(_.name) ++ scope.GlobalVars.vars.map(_.name) ++
+           scope.LocalVars.vars.map(_.name)).toSet
+        // a C-label capture takes its type from the body declarations visible
+        // at its label
+        val labelEnvs =
+          if (labelCaptures.isEmpty) Map.empty[String, Map[String, CCType]]
+          else labelDeclaredTypes(body)
+        val preTranslator = new ACSLTranslator(
+          new StatementContext(entrySymex, srcInfo, Some(entryDefined)))
+        for ((eat, cvName) <- captures) {
+          val isPre = ACSLTranslator.Label(eat.id_) == ACSLTranslator.Label.Pre
+          val hint =
+            if (isPre) "referenced name not in function-entry scope, or unsupported"
+            else "referenced name not visible at the label, or unsupported"
+          val translator =
+            if (isPre) preTranslator
+            else new ACSLTranslator(
+              new StatementContext(entrySymex, srcInfo, Some(entryDefined),
+                                   labelEnvs.getOrElse(eat.id_, Map.empty)))
+          val t = boolToInt(
+            try translator.translate(eat.expr_)
+            catch {
+              case NeedsHeapModelException => throw NeedsHeapModelException
+              case e : Throwable => throw new TranslationException(
+                getLineString(Some(srcInfo)) +
+                "Failed to capture the expression for a labelled state in a " +
+                s"statement annotation ($hint)\n" + e.getMessage)
+            })
+          if (isArrayType(t.typ))
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              "a whole-array value (logical array) cannot be captured; only " +
+              "scalar values are supported")
+          val cv = new CCVar(cvName, Some(srcInfo), t.typ, AutoStorage)
+          scope.LocalVars addVar cv
+          // a C-label is bound at the label point, until then it is unconstrained
+          if (isPre)
+            entrySymex.addValue(t)
+          else
+            entrySymex.addValue(CCTerm.fromTerm(IConstant(cv.term), cv.typ,
+                                                Some(srcInfo)))
+        }
+        val entryWithCaptures = newPred(Nil, Some(srcInfo))
+        entrySymex.outputClause(entryWithCaptures, Some(srcInfo))
+        entryWithCaptures
+      }
+    }
+
+    // binds `name`'s capture variables to e evaluated in the label's state, as an
+    // assignment, so a label reached more than once holds the most recent passage
+    private def bindLabelCaptures(name      : String,
+                                  labelPred : CCPredicate,
+                                  srcInfo   : SourceInfo) : CCPredicate = {
+      val caps = labelCaptures.getOrElse(name, Nil)
+      if (caps.isEmpty) labelPred
+      else {
+        val labelSymex = Symex(symexContext, scope, labelPred, heapModel)
+        val labelCtx   = new StatementContext(labelSymex, srcInfo)
+        val translator = new ACSLTranslator(labelCtx)
+        var bound : Map[Int, ITerm] = Map.empty
+        for ((cvName, eAst) <- caps) {
+          val t = boolToInt(translator.translate(eAst))
+          val cvIndex = scope.lookupVar(cvName, functionName)
+          val cvVar   = scope.allFormalVars(cvIndex)
+          if (t.typ != cvVar.typ)
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              s"the type of the captured expression for C-label '$name' differs " +
+              "from its declared type (shadowing with a different type is not " +
+              "supported)")
+          bound += (cvIndex -> t.toTerm)
+        }
+        val capturedAtLabel = newPred(Nil, Some(srcInfo))
+        val args = scope.allFormalVarTerms.zipWithIndex.map {
+          case (term, i) => bound.getOrElse(i, term)
+        }.take(capturedAtLabel.arity)
+        output(addRichClause(Clause(atom(capturedAtLabel, args),
+          List(atom(labelPred, scope.allFormalVarTerms take labelPred.arity)), true),
+          Some(srcInfo)))
+        capturedAtLabel
+      }
+    }
 
     private def symexFor(initPred : CCPredicate,
                          stm : Expression_stm) : (Symex, Option[CCTerm]) = {
@@ -2393,6 +3002,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           implicit val evalSettings = exprSymex.EvalSettings()
           implicit val evalContext = exprSymex.EvalContext()
                                               .withFunctionName(functionName)
+                                              .withGhostVisible(inGhostMode)
+                                              .withGhostMode(inGhostMode)
           Some(exprSymex eval stm.exp_)
       }
       (exprSymex, res)
@@ -2529,6 +3140,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       new ArrayBuffer[(String, CCPredicate, scala.Seq[ITerm], Int, SourceInfo)]
     private val labelledLocs =
       new MHashMap[String, (CCPredicate, scala.Seq[ITerm])]
+    // C-labels visible at the current point, one set per open statement block, so
+    // a label goes out of scope when its block ends (C local-variable scoping). A
+    // \at(e, L) use is only valid for a label in this stack (declared before the
+    // use, in an enclosing or the current block)
+    private val labelScopes =
+      new scala.collection.mutable.Stack[scala.collection.mutable.Set[String]]
+    private def labelVisible(name : String) : Boolean =
+      labelScopes.exists(_.contains(name))
     private val usedJumpTargets =
       new MHashMap[CCPredicate, String]
     private val atomicBlocks =
@@ -2556,198 +3175,130 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case stm: AtomicS =>
           translate(stm.atomic_stm_, entry, exit)
         case stm: AnnotationS => // todo: move this into a separate translate method
-          try{translate(stm.annotation_, entry)}
-          catch {
-            case e : Exception =>
-              warn("Ignoring ACSL annotation (possibly " +
-                "an error or an unsupported fragment):\n" + e.getMessage)
-          }
+          val assumed =
+            try{translate(stm.annotation_, entry)}
+            catch {
+              case NeedsHeapModelException => throw NeedsHeapModelException
+              case e : Exception =>
+                throw new TranslationException(
+                  getLineString(Some(getSourceInfo(stm))) +
+                  "Failed to process ACSL statement annotation (parse error or " +
+                  "unsupported fragment)\n" +
+                  e.getMessage)
+            }
+          val vars = scope.allFormalVarTerms
+          val constraint : IFormula = assumed.getOrElse(true)
+          output(addRichClause(Clause(atom(exit, vars take exit.arity),
+                                      List(atom(entry, vars take entry.arity)),
+                                      constraint),
+            Some(getSourceInfo(stm))))
         case stm : AnnotatedIterS =>
           translate(stm.annotation_, stm.iter_stm_, entry, exit)
+        case stm : GhostStm =>
+          // Standalone ghost annotation appearing as a `Stm` outside
+          // a compound block. Ghost assignments work but, declarations 
+          // are scoped to just this single statement.
+          val newExit = translateGhostStmBlock(stm.liststm_.asScala.toSeq,
+                                               entry, getSourceInfo(stm))
+          val srcInfo = Some(getSourceInfo(stm))
+          output(addRichClause(Clause(
+            atom(exit, scope.allFormalVarTerms take exit.arity),
+            List(atom(newExit, scope.allFormalVarTerms take newExit.arity)),
+            true), srcInfo))
       }
 
-    private def translate(stm : Annotation, entry : CCPredicate) : Unit = {
+    // rejects \at(e, L) uses of a C-label L that ACSL does not make visible here:
+    // undefined, used before the label, or in a block that already ended
+    private def checkLabelVisibility(annot   : String,
+                                     srcInfo : SourceInfo) : Unit = {
+      val parsed =
+        try Some(ACSLTranslator.parseToAST("/*@" + annot + "*/"))
+        catch { case _ : Throwable => None }
+      for (ast <- parsed) {
+        val collector = new ACSLTranslator.CaptureCollector
+        ast.accept(collector, ())
+        for (eat <- collector.found
+             if ACSLTranslator.Label(eat.id_)
+                  .isInstanceOf[ACSLTranslator.Label.CLabel]) {
+          val label = eat.id_
+          if (!definedLabels.contains(label))
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              s"reference to undefined C-label '$label'")
+          else if (!labelVisible(label))
+            throw new TranslationException(getLineString(Some(srcInfo)) +
+              s"reference to C-label '$label' which is not visible here " +
+              "(it must appear before the use and not in a block that has ended)")
+        }
+      }
+    }
+
+    private def translate(stm : Annotation, entry : CCPredicate)
+    : Option[IFormula] = {
       val annotationInfo = AnnotationParser(annotationStringExtractor(stm))
       annotationInfo match {
         case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
+          checkLabelVisibility(annot, getSourceInfo(stm))
           val stmSymex = Symex(symexContext, scope, entry, heapModel)
-          class LocalContext extends ACSLTranslator.StatementAnnotationContext {
-            /**
-             * Returns the term from the init atom - this should work as
-             * long as the annotation does not have side effects, because
-             * it always returns the original terms from initAtom
-             */
-            override def getTermInScope(name: String): Option[CCTerm] = {
-              entry.argVars.zipWithIndex.find {
-                case (v, i) => v.name == name
-              } match {
-                case Some((v, i)) =>
-                  stmSymex.initAtomArgs match {
-                    case Some(args) => Some(CCTerm.fromTerm(args(i), v.typ, v.srcInfo))
-                    case None => None
-                  }
-                case None => None
-              }
-            }
-
-            override def getGlobals: scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
-            override def sortWrapper(s: Sort): Option[IFunction] =
-              sortWrapperMap get s
-            override def sortGetter(s: Sort): Option[IFunction] =
-              sortGetterMap get s
-            override def wrapperSort(wrapper: IFunction): Option[Sort] =
-              wrapper match {
-                case w: MonoSortedIFunction =>
-                  wrapperSortMap.get(w)
-                case _ => None
-              }
-            override def getterSort(getter: IFunction): Option[Sort] =
-              getter match {
-                case g: MonoSortedIFunction =>
-                  getterSortMap.get(g)
-                case _ => None
-              }
-
-            override def getCtor(s: Sort): Int = sortCtorIdMap(s)
-            override def getTypOfPointer(t: CCType): CCType =
-              t match {
-                case p : CCHeapPointer => p.typ
-                case t => t
-              }
-            override def isHeapEnabled: Boolean = modelHeap
-            override def getHeap: HeapTheoryObject =
-              if (modelHeap) heap
-              else throw new TranslationException("getHeap called with no heap!")
-            override def getHeapTerm: ITerm = {
-              if (modelHeap) {
-                val heapVar = heapModel.get match {
-                  case m : HeapTheoryModel => m.heapVar
-                  case _ => throw new TranslationException(
-                    "Heap in ACSL only supported using the theory of heaps.")
-                }
-                stmSymex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
-              } else throw new TranslationException("getHeapTerm called with no heap!")
-            }
-            override def getOldHeapTerm: ITerm = {
-              if (modelHeap) getHeapTerm
-              else throw new TranslationException("getOldHeapTerm called with no heap!")
-            } // todo: heap term for exit predicate?
-
-            override val getStructMap: Map[IFunction, CCStruct] =
-              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
-
-            override val annotationBeginSourceInfo : SourceInfo =
-              getSourceInfo(stm)
-
-            override val annotationNumLines : Int = 1
-          }
+          val ctx = new StatementContext(stmSymex, getSourceInfo(stm))
+          val rewriter = new ACSLTranslator.CaptureRewriter(captureNames)
           ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
+            "/*@" + annot + "*/", ctx, _.accept(rewriter, ())) match {
             case res: tricera.acsl.StatementAnnotation =>
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
-                                        properties.Reachability)
-              } else
-                warn("Ignoring annotation: " + annot)
-            case _ => warn("Ignoring annotation: " + annot)
+                                        properties.UserAssertion(res.name))
+                None
+              } else Some(res.f)
+            case _ =>
+              warn("Ignoring annotation: " + annot)
+              None
           }
-        case _ => warn("Ignoring annotation: " + annotationInfo)
+        case _ =>
+          warn("Ignoring annotation: " + annotationInfo)
+          None
+      }
+    }
+
+    // Ghost block inside a function body
+    private def translateGhostStmBlock(stms    : scala.Seq[Stm],
+                                       entry   : CCPredicate,
+                                       srcInfo : SourceInfo) : CCPredicate = {
+      val wasInGhost = inGhostMode
+      inGhostMode = true
+      try {
+        var prevPred = entry
+        for (stm <- stms) stm match {
+          case d : DecS =>
+            prevPred = translate(d.dec_, prevPred, isGhost = true)
+          case g : GhostStm =>
+            prevPred = translateGhostStmBlock(
+              g.liststm_.asScala.toSeq, prevPred, getSourceInfo(g))
+          case s =>
+            val nextPred = newPred(Nil, Some(getSourceInfo(s)))
+            translate(s, prevPred, nextPred)
+            prevPred = nextPred
+        }
+        prevPred
+      } finally {
+        inGhostMode = wasInGhost
       }
     }
 
     private def translate(loop_annot : Annotation,
                           iter       : Iter_stm,
                           entry      : CCPredicate,
-                          exit       : CCPredicate) : Unit = {
-      val annotationInfo = AnnotationParser(annotationStringExtractor(loop_annot))
-      annotationInfo match {
-        case scala.Seq(MaybeACSLAnnotation(annot, _)) =>
-          val stmSymex = Symex(symexContext, scope, entry, heapModel)
-          class LocalContext extends ACSLTranslator.StatementAnnotationContext {
-            /**
-             * Returns the term from the init atom - this should work as
-             * long as the annotation does not have side effects, because
-             * it always returns the original terms from initAtom
-             */
-            override def getTermInScope(name : String) : Option[CCTerm] = {
-              entry.argVars.zipWithIndex.find{
-                case (v, i) => v.name == name
-              } match {
-                case Some((v, i)) =>
-                  stmSymex.initAtomArgs match {
-                    case Some(args) => Some(CCTerm.fromTerm(args(i), v.typ, v.srcInfo))
-                    case None       => None
-                  }
-                case None         => None
-              }
-            }
-
-            override def getGlobals : scala.Seq[CCVar] = scope.GlobalVars.vars.toSeq
-            override def sortWrapper(s : Sort) : Option[IFunction] =
-              sortWrapperMap get s
-            override def sortGetter(s : Sort) : Option[IFunction] =
-              sortGetterMap get s
-            override def wrapperSort(wrapper: IFunction): Option[Sort] =
-              wrapper match {
-                case w: MonoSortedIFunction =>
-                  wrapperSortMap.get(w)
-                case _ => None
-              }
-            override def getterSort(getter: IFunction): Option[Sort] =
-              getter match {
-                case g: MonoSortedIFunction =>
-                  getterSortMap.get(g)
-                case _ => None
-              }
-            override def getCtor(s : Sort) : Int = sortCtorIdMap(s)
-            override def getTypOfPointer(t : CCType) : CCType =
-              t match {
-                case p : CCHeapPointer => p.typ
-                case _ => t
-              }
-            override def isHeapEnabled : Boolean = modelHeap
-            override def getHeap : HeapTheoryObject =
-              if (modelHeap) heap else throw NeedsHeapModelException
-            override def getHeapTerm : ITerm = {
-              if (modelHeap) {
-                val heapVar = heapModel.get match {
-                  case m : HeapTheoryModel => m.heapVar
-                  case _                   => throw new TranslationException(
-                    "Heap in ACSL only supported using the theory of heaps.")
-                }
-                stmSymex.getValues(scope.GlobalVars.lastIndexWhere(heapVar)).toTerm
-              } else throw NeedsHeapModelException
-            }
-
-            override def getOldHeapTerm : ITerm =
-              getHeapTerm // todo: heap term for exit predicate?
-            
-            override val getStructMap: Map[IFunction, CCStruct] = 
-              structDefs.values.map((struct: CCStruct) => (struct.ctor, struct)).toMap
-
-            override val annotationBeginSourceInfo : SourceInfo =
-              getSourceInfo(loop_annot)
-
-            override val annotationNumLines : Int = 1
-          }
-          ACSLTranslator.translateACSL(
-            "/*@" + annot + "*/", new LocalContext()) match {
-            case res : tricera.acsl.LoopAnnotation =>
-                ???
-            case _ =>
-              warn("Ignoring annotation: " + annot)
-              ???
-          }
-        case _  =>
-          warn("Ignoring annotation: " + annotationInfo)
-          ???
-      }
-    }
+                          exit       : CCPredicate) : Unit =
+      throw new TranslationException(
+        getLineString(Some(getSourceInfo(loop_annot))) +
+        "explicit loop invariants are not yet supported")
 
 
-    private def translate(dec : Dec, entry : CCPredicate) : CCPredicate = {
+    private def translate(dec     : Dec,
+                          entry   : CCPredicate,
+                          isGhost : Boolean = false) : CCPredicate = {
       val decSymex = Symex(symexContext, scope, entry, heapModel)
-      collectVarDecls(dec, false, decSymex, functionName, false)
+      collectVarDecls(dec, isGlobal = false, decSymex, functionName,
+                      collectOnlyLocalStatic = false, isGhost = isGhost)
       val exit = newPred(Nil, Some(getSourceInfo(dec)))
       decSymex outputClause(exit, exit.srcInfo)
       exit
@@ -2760,7 +3311,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         if (labelledLocs contains stm.cident_)
           throw new TranslationException("multiple labels " + stm.cident_)
         labelledLocs.put(stm.cident_, (entry, scope.allFormalVarTerms))
-        translate(stm.stm_, entry, exit)
+        if (labelScopes.nonEmpty) labelScopes.top += stm.cident_
+        val labelEntry =
+          bindLabelCaptures(stm.cident_, entry, getSourceInfo(stm))
+        translate(stm.stm_, labelEntry, exit)
       }
       case stm : SlabelTwo => { // Labeled_stm ::= "case" Constant_expression ":" Stm ;
         val caseVal = translateConstantExpr(stm.constant_expression_)
@@ -2804,6 +3358,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         }
         output(addRichClause(entryClause, entryPred.srcInfo))
 
+        // set up the label captures before translating this function body
+        val bodyEntry =
+          setupLabelCaptures(compound, entryPred, getSourceInfo(compound))
+
         val initStmts : Iterator[Stm] = {
           val inputInitCode =
             if(TriCeraParameters.get.determinizeInput)
@@ -2821,10 +3379,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val initStmsPeek = ap.util.PeekIterator(initStmts)
         if (initStmsPeek.hasNext) {
           val midPred = newPred(Nil, None)
-          inInjectedCode { translateStmSeq(initStmsPeek, entryPred, midPred) }
+          inInjectedCode { translateStmSeq(initStmsPeek, bodyEntry, midPred) }
           translateStmSeq(ap.util.PeekIterator(stmsIt), midPred, exit)
         } else {
-          translateStmSeq(ap.util.PeekIterator(stmsIt), entryPred, exit)
+          translateStmSeq(ap.util.PeekIterator(stmsIt), bodyEntry, exit)
         }
         scope.LocalVars popFrame
       }
@@ -2891,12 +3449,32 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     private def translateStmSeq(stmsIt : Iterator[Stm],
                                 entry : CCPredicate,
                                 exit : CCPredicate) : Unit = {
+      labelScopes.push(scala.collection.mutable.Set.empty[String])
+      try translateStmSeqInScope(stmsIt, entry, exit)
+      finally labelScopes.pop()
+    }
+
+    private def translateStmSeqInScope(stmsIt : Iterator[Stm],
+                                       entry : CCPredicate,
+                                       exit : CCPredicate) : Unit = {
       var prevPred = entry
       while (stmsIt.hasNext)
         stmsIt.next match {
           case stm : DecS => {
             val srcInfo = Some(getSourceInfo(stm))
-            prevPred = translate(stm.dec_, prevPred)
+            prevPred = translate(stm.dec_, prevPred, isGhost = inGhostMode)
+            if (!stmsIt.hasNext) {
+              output(addRichClause(Clause(
+                atom(exit, scope.allFormalVarTerms take exit.arity),
+                List(atom(prevPred, scope.allFormalVarTerms take prevPred.arity)),
+                true), srcInfo))
+            }
+          }
+          case stm : GhostStm => {
+            val srcInfo = Some(getSourceInfo(stm))
+            prevPred = translateGhostStmBlock(stm.liststm_.asScala.toSeq,
+                                              prevPred,
+                                              getSourceInfo(stm))
             if (!stmsIt.hasNext) {
               output(addRichClause(Clause(
                 atom(exit, scope.allFormalVarTerms take exit.arity),
@@ -2965,6 +3543,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
+                                            .withGhostVisible(inGhostMode)
+                                            .withGhostMode(inGhostMode)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, first, exit, entry.srcInfo)
         withinLoop(entry, exit) {
@@ -2989,6 +3569,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext  = condSymex.EvalContext()
                                              .withFunctionName(functionName)
+                                             .withGhostVisible(inGhostMode)
+                                             .withGhostMode(inGhostMode)
         val cond = (condSymex eval stm.exp_).toFormula
         condSymex.outputITEClauses(cond, entry, exit, srcInfo)
       }
@@ -3032,6 +3614,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             val incSymex = Symex(symexContext, scope, third, heapModel)
             val evalContext = incSymex.EvalContext()
                                                .withFunctionName(functionName)
+                                               .withGhostVisible(inGhostMode)
+                                               .withGhostMode(inGhostMode)
             incSymex.eval(stm.exp_)(incSymex.EvalSettings(), evalContext)
             incSymex outputClause (first, srcInfo)
           }
@@ -3047,6 +3631,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = condSymex.EvalSettings()
         implicit val evalContext = condSymex.EvalContext()
                                             .withFunctionName(functionName)
+                                            .withGhostVisible(inGhostMode)
+                                            .withGhostMode(inGhostMode)
         val (cond, srcInfo1, srcInfo2) = stm match {
           case stm : SselOne =>
             ((condSymex eval stm.exp_).toFormula,
@@ -3081,6 +3667,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         implicit val evalSettings = selectorSymex.EvalSettings()
         implicit val evalContext  = selectorSymex.EvalContext()
                                                  .withFunctionName(functionName)
+                                                 .withGhostVisible(inGhostMode)
+                                                 .withGhostMode(inGhostMode)
         val selector = (selectorSymex eval stm.exp_).toTerm
 
         val newEntry = newPred(Nil, Some(getSourceInfo(stm)))
@@ -3090,14 +3678,24 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           translate(stm.stm_, newEntry, exit)
         }
 
-        // add clauses for the various cases of the switch
+        // Variables declared in the switch body before a label are in scope at
+        // the label but their declaration is skipped when jumping to it, so the
+        // extra case arguments are filled with fresh unconstrained constants.
+        def dispatchToCase(target : CCPredicate) : Unit = {
+          val entryArgs  = selectorSymex.getValuesAsTerms
+          val targetArgs = entryArgs.take(target.arity) ++ (
+            for (i <- entryArgs.size until target.arity)
+            yield IConstant(new ConstantTerm("switchSkippedDecl_" + i)))
+          selectorSymex outputClause(atom(target, targetArgs), target.srcInfo)
+        }
+
         val (defaults, cases) = collector partition (_._1 == null)
         val guards = for ((value, _) <- cases) yield (selector === value.toTerm)
 
         for (((_, target), guard) <- cases.iterator zip guards.iterator) {
           selectorSymex.saveState
           selectorSymex addGuard guard
-          selectorSymex outputClause(target, target.srcInfo) // todo: correct line no?
+          dispatchToCase(target)
           selectorSymex.restoreState
         }
 
@@ -3111,7 +3709,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           case scala.Seq((_, target)) => {
             selectorSymex.saveState
             selectorSymex addGuard ~or(guards)
-            selectorSymex outputClause(target, target.srcInfo)
+            dispatchToCase(target)
             selectorSymex.restoreState
           }
           case _ =>
@@ -3161,6 +3759,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           implicit val evalSettings = symex.EvalSettings()
           implicit val evalContext  = symex.EvalContext()
                                            .withFunctionName(functionName)
+                                           .withGhostVisible(inGhostMode)
+                                           .withGhostMode(inGhostMode)
           val retValue = symex eval jump.exp_
           if (retValue.typ.isInstanceOf[CCStackPointer]) {
             throw new UnsupportedCFragmentException(
@@ -3206,6 +3806,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             implicit val evalSettings = condSymex.EvalSettings()
             implicit val evalContext  = condSymex.EvalContext()
                                                  .withFunctionName(functionName)
+                                                 .withGhostVisible(inGhostMode)
+                                                 .withGhostMode(inGhostMode)
             condSymex.saveState
             val cond = (condSymex eval stm.exp_).toFormula
             if (!condSymex.atomValuesUnchanged)

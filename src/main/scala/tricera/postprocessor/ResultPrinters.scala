@@ -42,6 +42,39 @@ object ResultPrinters {
 
   type HornSolverResult = Either[Option[HornPreprocessor.Solution], VerificationLoop.Counterexample]
 
+  // a solution interpreting an assertion clause's body predicate as false
+  // proves the assertion's program point unreachable, the check then holds
+  // vacuously
+  def printVacuousAssertions(
+      assertionSites : Seq[(Seq[Predicate], Option[tricera.Util.SourceInfo],
+                            properties.Property)])
+      (result : HornSolverResult) : Unit = result match {
+    case Left(Some(solution)) =>
+      // solution predicates are fresh instances carrying the inv_ prefix, so
+      // sites are matched by prefix-stripped name and arity
+      val solutionByName =
+        solution.map { case (p, f) =>
+          ((p.name.stripPrefix(Literals.invPrefix), p.arity), f) }
+      val vacuous =
+        (for ((preds, srcInfo, property) <- assertionSites
+              if preds.nonEmpty &&
+                 preds.exists(p => solutionByName.get((p.name, p.arity))
+                                     .contains(IBoolLit(false))))
+         yield (srcInfo, property)).distinct
+      for ((srcInfo, property) <- vacuous.sortBy(_._1.map(i => (i.line, i.col)))) {
+        val where = srcInfo match {
+          case Some(i) => s"${i.line}:${i.col}"
+          case None    => "unknown location"
+        }
+        println(s"Warning: assertion at $where ($property) is unreachable, " +
+                "its verification is vacuous")
+      }
+    case Left(None) =>
+      println("Warning: no solution available, assertions were not checked " +
+              "for vacuity")
+    case Right(_) =>
+  }
+
   def printSolutionSMT(result: HornSolverResult) = result match {
     case Left(Some(solution)) =>
       import lazabs.horn.global._

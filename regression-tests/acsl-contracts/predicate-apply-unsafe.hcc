@@ -1,0 +1,8 @@
+/*@ predicate Pos{L}(int x) = \at(x, L) > 0; */
+/*@ predicate Gt5{L}(int x) = \at(x, L) > 5; */
+
+/*@ requires Pos(x);
+  @ ensures  Gt5(\result); */
+int id(int x) { return x; }
+
+int main(void) { return 0; }

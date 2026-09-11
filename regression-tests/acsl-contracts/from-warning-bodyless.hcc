@@ -1,0 +1,6 @@
+int g;
+
+/*@ assigns g \from g; */
+void f(void);
+
+int main(void){ f(); return 0; }

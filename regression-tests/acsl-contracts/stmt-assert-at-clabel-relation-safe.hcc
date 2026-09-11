@@ -1,0 +1,9 @@
+// \at over a relation
+int main(void) {
+  int x = 3;
+  int y = 4;
+L:
+  x = 100;
+  /*@ assert \at(x < y, L); @*/
+  return 0;
+}

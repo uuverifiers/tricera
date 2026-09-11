@@ -36,4 +36,5 @@ object CCExceptions {
   class UnsupportedCFragmentException(msg : String) extends Exception(msg)
   object NeedsTimeException extends Exception
   object NeedsHeapModelException extends Exception
+  object NeedsObjectWrapperException extends Exception
 }

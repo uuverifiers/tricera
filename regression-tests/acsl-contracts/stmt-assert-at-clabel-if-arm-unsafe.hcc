@@ -1,0 +1,9 @@
+// the untaken arm skips L, the capture is unconstrained like an uninitialized read
+int main(void) {
+  int x = 1;
+  if (x == 2)
+L:
+    x = 3;
+  /*@ assert \at(x, L) == 3; @*/
+  return 0;
+}

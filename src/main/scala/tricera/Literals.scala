@@ -17,10 +17,22 @@ object Literals {
   val predPostSuffix = "_post"
   val predPreSuffix = "_pre"
 
-  // Used for indicating that an annotation is ACSL related
-  val annotationMarker = "■■" // ascii 254 times 2
+  // Used for indicating that an annotation is ACSL related.
+  val annotationMarker = "■■"
+
+  // Bracket markers emitted by `CommentPreprocessor` around ghost comments
+  val ghostOpenMarker  = "⟦"
+  val ghostCloseMarker = "⟧"
+
+  // Markers around standalone global annotations (e.g. predicate definitions)
+  val predicateOpenMarker  = "⟪"
+  val predicateCloseMarker = "⟫"
 
   val atExpressionName = "$at"
+
+  // Prefix for variables holding a value captured at a labelled program state
+  // (\at(e, label)).
+  val captureVarPrefix = "$cap_"
 
   val anonStructName = ".AS"
   val anonEnumName   = ".ES"

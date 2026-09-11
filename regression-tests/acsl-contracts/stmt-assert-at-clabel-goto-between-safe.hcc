@@ -1,0 +1,12 @@
+// a goto target between the label and the use
+int main(void) {
+  int x = 0;
+  int i = 0;
+A:
+  x = 5;
+B:
+  i = i + 1;
+  if (i < 2) goto B;
+  /*@ assert \at(x, A) == 0; @*/
+  return 0;
+}

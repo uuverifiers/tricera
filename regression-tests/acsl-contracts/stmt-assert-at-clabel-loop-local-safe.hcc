@@ -1,0 +1,12 @@
+// \at over a local declared inside the loop body
+int main(void) {
+  int i = 0;
+  while (i < 3) {
+    int k = i * 2;
+L:
+    k = k + 1;
+    /*@ assert \at(k, L) + 1 == k; @*/
+    i = i + 1;
+  }
+  return 0;
+}

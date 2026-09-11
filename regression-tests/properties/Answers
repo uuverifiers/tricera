@@ -37,7 +37,6 @@ UNSAFE
 
 valid-deref-arraybounds-3-true.c
 Warning: no definition of function "nondet" available
-Warning: no definition of function "nondet" available
 SAFE
 
 valid-deref-arraybounds-2-false.c
@@ -47,7 +46,6 @@ valid-deref-nullptr-false.c
 UNSAFE
 
 valid-deref-arraybounds-3-false.c
-Warning: no definition of function "nondet" available
 Warning: no definition of function "nondet" available
 UNSAFE
 

@@ -1,0 +1,10 @@
+// a local shadowing a global resolves to the local
+int g = 3;
+int main(void) {
+  {
+    long g = 5;
+    g = g + 1;
+    /*@ assert g == 6; @*/
+  }
+  return 0;
+}

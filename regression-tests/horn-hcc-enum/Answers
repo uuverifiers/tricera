@@ -67,3 +67,9 @@ SAFE
 
 enum-typedef-bug-2.hcc
 SAFE
+
+enum-cast-unsigned.hcc
+SAFE
+
+enum-cast-unsigned-unsafe.hcc
+UNSAFE

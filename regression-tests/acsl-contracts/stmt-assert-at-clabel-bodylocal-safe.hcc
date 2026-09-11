@@ -1,0 +1,11 @@
+// \at over a body-local of a non-entry function
+int f(int n) {
+  int acc = n;
+L:
+  acc = acc + 100;
+  /*@ assert \at(acc, L) + 100 == acc; @*/
+  return acc;
+}
+void main(void) {
+  f(7);
+}

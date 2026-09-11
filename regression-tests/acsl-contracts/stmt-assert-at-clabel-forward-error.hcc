@@ -1,0 +1,10 @@
+// ACSL forbids referring to a label not yet in scope.
+
+int main(void) {
+  int x = 5;
+  /*@ assert \at(x, L) == 10; @*/
+  x = 10;
+L:
+  x = 20;
+  return 0;
+}

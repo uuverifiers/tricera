@@ -1,0 +1,3 @@
+/*@ ensures \result == 0xA2; */
+int f(void){ return 162; }
+int main(void){ f(); return 0; }

@@ -1,0 +1,8 @@
+int f(int x) {
+  x = 42;
+  /*@ assert \at(x, Here) == 42; @*/
+  return x;
+}
+void main(void) {
+  f(7);
+}

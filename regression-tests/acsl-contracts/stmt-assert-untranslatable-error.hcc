@@ -1,0 +1,7 @@
+void f(void) {
+  int y = 3;
+  /*@ assert \at(y, Pre) == 0; @*/
+}
+void main(void) {
+  f();
+}

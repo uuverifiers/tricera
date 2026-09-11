@@ -102,7 +102,7 @@ class Encoder(reader : CCReader) {
     }
 
     val newPreClauses : Seq[CCAssertionClause] =
-      preClauses.map(c => buildPreClause(reader.getRichClause(c).get))
+      preClauses.flatMap(c => buildPreClauses(reader.getRichClause(c).get))
     val newPostClauses : Seq[CCAssertionClause] = buildPostAsserts
     others.map(
       c => reader.getRichClause(c).get.asInstanceOf[CCAssertionClause]) ++
@@ -216,6 +216,28 @@ class Encoder(reader : CCReader) {
                               tricera.properties.FunctionPrecondition(name, old.srcInfo))
   }
 
+  private def buildPreClauses(old : CCClause) : Seq[CCAssertionClause] = {
+    assert(prePredsToReplace(old.clause.head.pred))
+    val name     : String = old.clause.head.pred.name.stripSuffix(predPreSuffix)
+    val preAtom  : IAtom  = funToPreAtom(name)
+    val contract = funToContract(name)
+    val (named, unnamed) = contract.preClauses.partition(_._1.isDefined)
+    val namedAsserts = named.map { case (clauseName, f) =>
+      reader.mkRichAssertionClause(
+        Clause(falseHead, old.clause.body,
+               applyArgs(f, preAtom, old.clause.head).unary_!),
+        old.srcInfo,
+        tricera.properties.FunctionPrecondition(name, old.srcInfo, clauseName))
+    }
+    val unnamedPre : IFormula = IExpression.and(unnamed.map(_._2))
+    val rest = reader.mkRichAssertionClause(
+      Clause(falseHead, old.clause.body,
+             applyArgs(unnamedPre, preAtom, old.clause.head).unary_!),
+      old.srcInfo,
+      tricera.properties.FunctionPrecondition(name, old.srcInfo))
+    namedAsserts :+ rest
+  }
+
   // Fetches clauses from system.processes and system.backgroundAxioms implying
   // post-condition and generates assertion clauses (to be moved into
   // system.assertions).
@@ -233,22 +255,32 @@ class Encoder(reader : CCReader) {
 
     val clauses : Seq[CCClause] = clauses1 ++ clauses2
 
-    clauses.collect({
+    clauses.flatMap({
       // Handles final clause, e.g:
       // f_post(..) :- f1(..) ==> false :- f1(..), !(<post> & <assigns>)
       case CCClause(Clause(head, body, oldConstr), srcInfo)
         if postPredsToReplace(head.pred) =>
         val name     : String   = head.pred.name.stripSuffix(predPostSuffix)
         val postAtom : IAtom    = funToPostAtom(name)
-        val postCond : IFormula = funToContract(name).post
-        val postSrc  : SourceInfo = funToContract(name).postSrcInfo
-        val constr   : IFormula = applyArgs(postCond, postAtom, head)
+        val contract = funToContract(name)
+        val postSrc  : SourceInfo = contract.postSrcInfo
         val assigns  : IFormula =
-          applyArgs(funToContract(name).assignsAssert, postAtom, head)
-        reader.mkRichAssertionClause(Clause(
-          falseHead, body, oldConstr &&& (constr &&& assigns).unary_!),
-                                  Some(postSrc),
-                                  tricera.properties.FunctionPostcondition(name, srcInfo))
+          applyArgs(contract.assignsAssert, postAtom, head)
+        val (named, unnamed) = contract.postClauses.partition(_._1.isDefined)
+        val namedAsserts = named.map { case (clauseName, f) =>
+          reader.mkRichAssertionClause(Clause(
+            falseHead, body, oldConstr &&& applyArgs(f, postAtom, head).unary_!),
+            Some(postSrc),
+            tricera.properties.FunctionPostcondition(name, srcInfo, clauseName))
+        }
+        val unnamedPost : IFormula =
+          applyArgs(IExpression.and(unnamed.map(_._2)), postAtom, head)
+        val rest = reader.mkRichAssertionClause(Clause(
+          falseHead, body, oldConstr &&& (unnamedPost &&& assigns).unary_!),
+          Some(postSrc),
+          tricera.properties.FunctionPostcondition(name, srcInfo))
+        namedAsserts :+ rest
+      case _ => Seq()
     })
   }
 

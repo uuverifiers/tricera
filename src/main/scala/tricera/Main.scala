@@ -232,6 +232,17 @@ object Main {
     else
       println("(error \"" + message.replace("\"", "\"\"\"") + "\")")
 
+  // Used to decide whether to disable tri-pp's declaration slicer
+  // tri-pp cannot see ACSL annotations, so it would slice declarations that are
+  // only referenced from one (ghost code, or a contract referencing a global).
+  private val acslCommentPattern =
+    ("""(/\*@|//@)""").r
+  private def containsACSLAnnotation(filePath : String) : Boolean = {
+    val src = scala.io.Source.fromFile(filePath)
+    try acslCommentPattern.findFirstIn(src.mkString).nonEmpty
+    finally src.close()
+  }
+
 }
 
 class Main (args: Array[String]) {
@@ -314,12 +325,15 @@ class Main (args: Array[String]) {
           println("=" * 80 + "\nTriCera's preprocessor (tri-pp) warnings and errors\n")
         }
 
+      val hasACSL = containsACSLAnnotation(cppFileName)
+
       val pp = new TriCeraPreprocessor(cppFileName,
         preprocessedFile.getAbsolutePath,
         displayWarnings = logPPLevel == 2,
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName,
-        determinize = TriCeraParameters.get.determinizeInput)
+        determinize = TriCeraParameters.get.determinizeInput,
+        noDeclSlice = hasACSL || TriCeraParameters.get.slice)
       preprocessorFacts = pp.facts
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
@@ -391,7 +405,8 @@ class Main (args: Array[String]) {
 
     // todo: add a switch for this, also benchmark/profile
     val bufferedReader = parsers.CommentPreprocessor(new java.io.BufferedReader(
-      new java.io.FileReader(new java.io.File(ppFileName))))
+      new java.io.FileReader(new java.io.File(ppFileName))),
+      typedefs = preprocessorFacts.typedefs)
     val (reader, modelledHeapRes, callSiteTransforms) =
       try {
         CCReader(bufferedReader, funcName, propertiesToCheck, preprocessorFacts)
@@ -549,12 +564,13 @@ class Main (args: Array[String]) {
       return ExecutionSummary(DidNotExecute, Map(), modelledHeap, 0, preprocessTimer.s)
 
     import tricera.Util._
-    import tricera.postprocessor.ResultPrinters.{printSolutionProlog, printSolutionSMT}
+    import tricera.postprocessor.ResultPrinters.{printSolutionProlog, printSolutionSMT, printVacuousAssertions}
     import tricera.postprocessor.ResultConverter.hornSolverSolutionToResult
 
     val result = verificationLoop.result
       .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
+      .tapIf(TriCeraParameters.get.smoke)(printVacuousAssertions(reader.assertionSites))
       .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
       .through(MergeTransformedFunctionsContracts(callSiteTransforms))
 
@@ -636,10 +652,10 @@ class Main (args: Array[String]) {
               violatedRichAssertionClause match {
                 case Some(assertionClause) =>
                   val mappedSrcInfo = assertionClause.property match {
-                    case properties.FunctionPrecondition(funName, _) =>
+                    case properties.FunctionPrecondition(funName, _, _) =>
                       ppLineMapping(assertionClause.srcInfo)
                         .orElse(ppLineMapping.findInOriginal(funName))
-                    case properties.FunctionPostcondition(funName, _) =>
+                    case properties.FunctionPostcondition(funName, _, _) =>
                       ppLineMapping(assertionClause.srcInfo)
                         .orElse(ppLineMapping.findInOriginal(funName))
                     case _ =>

@@ -1,0 +1,13 @@
+// \at over a pointer
+#include <stdlib.h>
+int main(void) {
+  int *p;
+  int *q;
+  p = malloc(sizeof(int));
+  q = p;
+L:
+  p = malloc(sizeof(int));
+  /*@ assert \at(p, L) == p; @*/
+  return 0;
+}
+

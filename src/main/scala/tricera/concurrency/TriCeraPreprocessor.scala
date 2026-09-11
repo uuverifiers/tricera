@@ -40,7 +40,8 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                           val entryFunction   : String,
                           val displayWarnings : Boolean,
                           val quiet           : Boolean,
-                          val determinize     : Boolean) {
+                          val determinize     : Boolean,
+                          val noDeclSlice     : Boolean = false) {
   private val factsFile : File = File.createTempFile("tri-facts-", ".yml")
   factsFile.deleteOnExit()
 
@@ -61,7 +62,9 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                               output    : String) : Int = {
     val langFlag = if (inputFilePath.endsWith(".cpp")) "-xc++" else "-xc"
     val cmdLine : scala.Seq[String] = scala.Seq(ppPath, input, "-o", output) ++
-                     (if (quiet) scala.Seq("-q") else Nil) ++ extraArgs ++
+                     (if (quiet) scala.Seq("-q") else Nil) ++
+                     (if (noDeclSlice) scala.Seq("--no-decl-slice") else Nil) ++
+                     extraArgs ++
                      scala.Seq(s"--facts=${factsFile.getAbsolutePath}") ++
                      scala.Seq("-m", entryFunction, "--", langFlag) ++
                      (if (displayWarnings) Nil else scala.Seq("-Wno-everything"))
@@ -78,7 +81,9 @@ class TriCeraPreprocessor(val inputFilePath   : String,
   }
 
   private val initialReturnCode = runPreprocessor(
-    Nil, "TriCera preprocessor could not be executed.", inputFilePath, outputFilePath)
+    if (noDeclSlice) Seq("--no-decl-slice") else Nil,
+    "TriCera preprocessor could not be executed.",
+    inputFilePath, outputFilePath)
   val hasError : Boolean = initialReturnCode != 0
 
   if (determinize) {
@@ -118,10 +123,24 @@ object PreprocessorFacts {
       case Some(YamlBoolean(b)) => b
       case _                    => false
     }
-    PreprocessorFacts(flag("usesThrow"), flag("usesTryCatch"))
+    val typedefs : Map[String, String] =
+      fields.get(YamlString("typedefs")) match {
+        case Some(YamlArray(entries)) =>
+          entries.flatMap {
+            case YamlObject(m) =>
+              (m.get(YamlString("name")), m.get(YamlString("underlying"))) match {
+                case (Some(YamlString(n)), Some(YamlString(u))) => Some(n -> u)
+                case _                                          => None
+              }
+            case _ => None
+          }.toMap
+        case _ => Map.empty
+      }
+    PreprocessorFacts(flag("usesThrow"), flag("usesTryCatch"), typedefs)
   }
 }
 
-case class PreprocessorFacts(usesThrow : Boolean, usesTryCatch : Boolean) {
+case class PreprocessorFacts(usesThrow : Boolean, usesTryCatch : Boolean,
+                             typedefs : Map[String, String] = Map.empty) {
   def usesExceptions : Boolean = usesThrow || usesTryCatch
 }

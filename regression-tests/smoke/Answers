@@ -1,0 +1,11 @@
+
+reachable.hcc
+SAFE
+
+vacuous-branch.hcc
+Warning: assertion at 5:5 (user-assertion) is unreachable, its verification is vacuous
+SAFE
+
+vacuous-contract.hcc
+Warning: assertion at 8:3 (user-assertion) is unreachable, its verification is vacuous
+SAFE

@@ -102,6 +102,11 @@ object Util {
       println(msg)
   }
 
+  def printlnDebugHeapTypes(msg : String) : Unit = {
+    if (params.TriCeraParameters.get.printDebugHeapTypes)
+      println(msg)
+  }
+
   case class SourceInfo (line : Int, col : Int)
 
   /**

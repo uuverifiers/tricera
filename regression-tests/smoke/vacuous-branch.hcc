@@ -1,0 +1,8 @@
+// the assert sits in an infeasible branch
+int main(void) {
+  int x = 0;
+  if (x > 0 && x < 0) {
+    /*@ assert x == 42; @*/
+  }
+  return 0;
+}

@@ -1,0 +1,16 @@
+// same as separated-safe but without \separated(p, q)
+
+/*@
+  requires \valid(p, q);
+*/
+void foo(int* p, int* q) {
+  *p = 7;
+  *q = 43;
+  assert(*p == 7);
+}
+
+int main(void) {
+  int* p = malloc(sizeof(*p));
+  int* q = malloc(sizeof(*q));
+  foo(p, q);
+}

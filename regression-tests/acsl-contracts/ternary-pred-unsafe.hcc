@@ -1,0 +1,9 @@
+/*@
+  requires x >= -100 && x <= 100;
+  ensures \result == (x >= 0 ? 1 : 0);
+*/
+int nonneg(int x){
+  if (x >= 0) return 0;
+  else return 1;
+}
+int main(void){ nonneg(7); nonneg(-7); return 0; }

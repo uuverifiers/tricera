@@ -145,7 +145,8 @@ class HeapTheoryModel(context           : SymexContext,
   override def read(p : CCTerm, s : scala.Seq[CCTerm], loc : CCTerm) : HeapOperationResult = {
     val (objectGetter, typ : CCType) = p.typ match {
       case typ: CCHeapPointer =>
-        (context.sortGetterMap(typ.typ.toSort), typ.typ)
+        (context.sortGetterMap.getOrElse(typ.typ.toSort,
+           context.forceHeapObjectWrappers(Seq(typ.typ))), typ.typ)
       case _ => throw new TranslationException(
         "Can only read from heap pointers! (" + p + ")")
     }
@@ -156,7 +157,8 @@ class HeapTheoryModel(context           : SymexContext,
 
     if (context.propertiesToCheck.contains(properties.MemValidDeref)) {
       val safetyFormula = CCTerm.fromFormula(
-        context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap(typ.toSort)),
+        context.heap.hasUserHeapCtor(readObj, context.sortCtorIdMap.getOrElse(
+          typ.toSort, context.forceHeapObjectWrappers(Seq(typ)))),
         CCInt, loc.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
@@ -224,7 +226,8 @@ class HeapTheoryModel(context           : SymexContext,
       val ptrType = p.typ.asInstanceOf[CCHeapPointer].typ
       val safetyFormula = CCTerm.fromFormula(
         context.heap.hasUserHeapCtor(
-          curO.toTerm, context.sortCtorIdMap(ptrType.toSort)),
+          curO.toTerm, context.sortCtorIdMap.getOrElse(
+            ptrType.toSort, context.forceHeapObjectWrappers(Seq(ptrType)))),
         CCInt, loc.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
@@ -353,7 +356,8 @@ class HeapTheoryModel(context           : SymexContext,
     // TODO: remvoe the wrappers from here too!
     val newBatchAlloc =
       context.heap.allocRange(getValue(heapVar, s).toTerm,
-                              context.sortWrapperMap(o.typ.toSort)(o.toTerm), size)
+                              context.sortWrapperMap.getOrElse(o.typ.toSort,
+                                context.forceHeapObjectWrappers(Seq(o.typ)))(o.toTerm), size)
     val newHeapTerm = CCTerm.fromTerm(
       context.heap.heapRangePair_1(newBatchAlloc),
       CCHeap(context.heap),

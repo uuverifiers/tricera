@@ -5,7 +5,8 @@
 TESTS="simple-loop.c  \
        simple-loop-annotate.c  \
        simple-loop-contract.c  \
-       loop-in-func.c"
+       loop-in-func.c  \
+       loop-invariant-unsupported.c"
 
 for name in $TESTS; do
     echo

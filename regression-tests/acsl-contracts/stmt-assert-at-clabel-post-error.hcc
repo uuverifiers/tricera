@@ -1,0 +1,8 @@
+// Post is a contract label, not allowed in a stmt annotation
+
+int main(void) {
+  int x = 5;
+  x = 10;
+  /*@ assert \at(x, Post) == 10; @*/
+  return 0;
+}

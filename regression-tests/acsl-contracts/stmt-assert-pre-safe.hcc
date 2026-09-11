@@ -1,0 +1,10 @@
+int f(int x) {
+  int i = 0;
+  x = 99;
+  while (i < 3) { x = x + i; i = i + 1; }
+  /*@ assert \at(x, Pre) == 7; @*/
+  return x;
+}
+void main(void) {
+  f(7);
+}

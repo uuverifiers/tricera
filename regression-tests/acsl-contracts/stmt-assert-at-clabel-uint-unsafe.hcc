@@ -1,0 +1,10 @@
+// \at over an unsigned
+int main(void) {
+  unsigned u;
+  u = 7u;
+L:
+  u = 42u;
+  /*@ assert \at(u, L) == 42; @*/
+  return 0;
+}
+

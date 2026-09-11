@@ -1,0 +1,6 @@
+int g[5];
+
+/*@ requires \valid_read(&g[10]); */
+void consumer(void);
+
+int main(void){ consumer(); return 0; }

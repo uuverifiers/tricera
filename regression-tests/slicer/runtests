@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Run with "-slice -debug" for "slice removed ..." output.
+
+TESTS="dead-global.c \
+       dead-function.c \
+       dead-code-only-ref.c \
+       dead-mutual-recursion.c \
+       dead-struct.c \
+       dead-enum.c \
+       dead-anon-aggregate.c \
+       chain-unsafe.c \
+       thread-unsafe.c \
+       global-write-unsafe.c \
+       static-inline-unsafe.c \
+       struct-via-cast-kept.c \
+       struct-param-type-kept.c \
+       struct-nested-field-kept.c \
+       enum-array-size-kept.c \
+       recursive-struct.c \
+       init-reference.c \
+       multi-declarator.c \
+       contract-global-unsafe.c \
+       assert-global-unsafe.c \
+       loopinv-global-unsafe.c \
+       dead-global-collides-acsl-field.c \
+       dead-global-collides-acsl-old-keyword.c \
+       fptr-address-taken-kept.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD "$@" $name 2>&1 | grep -v 'at '
+done
+
+# Entry point chosen with -m: main is unreachable from foo and is dropped.
+echo
+echo entry-foo.c
+$TRI_CMD "$@" -m:foo entry-foo.c 2>&1 | grep -v 'at '

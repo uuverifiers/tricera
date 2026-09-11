@@ -1,0 +1,6 @@
+enum { EE = 5 };
+
+/*@ ensures \result == EE; */
+int f(void){ return 4; }
+
+int main(void){ f(); return 0; }

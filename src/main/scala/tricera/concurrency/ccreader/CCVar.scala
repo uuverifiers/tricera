@@ -38,6 +38,7 @@ sealed trait VariableStorage
 case object GlobalStorage extends VariableStorage
 case object AutoStorage   extends VariableStorage
 case class  StaticStorage(enclosingFunctionName : String) extends VariableStorage
+case class  GhostStorage(enclosingFunctionName : Option[String]) extends VariableStorage
 
 object CCVar {
   val lineNumberPrefix = ":"
@@ -49,10 +50,12 @@ class CCVar(val name    : String,
             val storage : VariableStorage) {
   import CCVar._
   val isStatic = storage.isInstanceOf[StaticStorage]
+  val isGhost  = storage.isInstanceOf[GhostStorage]
   val enclosingFunctionName : Option[String] = storage match {
     case GlobalStorage     => None
     case AutoStorage       => None // We could provide the enclosing function, but it is not needed.
     case s : StaticStorage => Some(s.enclosingFunctionName)
+    case g : GhostStorage  => g.enclosingFunctionName
   }
   val nameWithLineNumber = name +
     (srcInfo match {

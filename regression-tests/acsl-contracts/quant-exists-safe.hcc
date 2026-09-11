@@ -1,0 +1,7 @@
+/*@ ensures \exists integer i; (1 <= i && i <= 3) && \result == i; */
+int f();
+
+void main() {
+  int r = f();
+  assert(r >= 1 && r <= 3);
+}
