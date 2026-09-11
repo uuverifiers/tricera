@@ -3,7 +3,8 @@
 
 
 TESTS="anon.hcc assign.hcc assign2.hcc assign-exp-eval-order.hcc assign-illegal.hcc \
-       init.hcc loop.hcc nested.hcc typedef.hcc emptyStruct.hcc"
+       init.hcc init-copy-safe.c init-copy-nested-safe.c \
+       loop.hcc nested.hcc typedef.hcc emptyStruct.hcc"
 
 for name in $TESTS; do
     echo
@@ -11,7 +12,7 @@ for name in $TESTS; do
     $TRI_CMD -cex -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
-NOCEXTESTS="race.hcc"
+NOCEXTESTS="race.hcc init-copy-unsafe.c init-copy-nested-unsafe.c"
 for name in $NOCEXTESTS; do
     echo
     echo $name

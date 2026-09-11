@@ -505,8 +505,14 @@ case class CCStruct(ctor : MonoSortedIFunction,
       for (field <- sels)
         yield
           field._2 match {
+            case s: CCStructField // do not add ctor again if already struct
+              if values.nonEmpty && Sort.sortOf(values.top) == s.toSort =>
+              values.pop()
             case CCStructField(name, structs) =>
               structs(name).getInitialized(values)
+            case s: CCStruct // do not add ctor again if already struct
+              if values.nonEmpty && Sort.sortOf(values.top) == s.toSort =>
+              values.pop()
             case s: CCStruct => s.getInitialized(values)
             case p: CCHeapPointer =>
               if (values.isEmpty) p.nullAddr else values.pop()

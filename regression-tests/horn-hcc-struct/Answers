@@ -21,6 +21,12 @@ init.hcc
 Warning: entry function "main" not found
 SAFE
 
+init-copy-safe.c
+SAFE
+
+init-copy-nested-safe.c
+SAFE
+
 loop.hcc
 SAFE
 
@@ -37,4 +43,10 @@ Warning: Struct a was declared, but never defined, or it has no fields.
 SAFE
 
 race.hcc
+UNSAFE
+
+init-copy-unsafe.c
+UNSAFE
+
+init-copy-nested-unsafe.c
 UNSAFE
