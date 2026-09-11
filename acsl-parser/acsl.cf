@@ -151,10 +151,9 @@ EBitOr.      Expr11 ::= Expr12 "|" Expr11 ;    -- (left)
 EBitXOr.     Expr12 ::= Expr13 "^" Expr12 ;    -- (left)
 EBitAnd.     Expr13 ::= Expr14 "&" Expr13 ;    -- (left)
 
--- Comparison (associativity -)
-EEq.         Expr14  ::= Expr14 "==" Expr15 ;
-ENeq.        Expr14  ::= Expr14 "!=" Expr15 ;
-ERelOp.      Expr15  ::= Expr15 RelOp Expr16; -- FIXME: Chained relops allowed.
+EComparison. Expr14 ::= Expr16 [Comparison] ;
+AComparison. Comparison ::= RelOp Expr16 ;
+separator nonempty Comparison "" ;
 
 -- Shift (left)
 ELeftShift.  Expr16  ::= Expr17 "<<" Expr16;
@@ -210,6 +209,8 @@ RelOpLEQ.             RelOp ::= "<=" ;
 RelOpGEQ.             RelOp ::= ">=" ;
 RelOpGT.              RelOp ::= ">" ;
 RelOpLT.              RelOp ::= "<" ;
+RelOpEQ.              RelOp ::= "==" ;
+RelOpNEQ.             RelOp ::= "!=" ;
 
 -- Binders (2.4) -------------------------------------------
 ABinder. Binder ::= TypeName [VarIdent] ;

@@ -223,6 +223,18 @@ SAFE
 quant-nested-unsafe.hcc
 UNSAFE
 
+comparison-chain-safe.hcc
+SAFE
+
+comparison-chain-unsafe.hcc
+UNSAFE
+
+comparison-parentheses-safe.hcc
+SAFE
+
+comparison-parentheses-unsafe.hcc
+UNSAFE
+
 annotation-comments-safe.hcc
 SAFE
 

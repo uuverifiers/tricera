@@ -591,9 +591,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EBitOr      => ???
     case e : AST.EBitXOr     => ???
     case e : AST.EBitAnd     => ???
-    case e : AST.EEq         => translateEqNeq(e)
-    case e : AST.ENeq        => translateEqNeq(e)
-    case e : AST.ERelOp      => translateRelOp(e)
+    case e : AST.EComparison => translateComparison(e)
     case e : AST.ELeftShift  => ???
     case e : AST.ERightShift => ???
     case _ :   AST.EPlus
@@ -642,46 +640,45 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  /**
-   * term x term -> predicate
-   * In the ACSL grammar the return type of rel ops is ambiguous: it can be
-   * a term or a predicate. Here we disambiguate by picking the latter.
-   * TODO: support chained applications
-   */
-  def translateRelOp(relOp : AST.ERelOp) : CCTerm = {
-    val lhs : ITerm = translate(relOp.expr_1).toTerm
-    val rhs : ITerm = translate(relOp.expr_2).toTerm
-    val srcInfo = Some(getSourceInfo(relOp))
-    CCTerm.fromFormula(relOp.relop_ match {
-      case _ : AST.RelOpLEQ => lhs <= rhs
-      case _ : AST.RelOpGEQ => lhs >= rhs
-      case _ : AST.RelOpGT  => lhs > rhs
-      case _ : AST.RelOpLT  => lhs < rhs
-    }, CCBool, srcInfo)
-  }
-
-  /**
-   * term x term -> predicate
-   * In the ACSL grammar the return type of rel ops is ambiguous: it can be
-   * a term or a predicate. Here we disambiguate by picking the latter.
-   * TODO: support chained applications
-   */
-  def translateEqNeq(expr : AST.Expr) : CCTerm = {
+  def translateComparison(expr : AST.EComparison) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
-    CCTerm.fromFormula(
-      expr match {
-        case eq  : AST.EEq =>
-          val lhs : ITerm = translateTerm(eq.expr_1).toTerm
-          val rhs : ITerm = translateTerm(eq.expr_2).toTerm
-          lhs === rhs
-        case neq : AST.ENeq =>
-          val lhs : ITerm = translateTerm(neq.expr_1).toTerm
-          val rhs : ITerm = translateTerm(neq.expr_2).toTerm
-          lhs =/= rhs
-        case _ =>
-          throw new ACSLParseException(s"Op must be '==' or '!=', got " +
-                                       s"${printer print expr}.", srcInfo)
-      }, CCBool, Some(srcInfo))
+    val comparisons = expr.listcomparison_.asScala.toList.map(
+      _.asInstanceOf[AST.AComparison])
+    val ops = comparisons.map(_.relop_)
+    val terms = (expr.expr_ :: comparisons.map(_.expr_)).map(translateTerm)
+
+    if (ops.size > 1) {
+      val ascending = ops.forall {
+        case _ : AST.RelOpLT | _ : AST.RelOpLEQ | _ : AST.RelOpEQ => true
+        case _ => false
+      }
+      val descending = ops.forall {
+        case _ : AST.RelOpGT | _ : AST.RelOpGEQ | _ : AST.RelOpEQ => true
+        case _ => false
+      }
+      if (!ascending && !descending)
+        throw new ACSLParseException(
+          "Chained comparisons must have the same direction and cannot use !=.",
+          srcInfo)
+      if (terms.exists(_.typ == CCBool))
+        throw new ACSLParseException(
+          "Chained comparisons require non-Boolean operands.", srcInfo)
+    }
+
+    val formulas = (ops zip (terms zip terms.tail)).map {
+      case (op, (left, right)) =>
+        val lhs = left.toTerm
+        val rhs = right.toTerm
+        op match {
+          case _ : AST.RelOpLEQ => lhs <= rhs
+          case _ : AST.RelOpGEQ => lhs >= rhs
+          case _ : AST.RelOpGT  => lhs > rhs
+          case _ : AST.RelOpLT  => lhs < rhs
+          case _ : AST.RelOpEQ  => lhs === rhs
+          case _ : AST.RelOpNEQ => lhs =/= rhs
+        }
+    }
+    CCTerm.fromFormula(IExpression.and(formulas), CCBool, Some(srcInfo))
   }
 
   def translateArith(expr : AST.Expr) : CCTerm = {
