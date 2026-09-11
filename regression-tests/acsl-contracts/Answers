@@ -193,6 +193,12 @@ SAFE
 predicate-no-labels-unsafe.hcc
 UNSAFE
 
+annotation-comments-safe.hcc
+SAFE
+
+annotation-comments-unsafe.hcc
+UNSAFE
+
 named-assert-safe.hcc
 SAFE
 

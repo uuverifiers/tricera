@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021-2022 Zafer Esen. All rights reserved.
+ * Copyright (c) 2021-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -157,13 +157,25 @@ object CommentPreprocessor {
       java.util.regex.Pattern.quote(annotationMarker), "body")
   private def rewriteGlobalAnnotations(s : String) : String =
     annotationSpanRegex.replaceAllIn(s, m => {
-      val body = m.group("body")
+      val body = stripLineComments(m.group("body"))
+      val isEmpty = body.forall(c => c.isWhitespace || c == '@')
       val (open, close) =
-        if (body.matches("(?s)\\s*predicate\\b.*"))
+        if (isEmpty)
+          (" " * annotationMarker.length, " " * annotationMarker.length)
+        else if (body.matches("(?s)[\\s@]*predicate\\b.*"))
           (predicateOpenMarker, predicateCloseMarker)
         else (annotationMarker, annotationMarker)
-      java.util.regex.Matcher.quoteReplacement(open + body + close)
+      java.util.regex.Matcher.quoteReplacement(
+        open + (if (isEmpty) body.replace('@', ' ') else body) + close)
     })
+
+  private val quotedOrLineComment =
+    """(?s)"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|//@|//[^\r\n]*""".r
+
+  private def stripLineComments(body : String) : String =
+    quotedOrLineComment.replaceAllIn(body, m =>
+      if (m.matched.startsWith("//")) " " * m.matched.length
+      else java.util.regex.Matcher.quoteReplacement(m.matched))
 
   // resolve C typedef names used in annotations
   // TODO: do this without regex
@@ -195,7 +207,7 @@ object CommentPreprocessor {
       java.util.regex.Pattern.quote(ghostCloseMarker), "body")
   private def rewriteGhostLogicTypes(s : String) : String =
     ghostSpanRegex.replaceAllIn(s, m => {
-      val body = m.group("body")
+      val body = stripLineComments(m.group("body"))
         .replaceAll("\\binteger\\b", "\\$MathInt")
         .replaceAll("\\bboolean\\b", "_Bool")
       java.util.regex.Matcher.quoteReplacement(
