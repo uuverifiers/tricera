@@ -187,6 +187,12 @@ SAFE
 predicate-assert-unsafe.hcc
 UNSAFE
 
+predicate-no-labels-safe.hcc
+SAFE
+
+predicate-no-labels-unsafe.hcc
+UNSAFE
+
 named-assert-safe.hcc
 SAFE
 

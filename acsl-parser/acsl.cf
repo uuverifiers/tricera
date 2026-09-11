@@ -38,8 +38,11 @@ AnnotAssertion. Annotation ::= "/*@" Assertion "*/";
 LoopAnnot.      Annotation ::= "/*@" LoopInvariant "*/";
 AnnotPredicate. Annotation ::= "/*@" PredicateDef "*/";
 
-PredWithParams. PredicateDef ::= "predicate" Id "{" [Id] "}" "(" [PredParam] ")" "=" Expr ";" ;
-PredNoParams.   PredicateDef ::= "predicate" Id "{" [Id] "}" "=" Expr ";" ;
+PredWithParams. PredicateDef ::= "predicate" Id MaybePredLabels "(" [PredParam] ")" "=" Expr ";" ;
+PredNoParams.   PredicateDef ::= "predicate" Id MaybePredLabels "=" Expr ";" ;
+
+NoPredLabels.   MaybePredLabels ::= ;
+SomePredLabels. MaybePredLabels ::= "{" [Id] "}" ;
 
 APredParam. PredParam ::= TypeName VarIdent ;
 separator nonempty PredParam "," ;

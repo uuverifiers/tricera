@@ -180,14 +180,20 @@ object ACSLTranslator {
     p.pAnnotation() match {
       case ap : AST.AnnotPredicate => ap.predicatedef_ match {
         case d : AST.PredWithParams =>
-          PredicateDef(d.id_, d.listid_.asScala.toList,
+          PredicateDef(d.id_, predLabelNames(d.maybepredlabels_),
                        predParamNames(d.listpredparam_), d.expr_)
         case d : AST.PredNoParams =>
-          PredicateDef(d.id_, d.listid_.asScala.toList, Nil, d.expr_)
+          PredicateDef(d.id_, predLabelNames(d.maybepredlabels_), Nil, d.expr_)
       }
       case _ => throw new ACSLException("Expected a predicate definition.")
     }
   }
+
+  private def predLabelNames(labels : AST.MaybePredLabels) : List[String] =
+    labels match {
+      case _ : AST.NoPredLabels => Nil
+      case ls : AST.SomePredLabels => ls.listid_.asScala.toList
+    }
 
   private def predParamNames(ps : AST.ListPredParam) : List[String] =
     ps.asScala.toList.map {

@@ -1,0 +1,8 @@
+/*@ predicate Nonzero(int value) = value != 0; */
+/*@ predicate Example = Nonzero(4); */
+
+int main(void) {
+  int x = 4;
+  //@ assert Example && Nonzero(x);
+  return 0;
+}
