@@ -579,7 +579,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.ENaming2  => translate(e.expr_)
     case _ :   AST.EForAll
          | _ : AST.EExists => translateQuantified(expr)
-    case e : AST.EBinding  => ???
+    case e : AST.EBinding  => translateBinding(e)
     case e : AST.ETernary  => translateTernary(e)
     case _ :   AST.EEquiv
          | _ : AST.EImplies
@@ -802,26 +802,16 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-//  def translate(pred : AST.PredLocalBinding) : IFormula = {
-//    val ident   : String = pred.id_
-//    val boundTo : CCTerm = translate(pred.term_)
-//
-//    locals.put(ident, CCTerm(boundTo.toTerm, boundTo.typ, boundTo.srcInfo))
-//    val inner : IFormula = translate(pred.predicate_)
-//    locals.remove(ident)
-//    inner
-//  }
-
-  /* TODO: Requires all translate to just return IExpression - desired?
-           Alternative approach could be preprocessing/replacement.
-  def translate(pred : AST.PredLocalBinding2) : IFormula = {
-    val ident   : String   = pred.id_
-    val boundTo : IFormula = translate(pred.predicate_1)
-    locals.put(ident, boundTo)
-    val inner : IFormula = translate(pred.predicate_2)
-    locals.remove(ident)
-    inner
-  }*/
+  def translateBinding(expr : AST.EBinding) : CCTerm = {
+    val bound = translate(expr.expr_1)
+    val saved = locals.put(expr.id_, bound)
+    try translate(expr.expr_2) finally {
+      saved match {
+        case Some(term) => locals.put(expr.id_, term)
+        case None       => locals.remove(expr.id_)
+      }
+    }
+  }
 
   def translateQuantified(pred : AST.Expr) : CCTerm = {
     val srcInfo = getSourceInfo(pred)

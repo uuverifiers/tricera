@@ -79,6 +79,8 @@ TESTS="contract1.hcc  \
        comparison-chain-unsafe.hcc \
        comparison-parentheses-safe.hcc \
        comparison-parentheses-unsafe.hcc \
+       let-binding-safe.hcc \
+       let-binding-unsafe.hcc \
        annotation-comments-safe.hcc \
        annotation-comments-unsafe.hcc \
        named-assert-safe.hcc \

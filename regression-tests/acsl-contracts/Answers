@@ -235,6 +235,12 @@ SAFE
 comparison-parentheses-unsafe.hcc
 UNSAFE
 
+let-binding-safe.hcc
+SAFE
+
+let-binding-unsafe.hcc
+UNSAFE
+
 annotation-comments-safe.hcc
 SAFE
 
