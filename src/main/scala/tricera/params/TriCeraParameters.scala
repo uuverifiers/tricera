@@ -146,12 +146,12 @@ class TriCeraParameters extends GlobalParameters {
 
   solutionReconstruction = GlobalParameters.SolutionReconstruction.CEGAR
 
-  private val version = "0.4"
+  private val version = "0.5"
 
   private val greeting =
     s"""TriCera v$version.
-        |(C) Copyright 2012-2025 Zafer Esen and Philipp Ruemmer
-        |Contributors: Pontus Ernstedt, Hossein Hojjat, Oskar Soederberg, Scania CV AB""".stripMargin
+        |(C) Copyright 2012-2026 Zafer Esen and Philipp Ruemmer
+        |Contributors: Jesper Amilon, Pontus Ernstedt, Hossein Hojjat, Hugo Sacilotto, Oskar Soederberg, Scania CV AB""".stripMargin
 
 
   private def parseArgs(args: List[String], shouldExecute : Boolean = true): Boolean =
