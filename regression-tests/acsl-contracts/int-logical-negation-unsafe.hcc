@@ -1,0 +1,11 @@
+int in;
+int out;
+
+/*@
+  ensures (!in) ==> (!out);
+*/
+void main() {
+  if (in) {
+    out = in;
+  }
+}

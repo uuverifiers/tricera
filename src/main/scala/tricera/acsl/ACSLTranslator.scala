@@ -1087,12 +1087,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         val t = translateTerm(expr.expr_)
         CCTerm.fromTerm(- t.toTerm, t.typ, t.srcInfo)
       case _ : AST.UnaryNegation =>
-        translate(expr.expr_) match {
-          case term : CCTerm if term.originalFormula.isEmpty =>
-            CCTerm.fromTerm(- term.toTerm, term.typ, term.srcInfo)
-          case pred : CCTerm =>
-            CCTerm.fromFormula(!pred.toFormula, pred.typ, pred.srcInfo)
-        }
+        val t = translate(expr.expr_)
+        CCTerm.fromFormula(!t.toFormula, CCBool, Some(srcInfo))
       case op : AST.UnaryComplementation => throwNotImpl(op)
       case _ : AST.UnaryPtrDeref =>
         val t = translateTerm(expr.expr_)

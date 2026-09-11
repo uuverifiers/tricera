@@ -103,6 +103,8 @@ TESTS="contract1.hcc  \
        stmt-assert-arith-bare-unsafe.hcc \
        stmt-assert-arith-bare-minus-safe.hcc \
        stmt-assert-arith-bare-minus-unsafe.hcc \
+       int-logical-negation-safe.hcc \
+       int-logical-negation-unsafe.hcc \
        stmt-assert-shadow-safe.hcc \
        stmt-assert-shadow-unsafe.hcc \
        stmt-assert-at-clabel-safe.hcc \

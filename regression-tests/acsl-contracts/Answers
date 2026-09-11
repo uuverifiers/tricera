@@ -308,6 +308,12 @@ SAFE
 stmt-assert-arith-bare-minus-unsafe.hcc
 UNSAFE
 
+int-logical-negation-safe.hcc
+SAFE
+
+int-logical-negation-unsafe.hcc
+UNSAFE
+
 stmt-assert-shadow-safe.hcc
 SAFE
 
