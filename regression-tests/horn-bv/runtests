@@ -11,7 +11,11 @@ TESTS="nonlinear2.hcc \
 for name in $TESTS; do
     echo
     echo $name
-    $TRI_CMD -cex -abstract:off -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at '
+    # Clause verification can exhaust memory or time depending on the platform.
+    # Keep the warning and result, but normalize the resource-limit diagnostic.
+    $TRI_CMD -cex -abstract:off -arithMode:ilp32 "$@" $name 2>&1 | grep -v 'at ' |
+        sed -e 's/^Warning: Timeout while verifying clause:$/Warning: Verification of clause was not possible:/' \
+            -e '/^Checker said: OutOfMemory$/d'
 done
 
 echo
