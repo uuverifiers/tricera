@@ -65,6 +65,12 @@ TESTS="contract1.hcc  \
        predicate-assert-unsafe.hcc \
        predicate-no-labels-safe.hcc \
        predicate-no-labels-unsafe.hcc \
+       predicate-shadow-safe.hcc \
+       predicate-shadow-unsafe.hcc \
+       quant-shadow-safe.hcc \
+       quant-shadow-unsafe.hcc \
+       quant-restore-binding-safe.hcc \
+       quant-restore-binding-unsafe.hcc \
        annotation-comments-safe.hcc \
        annotation-comments-unsafe.hcc \
        named-assert-safe.hcc \

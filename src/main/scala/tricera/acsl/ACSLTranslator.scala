@@ -840,12 +840,15 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
 
     val namedTerms : Seq[(String, CCTerm)] = bindersToConstants(binders)
-
-    namedTerms.map(t => locals.put(t._1, t._2))
-    val inner : CCTerm = translatePred(bodyExpr)
     val (names, terms) : (Seq[String], Seq[CCTerm]) = namedTerms.unzip
-    // FIXME: If v is shadowed, this will remove the shadowed term.
-    names.map(locals.remove)
+    val savedLocals = names.map(name => (name, locals.get(name)))
+    namedTerms.foreach { case (name, term) => locals.put(name, term) }
+    val inner : CCTerm = try translatePred(bodyExpr) finally {
+      savedLocals.foreach {
+        case (name, Some(term)) => locals.put(name, term)
+        case (name, None)       => locals.remove(name)
+      }
+    }
 
     // FIXME: Look over order of creation here.
     CCTerm.fromFormula(terms.foldLeft(inner.toFormula)((formula, term) => {
@@ -1053,28 +1056,20 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   def translateIdentExpr(t : AST.EIdent) : CCTerm = {
     val srcInfo = getSourceInfo(t)
     val ident = t.id_
-    // TODO: Lookup if var exists as as local binding.
-    // FIXME: Order of lookups (priority)?
-
-    val maybeTerm = ctx match {
-      case stmCtx : StatementAnnotationContext =>
-        stmCtx.getTermInScope(ident)
-      case _ => None
-    }
-
-    maybeTerm match {
-      case Some(t) => t
-      case None =>
-        val bound: Option[CCTerm] = locals.get(ident)
-        val scoped: Option[CCTerm] =
-          vars.get(ident).map(v => CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
-        bound.orElse(scoped).orElse(ctx.enumeratorDefs.get(ident))
-          .orElse(ctx.acslPredicateDefs.get(ident).map(_ =>
-            inlinePredicate(ident, Nil, srcInfo)))
-          .getOrElse(
-            throw new ACSLParseException(
-              s"Identifier $ident not found in scope.", srcInfo))
-    }
+    // Predicate parameters and quantified variables shadow program variables.
+    locals.get(ident).orElse {
+      ctx match {
+        case stmCtx : StatementAnnotationContext =>
+          stmCtx.getTermInScope(ident)
+        case _ => None
+      }
+    }.orElse(vars.get(ident).map(v =>
+      CCTerm.fromTerm(v.term, v.typ, v.srcInfo)))
+      .orElse(ctx.enumeratorDefs.get(ident))
+      .orElse(ctx.acslPredicateDefs.get(ident).map(_ =>
+        inlinePredicate(ident, Nil, srcInfo)))
+      .getOrElse(throw new ACSLParseException(
+        s"Identifier $ident not found in scope.", srcInfo))
   }
 
   def translateUnary(expr : AST.EUnary) : CCTerm = {

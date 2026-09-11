@@ -1,0 +1,5 @@
+int main(void) {
+  int x = 0;
+  //@ assert \exists integer x; x != 0;
+  return 0;
+}

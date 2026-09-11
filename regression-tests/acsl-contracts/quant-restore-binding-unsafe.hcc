@@ -1,0 +1,7 @@
+/*@ predicate Nonzero(int x) = (\forall integer x; x == x) && x != 0; */
+
+int main(void) {
+  int x = 1;
+  //@ assert Nonzero(0);
+  return 0;
+}

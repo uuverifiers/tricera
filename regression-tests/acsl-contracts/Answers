@@ -193,6 +193,24 @@ SAFE
 predicate-no-labels-unsafe.hcc
 UNSAFE
 
+predicate-shadow-safe.hcc
+SAFE
+
+predicate-shadow-unsafe.hcc
+UNSAFE
+
+quant-shadow-safe.hcc
+SAFE
+
+quant-shadow-unsafe.hcc
+UNSAFE
+
+quant-restore-binding-safe.hcc
+SAFE
+
+quant-restore-binding-unsafe.hcc
+UNSAFE
+
 annotation-comments-safe.hcc
 SAFE
 

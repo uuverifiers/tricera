@@ -1,0 +1,13 @@
+/*@ predicate Nonzero(int x) = x != 0; */
+
+int main(void) {
+  {
+    int x = 0;
+    //@ assert Nonzero(1) && !Nonzero(x);
+  }
+  {
+    //@ ghost int x = 0;
+    //@ assert Nonzero(1) && !Nonzero(x);
+  }
+  return 0;
+}
