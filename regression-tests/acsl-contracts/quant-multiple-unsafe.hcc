@@ -1,0 +1,4 @@
+int main(void) {
+  //@ assert \forall integer x, y; x == y;
+  return 0;
+}

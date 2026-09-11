@@ -71,6 +71,10 @@ TESTS="contract1.hcc  \
        quant-shadow-unsafe.hcc \
        quant-restore-binding-safe.hcc \
        quant-restore-binding-unsafe.hcc \
+       quant-multiple-safe.hcc \
+       quant-multiple-unsafe.hcc \
+       quant-nested-safe.hcc \
+       quant-nested-unsafe.hcc \
        annotation-comments-safe.hcc \
        annotation-comments-unsafe.hcc \
        named-assert-safe.hcc \

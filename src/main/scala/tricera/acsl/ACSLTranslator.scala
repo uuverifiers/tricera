@@ -826,7 +826,6 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     inner
   }*/
 
-  // TODO: Not tested. Unsure if correct.
   def translateQuantified(pred : AST.Expr) : CCTerm = {
     val srcInfo = getSourceInfo(pred)
     val (binders, bodyExpr, quantifier) = pred match {
@@ -839,10 +838,11 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
           "Not a quantified expression: " + (printer print pred), srcInfo)
     }
 
-    val namedTerms : Seq[(String, CCTerm)] = bindersToConstants(binders)
-    val (names, terms) : (Seq[String], Seq[CCTerm]) = namedTerms.unzip
-    val savedLocals = names.map(name => (name, locals.get(name)))
-    namedTerms.foreach { case (name, term) => locals.put(name, term) }
+    val boundVars = bindersToConstants(binders)
+    val savedLocals = boundVars.map { case (c, _) => (c.name, locals.get(c.name)) }
+    boundVars.foreach { case (c, typ) =>
+      locals.put(c.name, CCTerm.fromTerm(IConstant(c), typ, None))
+    }
     val inner : CCTerm = try translatePred(bodyExpr) finally {
       savedLocals.foreach {
         case (name, Some(term)) => locals.put(name, term)
@@ -850,39 +850,19 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       }
     }
 
-    // FIXME: Look over order of creation here.
-    CCTerm.fromFormula(terms.foldLeft(inner.toFormula)((formula, term) => {
-        val sort : Sort = term.typ.toSort
-        ISortedQuantified(quantifier, sort, formula)
-    }), CCBool, Some(getSourceInfo(pred)))
+    CCTerm.fromFormula(
+      IExpression.quanConsts(quantifier, boundVars.map(_._1), inner.toFormula),
+      CCBool, Some(srcInfo))
   }
 
-//  def translate(pred: AST.PredExists): IFormula = {
-//    val binders: Seq[AST.ABinder] =
-//      pred.listbinder_.asScala.toList.map(_.asInstanceOf[AST.ABinder])
-//    val namedTerms: Seq[(String, CCTerm)] = bindersToConstants(binders)
-//
-//    namedTerms.map(t => locals.put(t._1, t._2))
-//    val inner: IFormula = translate(pred.predicate_)
-//    val (names, terms): (Seq[String], Seq[CCTerm]) = namedTerms.unzip
-//    // FIXME: If v is shadowed, this will remove the shadowed term.
-//    names.map(locals.remove)
-//
-//    // FIXME: Look over order of creation here.
-//    // FIXME: Use IExpression.all?
-//    terms.foldLeft(inner)((formula, term) => {
-//      val sort: Sort = term.typ.toSort
-//      ISortedQuantified(IExpression.Quantifier.EX, sort, formula)
-//    })
-//  }
-
-  private def bindersToConstants(binders : AST.ListBinder) : Seq[(String, CCTerm)] = {
+  private def bindersToConstants(binders : AST.ListBinder)
+      : Seq[(SortedConstantTerm, CCType)] = {
     binders.asScala.toList.map(_.asInstanceOf[AST.ABinder]).flatMap(b => {
       val ctyp : CCType = getType(b.typename_)
       val idents : Seq[AST.VarIdent] = b.listvarident_.asScala.toList
       idents.map {
         case v: AST.VarIdentId =>
-          (v.id_, CCTerm.fromTerm(ISortedVariable(0, ctyp.toSort), ctyp, None)) // todo: line no?
+          (new SortedConstantTerm(v.id_, ctyp.toSort), ctyp)
         case v: AST.VarIdentPtrDeref => throwNotImpl(v)
         case v: AST.VarIdentArray => throwNotImpl(v)
       }

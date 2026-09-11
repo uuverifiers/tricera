@@ -211,6 +211,18 @@ SAFE
 quant-restore-binding-unsafe.hcc
 UNSAFE
 
+quant-multiple-safe.hcc
+SAFE
+
+quant-multiple-unsafe.hcc
+UNSAFE
+
+quant-nested-safe.hcc
+SAFE
+
+quant-nested-unsafe.hcc
+UNSAFE
+
 annotation-comments-safe.hcc
 SAFE
 
