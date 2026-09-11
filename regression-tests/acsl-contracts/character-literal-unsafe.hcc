@@ -1,0 +1,4 @@
+int main(void) {
+  //@ assert '\0' == '0' || '\101' == 'B' || '\x41' == 'B';
+  return 0;
+}

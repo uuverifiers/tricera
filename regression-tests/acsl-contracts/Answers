@@ -241,6 +241,12 @@ SAFE
 let-binding-unsafe.hcc
 UNSAFE
 
+character-literal-safe.hcc
+SAFE
+
+character-literal-unsafe.hcc
+UNSAFE
+
 annotation-comments-safe.hcc
 SAFE
 

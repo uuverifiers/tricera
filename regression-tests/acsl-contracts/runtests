@@ -81,6 +81,8 @@ TESTS="contract1.hcc  \
        comparison-parentheses-unsafe.hcc \
        let-binding-safe.hcc \
        let-binding-unsafe.hcc \
+       character-literal-safe.hcc \
+       character-literal-unsafe.hcc \
        annotation-comments-safe.hcc \
        annotation-comments-unsafe.hcc \
        named-assert-safe.hcc \

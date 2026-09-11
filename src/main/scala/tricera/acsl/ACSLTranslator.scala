@@ -636,7 +636,30 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         CCTerm.fromTerm(i(value), CCInt, srcInfo)
       case t : AST.LitReal => ???
       case t : AST.LitString => ???
-      case t : AST.LitChar => ???
+      case t : AST.LitChar =>
+        val literal = t.characterliteral_
+        val body = literal.substring(1, literal.length - 1)
+        val value = body match {
+          case "\\a"  => IdealInt(7)
+          case "\\b"  => IdealInt(8)
+          case "\\f"  => IdealInt(12)
+          case "\\n"  => IdealInt(10)
+          case "\\r"  => IdealInt(13)
+          case "\\t"  => IdealInt(9)
+          case "\\v"  => IdealInt(11)
+          case "\\\\" => IdealInt(92)
+          case "\\'"  => IdealInt(39)
+          case "\\\"" => IdealInt(34)
+          case "\\?"  => IdealInt(63)
+          case s if s.startsWith("\\x") => IdealInt(s.substring(2), 16)
+          case s if s.startsWith("\\")  => IdealInt(s.substring(1), 8)
+          case s => IdealInt(s.charAt(0).toInt)
+        }
+        if (value > 127)
+          throw new ACSLParseException(
+            s"Character literal $literal is outside the supported ASCII range.",
+            srcInfo.get)
+        CCTerm.fromTerm(i(value), CCInt, srcInfo)
     }
   }
 
