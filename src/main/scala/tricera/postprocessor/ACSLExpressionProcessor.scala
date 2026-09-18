@@ -69,17 +69,18 @@ object ACSLExpressionProcessor extends ResultProcessor {
         id,
         isSrcAnnotated,
         PreCondition(ACSLExpressionVisitor(preInv, preCondition)),
-        PostCondition(ACSLExpressionVisitor(postInv, postCondition)),
+        PostCondition(ACSLExpressionVisitor(postInv, postCondition, preInv.expression)),
         loopInvariants.map(i => ACSLExpressionVisitor(i,i)))
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
       newInvs
   }
 
   object ACSLExpressionVisitor {
-    def apply(invariant: Invariant, context: InvariantContext): Invariant =
+    def apply(invariant: Invariant, context: InvariantContext,
+              precondition: IFormula = IBoolLit(true)): Invariant =
       invariant match {
         case Invariant(form, Some(heapInfo), maybeSourceInfo) =>
-          val visitor = new ACSLExpressionVisitor(heapInfo, context)
+          val visitor = new ACSLExpressionVisitor(heapInfo, context, precondition & form)
           Invariant(visitor(form), Some(heapInfo), maybeSourceInfo)
         case _ =>
           invariant
@@ -88,7 +89,7 @@ object ACSLExpressionProcessor extends ResultProcessor {
     def apply(invariant: LoopInvariant, context: InvariantContext): LoopInvariant =
       invariant match {
         case LoopInvariant(form, Some(heapInfo), srcInfo) =>
-          val visitor = new ACSLExpressionVisitor(heapInfo, context)
+          val visitor = new ACSLExpressionVisitor(heapInfo, context, form)
           LoopInvariant(visitor(form), Some(heapInfo), srcInfo)
         case _ =>
           invariant
@@ -97,7 +98,8 @@ object ACSLExpressionProcessor extends ResultProcessor {
 
   class ACSLExpressionVisitor(
     heapInfo: HeapInfo,
-    context: InvariantContext
+    context: InvariantContext,
+    assumptions: IFormula = IBoolLit(true)
   ) extends CollectingVisitor[Unit, IExpression] {
 
     def apply(form: IFormula): IFormula = {
@@ -114,7 +116,12 @@ object ACSLExpressionProcessor extends ResultProcessor {
     private object ArrayPtrRange {
       def unapply(t: ITerm): Option[ProgVarProxy] = t match {
         case IFunApp(rangeSel, Seq(ConstantAsProgVarProxy(array)))
-            if heapInfo.isArrayPtrRange(rangeSel) => Some(array)
+            if heapInfo.isArrayPtrRange(rangeSel) =>
+          // unchanged pointers can also read from the old heap
+          val aliases = equalities.getVal(IConstant(array)).toSeq.flatMap(_.variants)
+            .collect { case IConstant(p: ProgVarProxy) if p.isPreExec => p }
+          Some(aliases.sortBy(p => (if (p.isParameter) 0 else 1, p.name))
+            .headOption.getOrElse(array))
         case _ => None
       }
     }
@@ -122,21 +129,33 @@ object ACSLExpressionProcessor extends ResultProcessor {
     // rangeNth(rangeSel(a), i) or rangeStart(rangeSel(a)) + i
     private object ArrayElementAddress {
       def unapply(address: ITerm): Option[(ProgVarProxy, ITerm)] = address match {
+        case IFunApp(addr, Seq(index)) if heapInfo.isAddrFun(addr) =>
+          unapply(index)
         case IFunApp(nth, Seq(ArrayPtrRange(array), index))
-            if heapInfo.isRangeNth(nth) && isCleanIndex(index) =>
-          Some((array, index))
+            if heapInfo.isRangeNth(nth) =>
+          relativeIndex(array, index).map(array -> _)
         case IPlus(index, IFunApp(start, Seq(ArrayPtrRange(array))))
-            if heapInfo.isRangeStart(start) && isCleanIndex(index) =>
-          Some((array, index))
+            if heapInfo.isRangeStart(start) =>
+          relativeIndex(array, index).map(array -> _)
         case IPlus(IFunApp(start, Seq(ArrayPtrRange(array))), index)
-            if heapInfo.isRangeStart(start) && isCleanIndex(index) =>
-          Some((array, index))
+            if heapInfo.isRangeStart(start) =>
+          relativeIndex(array, index).map(array -> _)
         case _ => None
       }
     }
 
     private def isCleanIndex(index: ITerm): Boolean =
       !ContainsTOHVisitor(index, heapInfo)
+
+    private lazy val equalities = ValSetReader(assumptions)
+
+    // heap indices start at the allocation, C indices start at the pointer
+    private def relativeIndex(array: ProgVarProxy, index: ITerm): Option[ITerm] =
+      heapInfo.arrayPtrOffset(IConstant(array)).flatMap { offset =>
+        val offsets = Seq(offset) ++ equalities.getVal(offset).toSeq.flatMap(_.variants)
+        offsets.iterator.map(o => new Simplifier().apply(index - o))
+          .find(isCleanIndex)
+      }
 
     // Bare constants inside an ACSL index denote entry-state values in a
     // precondition and, wrapped in \old, pre-state values in a postcondition;

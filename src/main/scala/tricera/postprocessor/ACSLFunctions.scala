@@ -52,6 +52,7 @@ object ACSLExpression {
     new IFunction("arrowOldPointer", 2, false, false) // \old(p)->a
   val oldArrow = new IFunction("oldArrow", 2, false, false) // \old(p->a)
   val arrayAccess = new IFunction("arrayAccess", 2, false, false) // a[i]
+  val pointerOffset = new IFunction("pointerOffset", 2, false, false) // a + i
   val arrayAccessOldPointer =
     new IFunction("arrayAccessOldPointer", 2, false, false) // \old(a)[i]
   val oldArrayAccess =
@@ -64,7 +65,8 @@ object ACSLExpression {
 
   val functions = Set(deref, oldDeref, derefOldPointer, arrow, arrowOldPointer,
                       oldArrow, arrayAccess, arrayAccessOldPointer,
-                      oldArrayAccess, arrayFieldAccess, oldArrayFieldAccess)
+                      oldArrayAccess, arrayFieldAccess, oldArrayFieldAccess,
+                      pointerOffset)
   val predicates = Set(valid, separated)
 
   def fun2Identifier(fun : IFunction) = fun.name.split("::").last

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021-2022 Zafer Esen. All rights reserved.
+ * Copyright (c) 2021-2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -121,7 +121,9 @@ object ADTExploder extends ResultProcessor {
         val adt = adtTerm.adtSort.adtTheory
         val ctorIndex = adt.constructors.indexOf(ctorFun)
         val selectors = adt.selectors(ctorIndex)
-        (for ((fieldTerm, selectorInd) <- selectorTerms zipWithIndex)
+        // nullary ctor has no selectors, keep its equality
+        if (selectorTerms.isEmpty) newEq
+        else (for ((fieldTerm, selectorInd) <- selectorTerms zipWithIndex)
           yield selectors(selectorInd)(newRootTerm) ===
             fieldTerm).reduce(_ &&& _)
       }

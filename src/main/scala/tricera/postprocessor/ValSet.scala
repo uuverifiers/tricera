@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
- *               2025 Zafer Esen. All rights reserved.
+ *               2025-2026 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,7 +38,7 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.{Conj, Disj, Eq}
+import IExpression.{Conj, Disj, Eq, Quantifier}
 import ap.theories.ADT
 import tricera.{ConstantAsProgVarProxy, ProgVarProxy}
 
@@ -169,27 +169,13 @@ case class ValSet(vals : Set[Val]) {
 
 object ValSetReader {
   def apply(contractCondition : IExpression) : ValSet =
-    Reader.visit(contractCondition, 0)
+    Reader.visit(contractCondition, ())
 
-  private object Reader extends CollectingVisitor[Int, ValSet]
-    with ExpressionUtils {
-
-    override def preVisit(t               : IExpression,
-                          quantifierDepth : Int) : PreVisitResult = t match {
-      case _ : IVariableBinder => UniSubArgs(quantifierDepth + 1)
-      case _                   => KeepArg
-    }
+  private object Reader extends CollectingVisitor[Unit, ValSet] {
 
     override def postVisit(t               : IExpression,
-                           quantifierDepth : Int,
+                           arg             : Unit,
                            subres          : Seq[ValSet]) : ValSet = {
-      // Replace all v(index) within term where index >= depth with
-      // v(index - depth).
-      def shiftTerm(term : ITerm) : ITerm =
-        VariableShiftVisitor(term,
-                             offset = quantifierDepth,
-                             shift  = -quantifierDepth)
-
       t match {
         case Conj(_, _) =>
           ValSet.union(subres: _*)
@@ -198,32 +184,29 @@ object ValSetReader {
           ValSet.intersect(subres(0), subres(1))
 
         case Eq(IFunApp(ADT.CtorId(_, _), Seq(_)), _) =>
-          ValSet.union(subres: _*)
+          ValSet.empty
 
-        // ContainsQuantifiedVisitor(term, depth) returns true if
-        // term contains an v(n) with n < current quantifierDepth,
-        // which implies that term must have an inner quantifier.
-        // The case will still trigger if n >= quantifierDepth, which can happen
-        // if the terms have IVariables that are not bound to local quantifiers,
-        // but are predicate arguments (such as in pre/post condition). In that
-        // case we need to subtract the current quantifierDepth from those vars
-        // to get their actual terms in the outermost context.
-        // e.g., pre(v(0), v(1)) :- (EX. v(1) = v(2)) ...
-        // Inside the quantified formula depth = 1, and we add the fact that
-        // v(0) = v(1) by shifting the terms by -1.
-        case Eq(term1, term2)
-          if !ContainsQuantifiedVisitor(term1, quantifierDepth) && // no quantifiers in term1
-             !ContainsQuantifiedVisitor(term2, quantifierDepth) => // no quantifiers in term2
-          val newEquality = ValSet(shiftTerm(term1), shiftTerm(term2))
-          ValSet.union(subres :+ newEquality: _*)
+        case Eq(term1, term2) =>
+          ValSet(term1, term2)
 
-        case IIntFormula(IIntRelation.EqZero, term)
-          if !ContainsQuantifiedVisitor(term, quantifierDepth) =>
-          val newEquality = ValSet(0, shiftTerm(term))
-          ValSet.union(subres :+ newEquality: _*)
+        case IIntFormula(IIntRelation.EqZero, term) =>
+          ValSet(0, term)
+
+        case IQuantified(Quantifier.EX, _) =>
+          // when leaving EX, drop terms containing its v(0), then shift
+          // remaining variables down by one, e.g., 
+          // EX. v(1) = v(2) --> v(0) = v(1) in the outer context
+          // keep equalities derived through the bound variable
+          // EX v. x = f(v) & y = f(v) still implies x = y
+          ValSet(subres.head.vals.map { value =>
+            Val(value.variants.filterNot(t =>
+              SymbolCollector.variables(t).exists(_.index == 0))
+              .map(t => VariableShiftVisitor(t, 1, -1)))
+          }.filter(_.variants.size > 1))
 
         case _ =>
-          if (subres.isEmpty) ValSet.empty else ValSet.union(subres: _*)
+          // eqs under negation or inside terms are not facts
+          ValSet.empty
       }
     }
   }

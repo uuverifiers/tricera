@@ -1,0 +1,15 @@
+int a[4];
+
+/*@
+  requires n == 1 && x == a + 1;
+  ensures a[2] == \old(a[2]) + 1;
+  ensures x == 1 + a && x - 1 == a;
+*/
+void increment(int x[], unsigned n) {
+  x[n] += 1;
+}
+
+int main() {
+  increment(a + 1, 1);
+  return 0;
+}

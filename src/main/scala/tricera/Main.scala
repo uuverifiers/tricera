@@ -571,7 +571,7 @@ class Main (args: Array[String]) {
       .tapIf(displaySolutionProlog)(printSolutionProlog(reader.PredPrintContext.predArgNames))
       .tapIf(lazabs.GlobalParameters.get.displaySolutionSMT)(printSolutionSMT)
       .tapIf(TriCeraParameters.get.smoke)(printVacuousAssertions(reader.assertionSites))
-      .through(hornSolverSolutionToResult(reader, TriCeraParameters.get.funcName))
+      .through(hornSolverSolutionToResult(reader, system))
       .through(MergeTransformedFunctionsContracts(callSiteTransforms))
 
     val executionResult = result match {

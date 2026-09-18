@@ -191,10 +191,15 @@ object ContainsTOHVisitor {
     }
   
     override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
+      case IConstant(p: ProgVarProxy) if heapInfo.isHeap(p) =>
+        ShortCutResult(true)
+      case ISortedVariable(_, sort) if sort == heapInfo.heap.HeapSort =>
+        ShortCutResult(true)
       case TheoryOfHeapFunApp(_, _) =>
         ShortCutResult(true)
       case IFunApp(fun, _)
-        if heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun) =>
+        if heapInfo.isObjSelector(fun) || heapInfo.isObjCtor(fun) ||
+           heapInfo.heapSizeFun.contains(fun) =>
         ShortCutResult(true)
       case IFunApp(fun, _)
         if heapInfo.isArrayPtrRange(fun) || heapInfo.isArrayPtrOffset(fun) ||
@@ -261,6 +266,9 @@ object ContainsExplicitPointerVisitor {
         dummy: Unit
     ): PreVisitResult = {
       t match {
+        case IEquation(_: IConstant, IFunApp(ACSLExpression.pointerOffset, _)) |
+             IEquation(IFunApp(ACSLExpression.pointerOffset, _), _: IConstant) =>
+          ShortCutResult(false)
         case IEquation(
           ConstantAsProgVarProxy(v1),
           ConstantAsProgVarProxy(v2))

@@ -173,6 +173,8 @@ object ACSLLineariser {
 
     override def preVisit(t: IExpression, settings: PrepSettings)
     : PreVisitResult = t match {
+      case IFunApp(ACSLExpression.pointerOffset, _) =>
+        KeepArg
       case ACSLPredicate(p) => //
         // Avoid '\old()' etc. in arguments to ACSL predicates (\valid and friends).
         val newSettings = settings.copy(usePlainConstant = true)
@@ -425,6 +427,10 @@ object ACSLLineariser {
 
         case IFunApp(ACSLExpression.arrayAccess, Seq(_, _)) =>
           allButLast(ctxt setPrecLevel 0, "[", "]", 2)
+
+        case IFunApp(ACSLExpression.pointerOffset, Seq(_, _)) =>
+          print("(")
+          allButLast(ctxt setPrecLevel 0, " + ", ")", 2)
 
         case IFunApp(ACSLExpression.arrayAccessOldPointer, Seq(_, _)) =>
           print("\\old(")

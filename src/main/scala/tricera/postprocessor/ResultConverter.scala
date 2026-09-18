@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2025 Scania CV AB. All rights reserved.
+ * Copyright (c) 2025 Scania CV AB
+ *               2026 Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -29,8 +30,10 @@
 
 package tricera.postprocessor
 
-import ap.parser.{CollectingVisitor, IConstant, IExpression, IFormula,
-                  IFunApp, IIntLit, ITerm, Simplifier, VariableSubstVisitor}
+import ap.parser.{CollectingVisitor, ConstantSubstVisitor, IConstant, IExpression, IFormula,
+                  IFunApp, IIntLit, ISortedVariable, ITerm, Simplifier, SymbolCollector,
+                  VariableSubstVisitor, IBoolLit, IQuantified, LineariseVisitor,
+                  IBinJunctor}
 import lazabs.horn.preprocessor.HornPreprocessor
 import tricera._
 import tricera.concurrency.CCReader
@@ -40,7 +43,7 @@ import tricera.Util.SourceInfo
 
 object ResultConverter {
   def hornSolverSolutionToResult
-    (reader: CCReader, entryFunction: String)
+    (reader: CCReader, system: hornconcurrency.ParametricEncoder.System)
     (result: Either[Option[HornPreprocessor.Solution], hornconcurrency.VerificationLoop.Counterexample])
     : Result = {
     import scala.collection.mutable.HashSet
@@ -156,17 +159,22 @@ object ResultConverter {
       annotatedFuncs: HashSet[String])
       = {
       val paramNames = ctx.acslContext.getParams.map(v => v.name)
+      val globalFacts = replacePredVarWithFunctionParam(
+        ConstantSubstVisitor(ctx.globalArrayPrecondition,
+          ctx.prePred.argVars.zipWithIndex.map { case (v, i) =>
+            v.term -> ISortedVariable(i, v.sort)
+          }.toMap), ctx.prePred.argVars, paramNames)
       FunctionInvariants(
         funcId,
         annotatedFuncs(funcId),
         PreCondition(Invariant(
           resolveGlobalArrayFacts(
             replacePredVarWithFunctionParam(
-              solution(ctx.prePred.pred),
+              solution(ctx.prePred.pred) &&& callSitePrecondition(ctx.prePred, solution),
               ctx.prePred.argVars,
               paramNames),
             ctx.prePred.argVars,
-            heapInfo),
+            heapInfo) &&& globalFacts,
           heapInfo,
           ctx.prePred.srcInfo)),
         PostCondition(Invariant(
@@ -182,6 +190,80 @@ object ResultConverter {
         loopInvs
           .withFilter(i => i._1.startsWith(funcId))
           .map(i => toLoopInvariant(i._2, solution, heapInfo, paramNames)).toList)
+    }
+
+    // recover caller facts that the inferred precondition may omit
+    // e.g., increment(a, 1) and increment(b, 2) yield
+    // (x == a && n == 1) || (x == b && n == 2)
+    def callSitePrecondition(pre: CCPredicate,
+                             solution: SolutionProcessor.Solution): IFormula = {
+      import IExpression._
+      val pointers = pre.argVars.filter(_.typ.isInstanceOf[CCHeapArrayPointer])
+      if (pointers.isEmpty) return IBoolLit(true)
+      val clauses = (system.assertions ++ system.backgroundAxioms.clauses ++
+        system.processes.flatMap(_._1.map(_._1))).filter(_.head.pred == pre.pred)
+      val byName = solution.map { case (p, f) => (p.name, p.arity) -> f }
+      def bodySolution(p: Predicate): Option[IFormula] =
+        solution.get(p).orElse(byName.get((invPrefix + p.name, p.arity)))
+      if (clauses.isEmpty || clauses.exists(_.body.exists(a =>
+            bodySolution(a.pred).isEmpty))) return IBoolLit(true)
+
+      val args = pre.argVars.map(v => IConstant(v.term))
+
+      def pointerAliases(form: IFormula): IFormula = {
+        val values = ValSetReader(form)
+        def knownOffset(term: ITerm): ITerm =
+          values.getVal(term).toSeq.flatMap(_.variants)
+            .find(t => !reader.getHeapInfo.exists(ContainsTOHVisitor(t, _)))
+            .getOrElse(term)
+        def components(v: CCVar): Seq[(ITerm, ITerm)] = {
+          val ops = v.typ.asInstanceOf[CCHeapArrayPointer].ptrOps
+          val term = IConstant(v.term)
+          Seq((ops.getRange(term), ops.getOffset(term))) ++
+            values.getVal(term).toSeq.flatMap(_.variants.collect {
+              case IFunApp(c, Seq(range, offset)) if c == ops.ctor => (range, offset)
+            })
+        }
+        val aliases = pointers.combinations(2).flatMap { case Seq(a, b) =>
+          val left = IConstant(a.term)
+          val right = IConstant(b.term)
+          if (values.areEqual(left, right)) Seq(left === right)
+          else for {
+            (ra, oa) <- components(a)
+            (rb, ob) <- components(b)
+            if a.typ.asInstanceOf[CCHeapArrayPointer].elementType ==
+               b.typ.asInstanceOf[CCHeapArrayPointer].elementType
+            if values.areEqual(ra, rb)
+            offset = new Simplifier().apply(knownOffset(ob) - knownOffset(oa))
+            if SymbolCollector.variables(offset).isEmpty &&
+               SymbolCollector.constants(offset).forall(pre.argVars.map(_.term).contains) &&
+               !reader.getHeapInfo.exists(ContainsTOHVisitor(offset, _))
+          } yield if (offset == IIntLit(0)) right === left
+                  else right === IFunApp(ACSLExpression.pointerOffset, Seq(left, offset))
+        }.toSeq
+        val nested = form match {
+          case Conj(_, _) =>
+            and(LineariseVisitor(form, IBinJunctor.And).map(pointerAliases))
+          case Disj(a, b) => pointerAliases(a) | pointerAliases(b)
+          case IQuantified(Quantifier.EX, body) => pointerAliases(body)
+          case _ => IBoolLit(true)
+        }
+        and(aliases) &&& nested
+      }
+
+      val incoming = or(for (clause <- clauses) yield {
+        val (body, constraint) = clause.inline(args)
+        val form = constraint & and(body.map { atom =>
+          VariableSubstVisitor(bodySolution(atom.pred).get, (atom.args.toList, 0))
+        })
+        val projected = quanConsts(Quantifier.EX, SymbolCollector.constantsSorted(form)
+          .filterNot(pre.argVars.map(_.term).contains), form)
+        projected &&& pointerAliases(form)
+      })
+      ConstantSubstVisitor(incoming,
+        pre.argVars.zipWithIndex.map { case (v, i) =>
+          v.term -> ISortedVariable(i, v.sort)
+        }.toMap)
     }
 
     result match {

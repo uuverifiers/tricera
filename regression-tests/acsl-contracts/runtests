@@ -205,3 +205,8 @@ for name in $TESTS; do
     $TRI_CMD "$@" $name 2>&1 | grep -v 'at '
 done
 
+for heap in native array; do
+    echo
+    echo "global-array-offset-safe.hcc ($heap)"
+    $TRI_CMD "$@" -forceNondetInit -heapModel:$heap -m:main global-array-offset-safe.hcc 2>&1 | grep -v 'at '
+done

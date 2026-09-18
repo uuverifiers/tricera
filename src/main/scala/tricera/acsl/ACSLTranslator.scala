@@ -710,7 +710,17 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
                 (op : (ITerm, ITerm) => ITerm) : CCTerm = {
       // the result keeps the operands' unified arithmetic type, not a predicate type
       val (lhs, rhs) = CCTerm.unifyTypes(translateTerm(l), translateTerm(r))
-      CCTerm.fromTerm(op(lhs.toTerm, rhs.toTerm), lhs.typ, Some(srcInfo))
+      (lhs.typ, rhs.typ, expr) match {
+        case (_: CCHeapArrayPointer, _: CCArithType, _: AST.EPlus) |
+             (_: CCArithType, _: CCHeapArrayPointer, _: AST.EPlus) =>
+          CCBinaryExpressions.BinaryOperators.Plus(lhs, rhs).term
+        case (_: CCHeapArrayPointer, _: CCArithType, _: AST.EMinus) =>
+          CCBinaryExpressions.BinaryOperators.Minus(lhs, rhs).term
+        case (_: CCHeapArrayPointer, _, _) | (_, _: CCHeapArrayPointer, _) =>
+          throw new ACSLParseException("Unsupported array pointer arithmetic.", srcInfo)
+        case _ =>
+          CCTerm.fromTerm(op(lhs.toTerm, rhs.toTerm), lhs.typ, Some(srcInfo))
+      }
     }
     expr match {
       case e : AST.EPlus  => binArith(e.expr_1, e.expr_2)(_ + _)

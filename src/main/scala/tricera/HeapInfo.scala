@@ -31,7 +31,7 @@ package tricera
 
 import ap.theories.ADT
 import ap.theories.heaps.{ArrayHeap, Heap, NativeHeap}
-import ap.parser.IFunction
+import ap.parser.{IFunction, ITerm}
 import tricera.concurrency.ccreader.ArrayPtrOps
 import tricera.concurrency.heap.{HeapModel, HeapTheoryModel}
 
@@ -59,6 +59,9 @@ final case class HeapInfo(heap: Heap, heapModel : HeapModel) {
 
   def isArrayPtrOffset(function : IFunction) : Boolean =
     arrayPtrOps.exists(_.offsetSel == function)
+
+  def arrayPtrOffset(pointer : ITerm) : Option[ITerm] =
+    arrayPtrOps.map(_.getOffset(pointer))
 
   private def findObjectCtorsAndSels(heap: Heap): Map[IFunction, Option[IFunction]] = {
     heap.userHeapConstructors

@@ -599,3 +599,9 @@ UNSAFE
 
 stmt-assert-pre-ptr-deref-unsafe.hcc
 UNSAFE
+
+global-array-offset-safe.hcc (native)
+SAFE
+
+global-array-offset-safe.hcc (array)
+SAFE

@@ -27,6 +27,8 @@ for name in $TESTS; do
 done
 
 TESTS="global-array-increment-safe.c \
+       global-array-offset.c \
+       global-array-call-aliases.c \
        global-array-increment-unsafe.c \
        global-array-pointer-alias-unsafe.c \
        global-array-pointer-reassign-safe.c"
@@ -37,4 +39,9 @@ for heap in native array; do
         echo "$name ($heap)"
         $TRI_CMD "$@" -assertNoVerify -acsl -forceNondetInit -heapModel:$heap -m:main $name 2>&1 | grep -v 'at '
     done
+
+    # Check that concrete initial values survive in the precondition too.
+    echo
+    echo "global-array-offset.c ($heap, initialized)"
+    $TRI_CMD "$@" -solutionReconstruction:cegar -assertNoVerify -acsl -heapModel:$heap -m:main global-array-offset.c 2>&1 | grep -v 'at '
 done

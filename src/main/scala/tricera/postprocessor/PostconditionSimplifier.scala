@@ -36,7 +36,7 @@
  * In this contract processor, attempts are made to simplify the postcondition by
  * using the information in the precondition. This is done as the simplified
  * postcondition may contain more clauses that are directly expressible in ACSL.
- * The precondition is left unchanged.
+ * Expanded array-heap reads are also normalised in the precondition.
  */
 
 package tricera.postprocessor
@@ -64,11 +64,15 @@ object PostconditionSimplifier extends ResultProcessor {
                             preCondition,
                             PostCondition(postInv),
                             loopInvariants) =>
+      val preInv = preCondition.invariant
       val newInvs = FunctionInvariants(
-        id, isSrcAnnotated, preCondition,
+        id, isSrcAnnotated,
+        PreCondition(Invariant(
+          normaliseHeapReads(preInv.expression, preInv.expression, preInv.heapInfo),
+          preInv.heapInfo, preInv.sourceInfo)),
         PostCondition(Invariant(
           simplify(postInv.expression,
-                   asOldState(preCondition.invariant.expression)),
+                   asOldState(preCondition.invariant.expression), postInv.heapInfo),
           postInv.heapInfo, postInv.sourceInfo)),
         loopInvariants)
       DebugPrinter.oldAndNew(this, funcInvs, newInvs)
@@ -103,7 +107,8 @@ object PostconditionSimplifier extends ResultProcessor {
   }
 
   private def simplify(postcondition : IFormula,
-                       precondition  : IFormula) : IFormula = {
+                       precondition  : IFormula,
+                       heapInfo      : Option[HeapInfo]) : IFormula = {
 
     val postConjs =
       LineariseVisitor(
@@ -118,10 +123,53 @@ object PostconditionSimplifier extends ResultProcessor {
     // read-over-write axiom of the theory of heaps. We simplify heap conjuncts
     // using non-heap conjuncts though.
     val (postHeapConjs, otherConjs) =
-      postConjs.partition(c => HeapFunDetector(c))
+      postConjs.partition(c => HeapFunDetector(c, heapInfo))
     val simpHeap  = simplifyHelper(and(postHeapConjs),
                                    precondition &&& and(otherConjs))
-    simpHeap &&& and(otherConjs)
+    val simplified = simpHeap &&& and(otherConjs)
+    normaliseHeapReads(simplified, precondition, heapInfo)
+  }
+
+  private def normaliseHeapReads(form: IFormula, pre: IFormula,
+                                 heapInfo: Option[HeapInfo]): IFormula =
+    heapInfo.map(_.heap) match {
+      case Some(heap: ap.theories.heaps.ArrayHeap) =>
+        normaliseArrayHeapReads(form, pre, heap)
+      case _ => form
+    }
+
+  private def normaliseArrayHeapReads(post: IFormula, pre: IFormula,
+                                  heap: ap.theories.heaps.ArrayHeap): IFormula = {
+    import IExpression._
+    val sizes: Map[ITerm, ITerm] = LineariseVisitor(pre, IBinJunctor.And).flatMap {
+      case DiffEq(size @ IFunApp(f, _), start @ IFunApp(g, _), n)
+          if f == heap.heapSize && g == heap.rangeStart =>
+        Some(size -> (start + n))
+      case DiffEq(start @ IFunApp(g, _), size @ IFunApp(f, _), n)
+          if f == heap.heapSize && g == heap.rangeStart =>
+        Some(size -> (start - n))
+      case _ => None
+    }.toMap
+    val context = pre & post
+    val visitor = new CollectingVisitor[Unit, IExpression] {
+      override def postVisit(t: IExpression, arg: Unit,
+                             subres: Seq[IExpression]): IExpression =
+        (t update subres) match {
+          case read @ IFunApp(select, Seq(IFunApp(contents, Seq(h)), index))
+              if select == heap.arrayTheory.select && contents == heap.heapContents &&
+                SymbolCollector.variables(read).isEmpty =>
+            val resolvedIndex = Rewriter.rewrite(index, {
+              case t: ITerm if sizes.contains(t) => sizes(t)
+              case e => e
+            }).asInstanceOf[ITerm]
+            val address = heap.addr(new Simplifier().apply(resolvedIndex))
+            if (isImplied(context, heap.isAlloc(h, address)))
+              heap.read(h, address)
+            else read
+          case updated => updated
+        }
+    }
+    visitor.visit(post, ()).asInstanceOf[IFormula]
   }
 
   private def simplifyHelper(f       : IFormula,
@@ -177,23 +225,29 @@ object PostconditionSimplifier extends ResultProcessor {
   }
 
   private object HeapFunDetector {
-    def apply(f : IFormula) : Boolean = {
-      val visitor = new HeapFunDetector
+    def apply(f: IFormula, heapInfo: Option[HeapInfo]): Boolean = {
+      val visitor = new HeapFunDetector(heapInfo)
       visitor.visit(f, ())
       visitor.hasHeap
     }
   }
-  private class HeapFunDetector extends CollectingVisitor[Unit, Unit] {
+  private class HeapFunDetector(heapInfo: Option[HeapInfo])
+      extends CollectingVisitor[Unit, Unit] {
     var hasHeap = false
-    override def preVisit(t : IExpression, arg : Unit) : PreVisitResult = t match {
+    override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
       case IFunApp(function @ Heap.HeapRelatedFunction(heap), _)
-        if heap.functions.contains(function) =>
-        //  heap.functions.contains(function) excludes functions allocResHeap
-        //  and allocResAddr, but those should not be appearing in results
+          if heap.functions.contains(function) =>
         hasHeap = true
         ShortCutResult()
       case IAtom(predicate @ Heap.HeapRelatedPredicate(heap), _)
-        if heap.predicates.contains(predicate) =>
+          if heap.predicates.contains(predicate) =>
+        hasHeap = true
+        ShortCutResult()
+      case IFunApp(function, _) if heapInfo.exists(_.heap match {
+        case h: ap.theories.heaps.ArrayHeap =>
+          function == h.heapContents || function == h.heapSize || function == h.heapPair
+        case _ => false
+      }) =>
         hasHeap = true
         ShortCutResult()
       case _ => KeepArg
