@@ -193,7 +193,9 @@ object CCReader {
                          val acslContext : ACSLTranslator.FunctionContext,
                          val prePredACSLArgNames : scala.Seq[String],
                          val postPredACSLArgNames : scala.Seq[String],
-                         val heapModel : Option[HeapModel])
+                         val heapModel : Option[HeapModel],
+                         val globalArrayPrecondition : IFormula,
+                         val globalArrayPostcondition : IFormula)
 
   case class FuncDef(body : Option[Compound_stm],
                      decl : Declarator,
@@ -1134,6 +1136,36 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     val funsThatMightHaveACSLContracts : Map[FuncDef, scala.Seq[(AnnotationInfo, SourceInfo)]] =
       functionAnnotations.filter(_._2.exists(_._1.isInstanceOf[MaybeACSLAnnotation]))
 
+    def isDeclaredGlobalArray(v : CCVar) : Boolean = v.typ match {
+      case p : CCHeapArrayPointer =>
+        p.arrayLocation == ArrayLocation.Global && p.declaredSize.isDefined
+      case _ => false
+    }
+
+    // known facts about global arrays
+    def globalArrayStorageFacts(globalVars : scala.Seq[CCVar]) : IFormula = {
+      import IExpression._
+      val arrays = for (v <- globalVars if isDeclaredGlobalArray(v);
+                        p = v.typ.asInstanceOf[CCHeapArrayPointer];
+                        size <- p.declaredSize)
+        yield (p.ptrOps.getRange(v.term), p.ptrOps.getOffset(v.term), size)
+      if (arrays.isEmpty)
+        return IBoolLit(true)
+
+      val heapTerm = globalVars.find(_.typ.isInstanceOf[CCHeap]).get.term
+      val allocated = and(for ((range, offset, size) <- arrays) yield {
+        (offset === 0) & (heap.rangeSize(range) === size) &
+          (if (size <= 0) IBoolLit(true) else
+            heap.isAlloc(heapTerm, heap.rangeNth(range, 0)) &
+            heap.isAlloc(heapTerm, heap.rangeNth(range, size - 1)))
+      })
+      val separated = and(for (Seq((a, _, n), (b, _, m)) <- arrays.combinations(2)
+                               if n > 0 && m > 0) yield
+        !heap.rangeWithin(a, heap.rangeNth(b, 0)) &
+        !heap.rangeWithin(b, heap.rangeNth(a, 0)))
+      allocated &&& separated
+    }
+
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
       scope.LocalVars.pushFrame
       pushArguments(fun)
@@ -1141,6 +1173,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
       val oldVars = scope.allFormalVars map (v =>
         new CCVar(v.name + Literals.preExecSuffix, v.srcInfo, v.typ, v.storage))
+      val oldVarCopies = scope.allFormalVars.zip(oldVars).toMap
+      val oldGlobalVars = scope.GlobalVars.formalVars.map(oldVarCopies)
       // the pre-condition: f_pre(preOldVars)
       val prePred = newPred(fun.name + Literals.predPreSuffix, oldVars,
         Some(fun.sourceInfo))
@@ -1252,7 +1286,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       }
 
       val funContext = new FunctionContext(prePred, postPred,
-        new ReaderFunctionContext, prePredArgACSLNames, postPredACSLArgNames, heapModel)
+        new ReaderFunctionContext, prePredArgACSLNames, postPredACSLArgNames, heapModel,
+        globalArrayStorageFacts(oldGlobalVars),
+        globalArrayStorageFacts(postGlobalVars.toSeq) &
+          // a call may change array contents, but not move a declared array
+          and(for ((before, after) <- oldGlobalVars.zip(postGlobalVars)
+                   if isDeclaredGlobalArray(before)) yield before.term === after.term))
       functionContexts += ((fun.name, funContext))
     }
 
@@ -1837,7 +1876,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                     }
                   case _ : CCHeapPointer if res.typ.isInstanceOf[CCHeapArrayPointer] =>
                     // lhs is actually a heap array pointer
-                    (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ,
+                    // an initialzied ptr is not another declared array object
+                    (new CCVar(lhsVar.name, lhsVar.srcInfo,
+                               res.typ.asInstanceOf[CCHeapArrayPointer]
+                                 .copy(declaredSize = None),
                                lhsVar.storage), res)
                   case _ : CCHeapPointer if res.typ.isInstanceOf[CCStackPointer] =>
                     // lhs is actually a stack pointer

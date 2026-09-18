@@ -121,18 +121,30 @@ class TriCeraParameters extends GlobalParameters {
 
   var displayACSL = false
   var inferLoopInvariants = false
-  var fullSolutionOnAssert = true
+  var assertionsNoVerify = false
   var smoke = false
 
   override def needFullSolution: Boolean =
-    (assertions && fullSolutionOnAssert) ||
+    assertions ||
       displaySolutionProlog || displaySolutionSMT || displayACSL || log ||
       inferLoopInvariants || smoke
+
+  override def setupApUtilDebug = {
+    val as = assertions || assertionsNoVerify
+    val vi = verifyInterpolants
+    ap.util.Debug.enabledAssertions.value = {
+      case (_, ap.util.Debug.AC_INTERPOLATION_IMPLICATION_CHECKS) => vi
+      case _ => as
+    }
+  }
 
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
     that.arithMode = this.arithMode
     that.smoke = this.smoke
+    that.assertionsNoVerify = this.assertionsNoVerify
+    that.displayACSL = this.displayACSL
+    that.inferLoopInvariants = this.inferLoopInvariants
   }
 
   override def clone: TriCeraParameters = {
@@ -322,8 +334,10 @@ class TriCeraParameters extends GlobalParameters {
     case "-dotCEX" :: rest => pngNo = false; parseArgs(rest)
     case "-eogCEX" :: rest => pngNo = false; eogCEX = true; parseArgs(rest)
     case "-cex" :: rest => plainCEX = true; parseArgs(rest)
-    case "-assert" :: rest => TriCeraParameters.get.assertions = true; parseArgs(rest)
-    case "-assertNoVerify" :: rest => TriCeraParameters.get.assertions = true;  TriCeraParameters.get.fullSolutionOnAssert = false; parseArgs(rest)
+    case "-assert" :: rest =>
+      assertions = true; assertionsNoVerify = false; parseArgs(rest)
+    case "-assertNoVerify" :: rest =>
+      assertions = false; assertionsNoVerify = true; parseArgs(rest)
     case "-dev" :: rest => devMode = true; showVarLineNumbersInTerms = true; parseArgs(rest)
     case "-debug" :: rest => printDebugMessages = true; parseArgs(rest)
     case "-debugHeapTypes" :: rest => printDebugHeapTypes = true; parseArgs(rest)

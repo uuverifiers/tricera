@@ -118,15 +118,14 @@ class Encoder(reader : CCReader) {
     val backmapping = new collection.mutable.HashMap[Clause, Option[Clause]]
     system.backgroundAxioms match {
       case SomeBackgroundAxioms(preds, clauses) => {
-        // FIXME: Delete *_pre/*_post predicates relating to annotated
-        //        functions from preds?  Not sure what its usage is.
         val encoded = clauses.collect({
           case c@Clause(head, List(atom), _) if prePredsToReplace(atom.pred) => {
             // Handles entry clause, e.g:
             // f0(..) :- f_pre(..) ==> f0(..) :- <pre>
             val name    : String   = atom.pred.name.stripSuffix(predPreSuffix)
             val preAtom : IAtom    = funToPreAtom(name)
-            val preCond : IFormula = funToContract(name).pre
+            val preCond : IFormula = funToContract(name).pre &&&
+              reader.getFunctionContexts(name).globalArrayPrecondition
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
             new CCClause(Clause(head, List(), constr),
                          reader.getRichClause(c).get.srcInfo)
@@ -140,7 +139,10 @@ class Encoder(reader : CCReader) {
           case c@Clause(head, _, _) if !postPredsToReplace(head.pred) =>
             replacePostPredInBody(reader.getRichClause(c).get)
         })
-        (preds, encoded)
+        // remove preds replaced by contracts
+        val remainingPreds = preds.filterNot(p =>
+          prePredsToReplace(p) || postPredsToReplace(p))
+        (remainingPreds, encoded)
       }
       case NoBackgroundAxioms => (Nil, Nil)
     }
@@ -156,7 +158,8 @@ class Encoder(reader : CCReader) {
             // f0(..) :- f_pre(..) ==> f0(..) :- <pre>
             val name    : String   = atom.pred.name.stripSuffix(predPreSuffix)
             val preAtom : IAtom    = funToPreAtom(name)
-            val preCond : IFormula = funToContract(name).pre
+            val preCond : IFormula = funToContract(name).pre &&&
+              reader.getFunctionContexts(name).globalArrayPrecondition
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
             (Clause(head, List(), constr), sync)
           }
@@ -193,7 +196,8 @@ class Encoder(reader : CCReader) {
         case atom :: Nil =>
           val name : String = atom.pred.name.stripSuffix(predPostSuffix)
           val postAtom : IAtom = funToPostAtom(name)
-          val postCond : IFormula = funToContract(name).post
+          val postCond : IFormula = funToContract(name).post &&&
+            reader.getFunctionContexts(name).globalArrayPostcondition
           val assigns  : IFormula = funToContract(name).assignsAssume
           (constr &&& applyArgs(postCond &&& assigns, postAtom, atom),
             Some(funToContract(name).postSrcInfo)

@@ -287,7 +287,7 @@ class Main (args: Array[String]) {
       }
     }
 
-    ap.util.Debug enableAllAssertions lazabs.Main.assertions
+    params.setupApUtilDebug
 
     if (princess)
       Prover.setProver(lazabs.prover.TheoremProver.PRINCESS)

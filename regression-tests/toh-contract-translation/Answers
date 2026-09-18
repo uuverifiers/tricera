@@ -269,3 +269,67 @@ Inferred ACSL annotations
 ================================================================================
 
 SAFE
+
+global-array-increment-safe.c (native)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for increment */
+/*@
+  requires n == 1 && x == a && \valid(a);
+  ensures \old(n) == 1 && \old(a) == \old(x) && a == \old(x) && \valid(x);
+*/
+================================================================================
+
+SAFE
+
+global-array-increment-unsafe.c (native)
+UNSAFE
+
+global-array-pointer-alias-unsafe.c (native)
+UNSAFE
+
+global-array-pointer-reassign-safe.c (native)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for reassign */
+/*@
+  requires p == a;
+  ensures \old(p) == a && \old(b) == b && \old(a) == a && p == b;
+*/
+================================================================================
+
+SAFE
+
+global-array-increment-safe.c (array)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for increment */
+/*@
+  requires n == 1 && x == a && \valid(a);
+  ensures \old(n) == 1 && \old(a) == \old(x) && a == \old(x) && \valid(x);
+*/
+================================================================================
+
+SAFE
+
+global-array-increment-unsafe.c (array)
+UNSAFE
+
+global-array-pointer-alias-unsafe.c (array)
+UNSAFE
+
+global-array-pointer-reassign-safe.c (array)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for reassign */
+/*@
+  requires p == a;
+  ensures \old(p) == a && \old(b) == b && \old(a) == a && p == b;
+*/
+================================================================================
+
+SAFE

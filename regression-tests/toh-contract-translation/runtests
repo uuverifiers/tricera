@@ -25,3 +25,16 @@ for name in $TESTS; do
     echo $name
     $TRI_CMD -cex -acsl -m:entry "$@" $name 2>&1 | grep -v 'at '
 done
+
+TESTS="global-array-increment-safe.c \
+       global-array-increment-unsafe.c \
+       global-array-pointer-alias-unsafe.c \
+       global-array-pointer-reassign-safe.c"
+
+for heap in native array; do
+    for name in $TESTS; do
+        echo
+        echo "$name ($heap)"
+        $TRI_CMD "$@" -assertNoVerify -acsl -forceNondetInit -heapModel:$heap -m:main $name 2>&1 | grep -v 'at '
+    done
+done

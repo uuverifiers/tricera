@@ -594,7 +594,9 @@ class Symex private (context        : SymexContext,
             case _ : CCHeapPointer =>
               throw new TranslationException(
                 getLineString(exp) + "Cannot assign an array value to " + lhsName)
-            case arrayPtr2 : CCHeapArrayPointer if arrayPtr1 != arrayPtr2 =>
+            case arrayPtr2 : CCHeapArrayPointer
+                if arrayPtr1.copy(declaredSize = None) !=
+                   arrayPtr2.copy(declaredSize = None) =>
               if (arrayPtr1.arrayLocation == ArrayLocation.Stack &&
                   arrayPtr2.arrayLocation == ArrayLocation.Heap)
                 scope.updateVarType(lhsName, arrayPtr1, evalCtx.enclosingFunctionName)
