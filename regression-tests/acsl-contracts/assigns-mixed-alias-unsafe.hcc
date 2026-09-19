@@ -1,0 +1,16 @@
+struct S { int x; };
+
+/*@ requires \valid(s);
+    assigns *p, *s;
+    ensures \valid(s);
+*/
+void update(int *p, struct S *s);
+
+int main() {
+  struct S *s = malloc(sizeof(struct S));
+  s->x = 42;
+  update((int *)s, s);
+  // the contract allows s->x to change
+  assert(s->x == 42);
+  return 0;
+}

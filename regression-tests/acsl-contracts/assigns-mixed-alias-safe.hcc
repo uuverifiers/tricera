@@ -1,0 +1,19 @@
+struct S { int x; };
+
+/*@ requires \valid(s);
+    assigns *p, *s;
+    ensures \valid(s);
+*/
+void update(int *p, struct S *s) {
+  s->x = 43;
+}
+
+int main() {
+  struct S *s = malloc(sizeof(struct S));
+  s->x = 42;
+  update((int *)s, s);
+  int *p = malloc(sizeof(int));
+  *p = 7;
+  update(p, s);
+  return *p;
+}

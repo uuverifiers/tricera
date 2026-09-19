@@ -630,6 +630,18 @@ SAFE
 valid-pointer-ensures-unsafe.hcc (native)
 UNSAFE
 
+assigns-mixed-alias-safe.hcc (native)
+SAFE
+
+assigns-mixed-alias-unsafe.hcc (native)
+UNSAFE
+
+assigns-unchanged-type-unsafe.hcc (native)
+UNSAFE
+
+assigns-freed-unsafe.hcc (native)
+UNSAFE
+
 param-shadow-safe.hcc (array)
 SAFE
 
@@ -646,4 +658,16 @@ valid-pointer-ensures-safe.hcc (array)
 SAFE
 
 valid-pointer-ensures-unsafe.hcc (array)
+UNSAFE
+
+assigns-mixed-alias-safe.hcc (array)
+SAFE
+
+assigns-mixed-alias-unsafe.hcc (array)
+UNSAFE
+
+assigns-unchanged-type-unsafe.hcc (array)
+UNSAFE
+
+assigns-freed-unsafe.hcc (array)
 UNSAFE

@@ -1,0 +1,11 @@
+/*@ assigns *p; */
+void leave(int *p) {}
+
+int main() {
+  int *p = malloc(sizeof(int));
+  *p = 7;
+  free(p);
+  leave(p);
+  // assigns does not make a freed pointer valid again
+  return *p;
+}

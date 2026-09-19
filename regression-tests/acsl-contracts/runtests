@@ -216,7 +216,9 @@ done
 for heap in native array; do
     for name in param-shadow-safe.hcc param-shadow-unsafe.hcc \
                 enum-array-safe.hcc enum-array-unsafe.hcc \
-                valid-pointer-ensures-safe.hcc valid-pointer-ensures-unsafe.hcc; do
+                valid-pointer-ensures-safe.hcc valid-pointer-ensures-unsafe.hcc \
+                assigns-mixed-alias-safe.hcc assigns-mixed-alias-unsafe.hcc \
+                assigns-unchanged-type-unsafe.hcc assigns-freed-unsafe.hcc; do
         echo
         echo "$name ($heap)"
         $TRI_CMD "$@" -valid-deref -heapModel:$heap "$name" 2>&1 | grep -v 'at '

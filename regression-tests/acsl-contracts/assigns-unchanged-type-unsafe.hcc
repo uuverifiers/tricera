@@ -1,0 +1,16 @@
+struct S { int x; };
+
+/*@ requires \valid(s);
+    assigns *p;
+    ensures \valid(s);
+*/
+void leave(int *p, struct S *s) {}
+
+int main() {
+  struct S *s = malloc(sizeof(struct S));
+  s->x = 42;
+  leave((int *)s, s);
+  // leaving the struct untouched must not make the call inconsistent
+  assert(0);
+  return 0;
+}

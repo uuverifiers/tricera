@@ -401,49 +401,29 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
                 val newHeap : ITerm = funCtx.getHeapTerm
                 val oldHeap : ITerm = funCtx.getOldHeapTerm
 
-                // Implicit existensional
-                val addrObjPairs : List[(ITerm, ITerm)] =
-                  (for ((ptr, i) <- ptrs zipWithIndex) yield {
-                    val o = new SortedConstantTerm("_o" + i, heap.ObjectSort)
-                    (ptr, IConstant(o))
-                  }).toList
-
-                val modifiedHeap : ITerm =
-                  addrObjPairs.foldLeft(oldHeap) ({
-                    case (h, pair) => heap.write(h, pair._1, pair._2)
+                // restore the assigned cells from the final heap
+                val modifiedHeap = ptrs.foldLeft(oldHeap) { (h, ptr) =>
+                  heap.write(h, ptr, heap.read(newHeap, ptr))
+                }
+                val ptrsBySort = ptrDerefs.groupBy {
+                  _.typ.asInstanceOf[CCHeapPointer].typ.toSort
+                }.map { case (sort, ps) => (sort, ps.map(_.toTerm)) }
+                val corrSort = IExpression.and(ptrs.map { ptr =>
+                  // an assigned cell may stay untouched
+                  val oldValue = heap.read(oldHeap, ptr)
+                  val newValue = heap.read(newHeap, ptr)
+                  // aliases may list different types for the same cell
+                  val allowedType = IExpression.or(ptrsBySort.map {
+                    case (sort, ps) =>
+                      val sameAddress = if (ps contains ptr) IBoolLit(true)
+                                        else IExpression.or(ps.map(_ === ptr))
+                      sameAddress &&&
+                        heap.hasUserHeapCtor(newValue, ctx.getCtor(sort))
                   })
-
-                val ptrObjPairs : List[(CCTerm, ITerm)] =
-                  ptrDerefs.zip(addrObjPairs.map(_._2)).toList
-
-                val corrSort : IFormula =
-                  ptrObjPairs.foldLeft(IBoolLit(true) : IFormula) (
-                    (formula, pair) => {
-                      val (p, obj) = pair
-                      val sort : Sort =
-                        p.typ.asInstanceOf[CCHeapPointer].typ.toSort
-                      val corr : IFormula =
-                        funCtx.getHeap.hasUserHeapCtor(obj, ctx.getCtor(sort))
-                      formula &&& corr
-                    }
-                  )
-
-                val assumeConstr : IFormula
-                  = newHeap === modifiedHeap &&& corrSort
-
-                // Implicit universal
-                val quant : ITerm =
-                  new SortedConstantTerm("_p", funCtx.getHeap.AddressSort)
-                val quantifiedNotEqual : IFormula =
-                  ptrs.foldLeft(IBoolLit(true) : IFormula) (
-                    (formula, ptr) => formula &&& quant =/= ptr
-                  )
-
-                val readEq : IFormula =
-                  heap.read(newHeap, quant) === heap.read(oldHeap, quant)
-                val assertConstr : IFormula = quantifiedNotEqual ==> readEq
-
-                (assertConstr, assumeConstr)
+                  (newValue === oldValue) ||| allowedType
+                })
+                val frame = (newHeap === modifiedHeap) &&& corrSort
+                (frame, frame)
             }
           (heapAssert &&& globConstraint &&& arrayElemConstraint,
            heapAssume &&& globConstraint &&& arrayElemConstraint)
