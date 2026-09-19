@@ -73,20 +73,21 @@ class Encoder(reader : CCReader) {
     val asserts = encodeAssertions
     val backAxi = encodeBackgroundAxioms
     val processes : ProcessSet =
-      if (hasACSLEntryFunction) encodeProcessesEntry else encodeProcesses
-
-    asserts.foreach(cc => reader.mkRichAssertionClause(
-      cc.clause, cc.srcInfo, cc.property))
+      if (hasACSLEntryFunction) encodeProcessesEntry else system.processes
 
     system.copy(
-      assertions = asserts.map(_.clause),
+      assertions = asserts.map(replacePostPredInBody),
       backgroundAxioms = backAxi match {
         case (Nil, Nil) =>
           ParametricEncoder.NoBackgroundAxioms
         case (preds, clauses) =>
-          ParametricEncoder.SomeBackgroundAxioms(preds, clauses.map(_.clause))
+          ParametricEncoder.SomeBackgroundAxioms(preds, clauses.map(replacePostPredInBody))
       },
-      processes = processes
+      processes = processes.map { case (clauses, replication) =>
+        (clauses.map { case (clause, sync) =>
+          (replacePostPredInBody(reader.getRichClause(clause).get), sync)
+        }, replication)
+      }
     )
   }
   /**
@@ -137,7 +138,7 @@ class Encoder(reader : CCReader) {
             buildPreClause(reader.getRichClause(c).get)
           }
           case c@Clause(head, _, _) if !postPredsToReplace(head.pred) =>
-            replacePostPredInBody(reader.getRichClause(c).get)
+            reader.getRichClause(c).get
         })
         // remove preds replaced by contracts
         val remainingPreds = preds.filterNot(p =>
@@ -152,7 +153,7 @@ class Encoder(reader : CCReader) {
     system.processes.map({
       case (p, r) =>
         val updated = p.collect({
-          case (Clause(head, List(atom), _), sync)
+          case (c@Clause(head, List(atom), _), sync)
             if prePredsToReplace(atom.pred) => {
             // Handles entry clause, e.g:
             // f0(..) :- f_pre(..) ==> f0(..) :- <pre>
@@ -161,50 +162,45 @@ class Encoder(reader : CCReader) {
             val preCond : IFormula = funToContract(name).pre &&&
               reader.getFunctionContexts(name).globalArrayPrecondition
             val constr  : IFormula = applyArgs(preCond, preAtom, atom)
-            (Clause(head, List(), constr), sync)
+            (reader.addRichClause(Clause(head, List(), constr),
+              reader.getRichClause(c).get.srcInfo).clause, sync)
           }
           case (c@Clause(head, _, _), sync) if !(postPredsToReplace(head.pred)
                                             || prePredsToReplace(head.pred)) =>
             // Keep all other clauses besides those which we generate assertions for.
-              (replacePostPredInBody(reader.getRichClause(c).get).clause, sync) // todo: fix
+              (c, sync)
         })
-        for((clause, _) <- updated) {
-          reader.addRichClause(clause, None) // todo: add line numbers
-        }
         (updated, r)
     })
   }
 
-  private def encodeProcesses : ParametricEncoder.ProcessSet = {
-    system.processes.map({
-      case (p, r) =>
-        val (clauses, syncs) = p.unzip
-        val newClauses : Seq[CCClause] = clauses.map(
-          c => replacePostPredInBody(reader.getRichClause(c).get))
-        newClauses.foreach(cc => reader.addRichClause(cc.clause, cc.srcInfo))
-        (newClauses.map(_.clause).zip(syncs), r) // todo: fix
-    })
-  }
-
-  private def replacePostPredInBody(c : CCClause) : CCClause = c match {
+  private def replacePostPredInBody(c : CCClause) : Clause = c match {
     // Handles assumption of postcondition after call, e.g:
     // mainN+1(..) :- mainN(..), f_post(..) ==>
     // mainN+1(..) :- mainN(..), <post> & <assigns>
     case CCClause(Clause(head, body, constr), oldSrcInfo) =>
       val (toss, keep) = body.partition(a => postPredsToReplace(a.pred))
-      val (maybeNewConstr, newSrcInfo) = toss match {
-        case atom :: Nil =>
-          val name : String = atom.pred.name.stripSuffix(predPostSuffix)
-          val postAtom : IAtom = funToPostAtom(name)
-          val postCond : IFormula = funToContract(name).post &&&
-            reader.getFunctionContexts(name).globalArrayPostcondition
-          val assigns  : IFormula = funToContract(name).assignsAssume
-          (constr &&& applyArgs(postCond &&& assigns, postAtom, atom),
-            Some(funToContract(name).postSrcInfo)
-          )
-        case _ => (constr, oldSrcInfo)
+      // nested calls can cause several post preds
+      val postconditions = toss.map { atom =>
+        val name = atom.pred.name.stripSuffix(predPostSuffix)
+        val contract = funToContract(name)
+        applyArgs(contract.post &&& contract.assignsAssume &&&
+          reader.getFunctionContexts(name).globalArrayPostcondition,
+          funToPostAtom(name), atom)
       }
-      new CCClause(Clause(head, keep, maybeNewConstr), newSrcInfo)
+      val newSrcInfo = toss match {
+        case atom :: Nil => Some(funToContract(
+          atom.pred.name.stripSuffix(predPostSuffix)).postSrcInfo)
+        case _ => oldSrcInfo
+      }
+      val clause = Clause(head, keep, constr &&& IExpression.and(postconditions))
+      c match {
+        // Keep the assertion's location and property for error reporting.
+        case a : CCAssertionClause =>
+          reader.mkRichAssertionClause(clause, a.srcInfo, a.property)
+        case _ => reader.addRichClause(clause, newSrcInfo)
+      }
+      clause
   }
 
   // Handles function calls, e.g:
@@ -214,7 +210,8 @@ class Encoder(reader : CCReader) {
     val name    : String   = old.clause.head.pred.name.stripSuffix(predPreSuffix)
     val preCond : IFormula = funToContract(name).pre
     val preAtom : IAtom    = funToPreAtom(name)
-    val constr  : IFormula = applyArgs(preCond, preAtom, old.clause.head).unary_!
+    val constr  : IFormula = old.clause.constraint &&&
+      applyArgs(preCond, preAtom, old.clause.head).unary_!
     reader.mkRichAssertionClause(Clause(falseHead, old.clause.body, constr),
                               old.srcInfo,
                               tricera.properties.FunctionPrecondition(name, old.srcInfo))
@@ -229,14 +226,14 @@ class Encoder(reader : CCReader) {
     val namedAsserts = named.map { case (clauseName, f) =>
       reader.mkRichAssertionClause(
         Clause(falseHead, old.clause.body,
-               applyArgs(f, preAtom, old.clause.head).unary_!),
+               old.clause.constraint &&& applyArgs(f, preAtom, old.clause.head).unary_!),
         old.srcInfo,
         tricera.properties.FunctionPrecondition(name, old.srcInfo, clauseName))
     }
     val unnamedPre : IFormula = IExpression.and(unnamed.map(_._2))
     val rest = reader.mkRichAssertionClause(
       Clause(falseHead, old.clause.body,
-             applyArgs(unnamedPre, preAtom, old.clause.head).unary_!),
+             old.clause.constraint &&& applyArgs(unnamedPre, preAtom, old.clause.head).unary_!),
       old.srcInfo,
       tricera.properties.FunctionPrecondition(name, old.srcInfo))
     namedAsserts :+ rest

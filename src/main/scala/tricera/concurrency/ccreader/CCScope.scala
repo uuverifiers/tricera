@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Zafer Esen, Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2025=2026 Zafer Esen, Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -75,6 +75,14 @@ class CCScope {
   }
   object LocalVars extends CCVars {
     val frameStack = new mutable.Stack[Int]
+    private[CCScope] var firstVisible = 0
+
+    // to hide the calling context's vars from an inlined fun
+    def withFunctionScope[A](body : => A) : A = {
+      val saved = firstVisible
+      firstVisible = size
+      try body finally firstVisible = saved
+    }
 
     override def addVar (v : CCVar) : Int = {
       variableHints += List()
@@ -104,7 +112,7 @@ class CCScope {
       reduceToSize(variableHints, GlobalVars.size + newSize)
     }
     def getVarsInTopFrame : List[CCVar] =
-      (vars takeRight (vars.size - frameStack.last)).toList
+      (vars takeRight (vars.size - frameStack.head)).toList
   }
 
   def lookupVarNoException(name : String, enclosingFunction : String)
@@ -119,7 +127,8 @@ class CCScope {
      *       invisible to regular C code; use `lookupAnyVarNoException` instead.
      */
     LocalVars.lastIndexWhere(name, enclosingFunction) match {
-      case -1 => GlobalVars.lastIndexWhere(name, enclosingFunction)
+      case i if i < LocalVars.firstVisible =>
+        GlobalVars.lastIndexWhere(name, enclosingFunction)
       case i  => i + GlobalVars.size
     }
   }
@@ -141,7 +150,8 @@ class CCScope {
   def lookupAnyVarNoException(name : String, enclosingFunction : String)
   : Int = {
     LocalVars.lastIndexWhereIncludingGhost(name, enclosingFunction) match {
-      case -1 => GlobalVars.lastIndexWhereIncludingGhost(name, enclosingFunction)
+      case i if i < LocalVars.firstVisible =>
+        GlobalVars.lastIndexWhereIncludingGhost(name, enclosingFunction)
       case i  => i + GlobalVars.size
     }
   }

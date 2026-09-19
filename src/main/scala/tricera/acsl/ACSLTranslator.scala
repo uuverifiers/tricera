@@ -68,6 +68,7 @@ object ACSLTranslator {
 
   trait FunctionContext extends AnnotationContext {
     def getOldVar(ident : String) : Option[CCVar]
+    def getOldGlobalVar(ident : String) : Option[CCVar]
     def getPostGlobalVar(ident : String) : Option[CCVar]
     def getParams  : Seq[CCVar]
     def getResultVar : Option[CCVar]
@@ -341,7 +342,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
             import ap.parser.IExpression._
             arrayElems.groupBy(_._1).foldLeft(IBoolLit(true) : IFormula) {
               case (formula, (name, elems)) =>
-                val gOld  : ITerm = funCtx.getOldVar(name).get.term
+                val gOld  : ITerm = funCtx.getOldGlobalVar(name).get.term
                 val gPost : ITerm = funCtx.getPostGlobalVar(name).get.term
                 val framed = elems.foldLeft(gOld) {
                   case (h, (_, arr, idx)) =>
@@ -358,14 +359,14 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
               ctx.getGlobals.foldLeft(IBoolLit(true) : IFormula) (
                 (formula, globVar) => {
                   val glob    : ITerm = funCtx.getPostGlobalVar(globVar.name).get.term//globVar.term
-                  val globOld : ITerm = funCtx.getOldVar(globVar.name).get.term
+                  val globOld : ITerm = funCtx.getOldGlobalVar(globVar.name).get.term
                   formula &&& glob === globOld
                 }
               )
             } else {
               val globals : Seq[ITerm] = ctx.getGlobals.map(_.term)
               val oldGlobals : Seq[ITerm] =
-                ctx.getGlobals.map(g => funCtx.getOldVar(g.name).get.term)
+                ctx.getGlobals.map(g => funCtx.getOldGlobalVar(g.name).get.term)
               val globToOld : Map[ITerm, ITerm] =
                 globals.zip(oldGlobals).toMap
               val postGlobals : Seq[ITerm] =
@@ -467,8 +468,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     : (Set[CCTerm], Set[CCTerm], Set[(String, CCArray, CCTerm)]) = {
     val srcInfo = getSourceInfo(clause)
     val funCtx = ctx.asInstanceOf[FunctionContext]
-    vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
-        ++ ctx.getGlobals.map(v => (v.name, v))).toMap
+    vars = (ctx.getGlobals.map(v => (v.name, v)) ++
+        funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
     val locations = clause match {
       case c : AST.AnAssignsClause     => c.locations_
       case c : AST.AnAssignsClauseFrom => c.locations_1
@@ -548,8 +549,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   def translate(clause : AST.EnsuresClause) : CCTerm = {
     val funCtx = ctx.asInstanceOf[FunctionContext]
     inPostCond = true
-    vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
-        ++ ctx.getGlobals.map(v => (v.name, funCtx.getPostGlobalVar(v.name).get))).toMap
+    // params shadow globals in annotations
+    vars = (ctx.getGlobals.map(v => (v.name, funCtx.getPostGlobalVar(v.name).get)) ++
+        funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
     val res = translatePred(clause.asInstanceOf[AST.AnEnsuresClause].expr_)
     inPostCond = false
     res
@@ -557,8 +559,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 
   def translate(clause : AST.RequiresClause) : CCTerm = {
     val funCtx = ctx.asInstanceOf[FunctionContext]
-    vars = (funCtx.getParams ++ ctx.getGlobals).map(v =>
-      (v.name, funCtx.getOldVar(v.name).get)).toMap
+    vars = (ctx.getGlobals.map(v => (v.name, funCtx.getOldGlobalVar(v.name).get)) ++
+        funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
     translatePred(clause.asInstanceOf[AST.ARequiresClause].expr_)
   }
 
@@ -1012,7 +1014,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
             case p : CCHeapPointer =>
               import ap.parser.IExpression.{toFunApplier, toPredApplier}
               val sort : Sort = p.typ.toSort
-              val heap : ITerm = ctx.getOldHeapTerm
+              val heap : ITerm = if (useOldHeap) ctx.getOldHeapTerm else ctx.getHeapTerm
               val valid    : IFormula = ctx.getHeap.isAlloc(heap, term.toTerm)
               val readObj  : IFunApp  = ctx.getHeap.read(heap, term.toTerm)
               val corrSort : IFormula =
@@ -1213,8 +1215,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   private def translateInOldState(e : AST.Expr) : CCTerm = {
     val old = vars
     val funCtx = ctx.asInstanceOf[FunctionContext]
-    vars = (funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))
-        ++ funCtx.getGlobals.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
+    vars = (funCtx.getGlobals.map(v => (v.name, funCtx.getOldGlobalVar(v.name).get)) ++
+        funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
     useOldHeap = true
     val res = translateTerm(e)
     useOldHeap = false

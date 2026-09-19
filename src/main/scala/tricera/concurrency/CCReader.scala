@@ -1148,22 +1148,26 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       val arrays = for (v <- globalVars if isDeclaredGlobalArray(v);
                         p = v.typ.asInstanceOf[CCHeapArrayPointer];
                         size <- p.declaredSize)
-        yield (p.ptrOps.getRange(v.term), p.ptrOps.getOffset(v.term), size)
+        yield (p.ptrOps.getRange(v.term), p.ptrOps.getOffset(v.term), size, p.elementType)
       if (arrays.isEmpty)
         return IBoolLit(true)
 
       val heapTerm = globalVars.find(_.typ.isInstanceOf[CCHeap]).get.term
-      val allocated = and(for ((range, offset, size) <- arrays) yield {
+      val allocated = and(for ((range, offset, size, _) <- arrays) yield {
         (offset === 0) & (heap.rangeSize(range) === size) &
           (if (size <= 0) IBoolLit(true) else
             heap.isAlloc(heapTerm, heap.rangeNth(range, 0)) &
             heap.isAlloc(heapTerm, heap.rangeNth(range, size - 1)))
       })
-      val separated = and(for (Seq((a, _, n), (b, _, m)) <- arrays.combinations(2)
+      val separated = and(for (Seq((a, _, n, _), (b, _, m, _)) <- arrays.combinations(2)
                                if n > 0 && m > 0) yield
         !heap.rangeWithin(a, heap.rangeNth(b, 0)) &
         !heap.rangeWithin(b, heap.rangeNth(a, 0)))
-      allocated &&& separated
+      val elementTypes = and(for ((range, _, size, typ) <- arrays if size <= 10;
+                                  i <- 0 until size) yield
+        heap.hasUserHeapCtor(heap.read(heapTerm, heap.rangeNth(range, i)),
+          sortCtorIdMap.getOrElse(typ.toSort, forceHeapObjectWrappers(Seq(typ)))))
+      allocated &&& separated &&& elementTypes
     }
 
     for(fun <- contractFuns ++ funsThatMightHaveACSLContracts.keys) {
@@ -1200,6 +1204,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
       val postOldVarsMap: Map[String, CCVar] =
       (scope.allFormalVars.map(_ name) zip oldVars).toMap
+      val oldGlobalVarsMap =
+        (scope.GlobalVars.formalVars.map(_.name) zip oldGlobalVars).toMap
       val postGlobalVarsMap: Map[String, CCVar] =
         (scope.GlobalVars.vars.map(_ name) zip postGlobalVars).toMap
 
@@ -1211,6 +1217,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       class ReaderFunctionContext extends ACSLTranslator.FunctionContext {
         def getOldVar(ident: String): Option[CCVar] =
           postOldVarsMap get ident
+
+        def getOldGlobalVar(ident: String): Option[CCVar] =
+          oldGlobalVarsMap get ident
 
         def getPostGlobalVar(ident: String): Option[CCVar] =
           postGlobalVarsMap get ident
@@ -2704,7 +2713,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                              exit : CCPredicate,
                              args : List[CCType],
                              isNoReturn : Boolean,
-                             functionName : String) : Unit = {
+                             functionName : String) : Unit = scope.LocalVars.withFunctionScope {
     scope.LocalVars pushFrame
     val stm = pushArguments(FuncDef(functionDef), args).getOrElse {
       throw new TranslationException("Only functions with bodies can be inlined.")

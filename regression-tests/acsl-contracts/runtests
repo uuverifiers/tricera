@@ -2,7 +2,9 @@
 
 
 
-TESTS="contract1.hcc  \
+TESTS="nested-calls-safe.hcc \
+       nested-calls-unsafe.hcc \
+       contract1.hcc  \
        contract2.hcc  \
        contract3.hcc  \
        contract4.hcc  \
@@ -209,4 +211,14 @@ for heap in native array; do
     echo
     echo "global-array-offset-safe.hcc ($heap)"
     $TRI_CMD "$@" -forceNondetInit -heapModel:$heap -m:main global-array-offset-safe.hcc 2>&1 | grep -v 'at '
+done
+
+for heap in native array; do
+    for name in param-shadow-safe.hcc param-shadow-unsafe.hcc \
+                enum-array-safe.hcc enum-array-unsafe.hcc \
+                valid-pointer-ensures-safe.hcc valid-pointer-ensures-unsafe.hcc; do
+        echo
+        echo "$name ($heap)"
+        $TRI_CMD "$@" -valid-deref -heapModel:$heap "$name" 2>&1 | grep -v 'at '
+    done
 done

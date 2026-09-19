@@ -1,0 +1,11 @@
+/*@ requires \valid(p); ensures \valid(p); */
+void release(int *p) {
+  free(p);
+}
+
+int main() {
+  int *p = malloc(sizeof(int));
+  *p = 0;
+  release(p);
+  return 0;
+}

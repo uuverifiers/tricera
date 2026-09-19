@@ -1,0 +1,22 @@
+int *p;
+
+void clear_global() {
+  p = 0;
+}
+
+/*@
+  requires \valid(p);
+  assigns *p;
+  ensures *p == \old(*p) + 1;
+*/
+void inc(int *p) {
+  *p += 1;
+  clear_global();
+}
+
+int main() {
+  p = malloc(sizeof(int));
+  *p = 4;
+  inc(p);
+  return 0;
+}

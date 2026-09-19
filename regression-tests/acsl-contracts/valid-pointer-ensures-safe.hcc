@@ -1,0 +1,15 @@
+/*@ ensures \valid(\result); */
+int *allocate() {
+  return malloc(sizeof(int));
+}
+
+/*@ requires \valid(p); ensures \old(\valid(p)); */
+void release(int *p) {
+  free(p);
+}
+
+int main() {
+  int *p = allocate();
+  release(p);
+  return 0;
+}

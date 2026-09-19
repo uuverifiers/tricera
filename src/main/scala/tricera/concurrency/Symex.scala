@@ -720,6 +720,11 @@ class Symex private (context        : SymexContext,
       val indexTerm = eval(index)
       arrayTerm.typ match {
         case array : CCArray =>
+          for (size <- array.sizeExpr
+               if context.propertiesToCheck(properties.MemValidDeref))
+            assertProperty((indexTerm.toTerm >= 0) &&&
+              (indexTerm.toTerm < size.toTerm), topVal.srcInfo,
+              properties.MemValidDeref)
           val oldStructTerm =
             array.arrayTheory.select(arrayTerm.toTerm, indexTerm.toTerm)
           val structType = array.elementType.asInstanceOf[CCStruct]

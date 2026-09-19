@@ -1,0 +1,17 @@
+enum Slot { LOW, HIGH };
+
+struct Record { int value; } records[2] = {{3}, {8}};
+
+/*@
+  requires 0 <= slot && slot < 2;
+  assigns \nothing;
+  ensures \valid(records + slot) && \result == \old(records[slot].value);
+*/
+int read_record(enum Slot slot) {
+  return records[slot].value;
+}
+
+int main() {
+  assert(read_record(HIGH) == 8);
+  return 0;
+}

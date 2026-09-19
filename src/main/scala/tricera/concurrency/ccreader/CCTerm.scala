@@ -113,6 +113,8 @@ object CCTerm {
 
   def unifyTypes(a: CCTerm, b: CCTerm): (CCTerm, CCTerm) = {
     (a.typ, b.typ) match {
+      case (_ : CCIntEnum, _) => unifyTypes(a.convertToType(CCInt), b)
+      case (_, _ : CCIntEnum) => unifyTypes(a, b.convertToType(CCInt))
       case _ if a.typ == b.typ =>
         (a, b)
 

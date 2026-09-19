@@ -1,4 +1,10 @@
 
+nested-calls-safe.hcc
+SAFE
+
+nested-calls-unsafe.hcc
+UNSAFE
+
 contract1.hcc
 SAFE
 
@@ -605,3 +611,39 @@ SAFE
 
 global-array-offset-safe.hcc (array)
 SAFE
+
+param-shadow-safe.hcc (native)
+SAFE
+
+param-shadow-unsafe.hcc (native)
+UNSAFE
+
+enum-array-safe.hcc (native)
+SAFE
+
+enum-array-unsafe.hcc (native)
+UNSAFE
+
+valid-pointer-ensures-safe.hcc (native)
+SAFE
+
+valid-pointer-ensures-unsafe.hcc (native)
+UNSAFE
+
+param-shadow-safe.hcc (array)
+SAFE
+
+param-shadow-unsafe.hcc (array)
+UNSAFE
+
+enum-array-safe.hcc (array)
+SAFE
+
+enum-array-unsafe.hcc (array)
+UNSAFE
+
+valid-pointer-ensures-safe.hcc (array)
+SAFE
+
+valid-pointer-ensures-unsafe.hcc (array)
+UNSAFE

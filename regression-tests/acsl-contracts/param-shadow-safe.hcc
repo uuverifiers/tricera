@@ -1,0 +1,24 @@
+int *p;
+
+void check_global() {
+  assert(p == 0);
+}
+
+/*@
+  requires \valid(p);
+  assigns *p;
+  ensures *p == \old(*p) + 1;
+*/
+void inc(int *p) {
+  *p += 1;
+}
+
+int main() {
+  int value = 4;
+  inc(&value);
+  assert(value == 5);
+  int p = 123;
+  check_global();
+  assert(p == 123);
+  return 0;
+}
