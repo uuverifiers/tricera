@@ -407,7 +407,8 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
                 }
                 val ptrsBySort = ptrDerefs.groupBy {
                   _.typ.asInstanceOf[CCHeapPointer].typ.toSort
-                }.map { case (sort, ps) => (sort, ps.map(_.toTerm)) }
+                }.toSeq.sortBy(_._1.toString)
+                 .map { case (sort, ps) => (sort, ps.map(_.toTerm)) }
                 val corrSort = IExpression.and(ptrs.map { ptr =>
                   // an assigned cell may stay untouched
                   val oldValue = heap.read(oldHeap, ptr)

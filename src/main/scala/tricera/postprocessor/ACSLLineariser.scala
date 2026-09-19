@@ -425,20 +425,26 @@ object ACSLLineariser {
           print("\\old(")
           allButLast(ctxt setPrecLevel 0, "->", ")", 2)
 
-        case IFunApp(ACSLExpression.arrayAccess, Seq(_, _)) =>
-          allButLast(ctxt setPrecLevel 0, "[", "]", 2)
+        case IFunApp(ACSLExpression.arrayAccess, Seq(_, index)) =>
+          val parens = AtomicTerm.unapply(index).isEmpty && !index.isInstanceOf[IIntLit]
+          allButLast(ctxt setPrecLevel 0, if (parens) "[(" else "[",
+                     if (parens) ")]" else "]", 2)
 
         case IFunApp(ACSLExpression.pointerOffset, Seq(_, _)) =>
           print("(")
           allButLast(ctxt setPrecLevel 0, " + ", ")", 2)
 
-        case IFunApp(ACSLExpression.arrayAccessOldPointer, Seq(_, _)) =>
+        case IFunApp(ACSLExpression.arrayAccessOldPointer, Seq(_, index)) =>
+          val parens = AtomicTerm.unapply(index).isEmpty && !index.isInstanceOf[IIntLit]
           print("\\old(")
-          allButLast(ctxt setPrecLevel 0, ")[", "]", 2)
+          allButLast(ctxt setPrecLevel 0, if (parens) ")[(" else ")[",
+                     if (parens) ")]" else "]", 2)
 
-        case IFunApp(ACSLExpression.oldArrayAccess, Seq(_, _)) =>
+        case IFunApp(ACSLExpression.oldArrayAccess, Seq(_, index)) =>
+          val parens = AtomicTerm.unapply(index).isEmpty && !index.isInstanceOf[IIntLit]
           print("\\old(")
-          allButLast(ctxt setPrecLevel 0, "[", "])", 2)
+          allButLast(ctxt setPrecLevel 0, if (parens) "[(" else "[",
+                     if (parens) ")])" else "])", 2)
 
         case IFunApp(ACSLExpression.arrayFieldAccess, Seq(_, _: IConstant)) =>
           allButLast(ctxt setPrecLevel 0, ".", "", 2)

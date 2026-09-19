@@ -214,7 +214,12 @@ object ResultConverter {
         val values = ValSetReader(form)
         def knownOffset(term: ITerm): ITerm =
           values.getVal(term).toSeq.flatMap(_.variants)
-            .find(t => !reader.getHeapInfo.exists(ContainsTOHVisitor(t, _)))
+            // prefer offsets expressible using fun args instead of caller locals
+            .filter(t => SymbolCollector.variables(t).isEmpty &&
+              SymbolCollector.constants(t).forall(pre.argVars.map(_.term).contains) &&
+              !reader.getHeapInfo.exists(ContainsTOHVisitor(t, _)))
+            .sortBy(t => (if (t.isInstanceOf[IIntLit]) 0 else 1, t.toString))
+            .headOption
             .getOrElse(term)
         def components(v: CCVar): Seq[(ITerm, ITerm)] = {
           val ops = v.typ.asInstanceOf[CCHeapArrayPointer].ptrOps
