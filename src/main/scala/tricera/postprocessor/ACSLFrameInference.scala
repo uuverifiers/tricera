@@ -42,12 +42,11 @@ import scala.util.control.NonFatal
 /** Tries to add assigns clauses from the solution if they can be verified. */
 object ACSLFrameInference {
   def apply(printed : ACSLResult, inferred : Result, reader : CCReader,
-            transforms : CallSiteTransforms) : ACSLResult =
+            transforms : CallSiteTransforms, checker : ACSLContractVerifier) : ACSLResult =
     inferred match {
       case source : Solution =>
         val contexts = reader.getFunctionContexts
         val sources = source.functionInvariants.map(i => i.id -> i).toMap
-        val checker = new ACSLContractVerifier(reader)
         val additions = transforms.map(_.getAstAdditions())
         val introducedGlobals = additions.iterator.flatMap(_.introducedGlobalVariables.keys).toSet
         // transformed functions omit parameters whose cells became globals

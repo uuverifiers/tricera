@@ -45,14 +45,13 @@ import scala.util.control.NonFatal
 /** Check that a function satisfies its printed contract for all inputs allowed
  *  by requires, including valid memory accesses and frees. */
 class ACSLContractVerifier(original : CCReader) {
-  // the original encoding may omit memory checks; build them in a separate reader
-  // once, when the first contract is checked
+  // check memory safety without changing the main encoding
   private lazy val reader = Console.withOut(lazabs.horn.Util.NullStream) {
     Console.withErr(lazabs.horn.Util.NullStream) {
       original.reencode(Set(properties.MemValidDeref, properties.MemValidFree))
     }
   }
-  private lazy val contexts = reader.getFunctionContexts
+  private[postprocessor] lazy val contexts = reader.getFunctionContexts
   private val verifiedContracts = scala.collection.mutable.Map[String, FunctionContract]()
   private val preOwners = original.getFunctionContexts.map { case (name, c) => c.prePred.pred -> name }
 
@@ -66,12 +65,29 @@ class ACSLContractVerifier(original : CCReader) {
                           atom : IAtom) : IFormula =
     ConstantSubstVisitor(form, pred.argVars.map(_.term).zip(atom.args).toMap)
 
+  private[postprocessor] def parse(printed : ACSLLinearisedContract) : FunctionContract = {
+    val assigns = printed.assigns.map(a => s"assigns $a;").getOrElse("")
+    Console.withOut(lazabs.horn.Util.NullStream) {
+      Console.withErr(lazabs.horn.Util.NullStream) {
+        ACSLTranslator.translateACSL(
+          s"/*@ requires ${printed.preCondition}; ensures ${printed.postCondition}; $assigns */",
+          contexts(printed.funcName).acslContext).asInstanceOf[FunctionContract]
+      }
+    }
+  }
+
   private object CheckTimeout extends RuntimeException
 
   // check the printed ACSL, since translation may have dropped requirements
-  def verify(printed : ACSLLinearisedContract, timeoutMillis : Long = 1000L) : Boolean = {
+  def verify(printed : ACSLLinearisedContract, timeoutMillis : Long = 1000L) : Boolean =
+    check(printed, timeoutMillis).contains(true)
+
+  // None means inconclusive
+  private[postprocessor] def check(printed : ACSLLinearisedContract,
+                                  timeoutMillis : Long) : Option[Boolean] = {
     val id = printed.funcName
-    if (original.getContractVerificationClauses(id).isEmpty) return false
+    val started = System.nanoTime()
+    if (original.getContractVerificationClauses(id).isEmpty) return None
     val params = GlobalParameters.get.clone
     val outerCheck = params.timeoutChecker
     val deadline = System.nanoTime() + timeoutMillis * 1000000L
@@ -82,42 +98,46 @@ class ACSLContractVerifier(original : CCReader) {
     }
     try {
       val proved = GlobalParameters.withValue(params) {
-        val assigns = printed.assigns.map(a => s"assigns $a;").getOrElse("")
-        val contract = Console.withOut(lazabs.horn.Util.NullStream) {
-          Console.withErr(lazabs.horn.Util.NullStream) {
-            ACSLTranslator.translateACSL(
-              s"/*@ requires ${printed.preCondition}; ensures ${printed.postCondition}; $assigns */",
-              contexts(id).acslContext).asInstanceOf[FunctionContract]
-          }
-        }
+        val contract = parse(printed)
         params.timeoutChecker()
-        val safe = verifyBody(id, contract).contains(true)
+        val safe = verifyBody(id, contract)
         params.timeoutChecker()
-        if (safe) verifiedContracts(id) = contract
+        if (safe.contains(true)) verifiedContracts(id) = contract
         safe
       }
       outerCheck()
+      Util.printlnDebug(s"ACSL contract check: $id $proved " +
+        s"(${(System.nanoTime() - started) / 1000000L} ms)")
       proved
     } catch {
       case e @ (tricera.Main.StoppedException | tricera.Main.TimeoutException) => throw e
       case NonFatal(e) =>
         Util.printlnDebug("ACSL contract check skipped " + id + ": " + e.toString)
-        false
+        None
     }
   }
 
   private def verifyBody(id : String, contract : FunctionContract) : Option[Boolean] = {
-    // include callees unless their contracts have already passed this checker
-    // the original solution need not prove memory safety
+    // include callees with no independently checked contract
     val included = scala.collection.mutable.LinkedHashSet[String]()
     def include(name : String) : Unit =
       if (included.add(name))
         callees(name).filterNot(verifiedContracts.contains).foreach(include)
     include(id)
     val clauses = included.toSeq.flatMap(reader.getContractVerificationClauses(_).toSeq.flatten)
+    val context = contexts(id)
+    val recursive = clauses.exists(_.head.pred == context.prePred.pred)
+    val recursiveChecks = if (recursive) Seq(
+      Clause(context.prePred(context.prePred.argVars), List(),
+        contract.pre &&& context.globalArrayPrecondition),
+      Clause(SimpleWrapper.FALSEAtom, List(context.postPred(context.postPred.argVars)),
+        contract.pre &&& context.globalArrayPrecondition &&&
+        !(contract.post &&& contract.assignsAssume &&& context.globalArrayPostcondition)))
+      else Nil
+
     // replace pre/post predicates with contracts; other predicates remain unknown
     val boundaries = contexts.toSeq.flatMap { case (name, c) =>
-      val known = if (name == id) Some(contract)
+      val known = if (name == id) { if (recursive) None else Some(contract) }
                   else verifiedContracts.get(name).orElse(reader.funToContract.get(name))
       known.toSeq.flatMap { annotated => Seq(
         c.prePred.pred -> (c.prePred, annotated.pre &&& c.globalArrayPrecondition),
@@ -131,9 +151,7 @@ class ACSLContractVerifier(original : CCReader) {
 
     // f_entry :- f_pre becomes f_entry :- requires
     // f_post :- f_exit becomes false :- f_exit, !ensures
-    // here ensures includes assigns and the facts about global array storage
-    // Calls to verified contracts assert requires and assume ensures
-    // Other callee preds stay in the clauses for inference
+    // ensures includes assigns and global array facts
     val checks = clauses.map { clause =>
       val (replaced, body) = clause.body.partition(a => boundaries.contains(a.pred))
       val constraint = clause.constraint &&& and(replaced.map { a =>
@@ -147,7 +165,7 @@ class ACSLContractVerifier(original : CCReader) {
         case None => Clause(clause.head, body, constraint)
       }
     }
-    val safe = SimpleWrapper.isSat(checks,
+    val safe = SimpleWrapper.isSat(checks ++ recursiveChecks,
       useTemplates = TriCeraParameters.get.templateBasedInterpolation)
     if (GlobalParameters.get.didIncompleteTransformation) None else Some(safe)
   }

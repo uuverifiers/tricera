@@ -216,4 +216,44 @@ class HeapObjectPartitionTests extends AnyFlatSpec {
       assert(!verifier.verify(contract.copy(assigns = Some("count")), 10000))
     }
   }
+
+  it should "infer stronger summaries for recursive calls" in {
+    withHeapReaders("""
+      |/*@contract@*/ int count(int n) {
+      |  if (n <= 0) return 0;
+      |  return count(n - 1) + 1;
+      |}
+      |void main() { count(2); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("count", "n >= 0",
+        "\\result >= 0 && (\\old(n) != 2 || \\result == 2)", Nil, Some("\\nothing"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(
+        postCondition = "\\old(n) != 2 || \\result == 3"), 10000))
+      assert(!verifier.verify(contract.copy(postCondition = "\\result >= 1"), 10000))
+      val specialised = contract.copy(preCondition = "n == 2", postCondition = "\\result == 2")
+      assert(verifier.verify(specialised, 10000))
+      assert(!verifier.verify(specialised.copy(postCondition = "\\result == 3"), 10000))
+    }
+  }
+
+
+  it should "preserve memory requirements in recursive calls" in {
+    withHeapReaders("""
+      |/*@contract@*/ int count(int *p, int n) {
+      |  if (n <= 0) return 0;
+      |  return *p + count(p, n - 1);
+      |}
+      |void main() { int *p = malloc(sizeof(int)); *p = 1; count(p, 2); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("count", "\\valid(p) && *p == 1 && n >= 0",
+        "\\result >= 0 && (\\old(n) != 2 || \\result == 2)", Nil, Some("\\nothing"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "\\valid(p) && n >= 0"), 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "n >= 0"), 10000))
+    }
+  }
+
 }

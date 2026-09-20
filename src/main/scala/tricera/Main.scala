@@ -606,11 +606,18 @@ class Main (args: Array[String]) {
               .through(RewrapPointers.apply)
               .through(AddValidPointerPredicates.apply)
               .through(FormulaSimplifier.apply)
-              .through(ACSLLineariser.apply)
-              .through(printed => if (displayACSL)
-                // use the solution before rewrites remove heap equalities
-                ACSLFrameInference(printed, frameSource, reader, callSiteTransforms)
-                else printed)
+              .through { translated =>
+                val printed = ACSLLineariser(translated)
+                if (displayACSL) {
+                  val checker = new ACSLContractVerifier(reader)
+                  // use the solution before rewrites remove heap equalities
+                  val framed = ACSLFrameInference(printed, frameSource, reader,
+                    callSiteTransforms, checker)
+                  if (strengthenACSL)
+                    ACSLStrengthener(translated, framed, reader, checker)
+                  else framed
+                } else printed
+              }
               .through(ResultPrinters.printACSL) 
             ).ignore
         }

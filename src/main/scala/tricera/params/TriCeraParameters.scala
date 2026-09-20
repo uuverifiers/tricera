@@ -120,6 +120,9 @@ class TriCeraParameters extends GlobalParameters {
   var printDebugHeapTypes : Boolean = false
 
   var displayACSL = false
+  var strengthenACSL = true
+  var strengthenACSLTimeout = 5000
+  var strengthenACSLAttempts = 100
   var inferLoopInvariants = false
   var assertionsNoVerify = false
   var smoke = false
@@ -144,6 +147,9 @@ class TriCeraParameters extends GlobalParameters {
     that.smoke = this.smoke
     that.assertionsNoVerify = this.assertionsNoVerify
     that.displayACSL = this.displayACSL
+    that.strengthenACSL = this.strengthenACSL
+    that.strengthenACSLTimeout = this.strengthenACSLTimeout
+    that.strengthenACSLAttempts = this.strengthenACSLAttempts
     that.inferLoopInvariants = this.inferLoopInvariants
   }
 
@@ -190,6 +196,19 @@ class TriCeraParameters extends GlobalParameters {
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
+    case "-noStrengthenACSL" :: rest => strengthenACSL = false; parseArgs(rest)
+    case opt :: rest if opt.startsWith("-strengthenACSLAttempts:") =>
+      val count = opt.drop("-strengthenACSLAttempts:".length).toIntOption
+      if (!count.exists(_ >= 0))
+        throw new MainException("Invalid ACSL strengthening attempt limit")
+      strengthenACSLAttempts = count.get
+      parseArgs(rest)
+    case opt :: rest if opt.startsWith("-strengthenACSLTimeout:") =>
+      val seconds = opt.drop("-strengthenACSLTimeout:".length).toDouble
+      if (!seconds.isFinite || seconds < 0 || seconds > Int.MaxValue / 1000.0)
+        throw new MainException("Invalid ACSL strengthening timeout")
+      strengthenACSLTimeout = (seconds * 1000).toInt
+      parseArgs(rest)
     case "-smoke" :: rest => smoke = true; parseArgs(rest)
 
     case "-heapModel:native" :: rest =>
@@ -392,6 +411,9 @@ class TriCeraParameters extends GlobalParameters {
     |-ssol              Show solution in SMT-LIB format
     |-inv               Try to infer loop invariants
     |-acsl              Print inferred ACSL annotations
+    |-noStrengthenACSL  Disable inferred contract strengthening
+    |-strengthenACSLTimeout:s  Per-function budget in seconds (default: 5; 0: query limits only)
+    |-strengthenACSLAttempts:n  Maximum solver queries per function (default: 100)
     |-smoke             Warn about assertions whose program point is unreachable (vacuously verified)
     |-log:n             Display progress based on verbosity level n (0 <= n <= 3)
     |                     1: Statistics only
