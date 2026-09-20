@@ -136,6 +136,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(y) && \valid(x);
   ensures \valid(y) && \valid(x) && *x == \old(*y) && \old(*x) == *y;
+  assigns *x, *y;
 */
 ================================================================================
 
@@ -349,6 +350,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(s) && s->x >= 0;
   ensures \valid(s) && s->x - \result == -1;
+  assigns \nothing;
 */
 ================================================================================
 

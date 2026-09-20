@@ -34,25 +34,39 @@ import ap.parser.IExpression._
 import tricera._
 import tricera.acsl.ACSLTranslator
 import tricera.concurrency.CCReader
+import tricera.concurrency.CallSiteTransform.CallSiteTransforms
 import tricera.concurrency.ccreader.{CCHeapArrayPointer, CCHeapPointer}
 
 import scala.util.control.NonFatal
 
 /** Tries to add assigns clauses from the solution if they can be verified. */
 object ACSLFrameInference {
-  def apply(printed : ACSLResult, beforeHeapRemoval : Result, reader : CCReader) : ACSLResult =
-    beforeHeapRemoval match {
+  def apply(printed : ACSLResult, inferred : Result, reader : CCReader,
+            transforms : CallSiteTransforms) : ACSLResult =
+    inferred match {
       case source : Solution =>
         val contexts = reader.getFunctionContexts
         val sources = source.functionInvariants.map(i => i.id -> i).toMap
         val checker = new ACSLContractVerifier(reader)
+        val additions = transforms.map(_.getAstAdditions())
+        val introducedGlobals = additions.iterator.flatMap(_.introducedGlobalVariables.keys).toSet
+        // transformed functions omit parameters whose cells became globals
+        val stackParams = (for (a <- additions;
+                                (transformed, original) <- a.transformedFunctionIdToOriginalId;
+                                from <- contexts.get(original);
+                                to <- contexts.get(transformed)) yield {
+          val removed = from.acslContext.getParams.map(_.name).toSet --
+                        to.acslContext.getParams.map(_.name)
+          original -> removed
+        }).groupMapReduce(_._1)(_._2)(_ ++ _)
 
         def addFrame(contract : ACSLLinearisedContract) : ACSLLinearisedContract = {
           val id = contract.funcName
           try {
             val candidate = for (inv <- sources.get(id) if !inv.isSrcAnnotated;
                                  context <- contexts.get(id);
-                                 locations <- extractLocations(inv, context.acslContext)) yield
+                                 locations <- extractLocations(inv, context.acslContext,
+                                   introducedGlobals, stackParams.getOrElse(id, Set.empty))) yield
               contract.copy(assigns = Some(ACSLLineariser.assignsString(
                 locations, inv.preCondition)))
             // e.g., an inferred heap update at p gives assigns *p
@@ -78,9 +92,10 @@ object ACSLFrameInference {
     }
 
   /** Find possible assigns locations from the solution. */
-  private def extractLocations(inv : FunctionInvariants, context : ACSLTranslator.FunctionContext)
+  private def extractLocations(inv : FunctionInvariants, context : ACSLTranslator.FunctionContext,
+                               introducedGlobals : Set[String], stackParams : Set[String])
   : Option[Seq[ITerm]] = {
-    val globals = context.getGlobals
+    val globals = context.getGlobals.filterNot(v => introducedGlobals(v.name))
     val parameters = context.getParams.map(_.name).toSet
     if (globals.exists(v => parameters(v.name)) ||
         globals.map(_.name).distinct.size != globals.size)
@@ -92,6 +107,17 @@ object ACSLFrameInference {
       case p : ProgVarProxy => p
     }
     val values = ValSetReader(pre &&& post)
+
+    // stack-pointer arguments were encoded as globals; their source locations are *p
+    val stackLocations = context.getParams.filter(p => stackParams(p.name)).flatMap { p =>
+      val before = ProgVarProxy(p.name, ProgVarProxy.State.PreExec,
+        ProgVarProxy.Scope.Parameter, true)
+      val after = before.copy(state = ProgVarProxy.State.PostExec)
+      val oldValue = ACSLExpression.derefFunApp(ACSLExpression.oldDeref, before)
+      val newValue = ACSLExpression.derefFunApp(ACSLExpression.deref, after)
+      if (values.areEqual(oldValue, newValue)) None
+      else Some(ACSLExpression.derefFunApp(ACSLExpression.deref, before))
+    }
 
     // globals omitted from assigns must stay unchanged
     val globalLocations = globals.filterNot { v =>
@@ -157,6 +183,6 @@ object ACSLFrameInference {
                .flatMap(_.variants).sortBy(_.toString).iterator
                .map(t => writes(t, IConstant(old))).collectFirst { case Some(cells) => cells }) yield heapLocations
     }
-    heapLocations.map(cells => (globalLocations ++ cells).distinct)
+    heapLocations.map(cells => (globalLocations ++ stackLocations ++ cells).distinct)
   }
 }

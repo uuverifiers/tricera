@@ -130,6 +130,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(x);
   ensures \valid(x) && \old(*x) - *x == -1;
+  assigns *x;
 */
 ================================================================================
 
@@ -157,6 +158,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(x);
   ensures \valid(x) && \old(*x) - *x == -1;
+  assigns *x;
 */
 ================================================================================
 
@@ -185,11 +187,13 @@ Inferred ACSL annotations
 /*@
   requires \valid(q) && 2147483647 >= q->val && q->val >= -2147483647;
   ensures \valid(q) && \old(q->val) - q->val == 1 && 2147483647 >= \old(q->val) && \old(q->val) >= -2147483647;
+  assigns *q;
 */
 /* contract for incdec */
 /*@
   requires \valid(p) && 2147483646 >= p->val && p->val >= -2147483648;
   ensures \valid(p) && p->val == \old(p->val) && 2147483646 >= \old(p->val) && \old(p->val) >= -2147483648;
+  assigns *p;
 */
 ================================================================================
 
@@ -231,6 +235,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(t) && 2147483646 >= t->val && t->val >= -2147483647;
   ensures \valid(t) && \old(t->val) - t->val == -1 && 2147483646 >= \old(t->val) && \old(t->val) >= -2147483647;
+  assigns *t;
 */
 ================================================================================
 
@@ -245,6 +250,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(t) && 2147483646 >= t->val && t->val >= -2147483648;
   ensures \valid(t) && \old(t->val) - t->val == -1 && 2147483646 >= \old(t->val) && \old(t->val) >= -2147483648;
+  assigns *t;
 */
 ================================================================================
 
@@ -261,6 +267,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(p) && 2147483647 >= *p && *p >= -2147483648;
   ensures \valid(p) && *p == 0 && \old(*p) >= -2147483648 && 2147483647 >= \old(*p);
+  assigns *p;
 */
 ================================================================================
 

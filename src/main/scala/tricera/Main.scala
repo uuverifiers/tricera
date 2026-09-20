@@ -581,11 +581,13 @@ class Main (args: Array[String]) {
 
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
-          result
+          val frameSource = result
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
             .through(ADTExploder.apply)
             .through(HeapFactsProcessor.apply)
             .through(PostconditionSimplifier.apply)
+
+          frameSource
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(addPointerPredicatesFrom(r))
@@ -606,7 +608,8 @@ class Main (args: Array[String]) {
               .through(FormulaSimplifier.apply)
               .through(ACSLLineariser.apply)
               .through(printed => if (displayACSL)
-                ACSLFrameInference(printed, r, reader)
+                // use the solution before rewrites remove heap equalities
+                ACSLFrameInference(printed, frameSource, reader, callSiteTransforms)
                 else printed)
               .through(ResultPrinters.printACSL) 
             ).ignore
