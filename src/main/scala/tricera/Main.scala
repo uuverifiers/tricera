@@ -605,6 +605,9 @@ class Main (args: Array[String]) {
               .through(AddValidPointerPredicates.apply)
               .through(FormulaSimplifier.apply)
               .through(ACSLLineariser.apply)
+              .through(printed => if (displayACSL)
+                ACSLFrameInference(printed, r, reader)
+                else printed)
               .through(ResultPrinters.printACSL) 
             ).ignore
         }

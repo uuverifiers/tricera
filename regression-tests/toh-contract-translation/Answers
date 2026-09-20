@@ -24,11 +24,13 @@ Inferred ACSL annotations
 /*@
   requires val == b && \valid(a) && \valid(b) && \separated(a, b);
   ensures \old(b) == b && \old(a) == a && \old(b_init) == b_init && \old(a_init) == a_init && \valid(val) && \valid(b) && \valid(a) && \separated(a, val) && \separated(a, b) && \old(*val) - *val == 1;
+  assigns *val;
 */
 /* contract for increment */
 /*@
   requires a == val && \valid(b) && \valid(val) && \separated(val, b) && *b == b_init && *val == a_init;
   ensures \old(b) == b && \old(a) == \old(val) && \old(b_init) == b_init && \old(a_init) == a_init && a == \old(val) && \valid(b) && \valid(val) && \separated(val, b) && \old(*val) - *val == -1;
+  assigns *val;
 */
 ================================================================================
 
@@ -44,11 +46,13 @@ Inferred ACSL annotations
 /*@
   requires val == a && \valid(a);
   ensures \old(a) == a && \old(a_init) == a_init && \valid(val) && \valid(a) && \old(*val) - *val == 1;
+  assigns *val;
 */
 /* contract for increment */
 /*@
   requires a == val && \valid(val) && *val == a_init;
   ensures \old(a) == \old(val) && \old(a_init) == a_init && a == \old(val) && \valid(val) && \old(*val) - *val == -1;
+  assigns *val;
 */
 ================================================================================
 
@@ -64,6 +68,7 @@ Inferred ACSL annotations
 /*@
   requires b == y && a == x && \valid(y) && \valid(x) && \separated(x, y) && *y == b_init && *x == a_init;
   ensures b == \old(y) && a == \old(x) && \old(b_init) == b_init && \old(a_init) == a_init && \old(r) == r && \old(b) == \old(y) && \old(a) == \old(x) && \valid(y) && \valid(x) && \separated(x, y) && ((\result == b_init && b_init - a_init >= 1) || (\result == a_init && a_init >= b_init));
+  assigns \nothing;
 */
 ================================================================================
 
@@ -99,6 +104,7 @@ Inferred ACSL annotations
 /*@
   requires a == num && \valid(result) && \valid(b) && \valid(num) && \separated(b, result) && \separated(num, result) && \separated(num, b) && *b == b_init && *num == a_init;
   ensures \old(b_init) == b_init && \old(a_init) == a_init && \old(result) == result && \old(b) == b && \old(a) == \old(num) && a == \old(num) && \valid(result) && \valid(b) && \valid(num) && \separated(b, result) && \separated(num, result) && \separated(num, b) && 2*\old(*num) == *num;
+  assigns *num;
 */
 ================================================================================
 
@@ -167,6 +173,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(t1) && \valid(t2) && \separated(t1, t2) && *t2 == 2;
   ensures \valid(t2) && \valid(t1) && \separated(t1, t2) && \old(*t1) - *t1 == -1 && \old(*t2) - *t2 == 1;
+  assigns *t1, *t2;
 */
 ================================================================================
 
@@ -180,6 +187,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(t4) && \valid(t3) && \valid(t2) && \valid(t1) && \separated(t3, t4) && \separated(t2, t4) && \separated(t2, t3) && \separated(t1, t4) && \separated(t1, t3) && \separated(t1, t2);
   ensures \valid(t4) && \valid(t3) && \valid(t2) && \valid(t1) && \separated(t3, t4) && \separated(t2, t4) && \separated(t2, t3) && \separated(t1, t4) && \separated(t1, t3) && \separated(t1, t2) && 2*\old(*t3) == *t3 && \old(*t2) - *t2 == 1 && *t1 - \old(*t1) == 2 && 2*\old(*t1) - *t4 == -4;
+  assigns *t1, *t3, *t2, *t4;
 */
 ================================================================================
 
@@ -231,6 +239,108 @@ UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer argumen
 alias-reject-deref.c
 UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
 
+frame-globals-only.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for increment */
+/*@
+  requires count == 0 && unchanged == 7;
+  ensures \old(count) == 0 && \old(unchanged) == 7 && count == 3 && unchanged == 7;
+  assigns count;
+*/
+/* contract for read_count */
+/*@
+  requires count == 3 && unchanged == 7;
+  ensures \old(count) == 3 && \old(unchanged) == 7 && count == 3 && unchanged == 7 && \result == 3;
+  assigns \nothing;
+*/
+================================================================================
+
+SAFE
+
+call-site-frame.c (native)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for increment */
+/*@
+  requires \valid(p);
+  ensures \valid(p) && \old(*p) - *p == -1;
+  assigns *p;
+*/
+================================================================================
+
+SAFE
+
+frame-globals.c (native)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for increment */
+/*@
+  requires count == 0 && \valid(p) && *p == 0;
+  ensures count == 1 && \old(count) == 0 && \valid(p) && \old(*p) - *p == -1;
+  assigns count, *p;
+*/
+================================================================================
+
+SAFE
+
+frame-allocate.c (native)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for allocate */
+/*@
+  requires \true;
+  ensures \valid(p) && *p == 7;
+*/
+================================================================================
+
+SAFE
+
+call-site-frame.c (array)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for increment */
+/*@
+  requires \valid(p);
+  ensures \valid(p) && \old(*p) - *p == -1;
+  assigns *p;
+*/
+================================================================================
+
+SAFE
+
+frame-globals.c (array)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for increment */
+/*@
+  requires count == 0 && \valid(p) && *p == 0;
+  ensures count == 1 && \old(count) == 0 && \valid(p) && \old(*p) - *p == -1;
+  assigns count, *p;
+*/
+================================================================================
+
+SAFE
+
+frame-allocate.c (array)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for allocate */
+/*@
+  requires \true;
+  ensures \valid(p) && *p == 7;
+*/
+================================================================================
+
+SAFE
+
 struct-field-read.c
 
 Inferred ACSL annotations
@@ -252,6 +362,7 @@ Inferred ACSL annotations
 /*@
   requires slot == 1;
   ensures \old(slot) == 1 && records == \old(records) && \old(records)[1] == \result;
+  assigns \nothing;
 */
 ================================================================================
 
@@ -265,6 +376,7 @@ Inferred ACSL annotations
 /*@
   requires slot == 1;
   ensures \old(slot) == 1 && records == \old(records) && \old(records)[1].level == \result;
+  assigns \nothing;
 */
 ================================================================================
 
@@ -278,6 +390,7 @@ Inferred ACSL annotations
 /*@
   requires n == 1 && x == a && \valid(a);
   ensures \old(n) == 1 && \old(a) == \old(x) && a == \old(x) && \valid(x) && \old(x[1]) - x[1] == -1;
+  assigns x[n];
 */
 ================================================================================
 
@@ -291,6 +404,7 @@ Inferred ACSL annotations
 /*@
   requires n == 1 && \valid(x) && (a + 1) == x;
   ensures \old(n) == 1 && \old(a) == a && \old(a[2]) - \old(a)[2] == -1;
+  assigns a[2];
 */
 ================================================================================
 
@@ -304,6 +418,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(x) && (n == 2 || n == 1) && ((b == x && n == 2) || (x == a && n == 1));
   ensures \old(b) == b && \old(a) == a && \valid(x) && \old(x[n]) - x[n] == -1 && (\old(n) == 2 || \old(n) == 1);
+  assigns x[n];
 */
 ================================================================================
 
@@ -349,6 +464,7 @@ Inferred ACSL annotations
 /*@
   requires n == 1 && x == a && \valid(a);
   ensures \old(n) == 1 && \old(a) == \old(x) && a == \old(x) && \valid(x) && \old(x[1]) - x[1] == -1;
+  assigns x[n];
 */
 ================================================================================
 
@@ -362,6 +478,7 @@ Inferred ACSL annotations
 /*@
   requires n == 1 && \valid(x) && (a + 1) == x;
   ensures \old(n) == 1 && \old(a) == a && \old(a[2]) - \old(a)[2] == -1;
+  assigns a[2];
 */
 ================================================================================
 
@@ -375,6 +492,7 @@ Inferred ACSL annotations
 /*@
   requires (n == 2 || n == 1) && ((b == x && n == 2) || (x == a && n == 1)) && \valid(x);
   ensures \old(b) == b && \old(a) == a && \valid(x) && \old(x[n]) - x[n] == -1 && (\old(n) == 2 || \old(n) == 1);
+  assigns x[n];
 */
 ================================================================================
 

@@ -19,6 +19,18 @@ for name in $TESTS; do
     $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
 
+echo
+echo frame-globals-only.c
+$TRI_CMD "$@" -assertNoVerify -acsl -m:main frame-globals-only.c 2>&1 | grep -v 'at '
+
+for heap in native array; do
+    for name in call-site-frame.c frame-globals.c frame-allocate.c; do
+        echo
+        echo "$name ($heap)"
+        $TRI_CMD "$@" -assertNoVerify -acsl -heapModel:$heap -m:main $name 2>&1 | grep -v 'at '
+    done
+done
+
 TESTS="struct-field-read.c enum-indexed-struct.c enum-indexed-struct-field.c"
 for name in $TESTS; do
     echo

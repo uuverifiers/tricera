@@ -7,6 +7,7 @@ Inferred ACSL annotations
 /*@
   requires 10 >= x && x >= 0;
   ensures 10 >= \old(x) && \old(x) >= 0 && \result >= 0 && (\old(x) != 10 || \result != 0);
+  assigns \nothing;
 */
 ================================================================================
 
@@ -20,6 +21,7 @@ Inferred ACSL annotations
 /*@
   requires x >= 0 && g >= 0;
   ensures \old(g) >= 0 && \old(x) >= 0 && g >= 1 && \result >= 0 && (\result >= \old(x) || \result >= 10);
+  assigns g;
 */
 ================================================================================
 
@@ -62,6 +64,7 @@ Inferred ACSL annotations
 /*@
   requires g >= 0;
   ensures \old(g) >= 0 && g >= 0 && (g - \old(g) >= \old(x) || -1 >= \old(x));
+  assigns g;
 */
 ================================================================================
 
@@ -75,6 +78,7 @@ Inferred ACSL annotations
 /*@
   requires \true;
   ensures (\old(y) == \result || \old(z) == \result || \old(y) - \old(z) >= 1) && (\old(y) == \result || \old(x) - \old(y) >= 1 || \old(z) >= \old(y)) && (\old(y) >= \old(z) || ((\old(y) != \result || \result >= \old(x)) && (\old(z) != \result || \old(x) - \old(y) >= 1)));
+  assigns \nothing;
 */
 ================================================================================
 
@@ -88,6 +92,7 @@ Inferred ACSL annotations
 /*@
   requires N == x && y >= 0 && x >= 0;
   ensures \old(x) == N && \old(N) == N && \old(N2) == N2 && \old(y) >= 0 && \result >= 0 && N >= 0 && (\result >= \old(y) || 0 >= N);
+  assigns \nothing;
 */
 ================================================================================
 
@@ -138,6 +143,7 @@ Inferred ACSL annotations
 /*@
   requires s.f == 21;
   ensures \result == 42 && \old(s).f == 21;
+  assigns \nothing;
 */
 ================================================================================
 

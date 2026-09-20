@@ -1,0 +1,162 @@
+/**
+ * Copyright (c) 2026 Zafer Esen. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * * Neither the name of the authors nor the names of their
+ *   contributors may be used to endorse or promote products derived from
+ *   this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+package tricera.postprocessor
+
+import ap.parser._
+import ap.parser.IExpression._
+import tricera._
+import tricera.acsl.ACSLTranslator
+import tricera.concurrency.CCReader
+import tricera.concurrency.ccreader.{CCHeapArrayPointer, CCHeapPointer}
+
+import scala.util.control.NonFatal
+
+/** Tries to add assigns clauses from the solution if they can be verified. */
+object ACSLFrameInference {
+  def apply(printed : ACSLResult, beforeHeapRemoval : Result, reader : CCReader) : ACSLResult =
+    beforeHeapRemoval match {
+      case source : Solution =>
+        val contexts = reader.getFunctionContexts
+        val sources = source.functionInvariants.map(i => i.id -> i).toMap
+        val checker = new ACSLContractVerifier(reader)
+
+        def addFrame(contract : ACSLLinearisedContract) : ACSLLinearisedContract = {
+          val id = contract.funcName
+          try {
+            val candidate = for (inv <- sources.get(id) if !inv.isSrcAnnotated;
+                                 context <- contexts.get(id);
+                                 locations <- extractLocations(inv, context.acslContext)) yield
+              contract.copy(assigns = Some(ACSLLineariser.assignsString(
+                locations, inv.preCondition)))
+            // e.g., an inferred heap update at p gives assigns *p
+            candidate.filter(c => checker.verify(c)).getOrElse(contract)
+          } catch {
+            case e @ (tricera.Main.StoppedException | tricera.Main.TimeoutException) => throw e
+            case NonFatal(e) =>
+              Util.printlnDebug("ACSL frame skipped " + id + ": " + e.toString)
+              contract
+          }
+        }
+
+        val byId = printed.contracts.map(c => c.funcName -> c).toMap
+        val visited = scala.collection.mutable.Set[String]()
+        val updated = scala.collection.mutable.Map[String, ACSLLinearisedContract]()
+        def update(id : String) : Unit = if (visited.add(id) && byId.contains(id)) {
+          checker.callees(id).foreach(update)
+          updated(id) = addFrame(byId(id))
+        }
+        byId.keys.toSeq.sorted.foreach(update)
+        printed.copy(contracts = printed.contracts.map(c => updated(c.funcName)))
+      case _ => printed
+    }
+
+  /** Find possible assigns locations from the solution. */
+  private def extractLocations(inv : FunctionInvariants, context : ACSLTranslator.FunctionContext)
+  : Option[Seq[ITerm]] = {
+    val globals = context.getGlobals
+    val parameters = context.getParams.map(_.name).toSet
+    if (globals.exists(v => parameters(v.name)) ||
+        globals.map(_.name).distinct.size != globals.size)
+      return None
+
+    val pre = inv.preCondition.invariant.expression
+    val post = inv.postCondition.invariant.expression
+    val constants = SymbolCollector.constants(pre &&& post).collect {
+      case p : ProgVarProxy => p
+    }
+    val values = ValSetReader(pre &&& post)
+
+    // globals omitted from assigns must stay unchanged
+    val globalLocations = globals.filterNot { v =>
+      val old = constants.find(p => p.name == v.name && p.isGlobal && p.isPreExec)
+      val current = constants.find(p => p.name == v.name && p.isGlobal && p.isPostExec)
+      (for (a <- old; b <- current) yield values.areEqual(IConstant(a), IConstant(b)))
+        .getOrElse(false)
+    }.map { v =>
+      IConstant(ProgVarProxy(v.name, ProgVarProxy.State.PreExec,
+        ProgVarProxy.Scope.Global, v.typ.isInstanceOf[CCHeapPointer] ||
+                                  v.typ.isInstanceOf[CCHeapArrayPointer])) : ITerm
+    }
+
+    val heapLocations = inv.postCondition.invariant.heapInfo match {
+      case None => if (context.isHeapEnabled) None else Some(Seq.empty[ITerm])
+      case Some(info) =>
+        val before = constants.find(p => info.isHeap(p) && p.isPreExec)
+        val after = constants.find(p => info.isHeap(p) && p.isPostExec)
+        val visitor = new ACSLExpressionProcessor.ACSLExpressionVisitor(
+          info, inv.preCondition, pre &&& post)
+
+        // assigns must be expressible using values at function entry
+        def entryTerm(t : ITerm) : Boolean =
+          SymbolCollector.variables(t).isEmpty && SymbolCollector.constants(t).forall {
+            case p : ProgVarProxy => p.isPreExec && (p.isParameter || p.isGlobal)
+            case _ => false
+          }
+
+        // prefer parameters over other vars
+        def entryNames(t : ITerm) : ITerm = Rewriter.rewrite(t, {
+          case term : ITerm =>
+            values.getVal(term).toSeq.flatMap(_.variants).collect {
+              case c @ IConstant(p : ProgVarProxy) if p.isPreExec && !info.isHeap(p) => (c, p)
+            }.sortBy { case (_, p) => (if (p.isParameter) 0 else 1, p.name) }
+              .headOption.map(_._1).getOrElse(term)
+          case e => e
+        }).asInstanceOf[ITerm]
+
+        // use the written value's type to translate a read at this address to *p, a[i], etc.
+        def location(address : ITerm, value : ITerm, oldHeap : ITerm) : Option[ITerm] =
+          value match {
+            case IFunApp(ctor, _) => info.objectCtorToSelector(ctor).flatMap { selector =>
+              val read = IFunApp(selector, Seq(info.heap.read(oldHeap, entryNames(address))))
+              val translated = visitor.visit(read, ()).asInstanceOf[ITerm]
+              if (entryTerm(translated) && !ContainsTOHVisitor(translated, info))
+                Some(translated)
+              else None
+            }
+            case _ => None
+          }
+
+        // h_post = write(write(h_pre, p, v), q, w) --> assigns *p, *q
+        def writes(t : ITerm, oldHeap : ITerm) : Option[Seq[ITerm]] =
+          if (values.areEqual(t, oldHeap)) Some(Nil) else t match {
+            case IFunApp(write, Seq(base, address, value)) if info.isWriteFun(write) =>
+              for (rest <- writes(base, oldHeap);
+                   cell <- location(address, value, oldHeap)) yield rest :+ cell
+            case _ => None
+          }
+
+        for (old <- before; current <- after;
+             heapLocations <- values.getVal(IConstant(current)).toSeq
+               .flatMap(_.variants).sortBy(_.toString).iterator
+               .map(t => writes(t, IConstant(old))).collectFirst { case Some(cells) => cells }) yield heapLocations
+    }
+    heapLocations.map(cells => (globalLocations ++ cells).distinct)
+  }
+}

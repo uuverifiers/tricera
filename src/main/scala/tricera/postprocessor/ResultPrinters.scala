@@ -152,6 +152,7 @@ object ResultPrinters {
         println( "/*@")
         println(f"  requires ${contract.preCondition};")
         println(f"  ensures ${contract.postCondition};")
+        contract.assigns.foreach(a => println(s"  assigns $a;"))
         println("*/")
         contract.loopInvariants.foreach(print)
       }

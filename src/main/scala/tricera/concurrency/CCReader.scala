@@ -114,13 +114,22 @@ object CCReader {
         CCAstSlicer(transformedCallsProg0, entryFunction)
       else transformedCallsProg0
 
-    var reader : CCReader = null
     forcedObjectWrapperTypes.clear()
     warnedFunctionNames.clear()
+    val reader = readProgram(transformedCallsProg, entryFunction, propertiesToCheck,
+                             inputVarNames, funcParamToGlobalMaps)
+    (reader, modelHeap, callSiteTransforms)
+  }
+
+  private def readProgram(prog : Program, entryFunction : String,
+                          propertiesToCheck : Set[properties.Property],
+                          inputVarNames : scala.Seq[String],
+                          funcParamToGlobalMaps : Map[String, Map[String, String]]) : CCReader = {
+    var reader : CCReader = null
     while (reader == null)
       try {
         reader = new CCReader(
-          transformedCallsProg, entryFunction, propertiesToCheck, inputVarNames,
+          prog, entryFunction, propertiesToCheck, inputVarNames,
           funcParamToGlobalMaps)
       } catch {
         case NeedsTimeException => {
@@ -134,7 +143,7 @@ object CCReader {
           // the missing type was recorded in forcedObjectWrapperTypes
         }
       }
-    (reader, modelHeap, callSiteTransforms)
+    reader
   }
 
   /**
@@ -409,6 +418,7 @@ class CCReader private (prog              : Program,
   private val functionClauses =
     new MHashMap[String, scala.Seq[(Clause, ParametricEncoder.Synchronisation)]]
   private val functionAssertionClauses = new MHashMap[String, scala.Seq[CCAssertionClause]]
+  private val contractVerificationClauses = new MHashMap[String, scala.Seq[Clause]]
   private val uniqueStructs = new MHashMap[Unique, String]
   private val structInfos   = new ArrayBuffer[StructInfo]
   private val structDefs    = new MHashMap[String, CCStruct]
@@ -424,6 +434,28 @@ class CCReader private (prog              : Program,
 
   def getLoopInvariants = loopInvariants.toMap
   def getFunctionContexts = functionContexts.toMap
+
+  def getContractVerificationClauses(name : String) : Option[scala.Seq[Clause]] =
+    contractVerificationClauses.get(name)
+
+  // used when verifying contracts
+  def reencode(extraProperties : Set[properties.Property]) : CCReader = {
+    val oldTime = useTime
+    val oldHeap = modelHeap
+    val oldWrappers = forcedObjectWrapperTypes.toVector
+    val oldWarnings = warnedFunctionNames.toVector
+    try {
+      CCReader.readProgram(prog, entryFunction, propertiesToCheck ++ extraProperties,
+                           inputVarNames, funcParamToGlobalMaps)
+    } finally {
+      useTime = oldTime
+      modelHeap = oldHeap
+      forcedObjectWrapperTypes.clear()
+      forcedObjectWrapperTypes ++= oldWrappers
+      warnedFunctionNames.clear()
+      warnedFunctionNames ++= oldWarnings
+    }
+  }
 
   // NOTE: Used by ACSL encoder.
   var hasACSLEntryFunction : Boolean = false
@@ -1389,6 +1421,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           functionClauses.put(name, functionClauses.getOrElse(name, Nil) ++ clauses)
           functionAssertionClauses.put(name,
           functionAssertionClauses.getOrElse(name, Nil) ++ assertionClauses)
+          contractVerificationClauses.put(name,
+            clauses.map(_._1).toVector ++ assertionClauses.map(_.clause))
           clauses.clear
           assertionClauses.clear
           scope.LocalVars popFrame

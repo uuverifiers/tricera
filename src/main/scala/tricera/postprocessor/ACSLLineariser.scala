@@ -48,7 +48,8 @@ case class ACSLLinearisedContract(
   funcName: String,
   preCondition: String,
   postCondition: String,
-  loopInvariants: Seq[ACSLLinearisedLoopInvariant])
+  loopInvariants: Seq[ACSLLinearisedLoopInvariant],
+  assigns: Option[String] = None)
 
 case class ACSLResult(
   contracts: Seq[ACSLLinearisedContract],
@@ -104,6 +105,11 @@ object ACSLLineariser {
 
   def asString(e : IExpression) : String =
     ap.DialogUtil.asString { printExpression(e) }
+
+  def assignsString(locations : Seq[ITerm], pre : PreCondition) : String =
+    if (locations.isEmpty) "\\nothing" else
+      locations.map(t => asString(PrepareACSLPrinting.visit(
+        t, PrepSettings(pre, false)))).mkString(", ")
 
   //////////////////////////////////////////////////////////////////////////////
 

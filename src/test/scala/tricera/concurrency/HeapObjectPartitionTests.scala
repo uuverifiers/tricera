@@ -32,6 +32,9 @@ package tricera.concurrency
 import org.scalatest.flatspec.AnyFlatSpec
 import CCReader._
 import ccreader._
+import lazabs.GlobalParameters
+import tricera.params.TriCeraParameters
+import tricera.postprocessor.{ACSLContractVerifier, ACSLLinearisedContract}
 
 class HeapObjectPartitionTests extends AnyFlatSpec {
 
@@ -138,5 +141,79 @@ class HeapObjectPartitionTests extends AnyFlatSpec {
         |}
         |""".stripMargin)
     assert(wrappers.contains(O_int))
+  }
+
+  private def withHeapReaders(program : String)(test : CCReader => Unit) : Unit =
+    for (heap <- Seq(TriCeraParameters.NativeHeap, TriCeraParameters.ArrayHeap)) {
+      val params = new TriCeraParameters
+      params.heapModel = heap
+      TriCeraParameters.parameters.withValue(params) {
+        GlobalParameters.withValue(params) {
+          val input = program.replace("/*@contract@*/", "■■contract■■")
+          val (reader, _, _) = CCReader(new java.io.StringReader(input), "main")
+          test(reader)
+        }
+      }
+    }
+
+  "Contract verification" should "require valid accesses through callees" in {
+    withHeapReaders("""
+      |/*@contract@*/ int read_cell(int *p) { return *p; }
+      |/*@contract@*/ int get(int *p) { return read_cell(p); }
+      |void main() { int *p = malloc(sizeof(int)); *p = 7; get(p); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("get", "\\valid(p)",
+        "\\result == *p", Nil, Some("\\nothing"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "\\true"), 10000))
+      assert(!verifier.verify(contract.copy(postCondition = "\\result == *p + 1"), 10000))
+    }
+  }
+
+  it should "check frees without changing the main encoding" in {
+    withHeapReaders("""
+      |/*@contract@*/ void release(int *p) { free(p); }
+      |void main() { int *p = malloc(sizeof(int)); release(p); assert(0); }
+      |""".stripMargin) { reader =>
+      val system = reader.system
+      val before = (system.processes, system.assertions, system.backgroundAxioms,
+        reader.wrapperSignatures, CCReader.forcedObjectWrapperTypes.toVector)
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("release", "\\valid(p)", "\\true", Nil)
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "\\true"), 10000))
+      assert(before == ((system.processes, system.assertions, system.backgroundAxioms,
+        reader.wrapperSignatures, CCReader.forcedObjectWrapperTypes.toVector)))
+    }
+  }
+
+  it should "check array bounds even for a live neighbouring cell" in {
+    withHeapReaders("""
+      |int a[2], b[2];
+      |/*@contract@*/ int get(int n) { return a[n]; }
+      |void main() { b[0] = 3; get(1); assert(b[0] == 3); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("get", "0 <= n && n < 2", "\\true", Nil)
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "n == 2"), 10000))
+    }
+  }
+
+  it should "preserve globals omitted from assigns" in {
+    withHeapReaders("""
+      |int count, unchanged;
+      |/*@contract@*/ void increment(int *p) { ++count; ++*p; }
+      |void main() { int *p = malloc(sizeof(int)); *p = 0; increment(p); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("increment", "\\valid(p)",
+        "count == \\old(count) + 1 && *p == \\old(*p) + 1", Nil,
+        Some("count, *p"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(assigns = Some("*p")), 10000))
+      assert(!verifier.verify(contract.copy(assigns = Some("count")), 10000))
+    }
   }
 }
