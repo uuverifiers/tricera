@@ -429,9 +429,7 @@ object ACSLStrengthener {
                 case _ => None
               }
               for ((term, n) <- fixed if !changed) {
-                if (accept(withPre(current, weakerPre &&& (term >= n))) ||
-                    accept(withPre(current, weakerPre &&& (term <= n))))
-                  changed = true
+                // generalize a concrete postcondition before relaxing the precondition
                 val post = withoutEntryFacts(current.postCondition.invariant.expression)
                 val indices = term match {
                   case IConstant(v : ProgVarProxy) if v.isParameter =>
@@ -445,6 +443,10 @@ object ACSLStrengthener {
                       accept(withPre(candidate, weakerPre &&& readBounds(candidate))))
                     changed = true
                 }
+                if (!changed && hasBudget &&
+                    (accept(withPre(current, weakerPre &&& (term >= n))) ||
+                     accept(withPre(current, weakerPre &&& (term <= n)))))
+                  changed = true
               }
             }
           }
