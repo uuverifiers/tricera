@@ -171,8 +171,9 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for mod */
 /*@
-  requires \valid(t2) && \valid(t1) && 2147483647 >= t2->val && t2->val >= -2147483647 && 2147483646 >= t1->val && t1->val >= -2147483648;
-  ensures \valid(t2) && \valid(t1) && \old(t2->val) - t2->val == 1 && \old(t1->val) - t1->val == -1 && 2147483647 >= \old(t2->val) && \old(t2->val) >= -2147483647 && 2147483646 >= \old(t1->val) && \old(t1->val) >= -2147483648;
+  requires \valid(t1) && \valid(t2) && \separated(t1, t2);
+  ensures \valid(t1) && \valid(t2) && \old(t1->val) - t1->val == -1 && \old(t2->val) - t2->val == 1;
+  assigns *t1, *t2;
 */
 ================================================================================
 

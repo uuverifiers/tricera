@@ -355,8 +355,7 @@ class CallSiteTransform(
         globalVariableIdsToParameterIds(),
         MHashMap((transDec.getId() -> originalFuncName)),
         MHashMap((originalFuncName -> params.asScala.map(p => p.accept(getName,())).toList)),
-        if (hasExplicitContract()) MHashMap((transDec.getId() -> paramToGlobalName))
-        else MHashMap[String, Map[String, String]]()
+        MHashMap((transDec.getId() -> paramToGlobalName))
       )
 
       transforms.foreach(t => t.accumulateAdditions(knownAdditions))

@@ -32,8 +32,6 @@ import ap.parser.{IFormula, IConstant}
 import tricera.Util.SourceInfo
 import ap.terfor.ConstantTerm
 import ap.theories.{Heap}
-import ap.parser.SymbolCollector
-import ap.parser.ConstantSubstVisitor
 
 /**
  * Special constant class to keep track of constants corresponding
@@ -122,64 +120,7 @@ case class FunctionInvariants(
   isSrcAnnotated: Boolean,
   preCondition: PreCondition,
   postCondition: PostCondition,
-  loopInvariants: List[LoopInvariant]) {
-
-  /**
-    * Calculates the "meet" of two FunctionInvariants instances'
-    * pre- and post-conditions. It is defined by
-    *   [pre1, post1] meet [pre2, post2] <=>
-    *   [(pre1 \/ pre2), (pre1 => post1) /\ (pre2 => post2)]
-    * 
-    * Any loop invariants will be aggregated into a single set.
-    *
-    * @param other The pre-/post-condition pair to meet with.
-    * @return 
-    */
-  def meet(other: FunctionInvariants): FunctionInvariants = {
-    def buildCommonConstantMap(constantSets: scala.collection.Set[ConstantTerm]*): Map[ConstantTerm, IConstant] = {
-      constantSets
-        .flatten
-        // Using toString is a bit ugly. But since we are dealing
-        // with different types of ConstantTerms, this will make
-        // instances with same name but different other properties,
-        // be different keys in the map.
-        .groupBy(c => c.toString)
-        .flatMap({ case (key, constants) =>
-          val term = new IConstant(constants.head)
-          constants.map(c => (c, term))
-        })
-    }
-    
-    val PreCondition(Invariant(pre1org, preHeapInfo, preSourceInfo)) = preCondition
-    val PostCondition(Invariant(post1org, postHeapInfo, postSrcInfo)) = postCondition
-    val PreCondition(Invariant(pre2org, _, _)) = other.preCondition
-    val PostCondition(Invariant(post2org, _, _)) = other.postCondition
- 
-    val const2Common = buildCommonConstantMap(
-      SymbolCollector.constants(pre1org),
-      SymbolCollector.constants(pre2org),
-      SymbolCollector.constants(post1org),
-      SymbolCollector.constants(post2org))
-    
-    val pre1 = ConstantSubstVisitor.apply(pre1org, const2Common)
-    val pre2 = ConstantSubstVisitor.apply(pre2org, const2Common)
-    val post1 = ConstantSubstVisitor.apply(post1org, const2Common)
-    val post2 = ConstantSubstVisitor.apply(post2org, const2Common)
-
-    // TODO: 2025-05-19 Decide if we should run expressions through the
-    //   SimpleAPI.simplify(). Doing so seems to mess up later stages, mainly
-    //   because they treat conjunctions and disjunctions differently. That is,
-    //   some parts of the code gives special treatment to e.g. disjunctions,
-    //   but no such special treatment would be done for the corresponding
-    //   conjunction (obtained by De'Morgans law).
-    FunctionInvariants(
-      id,
-      isSrcAnnotated,
-      PreCondition(Invariant((pre1 ||| pre2), preHeapInfo, preSourceInfo)),
-      PostCondition(Invariant((pre1 ===> post1) &&& (pre2 ===> post2), postHeapInfo, postSrcInfo)),
-      loopInvariants ::: other.loopInvariants)
-  }
-}
+  loopInvariants: List[LoopInvariant])
 
 sealed trait Result {
   def isSolution: Boolean = false

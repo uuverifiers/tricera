@@ -490,7 +490,7 @@ object ACSLLineariser {
               AbsyPrinter.visit(left, ctxt.setOpPrec("", 1))
           }
 
-          print(" -> ")
+          print(" ==> ")
 
           val newRightCtxt = right match {
             case IBinFormula(IBinJunctor.Or, INot(_), _) =>
@@ -506,7 +506,7 @@ object ACSLLineariser {
           val op = junctor match {
             case IBinJunctor.And => " && "
             case IBinJunctor.Or => " || "
-            case IBinJunctor.Eqv => " <-> "
+            case IBinJunctor.Eqv => " <==> "
           }
 
           val newLeftCtxt = left match {

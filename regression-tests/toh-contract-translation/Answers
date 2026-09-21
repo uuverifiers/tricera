@@ -135,7 +135,7 @@ Inferred ACSL annotations
 /* contract for swap */
 /*@
   requires \valid(y) && \valid(x);
-  ensures \valid(y) && \valid(x) && *x == \old(*y) && \old(*x) == *y;
+  ensures \valid(x) && \valid(y) && *y == \old(*x) && \old(*y) == *x;
   assigns *x, *y;
 */
 ================================================================================
@@ -200,8 +200,9 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for f */
 /*@
-  requires \valid(q) && *q == 0;
-  ensures \result == 2 && \valid(q) && *q == 2 && \old(*q) == 0;
+  requires p == q && \valid(q);
+  ensures \result == 2 && \valid(q) && *q == 2;
+  assigns *p, *q;
 */
 ================================================================================
 
@@ -230,6 +231,25 @@ Failed assertion:
 false :- main(@h, globalf_0_0p:9, x:8), x:8 != 1. (line:11 col:5) (property: user-assertion)
 
 UNSAFE
+
+alias-mixed-calls.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for twice */
+/*@
+  requires \true;
+  ensures \result == 2*\old(n);
+  assigns \nothing;
+*/
+/* contract for update */
+/*@
+  requires \valid(p) && \valid(q) && ((p == q && step == 3) || (step == 4 && \separated(p, q) && *p == 2 && *q == 5)) && (*q == 2 || (\separated(p, q) && *p == 2 && *q == 5));
+  ensures \valid(q) && \valid(p) && (5 - \old(*q) >= 1 || (\result == 3 && *p == 3 && *q == 9)) && (\old(q) != \old(p) || (\result == 6 && *q == 6));
+*/
+================================================================================
+
+SAFE
 
 alias-reject-overlap.c
 UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
@@ -350,6 +370,20 @@ Inferred ACSL annotations
 
 SAFE
 
+alias-heap-stack.c (native)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for update */
+/*@
+  requires \valid(q) && \valid(p) && *p == 2 && *q >= 5;
+  ensures \result == 3 && \valid(q) && \valid(p) && \old(*q) - *q == 1 && *p == 3;
+  assigns *p, *q;
+*/
+================================================================================
+
+SAFE
+
 call-site-frame.c (array)
 
 Inferred ACSL annotations
@@ -386,6 +420,20 @@ Inferred ACSL annotations
 /*@
   requires \true;
   ensures \valid(p) && *p == 7;
+*/
+================================================================================
+
+SAFE
+
+alias-heap-stack.c (array)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for update */
+/*@
+  requires \valid(q) && \valid(p) && *p == 2 && *q >= 5;
+  ensures \result == 3 && \valid(q) && \valid(p) && \old(*q) - *q == 1 && *p == 3;
+  assigns *p, *q;
 */
 ================================================================================
 

@@ -10,7 +10,7 @@ TESTS="get-1.c  \
        heapptr-to-stackptr.c \
        qualified-heapptr-to-stackptr.c \
        multi-arg-1.c multi-arg-2.c \
-       alias-share-safe.c alias-share-unsafe.c \
+       alias-share-safe.c alias-share-unsafe.c alias-mixed-calls.c \
        alias-reject-overlap.c alias-reject-array.c alias-reject-deref.c"
 
 for name in $TESTS; do
@@ -26,7 +26,7 @@ for name in frame-globals-only.c strengthen-globals.c strengthen-conditional.c s
 done
 
 for heap in native array; do
-    for name in call-site-frame.c frame-globals.c frame-allocate.c; do
+    for name in call-site-frame.c frame-globals.c frame-allocate.c alias-heap-stack.c; do
         echo
         echo "$name ($heap)"
         $TRI_CMD "$@" -assertNoVerify -acsl -heapModel:$heap -m:main $name 2>&1 | grep -v 'at '

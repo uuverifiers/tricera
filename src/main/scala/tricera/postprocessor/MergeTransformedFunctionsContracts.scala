@@ -134,7 +134,7 @@ object RewrapPointers
   */
 private object MapProgVarProxies 
   extends CollectingVisitor[MHashMap[String, String], IExpression]{
-  def apply(funcInvs: FunctionInvariants, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String])
+  def apply(funcInvs: FunctionInvariants, globalIdToParamId: MHashMap[String, String], introducedGlobals: Set[String])
   : FunctionInvariants = funcInvs match {
     case FunctionInvariants(
       id,
@@ -145,43 +145,37 @@ private object MapProgVarProxies
       FunctionInvariants(
         id,
         isSrcAnnotated,
-        PreCondition(applyTo(preInv, globalIdToParamId, funcParamIds)),
-        PostCondition(applyTo(postInv, globalIdToParamId, funcParamIds)),
-        loopInvariants.map(i => applyTo(i, globalIdToParamId, funcParamIds)))
+        PreCondition(applyTo(preInv, globalIdToParamId, introducedGlobals)),
+        PostCondition(applyTo(postInv, globalIdToParamId, introducedGlobals)),
+        loopInvariants.map(i => applyTo(i, globalIdToParamId, introducedGlobals)))
   }
 
-  private def applyTo(inv: Invariant, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String])
+  private def applyTo(inv: Invariant, globalIdToParamId: MHashMap[String, String], introducedGlobals: Set[String])
   : Invariant = inv match {
     case Invariant(form, heapInfo, srcInfo) => 
-      Invariant(applyTo(form, globalIdToParamId, funcParamIds), heapInfo, srcInfo)
+      Invariant(applyTo(form, globalIdToParamId, introducedGlobals), heapInfo, srcInfo)
   }
 
-  private def applyTo(inv: LoopInvariant, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String])
+  private def applyTo(inv: LoopInvariant, globalIdToParamId: MHashMap[String, String], introducedGlobals: Set[String])
   : LoopInvariant = inv match {
     case LoopInvariant(form, heapInfo, srcInfo) => 
-      LoopInvariant(applyTo(form, globalIdToParamId, funcParamIds), heapInfo, srcInfo)
+      LoopInvariant(applyTo(form, globalIdToParamId, introducedGlobals), heapInfo, srcInfo)
   }
 
-  private def applyTo(form: IFormula, globalIdToParamId: MHashMap[String, String], funcParamIds: List[String]) : IFormula = {
-    exQuantifyFalseParameters(visit(form, globalIdToParamId).asInstanceOf[IFormula], funcParamIds)
+  private def applyTo(form: IFormula, globalIdToParamId: MHashMap[String, String], introducedGlobals: Set[String]) : IFormula = {
+    projectGlobals(visit(form, globalIdToParamId).asInstanceOf[IFormula], introducedGlobals)
   }
 
-  private def exQuantifyFalseParameters(form: IFormula, funcParamIds: List[String]) : IFormula = {
-    // Some of the introduced global variables for paramters to other functions
-    // may be used in conditions on the parameters of the current function.
-    // Since these variables are not true global variables, they cannot affect
-    // the conditions for the current function. We account for that by existentially
-    // quantifying over the introduced variables that are not parameters to the current
-    // function.
-    SimpleAPI.withProver{ p =>
-      val constants = SymbolCollector.constants(form)
+  private def projectGlobals(form: IFormula, introducedGlobals: Set[String]): IFormula = {
+    // globals introduced for other calls are not inputs of this function
+    val constants = SymbolCollector.constants(form)
+    val toQuantify = constants.collect {
+      case p: ProgVarProxy if p.isGlobal && introducedGlobals(p.name) => p
+    }
+    if (toQuantify.isEmpty) form else SimpleAPI.withProver { p =>
       p.addConstantsRaw(constants)
       collectAndAddTheories(p, form)
-      val toQuantify = constants
-        .filter({case c: ProgVarProxy => c.isParameter && !funcParamIds.contains(c.name)})
-      val projected = IExpression.quanConsts(Quantifier.EX, toQuantify, form)
-      val simplified = p.simplify(projected)
-      simplified
+      p.simplify(IExpression.quanConsts(Quantifier.EX, toQuantify, form))
     }
   }
 
@@ -198,7 +192,7 @@ private object MapProgVarProxies
     globalIdToParamId: MHashMap[String, String],
     subres: Seq[IExpression])
   : IExpression = t match {
-    case ConstantAsProgVarProxy(proxy) if globalIdToParamId.get(proxy.name).isDefined =>
+    case ConstantAsProgVarProxy(proxy) if proxy.isGlobal && globalIdToParamId.contains(proxy.name) =>
         proxy.copy(
           _name = globalIdToParamId(proxy.name),
           _isPointer = true,
@@ -234,80 +228,83 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
   : Seq[FunctionInvariants] = {
     val astAdditions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
 
-    val transformedFuncInvsByOriginalId = astAdditions.transformedFunctionIdToOriginalId
-      .groupBy({case (transformedId, origId) => origId })
-      .mapValues(_.keySet
-        .map(funcId => funcInvs.find(i => i.id == funcId))
-        // Due to inlining of functions without annotations, not all transformed
-        // functions have a corresponding FunctionInvariants instance.
-        .withFilter(o => o.isDefined)
-        .map(o => o.get))
-      .filter({ case (id, set) => !set.isEmpty})
+    val introducedGlobals = astAdditions.introducedGlobalVariables.keySet.toSet
+    val originals = astAdditions.transformedFunctionIdToOriginalId
+    val transformed = funcInvs.filter(i => originals.contains(i.id))
+      .groupBy(i => originals(i.id))
 
-    transformedFuncInvsByOriginalId.map({case (originalId, transformedFuncInvs) => {
-      (originalId,
-       transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
-        (original, transformed) => 
-          original.meet(
-            MapProgVarProxies(
-              transformed,
-              astAdditions.globalVariableIdToParameterId,
-              astAdditions.originalFunctionIdToParamterIds(originalId)))))
-    }})
-    .map({ case (id, funcInv) => derefParameters(funcInv, astAdditions.originalFunctionIdToParamterIds(id)) })
-    .toSeq
-  }
-
-  private def derefParameters(funcInv: FunctionInvariants, funcParamsIds: List[String]): FunctionInvariants = funcInv match {
-    case FunctionInvariants(
-      id,
-      isSrcAnnotated,
-      PreCondition(preCondition),
-      PostCondition(postCondition),
-      loopInvariants) => 
-        val preDerefMap = 
-          SymbolCollector.constants(preCondition.expression)
-            .filter(c => funcParamsIds.exists(p => p == c.name))
-            .filter({ case c: ProgVarProxy if c.isPreExec => true})
-            .map(c => (c, ACSLExpression.derefFunApp(ACSLExpression.deref, c.asInstanceOf[ProgVarProxy])))
-            .toMap
-        val postDerefMap =
-          SymbolCollector.constants(postCondition.expression)
-            .withFilter(c => funcParamsIds.exists(p => p == c.name))
-            .withFilter({ case c: ProgVarProxy => true})
-            .map({ 
-              case c: ProgVarProxy if c.isPreExec => 
-                (c.asInstanceOf[ConstantTerm], ACSLExpression.derefFunApp(ACSLExpression.oldDeref, c))
-              case c: ProgVarProxy => 
-                (c.asInstanceOf[ConstantTerm], ACSLExpression.derefFunApp(ACSLExpression.deref, c))})
-            .toMap
-      // derefed stack pointers are valid by construction
-      val derefParams = (preDerefMap.keySet ++ postDerefMap.keySet).collect {
-        case p: ProgVarProxy if p.isPreExec => p
-      }.toSeq.distinctBy(_.name).sortBy(p => funcParamsIds.indexOf(p.name))
-      FunctionInvariants(
-        id,
-        isSrcAnnotated,
-        PreCondition(addValidParams(
-          derefParameters(preCondition, preDerefMap), derefParams)),
-        PostCondition(derefParameters(postCondition, postDerefMap)),
-        loopInvariants)
-  }
-
-  private def addValidParams(invariant: Invariant,
-                             params: Seq[ProgVarProxy]): Invariant =
-    invariant match {
-      case Invariant(form, heapInfo, sourceInfo) if params.nonEmpty =>
-        val validAtoms = params.map(p =>
-          IAtom(ACSLExpression.valid, Seq(IConstant(p))): IFormula)
-        Invariant(form.&(validAtoms.reduce(_ & _)), heapInfo, sourceInfo)
-      case _ => invariant
+    funcInvs.filterNot(i => originals.contains(i.id)).map { inv =>
+      val original = MapProgVarProxies(inv, MHashMap.empty, introducedGlobals)
+      transformed.get(original.id) match {
+        case None => original
+        case Some(variants) =>
+          val params = astAdditions.originalFunctionIdToParamterIds(original.id)
+          val branches = guardPostcondition(original) +: variants.sortBy(_.id).map { variant =>
+            val globals = astAdditions.transformedFunctionIdToParamToGlobal(variant.id)
+            val removed = params.filter(globals.contains)
+            val cells = globals.values.toSet
+            val mapping = astAdditions.globalVariableIdToParameterId
+              .filter { case (g, _) => cells(g) }
+            val mapped = MapProgVarProxies(variant, mapping, introducedGlobals)
+            // guard before dereferencing, so entry values become old(*p) in the post
+            val branch = derefParameters(guardPostcondition(mapped), removed.toSet)
+            val pointers = removed.map(p => IConstant(ProgVarProxy(p,
+              ProgVarProxy.State.PreExec, ProgVarProxy.Scope.Parameter, true)))
+            // f(&a, &a) shares one global; f(&a, &b) uses two separate globals
+            val aliases = IExpression.and(for (Seq(p, q) <- pointers.combinations(2)) yield
+              if (globals(p.c.name) == globals(q.c.name)) p === q
+              else IAtom(ACSLExpression.separated, Seq(p, q)))
+            val valid = IExpression.and(pointers.map(p => IAtom(ACSLExpression.valid, Seq(p))))
+            branch.copy(
+              preCondition = PreCondition(branch.preCondition.invariant.copy(
+                expression = branch.preCondition.invariant.expression &&& aliases &&& valid)),
+              postCondition = PostCondition(branch.postCondition.invariant.copy(
+                expression = aliases ===> branch.postCondition.invariant.expression)))
+          }
+          mergeBranches(original, branches)
+      }
     }
-
-  private def derefParameters(invariant: Invariant, derefMap: Map[ConstantTerm, ITerm]): Invariant = invariant match {
-    case Invariant(form, heapInfo, sourceInfo) =>
-      Invariant(ConstantSubstVisitor(form, derefMap), heapInfo, sourceInfo)
   }
+
+  private def guardPostcondition(inv: FunctionInvariants): FunctionInvariants =
+    inv.copy(postCondition = PostCondition(inv.postCondition.invariant.copy(
+      expression = inv.preCondition.invariant.expression ===> inv.postCondition.invariant.expression)))
+
+  private def mergeBranches(original: FunctionInvariants,
+                             branches: Seq[FunctionInvariants]): FunctionInvariants = {
+    // each postcondition is already guarded by its variant's entry conditions
+    // use the same constants for each occurrence of a source variable
+    val constants = branches.flatMap(b => SymbolCollector.constants(
+      b.preCondition.invariant.expression & b.postCondition.invariant.expression))
+    val common = constants.groupBy(_.toString).values.flatMap { group =>
+      group.map(c => c -> IConstant(group.head))
+    }.toMap
+    def rename(f: IFormula) = ConstantSubstVisitor(f, common)
+    original.copy(
+      preCondition = PreCondition(original.preCondition.invariant.copy(expression =
+        IExpression.connectSimplify(branches.map(b => rename(b.preCondition.invariant.expression)), IBinJunctor.Or))),
+      postCondition = PostCondition(original.postCondition.invariant.copy(expression =
+        IExpression.connectSimplify(branches.map(b => rename(b.postCondition.invariant.expression)), IBinJunctor.And))),
+      loopInvariants = branches.flatMap(_.loopInvariants).toList)
+  }
+
+  private def derefParameters(inv: FunctionInvariants,
+                              params: Set[String]): FunctionInvariants = {
+    def deref(form: IFormula, post: Boolean): IFormula = {
+      val replacements = SymbolCollector.constants(form).collect {
+        case p: ProgVarProxy if p.isParameter && params(p.name) =>
+          val fun = if (post && p.isPreExec) ACSLExpression.oldDeref else ACSLExpression.deref
+          (p: ConstantTerm) -> ACSLExpression.derefFunApp(fun, p)
+      }.toMap
+      ConstantSubstVisitor(form, replacements)
+    }
+    inv.copy(
+      preCondition = PreCondition(inv.preCondition.invariant.copy(
+        expression = deref(inv.preCondition.invariant.expression, false))),
+      postCondition = PostCondition(inv.postCondition.invariant.copy(
+        expression = deref(inv.postCondition.invariant.expression, true))))
+  }
+
 }
 
 
