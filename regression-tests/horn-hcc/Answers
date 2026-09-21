@@ -287,16 +287,11 @@ Init:
       V       
  main3_15(42) 
 --------------
-      |       
-      |       
-      V       
-   main(42)   
---------------
 Final:
-   main(42)   
+ main3_15(42) 
 --------------
 Failed assertion:
-false :- main(x:2). (line:8 col:3) (property: user-assertion)
+false :- main3_15(x:2). (line:4 col:5) (property: user-assertion)
 
 UNSAFE
 

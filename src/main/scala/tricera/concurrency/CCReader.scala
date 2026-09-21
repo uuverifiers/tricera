@@ -3332,8 +3332,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               if (res.isAssert) {
                 stmSymex.assertProperty(res.f, Some(getSourceInfo(stm)),
                                         properties.UserAssertion(res.name))
-                None
-              } else Some(res.f)
+              }
+              Some(res.f)
             case _ =>
               warn("Ignoring annotation: " + annot)
               None

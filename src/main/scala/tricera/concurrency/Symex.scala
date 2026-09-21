@@ -236,6 +236,10 @@ class Symex private (context        : SymexContext,
     val clause = (property :- (initAtom &&& guard))
     context.addAssertion(
       context.mkRichAssertionClause(clause, srcInfo, propertyType))
+    if (!ContainsSymbol(property, {
+      case IAtom(p, _) => context.predCCPredMap.contains(p)
+      case _ => false
+    })) addGuard(property)
   }
 
   def addValue(t : CCTerm) = {

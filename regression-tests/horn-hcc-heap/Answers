@@ -177,7 +177,7 @@ Init:
                                              |                                             
                                              |                                             
                                              V                                             
- main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(8))), heap.null, heap.addr(1)) 
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(9))), heap.null, heap.addr(1)) 
 -------------------------------------------------------------------------------------------
                                              |                                             
                                              |                                             
@@ -202,7 +202,7 @@ Init:
                                              |                                             
                                              |                                             
                                              V                                             
- main5_6_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(8))), heap.null, heap.addr(1)) 
+ main5_6_2(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(9))), heap.null, heap.addr(1)) 
 -------------------------------------------------------------------------------------------
                                              |                                             
                                              |                                             
@@ -229,7 +229,7 @@ Init:
                                                   |                                                  
                                                   |                                                  
                                                   V                                                  
-      main4_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(8))), heap.null, heap.addr(1))      
+      main4_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(9))), heap.null, heap.addr(1))      
 -----------------------------------------------------------------------------------------------------
                                                   |                                                  
                                                   |                                                  

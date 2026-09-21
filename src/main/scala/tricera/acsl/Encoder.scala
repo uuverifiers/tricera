@@ -175,16 +175,16 @@ class Encoder(reader : CCReader) {
   }
 
   private def replacePostPredInBody(c : CCClause) : Clause = c match {
-    // Handles assumption of postcondition after call, e.g:
+    // After checking the precondition, assume it along with the postcondition.
     // mainN+1(..) :- mainN(..), f_post(..) ==>
-    // mainN+1(..) :- mainN(..), <post> & <assigns>
+    // mainN+1(..) :- mainN(..), <pre> & <post> & <assigns>
     case CCClause(Clause(head, body, constr), oldSrcInfo) =>
       val (toss, keep) = body.partition(a => postPredsToReplace(a.pred))
       // nested calls can cause several post preds
       val postconditions = toss.map { atom =>
         val name = atom.pred.name.stripSuffix(predPostSuffix)
         val contract = funToContract(name)
-        applyArgs(contract.post &&& contract.assignsAssume &&&
+        applyArgs(contract.pre &&& contract.post &&& contract.assignsAssume &&&
           reader.getFunctionContexts(name).globalArrayPostcondition,
           funToPostAtom(name), atom)
       }

@@ -33,6 +33,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import CCReader._
 import ccreader._
 import lazabs.GlobalParameters
+import lazabs.horn.bottomup.SimpleWrapper
+import tricera.properties
 import tricera.params.TriCeraParameters
 import tricera.postprocessor.{ACSLContractVerifier, ACSLLinearisedContract}
 
@@ -143,18 +145,98 @@ class HeapObjectPartitionTests extends AnyFlatSpec {
     assert(wrappers.contains(O_int))
   }
 
-  private def withHeapReaders(program : String)(test : CCReader => Unit) : Unit =
+  private def withHeapReaders(program : String,
+                             checked : Set[properties.Property] = Set(properties.Reachability))
+                            (test : CCReader => Unit) : Unit =
     for (heap <- Seq(TriCeraParameters.NativeHeap, TriCeraParameters.ArrayHeap)) {
       val params = new TriCeraParameters
       params.heapModel = heap
       TriCeraParameters.parameters.withValue(params) {
         GlobalParameters.withValue(params) {
           val input = program.replace("/*@contract@*/", "■■contract■■")
-          val (reader, _, _) = CCReader(new java.io.StringReader(input), "main")
+            .replaceAll("(?s)/\\*@(.+?)\\*/", "■■$1■■")
+          val (reader, _, _) = CCReader(new java.io.StringReader(input), "main", checked)
           test(reader)
         }
       }
     }
+
+  private def assertionsAreSafe(reader : CCReader,
+                                keep : properties.Property => Boolean) : Boolean = {
+    val system = new tricera.acsl.Encoder(reader).encode
+    val assertions = system.assertions.filter { c =>
+      keep(reader.getRichClause(c).get.asInstanceOf[CCAssertionClause].property)
+    }
+    SimpleWrapper.isSat(system.processes.flatMap(_._1.map(_._1)) ++
+      system.backgroundAxioms.clauses ++ assertions)
+  }
+
+  "Assertion encoding" should "assume checked conditions at their original state" in {
+    for (premise <- Seq("assert(n > 0);", "/*@ assert premise: n > 0; */");
+         change <- Seq("", "n = 0;"))
+      withHeapReaders(s"""
+        |void main() {
+        |  int n;
+        |  $premise
+        |  $change
+        |  /*@ assert goal: n > 0; */
+        |}
+        |""".stripMargin) { reader =>
+        assert(!assertionsAreSafe(reader, _ => true))
+        // Removing the first check must leave its assumption, but only for that state.
+        assert(assertionsAreSafe(reader, _ == properties.UserAssertion(Some("goal"))) ==
+          change.isEmpty)
+      }
+  }
+
+  it should "keep predicate definitions out of continuation guards" in {
+    for (extra <- Seq("", "assert(!P(42));"))
+      withHeapReaders(s"""
+        |/*$$ P(int x) $$*/
+        |void main() { assert(P(42)); $extra }
+        |""".stripMargin) { reader =>
+        val system = reader.system
+        val transitions = system.processes.flatMap(_._1.map(_._1))
+        val clauses = transitions ++ system.backgroundAxioms.clauses ++ system.assertions
+        assert(clauses.exists(_.head.pred.name == "P"))
+        assert(!transitions.exists(_.body.exists(_.pred.name == "P")))
+      }
+  }
+
+  it should "assume only enabled memory checks" in {
+    for (enabled <- Seq(false, true)) {
+      val checked = if (enabled) Set[properties.Property](properties.MemValidDeref)
+                    else Set[properties.Property](properties.Reachability)
+      withHeapReaders("""
+        |void main() {
+        |  int a[1];
+        |  a[1] = 0;
+        |  /*@ assert goal: 0; */
+        |}
+        |""".stripMargin, checked) { reader =>
+        assert(!assertionsAreSafe(reader, _ => true))
+        assert(assertionsAreSafe(reader, _ == properties.UserAssertion(Some("goal"))) == enabled)
+      }
+    }
+  }
+
+  it should "check recursive call preconditions before assuming them" in {
+    for (n <- Seq(2, -1))
+      withHeapReaders(s"""
+        |/*@ requires n >= 0; ensures \\result == n; */
+        |int count(int n) {
+        |  if (n <= 0) return 0;
+        |  return count(n - 1) + 1;
+        |}
+        |void main() {
+        |  int r = count($n);
+        |  /*@ assert goal: r == 2; */
+        |}
+        |""".stripMargin) { reader =>
+        assert(assertionsAreSafe(reader, _ => true) == (n == 2))
+        assert(assertionsAreSafe(reader, _ == properties.UserAssertion(Some("goal"))))
+      }
+  }
 
   "Contract verification" should "require valid accesses through callees" in {
     withHeapReaders("""

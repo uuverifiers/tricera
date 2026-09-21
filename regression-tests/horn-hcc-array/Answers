@@ -392,10 +392,7 @@ pointer-arith-3-safe.c
 Splitting properties: {valid-deref,valid-memtrack,valid-free,unreach-call}
   valid-deref... SAFE
   valid-memtrack... SAFE
-  valid-free... Warning: type clash during inference: int vs Addr
-Warning: type clash during inference: int vs Addr
-Warning: type clash during inference: int vs Addr
-SAFE
+  valid-free... SAFE
   unreach-call... SAFE
 SAFE
 
@@ -405,11 +402,6 @@ Splitting properties: {valid-deref,valid-memtrack,valid-free,unreach-call}
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Init:
                                                     main5_3(heap.empty, arrayPtr(AddrRange(heap.null, 0), 0), 2)                                                    
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                                 |                                                                                  
-                                                                                 |                                                                                  
-                                                                                 V                                                                                  
-                          main(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 2)), arrayPtr(AddrRange(heap.addr(1), 2), 0), 2)                          
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                                                  |                                                                                  
                                                                                  |                                                                                  
