@@ -40,6 +40,18 @@ import tricera.parsers.AnnotationParser.MaybeACSLAnnotation
 import tricera.parsers.CommentPreprocessor.annotationMarker
 
 private object CCAstUtils {
+  object AddressOfDereference {
+    def unapply(exp: Exp): Option[Exp] = exp match {
+      case address: Epreop if address.unary_operator_.isInstanceOf[Address] =>
+        address.exp_ match {
+          case deref: Epreop if deref.unary_operator_.isInstanceOf[Indirection] =>
+            Some(deref.exp_)
+          case _ => None
+        }
+      case _ => None
+    }
+  }
+
   def isStackPtrInitialized(identifier: EvarWithType): Boolean = {
     def check(inializer: Initializer) = inializer match {
       case init: InitExpr => isStackPtr(init.exp_)
@@ -58,6 +70,7 @@ private object CCAstUtils {
     //   more refined will require more exlaborate data flow
     //   analysis.
     exp match {
+      case AddressOfDereference(p) => isStackPtr(p)
       case x: Etypeconv => isStackPtr(x.exp_)
       case x: Epreop =>
           x.unary_operator_ match {
@@ -200,6 +213,7 @@ class CallSiteTransform(
   val originalFuncName = declarator.accept(getName, ())
 
   private def addressString(arg : Exp) : String = arg match {
+    case CCAstUtils.AddressOfDereference(p) => addressString(p)
     case tc : Etypeconv => addressString(tc.exp_)
     case e              => new PrettyPrinterNonStatic().print(e)
   }
@@ -229,6 +243,7 @@ class CallSiteTransform(
   // `&<var/field/index>` with no pointer dereference; None otherwise (a `*`/`->`
   // is involved, or the argument is itself a pointer, so we cannot tell)
   private def addressBase(arg : Exp) : Option[String] = arg match {
+    case CCAstUtils.AddressOfDereference(p) => addressBase(p)
     case tc : Etypeconv => addressBase(tc.exp_)
     case pre : Epreop if pre.unary_operator_.isInstanceOf[Address] =>
       lvalueBase(pre.exp_)

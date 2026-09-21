@@ -85,3 +85,30 @@ UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
 stack-ptr-fun-ret.c
 Warning: no definition of function "nondet" available
 UNKNOWN (Unsupported C fragment. Returning stack pointers from functions is not yet supported.)
+
+address-deref-safe.c
+SAFE
+
+address-deref-unsafe.c
+
+-----------------------------------------------------------------------------------------------------------
+Init:
+                                            main5_5(heap.empty)                                            
+-----------------------------------------------------------------------------------------------------------
+                                                     |                                                     
+                                                     |                                                     
+                                                     V                                                     
+ main7_12(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.addr(1), heap.addr(1), heap.addr(1)) 
+-----------------------------------------------------------------------------------------------------------
+Final:
+ main7_12(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), heap.addr(1), heap.addr(1), heap.addr(1)) 
+-----------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main7_12(@h, q:5, update`p:5, update`q:5), update_post(@h, update`p:5, update`q:5, @h_post, _res3), _res3 != 1. (line:7 col:5) (property: user-assertion)
+
+UNSAFE
+
+address-deref-invalid.c
+tricera.concurrency.ccreader.CCExceptions$TranslationException: Cannot dereference non-pointer: int value:2
+(error "Cannot dereference non-pointer: int value:2")
+Other Error: Cannot dereference non-pointer: int value:2

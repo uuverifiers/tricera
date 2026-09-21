@@ -1291,6 +1291,14 @@ class Symex private (context        : SymexContext,
       // always correctly resolve.
       assert(updatedPostValue.typ == topVal.typ)
 
+    case CCAstUtils.AddressOfDereference(pointer) => // &*pointer
+      evalHelp(pointer)
+      topVal.typ match {
+        case _: CCStackPointer | _: CCHeapPointer | _: CCHeapArrayPointer =>
+        case _ => throw new TranslationException(
+          "Cannot dereference non-pointer: " + topVal.typ + " " + topVal.toTerm)
+      }
+
     case exp : Epreop =>
       val srcInfo = Some(getSourceInfo(exp))
       evalHelp(exp.exp_)
