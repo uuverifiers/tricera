@@ -323,3 +323,44 @@ SAFE
 
 heap-guard-bug-2.c
 SAFE
+
+address-subscript-safe.c
+SAFE
+
+address-subscript-unsafe.c
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                                     main2_5(heap.empty)                                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                              |                                                                                              
+                                                                                              |                                                                                              
+                                                                                              V                                                                                              
+ main3_5(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(1))), O_int(2))), arrayPtr(AddrRange(heap.addr(1), 2), 0), arrayPtr(AddrRange(heap.addr(1), 2), 2)) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main3_5(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(1))), O_int(2))), arrayPtr(AddrRange(heap.addr(1), 2), 0), arrayPtr(AddrRange(heap.addr(1), 2), 2)) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main3_5(@h, a:2, end:3), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(end:3), arrayPtrOffset(end:3) - 0))). (line:4 col:17) (property: valid-deref)
+
+UNSAFE
+
+address-subscript-index-unsafe.c
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                                                          main2_5(heap.empty)                                                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                   |                                                                                                                    
+                                                                                                                   |                                                                                                                    
+                                                                                                                   V                                                                                                                    
+ main3_5(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(1))), O_int(2))), O_int(0))), arrayPtr(AddrRange(heap.addr(1), 2), 0), arrayPtr(AddrRange(heap.addr(3), 1), 0)) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main3_5(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(1))), O_int(2))), O_int(0))), arrayPtr(AddrRange(heap.addr(1), 2), 0), arrayPtr(AddrRange(heap.addr(3), 1), 0)) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main3_5(@h, a:2, indices:3), !is_O_int(heap.read(@h, heap.rangeNth(arrayPtrRange(indices:3), arrayPtrOffset(indices:3) + 1))). (line:4 col:17) (property: valid-deref)
+
+UNSAFE

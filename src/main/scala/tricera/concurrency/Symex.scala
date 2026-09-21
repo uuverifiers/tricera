@@ -1291,6 +1291,22 @@ class Symex private (context        : SymexContext,
       // always correctly resolve.
       assert(updatedPostValue.typ == topVal.typ)
 
+    case CCAstUtils.AddressOfArrayElement(array, index) =>
+      // &a[i] is a + i without reading the element (C 6.5.3.2)
+      val (lhs, rhs) = evalBinExpArgs(array, index)
+      (lhs.typ, rhs.typ) match {
+        case (_: CCHeapArrayPointer, _: CCArithType | _: CCIntEnum) |
+             (_: CCArithType | _: CCIntEnum, _: CCHeapArrayPointer) =>
+          pushVal(BinaryOperators.Plus(lhs, rhs).term)
+        case (_: CCArray, _) | (_, _: CCArray) =>
+          throw new UnsupportedCFragmentException(
+            getLineString(exp) +
+            "Stack pointers to mathematical array fields are not yet supported.")
+        case _ =>
+          throw new TranslationException(getLineString(exp) +
+            "Array element address requires an array pointer and an integer index.")
+      }
+
     case CCAstUtils.AddressOfDereference(pointer) => // &*pointer
       evalHelp(pointer)
       topVal.typ match {

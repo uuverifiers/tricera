@@ -255,7 +255,7 @@ alias-reject-overlap.c
 UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
 
 alias-reject-array.c
-UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
+UNKNOWN (Unsupported C fragment. Array-pointer conversion for argument 2 of function f is not supported.)
 
 alias-reject-deref.c
 UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)

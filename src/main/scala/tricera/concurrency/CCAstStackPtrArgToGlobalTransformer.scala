@@ -40,6 +40,17 @@ import tricera.parsers.AnnotationParser.MaybeACSLAnnotation
 import tricera.parsers.CommentPreprocessor.annotationMarker
 
 private object CCAstUtils {
+  object AddressOfArrayElement {
+    def unapply(exp: Exp): Option[(Exp, Exp)] = exp match {
+      case address: Epreop if address.unary_operator_.isInstanceOf[Address] =>
+        address.exp_ match {
+          case array: Earray => Some((array.exp_1, array.exp_2))
+          case _ => None
+        }
+      case _ => None
+    }
+  }
+
   object AddressOfDereference {
     def unapply(exp: Exp): Option[Exp] = exp match {
       case address: Epreop if address.unary_operator_.isInstanceOf[Address] =>
@@ -71,6 +82,7 @@ private object CCAstUtils {
     //   analysis.
     exp match {
       case AddressOfDereference(p) => isStackPtr(p)
+      case AddressOfArrayElement(_, _) => false
       case x: Etypeconv => isStackPtr(x.exp_)
       case x: Epreop =>
           x.unary_operator_ match {
