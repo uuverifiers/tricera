@@ -254,8 +254,7 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
             val mapping = astAdditions.globalVariableIdToParameterId
               .filter { case (g, _) => cells(g) }
             val mapped = MapProgVarProxies(variant, mapping, introducedGlobals)
-            // guard before dereferencing, so entry values become old(*p) in the post
-            val branch = derefParameters(guardPostcondition(mapped), removed.toSet)
+            val branch = derefParameters(mapped, removed.toSet)
             val pointers = removed.map(p => IConstant(ProgVarProxy(p,
               ProgVarProxy.State.PreExec, ProgVarProxy.Scope.Parameter, true)))
             // f(&a, &a) shares one global; f(&a, &b) uses two separate globals
@@ -263,11 +262,17 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
               if (globals(p.c.name) == globals(q.c.name)) p === q
               else IAtom(ACSLExpression.separated, Seq(p, q)))
             val valid = IExpression.and(pointers.map(p => IAtom(ACSLExpression.valid, Seq(p))))
+            val postValid = ACSLExpression.validPointers(removed.map(p => ProgVarProxy(p,
+              ProgVarProxy.State.PostExec, ProgVarProxy.Scope.Parameter, true)).toSet)
+            val oldEntry = derefParameters(mapped.copy(
+              postCondition = PostCondition(mapped.preCondition.invariant)),
+              removed.toSet).postCondition.invariant.expression
             branch.copy(
               preCondition = PreCondition(branch.preCondition.invariant.copy(
                 expression = branch.preCondition.invariant.expression &&& aliases &&& valid)),
               postCondition = PostCondition(branch.postCondition.invariant.copy(
-                expression = aliases ===> branch.postCondition.invariant.expression)))
+                expression = (aliases &&& oldEntry) ===>
+                  (branch.postCondition.invariant.expression &&& postValid))))
           }
           mergeBranches(original, branches)
       }
@@ -315,10 +320,8 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
 
 }
 
-
 /**
-  * Scans the invariants for ProgVarProxy instances and adds a valid pointer atom
-  * for each one that is a pointer.
+  * Adds valid pointer requirements to preconditions.
   */
 object AddValidPointerPredicates 
   extends CollectingVisitor[Unit, (MSet[ProgVarProxy], MSet[ProgVarProxy])]
@@ -343,9 +346,7 @@ object AddValidPointerPredicates
         PreCondition(
           applyTo(preInv)
         ),
-        PostCondition(
-          applyTo(postInv)
-        ),
+        PostCondition(postInv),
         loopInvariants)
   }
 

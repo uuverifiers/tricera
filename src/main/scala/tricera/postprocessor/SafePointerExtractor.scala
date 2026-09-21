@@ -1,7 +1,7 @@
 /**
  * Copyright (c) 2023 Oskar Soederberg
  *               2025 Scania CV AB
- *               2025 Zafer Esen. All rights reserved.
+ *               2025-2026 Zafer Esen. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,6 +38,7 @@
 package tricera.postprocessor
 
 import ap.parser._
+import ap.theories.ADT
 import tricera._
 
 object SafePointerExtractor {
@@ -53,21 +54,74 @@ object SafePointerExtractor {
     invForm       : IFormula,
     heapInfo      : HeapInfo,
     isCurrentHeap : ProgVarProxy => Boolean) : ValSet = {
-    val valueSet = ValSetReader(invForm)
-    val explForm = ToExplicitForm(invForm, valueSet)
-    val redForm = HeapReducer(explForm, heapInfo)
+    @scala.annotation.tailrec
+    def reduce(form: IExpression, remaining: Int): IExpression = {
+      if (remaining == 0) form
+      else {
+        val next = HeapReducer(form, heapInfo, ValSetReader(form))
+        if (next == form) form else reduce(next, remaining - 1)
+      }
+    }
+    val redForm = reduce(invForm, SymbolCollector.constants(invForm).size + 1)
     HeapExtractor(redForm, isCurrentHeap) match {
       case Some(heap) =>
         val redValueSet = ValSetReader(redForm)
-        readSafeVariables(heap, redValueSet)
+        readSafeVariables(heap, redValueSet, heapInfo)
       case _ => ValSet.empty
     }
   }
 
   private def readSafeVariables(heap                  : HeapState,
-                                valueSetWithAddresses : ValSet) : ValSet =
-    ValSet(heap.storage.keys.map(
-      valueSetWithAddresses.getVariantVariables).toSet)
+                                valueSetWithAddresses : ValSet,
+                                heapInfo : HeapInfo) : ValSet = {
+    val addresses = heap.storage.collect {
+      case (address, IFunApp(ctor, _))
+          if heapInfo.objectCtorToSelector(ctor).nonEmpty => address
+    }
+    ValSet(addresses.map(valueSetWithAddresses.getVariantVariables).toSet)
+  }
+
+  def getValidPointers(invariant : Invariant,
+                       isCurrentHeap : ProgVarProxy => Boolean) : Set[ProgVarProxy] =
+    invariant.heapInfo.map { info =>
+      def collect(form : IFormula, known : ValSet) : Set[ProgVarProxy] = {
+        val values = ValSet.union(known, ValSetReader(form))
+        def pointers(heap : ITerm, address : ITerm) : Set[ProgVarProxy] = {
+          val heaps = values.getVal(heap).map(_.variants).getOrElse(Set(heap))
+          if (!heaps.exists {
+            case ConstantAsProgVarProxy(p) => isCurrentHeap(p)
+            case _ => false
+          }) Set.empty
+          else (values.getVal(address).map(_.variants).getOrElse(Set(address))).collect {
+            case ConstantAsProgVarProxy(p) if p.isPointer => p
+          }
+        }
+        def fromObject(term : ITerm) : Set[ProgVarProxy] = term match {
+          case IFunApp(read, Seq(heap, address)) if info.isReadFun(read) =>
+            pointers(heap, address)
+          case _ => Set.empty
+        }
+        form match {
+          case IExpression.EqLit(IFunApp(ADT.CtorId(adt, sort), Seq(obj)), id) =>
+            adt.constructors.filter(_.resSort == adt.sorts(sort))
+              .lift(id.intValueSafe).filter(c =>
+              info.objectCtorToSelector(c).nonEmpty).map(_ => fromObject(obj))
+              .getOrElse(Set.empty)
+          case IEquation(obj, IFunApp(ctor, _))
+              if info.objectCtorToSelector(ctor).nonEmpty => fromObject(obj)
+          case IEquation(IFunApp(ctor, _), obj)
+              if info.objectCtorToSelector(ctor).nonEmpty => fromObject(obj)
+          case IBinFormula(IBinJunctor.And, left, right) =>
+            collect(left, values) ++ collect(right, values)
+          case IBinFormula(IBinJunctor.Or, left, right) =>
+            collect(left, values) intersect collect(right, values)
+          case IQuantified(IExpression.Quantifier.EX, body) =>
+            collect(body, ValSet.empty)
+          case _ => Set.empty
+        }
+      }
+      collect(invariant.expression, ValSet.empty)
+    }.getOrElse(Set.empty)
 }
 
 private object HeapExtractor {
@@ -75,41 +129,51 @@ private object HeapExtractor {
       expr: IExpression,
       isCurrentHeap: ProgVarProxy => Boolean
   ): Option[HeapState] = {
-    (new InvariantHeapExtractor(isCurrentHeap)).visit(expr, ())
-  }
-}
-
-private class InvariantHeapExtractor(isCurrentHeap: ProgVarProxy => Boolean)
-    extends CollectingVisitor[Unit, Option[HeapState]] {
-  override def preVisit(t: IExpression, arg: Unit): PreVisitResult = t match {
-    case IEquation(ConstantAsProgVarProxy(h), heap: HeapState) if isCurrentHeap(h) =>
-      ShortCutResult(Some(heap))
-    case _ =>
-      KeepArg
-  }
-
-  override def postVisit(
-      t: IExpression,
-      arg: Unit,
-      subres: Seq[Option[HeapState]]
-  ): Option[HeapState] = t match {
-    case h: HeapState => Some(h)
-    case _            => subres.collectFirst { case Some(h) => h }
+    expr match {
+      case IEquation(ConstantAsProgVarProxy(h), heap: HeapState) if isCurrentHeap(h) =>
+        Some(heap)
+      case IEquation(heap: HeapState, ConstantAsProgVarProxy(h)) if isCurrentHeap(h) =>
+        Some(heap)
+      case IBinFormula(IBinJunctor.And, left, right) =>
+        apply(left, isCurrentHeap).orElse(apply(right, isCurrentHeap))
+      case IQuantified(IExpression.Quantifier.EX, body) =>
+        apply(body, isCurrentHeap)
+      case _ => None
+    }
   }
 }
 
 private object HeapReducer {
   def apply(
       invariantExpression: IExpression,
-      heapInfo: HeapInfo
+      heapInfo: HeapInfo,
+      values: ValSet = ValSet.empty
   ): IExpression = {
-    (new HeapReducer(heapInfo)).visit(invariantExpression, List[String]())
+    (new HeapReducer(heapInfo, values)).visit(invariantExpression, List[String]())
   }
 }
 
-private class HeapReducer(heapInfo: HeapInfo)
+private class HeapReducer(heapInfo: HeapInfo, values: ValSet)
     extends CollectingVisitor[List[String], IExpression]
     with IdGenerator {
+
+  private object KnownAddress {
+    def unapply(term: ITerm): Option[Address] = term match {
+      case a: Address => Some(a)
+      case _ => values.getVal(term).flatMap(_.variants.collectFirst {
+        case a: Address => a
+      })
+    }
+  }
+
+  private object KnownHeap {
+    def unapply(term: ITerm): Option[HeapState] = term match {
+      case h: HeapState => Some(h)
+      case _ => values.getVal(term).flatMap(_.variants.collectFirst {
+        case h: HeapState => h
+      })
+    }
+  }
 
   override def preVisit(
       t: IExpression,
@@ -137,17 +201,17 @@ private class HeapReducer(heapInfo: HeapInfo)
         HeapState.heapById(quantifierIds(index))
       case IFunApp(
             writeFun,
-            Seq(heap: HeapState, addr: Address, obj)
+            Seq(KnownHeap(heap), KnownAddress(addr), obj)
           ) if heapInfo.isWriteFun(writeFun) =>
         heap.write(addr, obj.asInstanceOf[ITerm])
       case IFunApp(
             readFun,
-            Seq(heap: HeapState, addr: Address)
+            Seq(KnownHeap(heap), KnownAddress(addr))
           ) if heapInfo.isReadFun(readFun) =>
-        heap.read(addr)
+        heap.storage.getOrElse(addr, t update subres)
       case IFunApp(
             allocFun,
-            Seq(heap: HeapState, obj)
+            Seq(KnownHeap(heap), obj)
           ) if heapInfo.isAllocFun(allocFun) =>
         heap.alloc(obj.asInstanceOf[ITerm])
       case IFunApp(

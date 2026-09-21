@@ -26,7 +26,7 @@ for name in frame-globals-only.c strengthen-globals.c strengthen-conditional.c s
 done
 
 for heap in native array; do
-    for name in call-site-frame.c frame-globals.c frame-allocate.c alias-heap-stack.c; do
+    for name in call-site-frame.c frame-globals.c frame-allocate.c alias-heap-stack.c read-free.c free-other.c conditional-free.c; do
         echo
         echo "$name ($heap)"
         $TRI_CMD "$@" -assertNoVerify -acsl -heapModel:$heap -m:main $name 2>&1 | grep -v 'at '

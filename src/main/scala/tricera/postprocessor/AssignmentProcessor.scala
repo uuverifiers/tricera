@@ -66,7 +66,11 @@ class AssignmentProcessor(srcs: Seq[FunctionInvariants]) extends ResultProcessor
             id,
             isSrcAnnotated,
             preCondition, // Note: This processor is only applicable to the post condition
-            PostCondition(addAssignmentAtoms(postInv, srcInv.postCondition, postCondition.isCurrentHeap)),
+            PostCondition(addAssignmentAtoms(postInv,
+              PostCondition(srcInv.postCondition.invariant.copy(expression =
+                srcInv.preCondition.invariant.expression &
+                  srcInv.postCondition.invariant.expression)),
+              postCondition.isCurrentHeap)),
             loopInvariants)
         case None =>
           funcInv
