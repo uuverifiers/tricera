@@ -3853,6 +3853,11 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
           returnPred match {
             case Some(rp) =>
+              if (functionContexts.contains(functionName) &&
+                  retValue.typ.isInstanceOf[CCHeapArrayPointer] &&
+                  retValue.typ.toSort != rp.argVars.last.sort)
+                throw new UnsupportedCFragmentException(
+                  s"Array-pointer conversion for the result of function $functionName is not supported.")
               val args = (symex.getValuesAsTerms take(rp.arity - 1)) ++
                          List(retValue.toTerm)
               symex outputClause(atom(rp, args), srcInfo)

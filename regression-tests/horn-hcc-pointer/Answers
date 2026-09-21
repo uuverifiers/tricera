@@ -112,3 +112,15 @@ address-deref-invalid.c
 tricera.concurrency.ccreader.CCExceptions$TranslationException: Cannot dereference non-pointer: int value:2
 (error "Cannot dereference non-pointer: int value:2")
 Other Error: Cannot dereference non-pointer: int value:2
+
+array-call-supported.c
+SAFE
+
+array-call-unsupported.c
+UNKNOWN (Unsupported C fragment. Array-pointer conversion for argument 1 of function read is not supported.)
+
+array-call-alias-unsupported.c
+UNKNOWN (Unsupported C fragment. Array-pointer conversion for argument 1 of function read is not supported.)
+
+array-return-unsupported.c
+UNKNOWN (Unsupported C fragment. Array-pointer conversion for the result of function identity is not supported.)

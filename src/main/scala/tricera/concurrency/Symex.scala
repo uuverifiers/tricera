@@ -1817,8 +1817,15 @@ class Symex private (context        : SymexContext,
         }
 
         var argTerms : List[ITerm] = List()
-        for (_ <- 0 until argCount)
-          argTerms = popVal.toTerm :: argTerms
+        for ((formal, index) <- ctx.prePred.argVars.takeRight(argCount).zipWithIndex.reverse) {
+          val arg = popVal
+          if (arg.typ.toSort != formal.sort &&
+              (arg.typ.isInstanceOf[CCHeapArrayPointer] ||
+               formal.typ.isInstanceOf[CCHeapArrayPointer]))
+            throw new UnsupportedCFragmentException(
+              s"Array-pointer conversion for argument ${index + 1} of function $name is not supported.")
+          argTerms = arg.toTerm :: argTerms
+        }
 
         val postGlobalVars : scala.Seq[ITerm] = // todo : use ctx postglobal?
           (for (v <- scope.GlobalVars.vars) yield {
