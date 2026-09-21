@@ -19,6 +19,10 @@ for name in $TESTS; do
     $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
 done
 
+echo
+echo "max-2.c (array)"
+$TRI_CMD -cex -acsl "$@" -heapModel:array max-2.c 2>&1 | grep -v 'at '
+
 for name in frame-globals-only.c strengthen-globals.c strengthen-conditional.c strengthen-guards.c; do
     echo
     echo $name

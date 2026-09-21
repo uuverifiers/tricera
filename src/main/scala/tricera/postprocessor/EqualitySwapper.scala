@@ -75,11 +75,47 @@ object ToVariableForm extends ResultProcessor {
     case Invariant(form, maybeHeapInfo, maybeSourceInfo) =>
       Invariant(
         EqualitySwapper(
-          form,
+          normaliseReadAddresses(form, valueSet, maybeHeapInfo),
           valueSet.toCanonicalFormMap,
           maybeHeapInfo).asInstanceOf[IFormula],
         maybeHeapInfo,
         maybeSourceInfo)
+  }
+
+  private def normaliseReadAddresses(form : IFormula, values : ValSet,
+                                     heapInfo : Option[HeapInfo]) : IFormula = {
+    // Use known values inside addresses, e.g., size(h1) = size(h0) = 3.
+    // Only replace terms by constants or literals, so rewriting cannot grow terms.
+    val replacements : Map[IExpression, ITerm] = values.vals.flatMap { value =>
+      value.variants.collect {
+        case t : IConstant => t : ITerm
+        case t : IIntLit => t : ITerm
+      }.minByOption(values.getOrderingKey).toSeq.flatMap { rep =>
+        value.variants.filterNot(_ == rep).map(_ -> rep)
+      }
+    }.toMap
+    val canonical = values.toCanonicalFormMap
+    def resolve(address : ITerm, info : HeapInfo) : ITerm = {
+      val simplified = new Simplifier().apply(Rewriter.rewrite(address,
+        t => replacements.getOrElse(t, t)).asInstanceOf[ITerm])
+      // Native heap addresses can also occur without their addr wrapper.
+      val candidates = info.heap match {
+        case _ : ap.theories.heaps.NativeHeap =>
+          Seq(simplified, IFunApp(info.heap.addr, Seq(simplified)))
+        case _ => Seq(simplified)
+      }
+      candidates.iterator.map(t => canonical.getOrElse(t, t)).collectFirst {
+        case p @ ConstantAsProgVarProxy(v) if v.isPointer => p
+      }.getOrElse(address)
+    }
+    Rewriter.rewrite(form, {
+      case read @ IFunApp(f, Seq(h, address))
+          if heapInfo.exists(_.isReadFun(f)) &&
+             SymbolCollector.variables(address).isEmpty =>
+        val resolved = resolve(address, heapInfo.get)
+        if (resolved == address) read else IFunApp(f, Seq(h, resolved))
+      case t => t
+    }).asInstanceOf[IFormula]
   }
 }
 

@@ -83,7 +83,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires b == y && a == x && r == max && \valid(y) && \valid(x) && \valid(max) && *y == b_init && *x == a_init;
-  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && r == \old(max) && (*max == \old(b_init) || \old(a_init) >= \old(b_init));
+  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && r == \old(max) && (\old(b_init) - \old(a_init) >= 1 || (\old(a_init) >= \old(b_init) && *max == \old(a_init))) && (*max == \old(b_init) || (\old(a_init) >= \old(b_init) && *max == \old(a_init)));
 */
 ================================================================================
 
@@ -259,6 +259,21 @@ UNKNOWN (Unsupported C fragment. Array-pointer conversion for argument 2 of func
 
 alias-reject-deref.c
 UNKNOWN (Unsupported C fragment. Cannot decide whether the stack-pointer arguments to contract function 'f' may alias. Pass the same lvalue, or distinct simple variables/fields, to its pointer parameters.)
+
+max-2.c (array)
+Warning: no definition of function "non_det_int_ptr" available
+Warning: no definition of function "non_det_int" available
+
+Inferred ACSL annotations
+================================================================================
+/* contract for findMax */
+/*@
+  requires b == y && a == x && r == max && \valid(y) && \valid(x) && \valid(max) && *y == b_init && *x == a_init;
+  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && r == \old(max) && (\old(a_init) >= \old(b_init) || (\old(b_init) - \old(a_init) >= 1 && *max == \old(b_init))) && (*max == \old(a_init) || (\old(b_init) - \old(a_init) >= 1 && *max == \old(b_init)));
+*/
+================================================================================
+
+SAFE
 
 frame-globals-only.c
 

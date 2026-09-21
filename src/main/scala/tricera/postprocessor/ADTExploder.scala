@@ -34,7 +34,7 @@ import ap.theories.ADT.ADTProxySort
 import ap.theories.{ADT, TheoryRegistry}
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import tricera.{
-  FunctionInvariants, Invariant, LoopInvariant,
+  FunctionInvariants, HeapInfo, Invariant, LoopInvariant,
   PostCondition, PreCondition, Solution}
 
 object ADTExploder extends ResultProcessor {
@@ -58,20 +58,20 @@ object ADTExploder extends ResultProcessor {
 
   def rewrite(inv: Invariant): Invariant = inv match {
     case Invariant(expression, heapInfo, sourceInfo) =>
-      Invariant(rewrite(expression), heapInfo, sourceInfo)
+      Invariant(rewrite(expression, heapInfo), heapInfo, sourceInfo)
   }
 
   def rewrite(inv: LoopInvariant): LoopInvariant = inv match {
     case LoopInvariant(expression, heapInfo, sourceInfo) =>
-      LoopInvariant(rewrite(expression), heapInfo, sourceInfo)
+      LoopInvariant(rewrite(expression, heapInfo), heapInfo, sourceInfo)
   }
 
-  def rewrite(expr : IFormula): IFormula = {
-    Rewriter.rewrite(expr, explodeADTs).asInstanceOf[IFormula]
+  def rewrite(expr : IFormula, heapInfo : Option[HeapInfo] = None): IFormula = {
+    Rewriter.rewrite(expr, e => adtTermExploder.visit(e, heapInfo)).asInstanceOf[IFormula]
   }
   
   case class ADTTerm(t : ITerm, adtSort : ADTProxySort)
-  object adtTermExploder extends CollectingVisitor[Object, IExpression] {
+  object adtTermExploder extends CollectingVisitor[Option[HeapInfo], IExpression] {
     def getADTTerm(t : IExpression) : Option[ADTTerm] = {
       t match {
         case f @ IFunApp(fun, _) if ADT.Constructor.unapply(fun).nonEmpty =>
@@ -85,7 +85,7 @@ object ADTExploder extends ResultProcessor {
       }
     }
 
-    override def postVisit(t: IExpression, none : Object,
+    override def postVisit(t: IExpression, heapInfo : Option[HeapInfo],
                            subres: Seq[IExpression]) : IExpression = {
 
       import IExpression._
@@ -103,7 +103,8 @@ object ADTExploder extends ResultProcessor {
         val adtTerm = getADTTerm(newFunApp).get
         val adt = adtTerm.adtSort.adtTheory
         val ctorIndex = adt.constructors.indexOf(ctorFun)
-        ctorIndex != -1
+        // keep address equalities for translating heap reads to pointers
+        ctorIndex != -1 && !heapInfo.exists(_.isAddrFun(ctorFun))
       }
 
       def explodeADTSelectors (originalEq : IEquation, ctorFun : IFunction,
@@ -144,9 +145,5 @@ object ADTExploder extends ResultProcessor {
       }
     }
   }
-
-  // converts "s = S(a, b)" to "f1(s) = a & f2(s) = b"
-  private def explodeADTs(expr : IExpression) : IExpression =
-    adtTermExploder.visit(expr, null)
 
 }
