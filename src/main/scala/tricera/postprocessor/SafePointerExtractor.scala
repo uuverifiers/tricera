@@ -84,8 +84,7 @@ object SafePointerExtractor {
   def getValidPointers(invariant : Invariant,
                        isCurrentHeap : ProgVarProxy => Boolean) : Set[ProgVarProxy] =
     invariant.heapInfo.map { info =>
-      def collect(form : IFormula, known : ValSet) : Set[ProgVarProxy] = {
-        val values = ValSet.union(known, ValSetReader(form))
+      def collect(form : IFormula, values : ValSet) : Set[ProgVarProxy] = {
         def pointers(heap : ITerm, address : ITerm) : Set[ProgVarProxy] = {
           val heaps = values.getVal(heap).map(_.variants).getOrElse(Set(heap))
           if (!heaps.exists {
@@ -114,13 +113,16 @@ object SafePointerExtractor {
           case IBinFormula(IBinJunctor.And, left, right) =>
             collect(left, values) ++ collect(right, values)
           case IBinFormula(IBinJunctor.Or, left, right) =>
-            collect(left, values) intersect collect(right, values)
+            collect(left, ValSet.union(values, ValSetReader(left))) intersect
+              collect(right, ValSet.union(values, ValSetReader(right)))
           case IQuantified(IExpression.Quantifier.EX, body) =>
-            collect(body, ValSet.empty)
+            collect(body, ValSetReader(body))
           case _ => Set.empty
         }
       }
-      collect(invariant.expression, ValSet.empty)
+      val form = ToVariableForm.normaliseReadAddresses(invariant.expression,
+        ValSetReader(invariant.expression), invariant.heapInfo)
+      collect(form, ValSetReader(form))
     }.getOrElse(Set.empty)
 }
 

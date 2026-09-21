@@ -194,7 +194,7 @@ Inferred ACSL annotations
 /*@
   requires \valid(p);
   ensures \valid(p) && \old(p->val) == p->val;
-  assigns *p;
+  assigns \nothing;
 */
 ================================================================================
 

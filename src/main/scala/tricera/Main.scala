@@ -583,7 +583,6 @@ class Main (args: Array[String]) {
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
           val frameSource = result
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
-            .through(ADTExploder.apply)
             .through(HeapFactsProcessor.apply)
             .through(PostconditionSimplifier.apply)
 
@@ -597,7 +596,7 @@ class Main (args: Array[String]) {
                  .through(ADTSimplifier.apply) // Rewrite constructors/selectors after heap processing
                  .through(ToVariableForm.apply)
               } else {
-                r
+                r.through(ADTExploder.apply)
               }
             )
             .tap(r => r

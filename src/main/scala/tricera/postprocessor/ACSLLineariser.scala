@@ -181,10 +181,12 @@ object ACSLLineariser {
     : PreVisitResult = t match {
       case IFunApp(ACSLExpression.pointerOffset, _) =>
         KeepArg
-      case ACSLPredicate(p) => //
-        // Avoid '\old()' etc. in arguments to ACSL predicates (\valid and friends).
-        val newSettings = settings.copy(usePlainConstant = true)
-        SubArgs((for (_ <- 0 until p.arity) yield newSettings))
+      case IAtom(p, args) if ACSLExpression.predicates(p) =>
+        SubArgs(args.map {
+          case ConstantAsProgVarProxy(v) if v.isParameter =>
+            settings.copy(usePlainConstant = true)
+          case _ => settings.copy(usePlainConstant = false)
+        })
       case ACSLFunction(f) =>
         // 'f' is an ACSL pseudo-function, which takes care of
         // '\old()' etc. by itself.

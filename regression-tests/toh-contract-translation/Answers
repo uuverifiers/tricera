@@ -8,7 +8,7 @@ Inferred ACSL annotations
 /* contract for get */
 /*@
   requires n == p && n_init >= 1 && \valid(p);
-  ensures n == \old(p) && \old(n_init) == n_init && \old(r1) == r1 && \old(n) == \old(p) && n_init >= 1 && \result >= 0 && (n_init == \result || \old(*p) != n_init);
+  ensures n == \old(p) && \old(n_init) == n_init && \old(r1) == r1 && \result >= 0 && (n_init == \result || \old(*p) != n_init) && \valid(p);
 */
 ================================================================================
 
@@ -83,7 +83,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires b == y && a == x && r == max && \valid(y) && \valid(x) && \valid(max) && *y == b_init && *x == a_init;
-  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && r == \old(max) && (\old(b_init) - \old(a_init) >= 1 || (\old(a_init) >= \old(b_init) && *max == \old(a_init))) && (*max == \old(b_init) || (\old(a_init) >= \old(b_init) && *max == \old(a_init)));
+  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && r == \old(max) && \valid(max) && (\old(b_init) - \old(a_init) >= 1 || (\old(a_init) >= \old(b_init) && *max == \old(a_init))) && (*max == \old(b_init) || (\old(a_init) >= \old(b_init) && *max == \old(a_init))) && \valid(x) && \valid(y);
 */
 ================================================================================
 
@@ -245,7 +245,7 @@ Inferred ACSL annotations
 /* contract for update */
 /*@
   requires \valid(p) && \valid(q) && ((p == q && step == 3) || (step == 4 && \separated(p, q) && *p == 2 && *q == 5)) && (*q == 2 || (\separated(p, q) && *p == 2 && *q == 5));
-  ensures (5 - \old(*q) >= 1 || (\result == 3 && \valid(p) && \valid(q) && *p == 3 && *q == 9)) && (\old(q) != \old(p) || (\result == 6 && \valid(p) && \valid(q) && *q == 6));
+  ensures (5 - \old(*q) >= 1 || (\result == 3 && \valid(p) && \valid(q) && *p == 3 && *q == 9)) && (\old(q) != \old(p) || (\result == 6 && \valid(p) && \valid(q) && *q == 6)) && \valid(p) && \valid(q);
 */
 ================================================================================
 
@@ -269,7 +269,7 @@ Inferred ACSL annotations
 /* contract for findMax */
 /*@
   requires b == y && a == x && r == max && \valid(y) && \valid(x) && \valid(max) && *y == b_init && *x == a_init;
-  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && r == \old(max) && (\old(a_init) >= \old(b_init) || (\old(b_init) - \old(a_init) >= 1 && *max == \old(b_init))) && (*max == \old(a_init) || (\old(b_init) - \old(a_init) >= 1 && *max == \old(b_init)));
+  ensures b_init == \old(b_init) && a_init == \old(a_init) && \old(y) == b && \old(x) == a && \old(b) == b && \old(a) == a && r == \old(max) && \valid(max) && (\old(a_init) >= \old(b_init) || (\old(b_init) - \old(a_init) >= 1 && *max == \old(b_init))) && (*max == \old(a_init) || (\old(b_init) - \old(a_init) >= 1 && *max == \old(b_init))) && \valid(x) && \valid(y);
 */
 ================================================================================
 
@@ -338,6 +338,20 @@ Inferred ACSL annotations
 /*@
   requires \true;
   ensures 1 >= \result && \result >= 0 && (0 >= \old(x) || \result >= 1);
+  assigns \nothing;
+*/
+================================================================================
+
+SAFE
+
+strengthen-assertion.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for positive */
+/*@
+  requires n == 1;
+  ensures \old(n) == 1 && \result == 1;
   assigns \nothing;
 */
 ================================================================================
@@ -444,6 +458,20 @@ Inferred ACSL annotations
 
 SAFE
 
+global-pointer-reset.c (native)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for reset */
+/*@
+  requires \valid(g);
+  ensures \valid(\old(g)) && *\old(g) == \result;
+  assigns g;
+*/
+================================================================================
+
+SAFE
+
 call-site-frame.c (array)
 
 Inferred ACSL annotations
@@ -544,6 +572,20 @@ Inferred ACSL annotations
 
 SAFE
 
+global-pointer-reset.c (array)
+
+Inferred ACSL annotations
+================================================================================
+/* contract for reset */
+/*@
+  requires \valid(g);
+  ensures \valid(\old(g)) && *\old(g) == \result;
+  assigns g;
+*/
+================================================================================
+
+SAFE
+
 struct-field-read.c
 
 Inferred ACSL annotations
@@ -551,7 +593,7 @@ Inferred ACSL annotations
 /* contract for f_with_arg */
 /*@
   requires \valid(s);
-  ensures s->x - \result == -1;
+  ensures s->x - \result == -1 && \valid(s);
   assigns \nothing;
 */
 ================================================================================
@@ -565,7 +607,7 @@ Inferred ACSL annotations
 /* contract for helper_read_record */
 /*@
   requires slot >= 0 && 2 - slot >= 1;
-  ensures records == \old(records) && \old(records)[slot] == \result;
+  ensures records == \old(records) && \old(records)[slot] == \result && \valid(records);
   assigns \nothing;
 */
 ================================================================================
@@ -579,7 +621,7 @@ Inferred ACSL annotations
 /* contract for helper_read_level */
 /*@
   requires slot >= 0 && 2 - slot >= 1;
-  ensures records == \old(records) && \old(records)[slot].level == \result;
+  ensures records == \old(records) && \old(records)[slot].level == \result && \valid(records);
   assigns \nothing;
 */
 ================================================================================
@@ -593,7 +635,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires x == a && 3 - n >= 1;
-  ensures a == \old(x) && \old(x[n]) - x[n] == -1;
+  ensures a == \old(x) && \old(x[n]) - x[n] == -1 && \valid(x);
   assigns x[n];
 */
 ================================================================================
@@ -607,7 +649,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires n == 1 && (a + 1) == x;
-  ensures \old(a) == a && \old(a[2]) - \old(a)[2] == -1;
+  ensures \old(a) == a && \old(a[2]) - \old(a)[2] == -1 && \valid(x) && \valid(a);
   assigns a[2];
 */
 ================================================================================
@@ -621,7 +663,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires (b == x && 5 - n >= 1) || (x == a && 3 - n >= 1);
-  ensures \old(b) == b && \old(a) == a && \old(x[n]) - x[n] == -1;
+  ensures \old(b) == b && \old(a) == a && \old(x[n]) - x[n] == -1 && \valid(x) && \valid(a) && \valid(b);
   assigns x[n];
 */
 ================================================================================
@@ -641,7 +683,7 @@ Inferred ACSL annotations
 /* contract for reassign */
 /*@
   requires p == a;
-  ensures \old(p) == a && \old(b) == b && \old(a) == a && p == b;
+  ensures \old(p) == a && \old(b) == b && \old(a) == a && p == b && \valid(a) && \valid(b);
 */
 ================================================================================
 
@@ -654,7 +696,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires (a + 1) == x && 4 - (1 + n) >= 1;
-  ensures a == \old(a) && x[n] - \old(x[n]) == 1;
+  ensures a == \old(a) && x[n] - \old(x[n]) == 1 && \valid(x) && \valid(a);
 */
 ================================================================================
 
@@ -667,7 +709,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires x == a && 3 - n >= 1;
-  ensures a == \old(x) && \old(x[n]) - x[n] == -1;
+  ensures a == \old(x) && \old(x[n]) - x[n] == -1 && \valid(x);
   assigns x[n];
 */
 ================================================================================
@@ -681,7 +723,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires n == 1 && (a + 1) == x;
-  ensures \old(a) == a && \old(a[2]) - \old(a)[2] == -1;
+  ensures \old(a) == a && \old(a[2]) - \old(a)[2] == -1 && \valid(x) && \valid(a);
   assigns a[2];
 */
 ================================================================================
@@ -715,7 +757,7 @@ Inferred ACSL annotations
 /* contract for reassign */
 /*@
   requires p == a;
-  ensures \old(p) == a && \old(b) == b && \old(a) == a && p == b;
+  ensures \old(p) == a && \old(b) == b && \old(a) == a && p == b && \valid(a) && \valid(b);
 */
 ================================================================================
 
@@ -728,7 +770,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires (a + 1) == x && 4 - (1 + n) >= 1;
-  ensures a == \old(a) && \old(a)[(1 + n)] == 1 + \old(a[(1 + n)]);
+  ensures a == \old(a) && \old(a)[(1 + n)] == 1 + \old(a[(1 + n)]) && \valid(x) && \valid(a);
 */
 ================================================================================
 

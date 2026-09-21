@@ -298,6 +298,27 @@ object ACSLStrengthener {
         yield withPost(inv, and(post.updated(i, replacement)))
     }
 
+    private def missingValidity(inv : FunctionInvariants) : Iterator[IFormula] = {
+      val post = inv.postCondition.invariant.expression
+      def address(p : ProgVarProxy) = IConstant(p.copy(state =
+        if (p.isParameter) ProgVarProxy.State.PreExec else ProgVarProxy.State.PostExec))
+      val existing = LineariseVisitor(post, IBinJunctor.And).collect {
+        case IAtom(ACSLExpression.valid, Seq(IConstant(p : ProgVarProxy))) =>
+          if (p.isParameter) address(p) else IConstant(p)
+      }
+      val values = ValSetReader(post)
+      val pointers = SymbolCollector.constants(inv.preCondition.invariant.expression & post)
+        .collect { case p : ProgVarProxy if p.isPointer && (p.isParameter || p.isGlobal) => p }
+        .toSeq.groupBy(p => (p.name, p.scope)).toSeq.sortBy {
+          case ((name, scope), _) =>
+            (if (scope == ProgVarProxy.Scope.Parameter) 0 else 1, name)
+        }
+      pointers.iterator.map { case (_, aliases) => address(aliases.head) }
+        .filterNot(p => existing.exists(values.areEqual(_, p)))
+        .distinctBy(p => values.getVal(p).getOrElse(Val(Set(p))))
+        .map(p => IAtom(ACSLExpression.valid, Seq(p)))
+    }
+
     private def strengthen(initial : FunctionInvariants) : FunctionInvariants = {
       if (initial.isSrcAnnotated || !reader.getFunctionContexts.contains(initial.id) ||
           reader.getContractVerificationClauses(initial.id).isEmpty)
@@ -475,6 +496,8 @@ object ACSLStrengthener {
             changed = (generalisedBranches(current) ++ weakerBranches(current) ++
                        strongerPostconditions(current)).takeWhile(_ => hasBudget).exists(accept)
         }
+        for (valid <- missingValidity(current).takeWhile(_ => hasBudget))
+          accept(withPost(current, current.postCondition.invariant.expression &&& valid))
       } catch {
         case e @ (tricera.Main.StoppedException | tricera.Main.TimeoutException) => throw e
         case NonFatal(e) =>

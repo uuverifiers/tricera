@@ -118,6 +118,9 @@ class ACSLContractVerifier(original : CCReader) {
   }
 
   private def verifyBody(id : String, contract : FunctionContract) : Option[Boolean] = {
+    val previous = verifiedContracts.get(id).filter(_.pre == contract.pre)
+    val provedPost = previous.map(c => c.post &&& c.assignsAssume)
+      .getOrElse(IBoolLit(true))
     // include callees with no independently checked contract
     val included = scala.collection.mutable.LinkedHashSet[String]()
     def include(name : String) : Unit =
@@ -131,7 +134,7 @@ class ACSLContractVerifier(original : CCReader) {
       Clause(context.prePred(context.prePred.argVars), List(),
         contract.pre &&& context.globalArrayPrecondition),
       Clause(SimpleWrapper.FALSEAtom, List(context.postPred(context.postPred.argVars)),
-        contract.pre &&& context.globalArrayPrecondition &&&
+        contract.pre &&& context.globalArrayPrecondition &&& provedPost &&&
         !(contract.post &&& contract.assignsAssume &&& context.globalArrayPostcondition)))
       else Nil
 
@@ -152,7 +155,8 @@ class ACSLContractVerifier(original : CCReader) {
     // f_entry :- f_pre becomes f_entry :- requires
     // f_post :- f_exit becomes false :- f_exit, !ensures
     // ensures includes assigns and global array facts
-    val checks = clauses.map { clause =>
+    val checks = clauses.filterNot(c =>
+      previous.nonEmpty && c.head == SimpleWrapper.FALSEAtom).map { clause =>
       val (replaced, body) = clause.body.partition(a => boundaries.contains(a.pred))
       val constraint = clause.constraint &&& and(replaced.map { a =>
         val (pred, form) = boundaries(a.pred)
@@ -160,8 +164,11 @@ class ACSLContractVerifier(original : CCReader) {
       })
       boundaries.get(clause.head.pred) match {
         case Some((pred, form)) =>
+          val assumed = if (clause.head.pred == context.postPred.pred)
+                          instantiate(provedPost, pred, clause.head)
+                        else IBoolLit(true)
           Clause(SimpleWrapper.FALSEAtom, body,
-            constraint &&& !instantiate(form, pred, clause.head))
+            constraint &&& assumed &&& !instantiate(form, pred, clause.head))
         case None => Clause(clause.head, body, constraint)
       }
     }

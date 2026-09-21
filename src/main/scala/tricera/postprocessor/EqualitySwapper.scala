@@ -82,7 +82,7 @@ object ToVariableForm extends ResultProcessor {
         maybeSourceInfo)
   }
 
-  private def normaliseReadAddresses(form : IFormula, values : ValSet,
+  private[postprocessor] def normaliseReadAddresses(form : IFormula, values : ValSet,
                                      heapInfo : Option[HeapInfo]) : IFormula = {
     // Use known values inside addresses, e.g., size(h1) = size(h0) = 3.
     // Only replace terms by constants or literals, so rewriting cannot grow terms.
