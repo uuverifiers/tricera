@@ -169,13 +169,21 @@ private object MapProgVarProxies
   private def projectGlobals(form: IFormula, introducedGlobals: Set[String]): IFormula = {
     // globals introduced for other calls are not inputs of this function
     val constants = SymbolCollector.constants(form)
-    val toQuantify = constants.collect {
-      case p: ProgVarProxy if p.isGlobal && introducedGlobals(p.name) => p
+    val toQuantify = constants.filter {
+      case p: ProgVarProxy => p.isGlobal && introducedGlobals(p.name)
+      case _ => false
     }
-    if (toQuantify.isEmpty) form else SimpleAPI.withProver { p =>
-      p.addConstantsRaw(constants)
-      collectAndAddTheories(p, form)
-      p.simplify(IExpression.quanConsts(Quantifier.EX, toQuantify, form))
+    if (toQuantify.isEmpty) form else {
+      // EX g. P(g) & Q is (EX g. P(g)) & Q when Q does not mention g
+      val (projected, kept) = LineariseVisitor(form, IBinJunctor.And).partition(f =>
+        SymbolCollector.constants(f).exists(toQuantify.contains))
+      val remaining = SimpleAPI.withProver { p =>
+        p.addConstantsRaw(constants)
+        val affected = IExpression.and(projected)
+        collectAndAddTheories(p, affected)
+        p.simplify(IExpression.quanConsts(Quantifier.EX, toQuantify, affected))
+      }
+      IExpression.and(kept) &&& remaining
     }
   }
 

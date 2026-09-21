@@ -192,8 +192,8 @@ Inferred ACSL annotations
 */
 /* contract for incdec */
 /*@
-  requires \valid(p);
-  ensures \valid(p) && p->val == \old(p->val);
+  requires \valid(p) && 2147483646 >= p->val && p->val >= -2147483648;
+  ensures \valid(p) && \old(p->val) == p->val && 2147483646 >= p->val && p->val >= -2147483648;
   assigns *p;
 */
 ================================================================================

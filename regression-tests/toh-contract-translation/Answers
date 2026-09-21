@@ -374,6 +374,12 @@ alias-heap-stack.c (native)
 
 Inferred ACSL annotations
 ================================================================================
+/* contract for bump */
+/*@
+  requires \valid(r);
+  ensures \valid(r) && *r == 1 + \old(*r);
+  assigns *r;
+*/
 /* contract for update */
 /*@
   requires \valid(q) && \valid(p) && *p == 2 && *q >= 5;
@@ -429,6 +435,12 @@ alias-heap-stack.c (array)
 
 Inferred ACSL annotations
 ================================================================================
+/* contract for bump */
+/*@
+  requires \valid(r);
+  ensures \valid(r) && *r == 1 + \old(*r);
+  assigns *r;
+*/
 /* contract for update */
 /*@
   requires \valid(q) && \valid(p) && *p == 2 && *q >= 5;
