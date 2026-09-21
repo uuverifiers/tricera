@@ -90,8 +90,8 @@ Inferred ACSL annotations
 ================================================================================
 /* contract for mult */
 /*@
-  requires N == x && x >= 0;
-  ensures \old(x) == N && \old(N) == N && \old(N2) == N2 && \result >= 0 && N >= 0 && (\result >= \old(y) || 0 >= N);
+  requires N == x;
+  ensures \old(x) == N && \old(N) == N && \old(N2) == N2 && \result >= 0 && (\result >= \old(y) || 0 >= N);
   assigns \nothing;
 */
 ================================================================================
@@ -192,8 +192,8 @@ Inferred ACSL annotations
 */
 /* contract for incdec */
 /*@
-  requires \valid(p) && 2147483646 >= p->val && p->val >= -2147483648;
-  ensures \valid(p) && \old(p->val) == p->val && 2147483646 >= p->val && p->val >= -2147483648;
+  requires \valid(p);
+  ensures \valid(p) && \old(p->val) == p->val;
   assigns *p;
 */
 ================================================================================

@@ -318,11 +318,31 @@ object ACSLStrengthener {
         def parsePost(f : IFormula) = parse(withPost(empty, f)).post
         val entry = facts &&& currentContract.pre
         val inputs = SymbolCollector.constants(entry)
+        // a map from post exprs to pre exprs that are equal
+        val entryValues = ValSetReader(currentContract.post).vals.flatMap { value =>
+          val (old, other) = value.variants.partition { t =>
+            val constants = SymbolCollector.constants(t)
+            constants.nonEmpty && constants.subsetOf(inputs) &&
+              SymbolCollector.variables(t).isEmpty
+          }
+          old.toSeq.sortBy(_.toString).headOption.toSeq.flatMap { before =>
+            other.filter(t => SymbolCollector.constants(t).nonEmpty).map(_ -> before)
+          }
+        }.toMap
         // e.g. requires x > 0 implies ensures old(x) >= 0
         val entryFacts = conjuncts(initial.postCondition.invariant.expression).iterator
           .takeWhile(_ => hasBudget).filter { f =>
             val parsed = parsePost(f)
-            SymbolCollector.constants(parsed).subsetOf(inputs) && implies(entry, parsed)
+            // keep eqs that relate current vals to those at entry
+            val atEntry = parsed match {
+              case IIntFormula(IIntRelation.GeqZero, _) =>
+                Rewriter.rewrite(parsed, {
+                  case t: ITerm => entryValues.getOrElse(t, t)
+                  case e => e
+                }).asInstanceOf[IFormula]
+              case _ => parsed
+            }
+            SymbolCollector.constants(atEntry).subsetOf(inputs) && implies(entry, atEntry)
           }.toSet
         def withoutEntryFacts(f : IFormula) = and(conjuncts(f).filterNot(entryFacts))
         val seen = scala.collection.mutable.Set(
