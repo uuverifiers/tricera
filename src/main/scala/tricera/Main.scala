@@ -601,6 +601,7 @@ class Main (args: Array[String]) {
             )
             .tap(r => r
               .through(ACSLExpressionProcessor.apply)
+              .through(PostconditionSimplifier.usingValidityRequirements(_, reader))
               .through(ClauseRemover.apply)
               .through(RewrapPointers.apply)
               .through(AddValidPointerPredicates.apply)
