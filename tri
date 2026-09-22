@@ -14,14 +14,11 @@ if [ -z "$TRI_PP_PATH" ]; then
         export TRI_PP_PATH="$BASEDIR/dist"
     elif [ -f "$BASEDIR/tri-pp" ]; then
         export TRI_PP_PATH="$BASEDIR"
-    else
-        echo "Could not find tri-pp." >&2
-        exit 1
     fi
 fi
 
-if [ -f $NATIVE ]; then
-    exec $NATIVE "$@"
+if [ -f "$NATIVE" ]; then
+    exec "$NATIVE" "$@"
 else
     . "$BASEDIR/triEnv"
     exec $LAZABS_CMD tricera.Main "$@"

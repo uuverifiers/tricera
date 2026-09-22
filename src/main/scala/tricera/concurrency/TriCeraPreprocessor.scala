@@ -32,8 +32,62 @@ package tricera.concurrency
 import tricera.Main
 
 import sys.process.Process
-import java.io.File
-import java.nio.file.{Files, Paths}
+import java.io.{File, IOException}
+import java.nio.file.{Files, Path, Paths}
+import java.util.concurrent.TimeUnit
+
+object TriCeraPreprocessor {
+  def findPreprocessor : Path = {
+    val executable = if (sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")) {
+      val command = ProcessHandle.current().info().command()
+      if (command.isPresent) Some(Paths.get(command.get())) else None
+    } else None
+    findPreprocessor(sys.env, Paths.get("").toAbsolutePath, executable)
+  }
+
+  private[concurrency] def findPreprocessor(env : Map[String, String], cwd : Path,
+                                           executable : Option[Path]) : Path = {
+    def usable(path : Path) = Files.isRegularFile(path) && Files.isExecutable(path)
+    env.get("TRI_PP_PATH").filter(_.nonEmpty) match {
+      case Some(directory) =>
+        val path = cwd.resolve(directory).resolve("tri-pp")
+        if (!usable(path)) throw new Main.MainException(
+          "TRI_PP_PATH does not contain an executable tri-pp: " + path)
+        path.normalize()
+      case None =>
+        val sibling = executable.toSeq.map(_.toAbsolutePath.getParent.resolve("tri-pp"))
+        val onPath = env.get("PATH").toSeq.flatMap(_.split(File.pathSeparator, -1))
+          .map(directory => cwd.resolve(directory).resolve("tri-pp"))
+        (Seq(cwd.resolve("tri-pp")) ++ sibling ++ onPath).find(usable)
+          .map(_.normalize()).getOrElse(throw new Main.MainException(
+            "Could not find an executable tri-pp. Set TRI_PP_PATH to its directory, " +
+            "place it in the current directory or beside TriCera, or add it to PATH."))
+    }
+  }
+
+  def checkReady() : Path = checkReady(findPreprocessor, 5000)
+
+  private[concurrency] def checkReady(path : Path, timeoutMillis : Long) : Path = {
+    val process = try {
+      new ProcessBuilder(path.toString, "--version")
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        .redirectError(ProcessBuilder.Redirect.INHERIT).start()
+    } catch {
+      case e : IOException => throw new Main.MainException(
+        "Could not execute tri-pp at " + path + ": " + e.getMessage)
+    }
+    try {
+      if (!process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS))
+        throw new Main.MainException("Timed out checking tri-pp at " + path)
+      if (process.exitValue() != 0)
+        throw new Main.MainException(
+          "tri-pp exited with status " + process.exitValue() + ": " + path)
+      path
+    } finally {
+      if (process.isAlive) process.destroyForcibly()
+    }
+  }
+}
 
 class TriCeraPreprocessor(val inputFilePath   : String,
                           val outputFilePath  : String,
@@ -45,16 +99,7 @@ class TriCeraPreprocessor(val inputFilePath   : String,
   private val factsFile : File = File.createTempFile("tri-facts-", ".yml")
   factsFile.deleteOnExit()
 
-  val ppPath : String = sys.env.get("TRI_PP_PATH") match {
-    case Some(path) => path + "/tri-pp"
-    case _ =>
-      val path = Paths.get(System.getProperty("user.dir") + "/tri-pp")
-      if (Files.exists(path)) path.toString
-      else throw new Main.MainException("The preprocessor binary" +
-        " (tri-pp) could not be found. Please ensure that the environment " +
-        "variable TRI_PP_PATH is exported and points to the preprocessor's" +
-        " base directory")
-  }
+  val ppPath : String = TriCeraPreprocessor.findPreprocessor.toString
 
   private def runPreprocessor(extraArgs : scala.Seq[String],
                               errorMsg  : String,
@@ -70,11 +115,9 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                      (if (displayWarnings) Nil else scala.Seq("-Wno-everything"))
 
     try { Process(cmdLine) ! } catch {
-      case _: Throwable =>
+      case e : Throwable =>
         throw new Main.MainException("TriCera preprocessor could not" +
-          " be executed. This might be due to TriCera preprocessor binary " +
-          "not being in the current directory. Alternatively, use the " +
-          "-noPP switch to disable the preprocessor.\n" +
+          " be executed at " + ppPath + ": " + e.getMessage + "\n" +
           "Preprocessor command: " + cmdLine
         )
     }

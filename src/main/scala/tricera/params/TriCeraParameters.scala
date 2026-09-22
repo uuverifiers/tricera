@@ -53,6 +53,7 @@ class TriCeraParameters extends GlobalParameters {
   var prettyPrintDot : Boolean = false
 
   var printPP    : Boolean = false
+  var checkPP    : Boolean = false
   var dumpPP     : Boolean = false
   var noPP       : Boolean = false
   var logPPLevel : Int = 0 // 0: quiet, 1: errors only, 2: errors + warnings
@@ -146,6 +147,7 @@ class TriCeraParameters extends GlobalParameters {
   protected def copyTo(that : TriCeraParameters) = {
     super.copyTo(that)
     that.arithMode = this.arithMode
+    that.checkPP = this.checkPP
     that.smoke = this.smoke
     that.assertionsNoVerify = this.assertionsNoVerify
     that.displayACSL = this.displayACSL
@@ -167,7 +169,7 @@ class TriCeraParameters extends GlobalParameters {
 
   solutionReconstruction = GlobalParameters.SolutionReconstruction.CEGAR
 
-  private val version = "0.5"
+  private val version = "0.5.1"
 
   private val greeting =
     s"""TriCera v$version.
@@ -184,6 +186,7 @@ class TriCeraParameters extends GlobalParameters {
     case "-p" :: rest => prettyPrint = true; parseArgs(rest)
     case "-pDot" :: rest => prettyPrint = true; prettyPrintDot = true; parseArgs(rest)
     case "-printPP" :: rest => printPP = true; parseArgs(rest)
+    case "-checkPP" :: rest => checkPP = true; parseArgs(rest)
     case "-dumpPP" :: rest => dumpPP = true; parseArgs(rest)
     case ppLogOption :: rest if (ppLogOption startsWith "-logPP:") =>
       logPPLevel = (ppLogOption drop 7).toInt; parseArgs(rest)
@@ -405,6 +408,7 @@ class TriCeraParameters extends GlobalParameters {
   """General options:
     |-h, --help         Show this information
     |-v, --version      Print version number
+    |-checkPP           Checks if tri-pp can be found and executed
     |-arithMode:t       Integer semantics: math (default), ilp32, lp64, llp64
     |-mathArrays        Use mathematical arrays for modeling program arrays (ignores memsafety properties)
     |-invEncoding[:t]   Use an invariant-based heap encoding. t is the encoding type:
