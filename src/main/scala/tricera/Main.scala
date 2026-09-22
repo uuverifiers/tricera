@@ -63,13 +63,23 @@ object Main {
   object StoppedException extends MainException("stopped")
 
   // entry point
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit = try {
     val res = doMain(args, false)
-    println(res.executionResult)
+    if (res.executionResult != DidNotExecute)
+      println(res.executionResult)
+  } catch {
+    case e : MainException if args.contains("-checkPP") =>
+      Console.err.println(e.getMessage)
+      sys.exit(1)
   }
 
   def doMain(args: Array[String], stoppingCond: => Boolean) : ExecutionSummary = {
     val triMain = new Main(args)
+
+    if (triMain.params.checkPP && !triMain.params.doNotExecute) {
+      println("tri-pp ready: " + TriCeraPreprocessor.checkReady())
+      return ExecutionSummary(DidNotExecute)
+    }
 
     triMain.programTimer.start()
     var remainingTimeout : Option[Int] = params.TriCeraParameters.get.timeout
@@ -254,7 +264,7 @@ class Main (args: Array[String]) {
   lazabs.GlobalParameters.parameters.value = params
   import params._
 
-  if (in == null && !params.doNotExecute) {
+  if (in == null && !params.doNotExecute && !params.checkPP) {
     showHelp
     printError("no input file given")
   }
