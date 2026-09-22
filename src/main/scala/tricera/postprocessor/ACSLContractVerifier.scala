@@ -94,18 +94,20 @@ class ACSLContractVerifier(original : CCReader) {
     // stop a slow contract check without using up the whole program timeout
     params.timeoutChecker = () => {
       outerCheck()
-      if (System.nanoTime() >= deadline) throw CheckTimeout
+      if (TriCeraParameters.get.contractTimeouts && System.nanoTime() >= deadline) throw CheckTimeout
     }
     try {
-      val proved = GlobalParameters.withValue(params) {
-        val contract = parse(printed)
-        params.timeoutChecker()
-        val safe = verifyBody(id, contract)
-        params.timeoutChecker()
-        if (safe.contains(true)) verifiedContracts(id) = contract
-        safe
+      val (contract, proved) = GlobalParameters.withValue(params) {
+        ACSLContractVerifier.withQueryBudget {
+          val contract = parse(printed)
+          params.timeoutChecker()
+          val safe = verifyBody(id, contract)
+          params.timeoutChecker()
+          (contract, safe)
+        }
       }
       outerCheck()
+      if (proved.contains(true)) verifiedContracts(id) = contract
       Util.printlnDebug(s"ACSL contract check: $id $proved " +
         s"(${(System.nanoTime() - started) / 1000000L} ms)")
       proved
@@ -177,4 +179,39 @@ class ACSLContractVerifier(original : CCReader) {
     if (GlobalParameters.get.didIncompleteTransformation) None else Some(safe)
   }
 
+}
+
+object ACSLContractVerifier {
+  private[postprocessor] object QueryLimit extends RuntimeException
+
+  private[postprocessor] def withQueryBudget[A](query : => A) : A = {
+    if (TriCeraParameters.get.contractTimeouts) return query
+    ap.util.OpCounters.withLocalCounters {
+      val params = GlobalParameters.get.clone
+      val outerCheck = params.timeoutChecker
+      params.timeoutChecker = () => {
+        outerCheck()
+        import ap.util.OpCounters
+        if (OpCounters(OpCounters.TaskApplications) +
+            OpCounters(OpCounters.Reductions) > TriCeraParameters.get.contractQueryLimit)
+          throw QueryLimit
+      }
+      GlobalParameters.withValue(params) {
+        val result = query
+        params.timeoutChecker()
+        result
+      }
+    }
+  }
+
+  private[postprocessor] def checkSat(p : ap.SimpleAPI) : ap.SimpleAPI.ProverStatus.Value = {
+    GlobalParameters.get.timeoutChecker()
+    var status = p.checkSat(false)
+    while (status == ap.SimpleAPI.ProverStatus.Running) {
+      GlobalParameters.get.timeoutChecker()
+      status = p.getStatus(50L)
+    }
+    GlobalParameters.get.timeoutChecker()
+    status
+  }
 }

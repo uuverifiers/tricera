@@ -277,30 +277,36 @@ object PostconditionSimplifier extends ResultProcessor {
   }
 
   private def isImplied(context : IFormula, formula : IFormula) : Boolean = {
-    SimpleAPI.withProver { p =>
-      import p._
-      // check if context && !formula is UNSAT
-      val combinedFormula = context &&& !formula
-      addConstants(SymbolCollector constantsSorted combinedFormula)
-      addRelations(ACSLExpression.predicatesSorted)
-      ACSLExpression.functionsSorted.foreach(f => addFunction(f))
+    try ACSLContractVerifier.withQueryBudget {
+      SimpleAPI.withProver { p =>
+        import p._
+        // check if context && !formula is UNSAT
+        val combinedFormula = context &&& !formula
+        addConstants(SymbolCollector constantsSorted combinedFormula)
+        addRelations(ACSLExpression.predicatesSorted)
+        ACSLExpression.functionsSorted.foreach(f => addFunction(f))
 
-      val theoryCollector = new TheoryCollector
-      theoryCollector(combinedFormula)
-      addTheories(theoryCollector.theories)
-      addAssertion(combinedFormula)
+        val theoryCollector = new TheoryCollector
+        theoryCollector(combinedFormula)
+        addTheories(theoryCollector.theories)
+        addAssertion(combinedFormula)
 
-      try {
-        withTimeout(100) {
-          ??? match {
-            case ProverStatus.Unsat => true
-            case _ => false
+        try {
+          if (!tricera.params.TriCeraParameters.get.contractTimeouts)
+            ACSLContractVerifier.checkSat(p) == ProverStatus.Unsat
+          else withTimeout(100) {
+            ??? match {
+              case ProverStatus.Unsat => true
+              case _ => false
+            }
           }
+        } catch {
+          case x: SimpleAPI.SimpleAPIException if x == TimeoutException =>
+            false
         }
-      } catch {
-        case x: SimpleAPI.SimpleAPIException if x == TimeoutException =>
-          false
       }
+    } catch {
+      case ACSLContractVerifier.QueryLimit => false
     }
   }
 

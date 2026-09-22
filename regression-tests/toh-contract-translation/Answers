@@ -737,7 +737,7 @@ Inferred ACSL annotations
 /* contract for increment */
 /*@
   requires (b == x && 5 - n >= 1) || (x == a && 3 - n >= 1);
-  ensures \old(b) == b && \old(a) == a && \old(x[n]) - x[n] == -1;
+  ensures \old(b) == b && \old(a) == a && \old(x[n]) - x[n] == -1 && \valid(x) && \valid(a) && \valid(b);
   assigns x[n];
 */
 ================================================================================

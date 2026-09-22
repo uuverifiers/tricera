@@ -82,10 +82,12 @@ object ACSLStrengthener {
       val queryDeadline = math.min(deadline, System.nanoTime() + 1000000000L)
       params.timeoutChecker = () => {
         outerCheck()
-        if (System.nanoTime() >= queryDeadline) throw BudgetExceeded
+        if (settings.contractTimeouts && System.nanoTime() >= queryDeadline) throw BudgetExceeded
       }
       try {
-        val result = GlobalParameters.withValue(params) { check }
+        val result = GlobalParameters.withValue(params) {
+          ACSLContractVerifier.withQueryBudget { check }
+        }
         outerCheck()
         Some(result)
       } catch {
@@ -117,7 +119,9 @@ object ACSLStrengthener {
           theories(formula)
           p.addTheories(theories.theories)
           p.addAssertion(formula)
-          p.withTimeout(math.max(1L, math.min(200L, remaining))) {
+          if (!settings.contractTimeouts)
+            ACSLContractVerifier.checkSat(p) == SimpleAPI.ProverStatus.Unsat
+          else p.withTimeout(math.max(1L, math.min(200L, remaining))) {
             p.??? == SimpleAPI.ProverStatus.Unsat
           }
         }
@@ -325,7 +329,7 @@ object ACSLStrengthener {
         return initial
 
       // limit each function separately
-      deadline = if (settings.strengthenACSLTimeout == 0) Long.MaxValue
+      deadline = if (!settings.contractTimeouts) Long.MaxValue
                  else System.nanoTime() + settings.strengthenACSLTimeout.toLong * 1000000L
       attempts = 0
       var current = initial

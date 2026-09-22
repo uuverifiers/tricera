@@ -120,8 +120,10 @@ class TriCeraParameters extends GlobalParameters {
   var printDebugHeapTypes : Boolean = false
 
   var displayACSL = false
+  var contractQueryLimit = 100000L
   var strengthenACSL = true
-  var strengthenACSLTimeout = 5000
+  var strengthenACSLTimeout = 0
+  def contractTimeouts : Boolean = strengthenACSLTimeout > 0
   var strengthenACSLAttempts = 100
   var inferLoopInvariants = false
   var assertionsNoVerify = false
@@ -147,6 +149,7 @@ class TriCeraParameters extends GlobalParameters {
     that.smoke = this.smoke
     that.assertionsNoVerify = this.assertionsNoVerify
     that.displayACSL = this.displayACSL
+    that.contractQueryLimit = this.contractQueryLimit
     that.strengthenACSL = this.strengthenACSL
     that.strengthenACSLTimeout = this.strengthenACSLTimeout
     that.strengthenACSLAttempts = this.strengthenACSLAttempts
@@ -196,6 +199,12 @@ class TriCeraParameters extends GlobalParameters {
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
+    case opt :: rest if opt.startsWith("-contractQueryLimit:") =>
+      val count = opt.drop("-contractQueryLimit:".length).toLongOption
+      if (count.isEmpty || count.get < 1)
+        throw new MainException("contract query limit must be positive")
+      contractQueryLimit = count.get
+      parseArgs(rest)
     case "-noStrengthenACSL" :: rest => strengthenACSL = false; parseArgs(rest)
     case opt :: rest if opt.startsWith("-strengthenACSLAttempts:") =>
       val count = opt.drop("-strengthenACSLAttempts:".length).toIntOption
@@ -412,7 +421,8 @@ class TriCeraParameters extends GlobalParameters {
     |-inv               Try to infer loop invariants
     |-acsl              Print inferred ACSL annotations
     |-noStrengthenACSL  Disable inferred contract strengthening
-    |-strengthenACSLTimeout:s  Per-function budget in seconds (default: 5; 0: query limits only)
+    |-contractQueryLimit:n     Solver operations per contract query (default: 100000)
+    |-strengthenACSLTimeout:s  Timeout (s) per function for strengthening (default: 0)
     |-strengthenACSLAttempts:n  Maximum solver queries per function (default: 100)
     |-smoke             Warn about assertions whose program point is unreachable (vacuously verified)
     |-log:n             Display progress based on verbosity level n (0 <= n <= 3)
