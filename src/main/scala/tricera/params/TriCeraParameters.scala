@@ -160,7 +160,7 @@ class TriCeraParameters extends GlobalParameters {
 
   solutionReconstruction = GlobalParameters.SolutionReconstruction.CEGAR
 
-  private val version = "0.5"
+  private val version = "0.5.1"
 
   private val greeting =
     s"""TriCera v$version.
