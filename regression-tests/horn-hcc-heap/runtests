@@ -6,7 +6,7 @@ TESTS="list-001.c list-001-fail.c list-002-fail.c mutually-referential-structs.c
 
 TESTSNOCEX=" stack-array-1-unsafe.c stack-array-2-unsafe.c"
 
-VALID_DEREF_TESTS="stack-ptr-bug-1.c sizeof-bug-1-true.c sizeof-bug-2-true.c heap-guard-bug-1.c heap-guard-bug-2.c"
+VALID_DEREF_TESTS="stack-ptr-bug-1.c sizeof-bug-1-true.c sizeof-bug-2-true.c heap-guard-bug-1.c heap-guard-bug-2.c address-subscript-safe.c address-subscript-unsafe.c address-subscript-index-unsafe.c"
 
 for name in $TESTS; do
     echo

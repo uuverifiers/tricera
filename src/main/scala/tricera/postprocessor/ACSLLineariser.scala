@@ -48,7 +48,8 @@ case class ACSLLinearisedContract(
   funcName: String,
   preCondition: String,
   postCondition: String,
-  loopInvariants: Seq[ACSLLinearisedLoopInvariant])
+  loopInvariants: Seq[ACSLLinearisedLoopInvariant],
+  assigns: Option[String] = None)
 
 case class ACSLResult(
   contracts: Seq[ACSLLinearisedContract],
@@ -104,6 +105,11 @@ object ACSLLineariser {
 
   def asString(e : IExpression) : String =
     ap.DialogUtil.asString { printExpression(e) }
+
+  def assignsString(locations : Seq[ITerm], pre : PreCondition) : String =
+    if (locations.isEmpty) "\\nothing" else
+      locations.map(t => asString(PrepareACSLPrinting.visit(
+        t, PrepSettings(pre, false)))).mkString(", ")
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -175,10 +181,12 @@ object ACSLLineariser {
     : PreVisitResult = t match {
       case IFunApp(ACSLExpression.pointerOffset, _) =>
         KeepArg
-      case ACSLPredicate(p) => //
-        // Avoid '\old()' etc. in arguments to ACSL predicates (\valid and friends).
-        val newSettings = settings.copy(usePlainConstant = true)
-        SubArgs((for (_ <- 0 until p.arity) yield newSettings))
+      case IAtom(p, args) if ACSLExpression.predicates(p) =>
+        SubArgs(args.map {
+          case ConstantAsProgVarProxy(v) if v.isParameter =>
+            settings.copy(usePlainConstant = true)
+          case _ => settings.copy(usePlainConstant = false)
+        })
       case ACSLFunction(f) =>
         // 'f' is an ACSL pseudo-function, which takes care of
         // '\old()' etc. by itself.
@@ -484,7 +492,7 @@ object ACSLLineariser {
               AbsyPrinter.visit(left, ctxt.setOpPrec("", 1))
           }
 
-          print(" -> ")
+          print(" ==> ")
 
           val newRightCtxt = right match {
             case IBinFormula(IBinJunctor.Or, INot(_), _) =>
@@ -500,7 +508,7 @@ object ACSLLineariser {
           val op = junctor match {
             case IBinJunctor.And => " && "
             case IBinJunctor.Or => " || "
-            case IBinJunctor.Eqv => " <-> "
+            case IBinJunctor.Eqv => " <==> "
           }
 
           val newLeftCtxt = left match {

@@ -236,6 +236,10 @@ class Symex private (context        : SymexContext,
     val clause = (property :- (initAtom &&& guard))
     context.addAssertion(
       context.mkRichAssertionClause(clause, srcInfo, propertyType))
+    if (!ContainsSymbol(property, {
+      case IAtom(p, _) => context.predCCPredMap.contains(p)
+      case _ => false
+    })) addGuard(property)
   }
 
   def addValue(t : CCTerm) = {
@@ -1291,6 +1295,30 @@ class Symex private (context        : SymexContext,
       // always correctly resolve.
       assert(updatedPostValue.typ == topVal.typ)
 
+    case CCAstUtils.AddressOfArrayElement(array, index) =>
+      // &a[i] is a + i without reading the element (C 6.5.3.2)
+      val (lhs, rhs) = evalBinExpArgs(array, index)
+      (lhs.typ, rhs.typ) match {
+        case (_: CCHeapArrayPointer, _: CCArithType | _: CCIntEnum) |
+             (_: CCArithType | _: CCIntEnum, _: CCHeapArrayPointer) =>
+          pushVal(BinaryOperators.Plus(lhs, rhs).term)
+        case (_: CCArray, _) | (_, _: CCArray) =>
+          throw new UnsupportedCFragmentException(
+            getLineString(exp) +
+            "Stack pointers to mathematical array fields are not yet supported.")
+        case _ =>
+          throw new TranslationException(getLineString(exp) +
+            "Array element address requires an array pointer and an integer index.")
+      }
+
+    case CCAstUtils.AddressOfDereference(pointer) => // &*pointer
+      evalHelp(pointer)
+      topVal.typ match {
+        case _: CCStackPointer | _: CCHeapPointer | _: CCHeapArrayPointer =>
+        case _ => throw new TranslationException(
+          "Cannot dereference non-pointer: " + topVal.typ + " " + topVal.toTerm)
+      }
+
     case exp : Epreop =>
       val srcInfo = Some(getSourceInfo(exp))
       evalHelp(exp.exp_)
@@ -1809,8 +1837,15 @@ class Symex private (context        : SymexContext,
         }
 
         var argTerms : List[ITerm] = List()
-        for (_ <- 0 until argCount)
-          argTerms = popVal.toTerm :: argTerms
+        for ((formal, index) <- ctx.prePred.argVars.takeRight(argCount).zipWithIndex.reverse) {
+          val arg = popVal
+          if (arg.typ.toSort != formal.sort &&
+              (arg.typ.isInstanceOf[CCHeapArrayPointer] ||
+               formal.typ.isInstanceOf[CCHeapArrayPointer]))
+            throw new UnsupportedCFragmentException(
+              s"Array-pointer conversion for argument ${index + 1} of function $name is not supported.")
+          argTerms = arg.toTerm :: argTerms
+        }
 
         val postGlobalVars : scala.Seq[ITerm] = // todo : use ctx postglobal?
           (for (v <- scope.GlobalVars.vars) yield {

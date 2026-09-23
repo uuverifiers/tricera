@@ -46,6 +46,7 @@ Inferred ACSL annotations
 /*@
   requires \true;
   ensures \true;
+  assigns \nothing;
 */
 /* loop invariant for the loop on line 3 */
 /*@

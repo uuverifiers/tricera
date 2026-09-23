@@ -42,15 +42,63 @@
 package tricera.postprocessor
 
 import ap.parser._
-import IExpression.{Conj, Disj, and, i, or}
+import IExpression.{Conj, Disj, and, i, or, toFunApplier}
 import ap.SimpleAPI.ProverStatus
 import ap.SimpleAPI.TimeoutException
 import ap.theories._
 import ap.SimpleAPI
 
 import tricera._
+import tricera.concurrency.CCReader
+import tricera.concurrency.ccreader.{CCHeapPointer, CCHeapArrayPointer}
 
 object PostconditionSimplifier extends ResultProcessor {
+
+  // use valid(p) in pre to simplify e.g. !is_int(read(old_heap, p)) || P to P.
+  def usingValidityRequirements(result : Result, reader : CCReader) : Result = result match {
+    case solution : Solution =>
+      val printed = AddValidPointerPredicates.applyTo(
+        RewrapPointers.applyTo(ClauseRemover.applyTo(solution)))
+      val contexts = reader.getFunctionContexts
+      solution.copy(functionInvariants = solution.functionInvariants.zip(
+        printed.functionInvariants).map { case (inv, translated) =>
+        val pre = inv.preCondition.invariant
+        val post = inv.postCondition.invariant
+        val facts = for {
+          info <- post.heapInfo.toSeq
+          context <- contexts.get(inv.id).toSeq.map(_.acslContext)
+          heap <- SymbolCollector.constants(pre.expression & post.expression).collect {
+            case p : ProgVarProxy if inv.preCondition.isCurrentHeap(p) => IConstant(p)
+          }.toSeq
+          IAtom(ACSLExpression.valid, Seq(IConstant(p : ProgVarProxy))) <-
+            LineariseVisitor(translated.preCondition.invariant.expression, IBinJunctor.And)
+          if p.isPreExec && (p.isParameter || p.isGlobal)
+          v <- (if (p.isParameter) context.getParams else context.getGlobals)
+            .filter(_.name == p.name)
+          location <- v.typ match {
+            case t : CCHeapPointer => Some((IConstant(p) : ITerm, t.typ.toSort))
+            case t : CCHeapArrayPointer => Some((info.heap.rangeNth(
+              t.ptrOps.getRange(IConstant(p)), t.ptrOps.getOffset(IConstant(p))),
+              t.elementType.toSort))
+            case _ => None
+          }
+          if context.sortWrapper(location._2).isDefined
+        } yield info.heap.hasUserHeapCtor(
+          info.heap.read(heap, location._1), context.getCtor(location._2))
+        if (facts.isEmpty) inv
+        else {
+          val known = facts.flatMap(IExpression.EqLit.unapply).toMap
+          val simplified = Rewriter.rewrite(post.expression, {
+            case IExpression.EqLit(t, n) if known.get(t).contains(n) => IBoolLit(true)
+            case e => e
+          }).asInstanceOf[IFormula]
+          if (simplified == post.expression) inv
+          else inv.copy(postCondition = PostCondition(post.copy(expression =
+            new Simplifier().apply(simplified))))
+        }
+      })
+    case _ => result
+  }
 
   override def applyTo(solution : Solution) = solution match {
     case Solution(functionInvariants, loopInvariants) =>
@@ -110,9 +158,10 @@ object PostconditionSimplifier extends ResultProcessor {
                        precondition  : IFormula,
                        heapInfo      : Option[HeapInfo]) : IFormula = {
 
+    val normalised = reduceArithmeticUsingPrecondition(postcondition, precondition)
     val postConjs =
       LineariseVisitor(
-        Transform2NNF(dropPreconditionGuard(postcondition, precondition)),
+        Transform2NNF(dropPreconditionGuard(normalised, precondition)),
         IBinJunctor.And)
     // The reason we partition the conjuncts based on heap operations is that we
     // would like to preserve non-heap conjuncts even if they are implied by a
@@ -124,11 +173,42 @@ object PostconditionSimplifier extends ResultProcessor {
     // using non-heap conjuncts though.
     val (postHeapConjs, otherConjs) =
       postConjs.partition(c => HeapFunDetector(c, heapInfo))
-    val simpHeap  = simplifyHelper(and(postHeapConjs),
-                                   precondition &&& and(otherConjs))
+    val simpHeap = simplifyHelper(and(postHeapConjs), precondition &&& and(otherConjs))
     val simplified = simpHeap &&& and(otherConjs)
     normaliseHeapReads(simplified, precondition, heapInfo)
   }
+
+  // use e.g. n = 3 to simplify x + n - 3 into x
+  private def reduceArithmeticUsingPrecondition(form : IFormula, pre : IFormula) : IFormula =
+    SimpleAPI.withProver { p =>
+      import ap.terfor.equations.{EquationConj, ReduceWithEqs}
+      import ap.terfor.linearcombination.LinearCombination
+      p.addConstants(SymbolCollector.constantsSorted(pre & form))
+      val collector = new TheoryCollector
+      collector(pre & form)
+      p.addTheories(collector.theories)
+      ACSLExpression.functionsSorted.foreach(p.addFunction(_))
+      p.addRelations(ACSLExpression.predicatesSorted)
+      val equations = LineariseVisitor(pre, IBinJunctor.And).flatMap { conjunct =>
+        p.asConjunction(conjunct).arithConj.positiveEqs.iterator
+      }
+      val assumptions = EquationConj(equations, p.order)
+      if (assumptions.isTrue || assumptions.isFalse) form
+      else {
+        val reduce = ReduceWithEqs(assumptions, p.order)
+        Rewriter.rewrite(form, {
+          case t : ITerm if (t.isInstanceOf[IPlus] || t.isInstanceOf[ITimes]) &&
+              !ContainsSymbol(t, {
+                case _ : IPlus | _ : ITimes | _ : IConstant | _ : IIntLit => false
+                case _ => true
+              }) =>
+            val linear = InputAbsy2Internal(t, p.order).asInstanceOf[LinearCombination]
+            val reduced = reduce(linear)
+            if (reduced == linear) t else Internal2InputAbsy(reduced)
+          case e => e
+        }).asInstanceOf[IFormula]
+      }
+    }
 
   private def normaliseHeapReads(form: IFormula, pre: IFormula,
                                  heapInfo: Option[HeapInfo]): IFormula =
@@ -197,30 +277,36 @@ object PostconditionSimplifier extends ResultProcessor {
   }
 
   private def isImplied(context : IFormula, formula : IFormula) : Boolean = {
-    SimpleAPI.withProver { p =>
-      import p._
-      // check if context && !formula is UNSAT
-      val combinedFormula = context &&& !formula
-      addConstants(SymbolCollector constantsSorted combinedFormula)
-      addRelations(ACSLExpression.predicatesSorted)
-      ACSLExpression.functionsSorted.foreach(f => addFunction(f))
+    try ACSLContractVerifier.withQueryBudget {
+      SimpleAPI.withProver { p =>
+        import p._
+        // check if context && !formula is UNSAT
+        val combinedFormula = context &&& !formula
+        addConstants(SymbolCollector constantsSorted combinedFormula)
+        addRelations(ACSLExpression.predicatesSorted)
+        ACSLExpression.functionsSorted.foreach(f => addFunction(f))
 
-      val theoryCollector = new TheoryCollector
-      theoryCollector(combinedFormula)
-      addTheories(theoryCollector.theories)
-      addAssertion(combinedFormula)
+        val theoryCollector = new TheoryCollector
+        theoryCollector(combinedFormula)
+        addTheories(theoryCollector.theories)
+        addAssertion(combinedFormula)
 
-      try {
-        withTimeout(100) {
-          ??? match {
-            case ProverStatus.Unsat => true
-            case _ => false
+        try {
+          if (!tricera.params.TriCeraParameters.get.contractTimeouts)
+            ACSLContractVerifier.checkSat(p) == ProverStatus.Unsat
+          else withTimeout(100) {
+            ??? match {
+              case ProverStatus.Unsat => true
+              case _ => false
+            }
           }
+        } catch {
+          case x: SimpleAPI.SimpleAPIException if x == TimeoutException =>
+            false
         }
-      } catch {
-        case x: SimpleAPI.SimpleAPIException if x == TimeoutException =>
-          false
       }
+    } catch {
+      case ACSLContractVerifier.QueryLimit => false
     }
   }
 

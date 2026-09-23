@@ -10,13 +10,31 @@ TESTS="get-1.c  \
        heapptr-to-stackptr.c \
        qualified-heapptr-to-stackptr.c \
        multi-arg-1.c multi-arg-2.c \
-       alias-share-safe.c alias-share-unsafe.c \
+       alias-share-safe.c alias-share-unsafe.c alias-mixed-calls.c \
        alias-reject-overlap.c alias-reject-array.c alias-reject-deref.c"
 
 for name in $TESTS; do
     echo
     echo $name
     $TRI_CMD -cex -acsl "$@" $name 2>&1 | grep -v 'at '
+done
+
+echo
+echo "max-2.c (array)"
+$TRI_CMD -cex -acsl "$@" -heapModel:array max-2.c 2>&1 | grep -v 'at '
+
+for name in frame-globals-only.c strengthen-globals.c strengthen-conditional.c strengthen-guards.c strengthen-assertion.c; do
+    echo
+    echo $name
+    $TRI_CMD "$@" -assertNoVerify -acsl -m:main $name 2>&1 | grep -v 'at '
+done
+
+for heap in native array; do
+    for name in call-site-frame.c frame-globals.c frame-allocate.c alias-heap-stack.c read-free.c free-other.c conditional-free.c global-pointer-reset.c; do
+        echo
+        echo "$name ($heap)"
+        $TRI_CMD "$@" -assertNoVerify -acsl -heapModel:$heap -m:main $name 2>&1 | grep -v 'at '
+    done
 done
 
 TESTS="struct-field-read.c enum-indexed-struct.c enum-indexed-struct-field.c"

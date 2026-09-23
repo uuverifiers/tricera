@@ -121,6 +121,11 @@ class TriCeraParameters extends GlobalParameters {
   var printDebugHeapTypes : Boolean = false
 
   var displayACSL = false
+  var contractQueryLimit = 100000L
+  var refineACSL = true
+  var refineACSLTimeout = 0
+  def contractTimeouts : Boolean = refineACSLTimeout > 0
+  var refineACSLAttempts = 100
   var inferLoopInvariants = false
   var assertionsNoVerify = false
   var smoke = false
@@ -146,6 +151,10 @@ class TriCeraParameters extends GlobalParameters {
     that.smoke = this.smoke
     that.assertionsNoVerify = this.assertionsNoVerify
     that.displayACSL = this.displayACSL
+    that.contractQueryLimit = this.contractQueryLimit
+    that.refineACSL = this.refineACSL
+    that.refineACSLTimeout = this.refineACSLTimeout
+    that.refineACSLAttempts = this.refineACSLAttempts
     that.inferLoopInvariants = this.inferLoopInvariants
   }
 
@@ -193,6 +202,25 @@ class TriCeraParameters extends GlobalParameters {
     case "-ssol" :: rest => displaySolutionSMT = true; parseArgs(rest)
     case "-inv" :: rest => inferLoopInvariants = true; parseArgs(rest)
     case "-acsl" :: rest => displayACSL = true; parseArgs(rest)
+    case opt :: rest if opt.startsWith("-contractQueryLimit:") =>
+      val count = opt.drop("-contractQueryLimit:".length).toLongOption
+      if (count.isEmpty || count.get < 1)
+        throw new MainException("contract query limit must be positive")
+      contractQueryLimit = count.get
+      parseArgs(rest)
+    case "-noRefineACSL" :: rest => refineACSL = false; parseArgs(rest)
+    case opt :: rest if opt.startsWith("-refineACSLAttempts:") =>
+      val count = opt.drop("-refineACSLAttempts:".length).toIntOption
+      if (!count.exists(_ >= 0))
+        throw new MainException("Invalid ACSL refinement attempt limit")
+      refineACSLAttempts = count.get
+      parseArgs(rest)
+    case opt :: rest if opt.startsWith("-refineACSLTimeout:") =>
+      val seconds = opt.drop("-refineACSLTimeout:".length).toDouble
+      if (!seconds.isFinite || seconds < 0 || seconds > Int.MaxValue / 1000.0)
+        throw new MainException("Invalid ACSL refinement timeout")
+      refineACSLTimeout = (seconds * 1000).toInt
+      parseArgs(rest)
     case "-smoke" :: rest => smoke = true; parseArgs(rest)
 
     case "-heapModel:native" :: rest =>
@@ -396,6 +424,10 @@ class TriCeraParameters extends GlobalParameters {
     |-ssol              Show solution in SMT-LIB format
     |-inv               Try to infer loop invariants
     |-acsl              Print inferred ACSL annotations
+    |-noRefineACSL      Disable inferred contract refinement
+    |-contractQueryLimit:n     Solver operations per contract query (default: 100000)
+    |-refineACSLTimeout:s      Timeout (s) per function for refinement (default: 0)
+    |-refineACSLAttempts:n     Maximum solver queries per function (default: 100)
     |-smoke             Warn about assertions whose program point is unreachable (vacuously verified)
     |-log:n             Display progress based on verbosity level n (0 <= n <= 3)
     |                     1: Statistics only

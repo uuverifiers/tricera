@@ -591,11 +591,12 @@ class Main (args: Array[String]) {
 
         if ((displayACSL || log) &&
           (solution.hasFunctionInvariants || solution.hasLoopInvariants)) {
-          result
+          val frameSource = result
             .through(FunctionInvariantsFilter(i => !i.isSrcAnnotated)(_))
-            .through(ADTExploder.apply)
             .through(HeapFactsProcessor.apply)
             .through(PostconditionSimplifier.apply)
+
+          frameSource
             .through(r =>
               if (solution.isHeapUsed) { r
                  .through(addPointerPredicatesFrom(r))
@@ -605,16 +606,28 @@ class Main (args: Array[String]) {
                  .through(ADTSimplifier.apply) // Rewrite constructors/selectors after heap processing
                  .through(ToVariableForm.apply)
               } else {
-                r
+                r.through(ADTExploder.apply)
               }
             )
             .tap(r => r
               .through(ACSLExpressionProcessor.apply)
+              .through(PostconditionSimplifier.usingValidityRequirements(_, reader))
               .through(ClauseRemover.apply)
               .through(RewrapPointers.apply)
               .through(AddValidPointerPredicates.apply)
               .through(FormulaSimplifier.apply)
-              .through(ACSLLineariser.apply)
+              .through { translated =>
+                val printed = ACSLLineariser(translated)
+                if (displayACSL) {
+                  val checker = new ACSLContractVerifier(reader)
+                  // use the solution before rewrites remove heap equalities
+                  val framed = ACSLFrameInference(printed, frameSource, reader,
+                    callSiteTransforms, checker)
+                  if (refineACSL)
+                    ACSLContractRefiner(translated, framed, reader, checker)
+                  else framed
+                } else printed
+              }
               .through(ResultPrinters.printACSL) 
             ).ignore
         }

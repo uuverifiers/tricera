@@ -112,7 +112,7 @@ case class ValSet(vals : Set[Val]) {
   def getOrderingKey(term : ITerm) : (Int, String) =
     (termScore(term), term.toString)
   private def termScore(term : ITerm) : Int = term match {
-    case IConstant(v : ProgVarProxy) if v.isParameter => 0
+    case IConstant(v : ProgVarProxy) if v.isParameter && v.isPreExec => 0
     case IConstant(v : ProgVarProxy) if v.isPostExec => 1
     case IConstant(_ : ProgVarProxy) => 2
     case _: IConstant                => 3

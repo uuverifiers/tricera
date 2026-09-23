@@ -32,6 +32,11 @@ package tricera.concurrency
 import org.scalatest.flatspec.AnyFlatSpec
 import CCReader._
 import ccreader._
+import lazabs.GlobalParameters
+import lazabs.horn.bottomup.SimpleWrapper
+import tricera.properties
+import tricera.params.TriCeraParameters
+import tricera.postprocessor.{ACSLContractVerifier, ACSLLinearisedContract}
 
 class HeapObjectPartitionTests extends AnyFlatSpec {
 
@@ -139,4 +144,198 @@ class HeapObjectPartitionTests extends AnyFlatSpec {
         |""".stripMargin)
     assert(wrappers.contains(O_int))
   }
+
+  private def withHeapReaders(program : String,
+                             checked : Set[properties.Property] = Set(properties.Reachability))
+                            (test : CCReader => Unit) : Unit =
+    for (heap <- Seq(TriCeraParameters.NativeHeap, TriCeraParameters.ArrayHeap)) {
+      val params = new TriCeraParameters
+      params.heapModel = heap
+      TriCeraParameters.parameters.withValue(params) {
+        GlobalParameters.withValue(params) {
+          val input = program.replace("/*@contract@*/", "■■contract■■")
+            .replaceAll("(?s)/\\*@(.+?)\\*/", "■■$1■■")
+          val (reader, _, _) = CCReader(new java.io.StringReader(input), "main", checked)
+          test(reader)
+        }
+      }
+    }
+
+  private def assertionsAreSafe(reader : CCReader,
+                                keep : properties.Property => Boolean) : Boolean = {
+    val system = new tricera.acsl.Encoder(reader).encode
+    val assertions = system.assertions.filter { c =>
+      keep(reader.getRichClause(c).get.asInstanceOf[CCAssertionClause].property)
+    }
+    SimpleWrapper.isSat(system.processes.flatMap(_._1.map(_._1)) ++
+      system.backgroundAxioms.clauses ++ assertions)
+  }
+
+  "Assertion encoding" should "assume checked conditions at their original state" in {
+    for (premise <- Seq("assert(n > 0);", "/*@ assert premise: n > 0; */");
+         change <- Seq("", "n = 0;"))
+      withHeapReaders(s"""
+        |void main() {
+        |  int n;
+        |  $premise
+        |  $change
+        |  /*@ assert goal: n > 0; */
+        |}
+        |""".stripMargin) { reader =>
+        assert(!assertionsAreSafe(reader, _ => true))
+        // Removing the first check must leave its assumption, but only for that state.
+        assert(assertionsAreSafe(reader, _ == properties.UserAssertion(Some("goal"))) ==
+          change.isEmpty)
+      }
+  }
+
+  it should "keep predicate definitions out of continuation guards" in {
+    for (extra <- Seq("", "assert(!P(42));"))
+      withHeapReaders(s"""
+        |/*$$ P(int x) $$*/
+        |void main() { assert(P(42)); $extra }
+        |""".stripMargin) { reader =>
+        val system = reader.system
+        val transitions = system.processes.flatMap(_._1.map(_._1))
+        val clauses = transitions ++ system.backgroundAxioms.clauses ++ system.assertions
+        assert(clauses.exists(_.head.pred.name == "P"))
+        assert(!transitions.exists(_.body.exists(_.pred.name == "P")))
+      }
+  }
+
+  it should "assume only enabled memory checks" in {
+    for (enabled <- Seq(false, true)) {
+      val checked = if (enabled) Set[properties.Property](properties.MemValidDeref)
+                    else Set[properties.Property](properties.Reachability)
+      withHeapReaders("""
+        |void main() {
+        |  int a[1];
+        |  a[1] = 0;
+        |  /*@ assert goal: 0; */
+        |}
+        |""".stripMargin, checked) { reader =>
+        assert(!assertionsAreSafe(reader, _ => true))
+        assert(assertionsAreSafe(reader, _ == properties.UserAssertion(Some("goal"))) == enabled)
+      }
+    }
+  }
+
+  it should "check recursive call preconditions before assuming them" in {
+    for (n <- Seq(2, -1))
+      withHeapReaders(s"""
+        |/*@ requires n >= 0; ensures \\result == n; */
+        |int count(int n) {
+        |  if (n <= 0) return 0;
+        |  return count(n - 1) + 1;
+        |}
+        |void main() {
+        |  int r = count($n);
+        |  /*@ assert goal: r == 2; */
+        |}
+        |""".stripMargin) { reader =>
+        assert(assertionsAreSafe(reader, _ => true) == (n == 2))
+        assert(assertionsAreSafe(reader, _ == properties.UserAssertion(Some("goal"))))
+      }
+  }
+
+  "Contract verification" should "require valid accesses through callees" in {
+    withHeapReaders("""
+      |/*@contract@*/ int read_cell(int *p) { return *p; }
+      |/*@contract@*/ int get(int *p) { return read_cell(p); }
+      |void main() { int *p = malloc(sizeof(int)); *p = 7; get(p); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("get", "\\valid(p)",
+        "\\result == *p", Nil, Some("\\nothing"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "\\true"), 10000))
+      assert(!verifier.verify(contract.copy(postCondition = "\\result == *p + 1"), 10000))
+    }
+  }
+
+  it should "check frees without changing the main encoding" in {
+    withHeapReaders("""
+      |/*@contract@*/ void release(int *p) { free(p); }
+      |void main() { int *p = malloc(sizeof(int)); release(p); assert(0); }
+      |""".stripMargin) { reader =>
+      val system = reader.system
+      val before = (system.processes, system.assertions, system.backgroundAxioms,
+        reader.wrapperSignatures, CCReader.forcedObjectWrapperTypes.toVector)
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("release", "\\valid(p)", "\\true", Nil)
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "\\true"), 10000))
+      assert(before == ((system.processes, system.assertions, system.backgroundAxioms,
+        reader.wrapperSignatures, CCReader.forcedObjectWrapperTypes.toVector)))
+    }
+  }
+
+  it should "check array bounds even for a live neighbouring cell" in {
+    withHeapReaders("""
+      |int a[2], b[2];
+      |/*@contract@*/ int get(int n) { return a[n]; }
+      |void main() { b[0] = 3; get(1); assert(b[0] == 3); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("get", "0 <= n && n < 2", "\\true", Nil)
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "n == 2"), 10000))
+    }
+  }
+
+  it should "preserve globals omitted from assigns" in {
+    withHeapReaders("""
+      |int count, unchanged;
+      |/*@contract@*/ void increment(int *p) { ++count; ++*p; }
+      |void main() { int *p = malloc(sizeof(int)); *p = 0; increment(p); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("increment", "\\valid(p)",
+        "count == \\old(count) + 1 && *p == \\old(*p) + 1", Nil,
+        Some("count, *p"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(assigns = Some("*p")), 10000))
+      assert(!verifier.verify(contract.copy(assigns = Some("count")), 10000))
+    }
+  }
+
+  it should "infer stronger summaries for recursive calls" in {
+    withHeapReaders("""
+      |/*@contract@*/ int count(int n) {
+      |  if (n <= 0) return 0;
+      |  return count(n - 1) + 1;
+      |}
+      |void main() { count(2); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("count", "n >= 0",
+        "\\result >= 0 && (\\old(n) != 2 || \\result == 2)", Nil, Some("\\nothing"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(
+        postCondition = "\\old(n) != 2 || \\result == 3"), 10000))
+      assert(!verifier.verify(contract.copy(postCondition = "\\result >= 1"), 10000))
+      val specialised = contract.copy(preCondition = "n == 2", postCondition = "\\result == 2")
+      assert(verifier.verify(specialised, 10000))
+      assert(!verifier.verify(specialised.copy(postCondition = "\\result == 3"), 10000))
+    }
+  }
+
+
+  it should "preserve memory requirements in recursive calls" in {
+    withHeapReaders("""
+      |/*@contract@*/ int count(int *p, int n) {
+      |  if (n <= 0) return 0;
+      |  return *p + count(p, n - 1);
+      |}
+      |void main() { int *p = malloc(sizeof(int)); *p = 1; count(p, 2); }
+      |""".stripMargin) { reader =>
+      val verifier = new ACSLContractVerifier(reader)
+      val contract = ACSLLinearisedContract("count", "\\valid(p) && *p == 1 && n >= 0",
+        "\\result >= 0 && (\\old(n) != 2 || \\result == 2)", Nil, Some("\\nothing"))
+      assert(verifier.verify(contract, 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "\\valid(p) && n >= 0"), 10000))
+      assert(!verifier.verify(contract.copy(preCondition = "n >= 0"), 10000))
+    }
+  }
+
 }
