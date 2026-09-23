@@ -122,10 +122,10 @@ class TriCeraParameters extends GlobalParameters {
 
   var displayACSL = false
   var contractQueryLimit = 100000L
-  var strengthenACSL = true
-  var strengthenACSLTimeout = 0
-  def contractTimeouts : Boolean = strengthenACSLTimeout > 0
-  var strengthenACSLAttempts = 100
+  var refineACSL = true
+  var refineACSLTimeout = 0
+  def contractTimeouts : Boolean = refineACSLTimeout > 0
+  var refineACSLAttempts = 100
   var inferLoopInvariants = false
   var assertionsNoVerify = false
   var smoke = false
@@ -152,9 +152,9 @@ class TriCeraParameters extends GlobalParameters {
     that.assertionsNoVerify = this.assertionsNoVerify
     that.displayACSL = this.displayACSL
     that.contractQueryLimit = this.contractQueryLimit
-    that.strengthenACSL = this.strengthenACSL
-    that.strengthenACSLTimeout = this.strengthenACSLTimeout
-    that.strengthenACSLAttempts = this.strengthenACSLAttempts
+    that.refineACSL = this.refineACSL
+    that.refineACSLTimeout = this.refineACSLTimeout
+    that.refineACSLAttempts = this.refineACSLAttempts
     that.inferLoopInvariants = this.inferLoopInvariants
   }
 
@@ -208,18 +208,18 @@ class TriCeraParameters extends GlobalParameters {
         throw new MainException("contract query limit must be positive")
       contractQueryLimit = count.get
       parseArgs(rest)
-    case "-noStrengthenACSL" :: rest => strengthenACSL = false; parseArgs(rest)
-    case opt :: rest if opt.startsWith("-strengthenACSLAttempts:") =>
-      val count = opt.drop("-strengthenACSLAttempts:".length).toIntOption
+    case "-noRefineACSL" :: rest => refineACSL = false; parseArgs(rest)
+    case opt :: rest if opt.startsWith("-refineACSLAttempts:") =>
+      val count = opt.drop("-refineACSLAttempts:".length).toIntOption
       if (!count.exists(_ >= 0))
-        throw new MainException("Invalid ACSL strengthening attempt limit")
-      strengthenACSLAttempts = count.get
+        throw new MainException("Invalid ACSL refinement attempt limit")
+      refineACSLAttempts = count.get
       parseArgs(rest)
-    case opt :: rest if opt.startsWith("-strengthenACSLTimeout:") =>
-      val seconds = opt.drop("-strengthenACSLTimeout:".length).toDouble
+    case opt :: rest if opt.startsWith("-refineACSLTimeout:") =>
+      val seconds = opt.drop("-refineACSLTimeout:".length).toDouble
       if (!seconds.isFinite || seconds < 0 || seconds > Int.MaxValue / 1000.0)
-        throw new MainException("Invalid ACSL strengthening timeout")
-      strengthenACSLTimeout = (seconds * 1000).toInt
+        throw new MainException("Invalid ACSL refinement timeout")
+      refineACSLTimeout = (seconds * 1000).toInt
       parseArgs(rest)
     case "-smoke" :: rest => smoke = true; parseArgs(rest)
 
@@ -424,10 +424,10 @@ class TriCeraParameters extends GlobalParameters {
     |-ssol              Show solution in SMT-LIB format
     |-inv               Try to infer loop invariants
     |-acsl              Print inferred ACSL annotations
-    |-noStrengthenACSL  Disable inferred contract strengthening
+    |-noRefineACSL      Disable inferred contract refinement
     |-contractQueryLimit:n     Solver operations per contract query (default: 100000)
-    |-strengthenACSLTimeout:s  Timeout (s) per function for strengthening (default: 0)
-    |-strengthenACSLAttempts:n  Maximum solver queries per function (default: 100)
+    |-refineACSLTimeout:s      Timeout (s) per function for refinement (default: 0)
+    |-refineACSLAttempts:n     Maximum solver queries per function (default: 100)
     |-smoke             Warn about assertions whose program point is unreachable (vacuously verified)
     |-log:n             Display progress based on verbosity level n (0 <= n <= 3)
     |                     1: Statistics only

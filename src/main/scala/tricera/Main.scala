@@ -623,8 +623,8 @@ class Main (args: Array[String]) {
                   // use the solution before rewrites remove heap equalities
                   val framed = ACSLFrameInference(printed, frameSource, reader,
                     callSiteTransforms, checker)
-                  if (strengthenACSL)
-                    ACSLStrengthener(translated, framed, reader, checker)
+                  if (refineACSL)
+                    ACSLContractRefiner(translated, framed, reader, checker)
                   else framed
                 } else printed
               }

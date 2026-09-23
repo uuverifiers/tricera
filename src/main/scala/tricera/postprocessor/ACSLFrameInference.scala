@@ -35,7 +35,7 @@ import tricera._
 import tricera.acsl.ACSLTranslator
 import tricera.concurrency.CCReader
 import tricera.concurrency.CallSiteTransform.CallSiteTransforms
-import tricera.concurrency.ccreader.{CCHeapArrayPointer, CCHeapPointer}
+import tricera.concurrency.ccreader.{CCHeapArrayPointer, CCHeapPointer, CCVar}
 
 import scala.util.control.NonFatal
 
@@ -107,8 +107,16 @@ object ACSLFrameInference {
     }
     val values = ValSetReader(pre &&& post)
 
-    // stack-pointer arguments were encoded as globals; their source locations are *p
-    val stackLocations = context.getParams.filter(p => stackParams(p.name)).flatMap { p =>
+    val stackLocations = extractStackLocations(context.getParams, stackParams, values)
+    val globalLocations = extractGlobalLocations(globals, constants, values)
+    val heapLocations = extractHeapLocations(inv, context, constants, values)
+    heapLocations.map(cells => (globalLocations ++ stackLocations ++ cells).distinct)
+  }
+
+  // stack-pointer arguments encoded as globals
+  private def extractStackLocations(params : Seq[CCVar], stackParams : Set[String],
+                                    values : ValSet) : Seq[ITerm] =
+    params.filter(p => stackParams(p.name)).flatMap { p =>
       val before = ProgVarProxy(p.name, ProgVarProxy.State.PreExec,
         ProgVarProxy.Scope.Parameter, true)
       val after = before.copy(state = ProgVarProxy.State.PostExec)
@@ -118,8 +126,11 @@ object ACSLFrameInference {
       else Some(ACSLExpression.derefFunApp(ACSLExpression.deref, before))
     }
 
-    // globals omitted from assigns must stay unchanged
-    val globalLocations = globals.filterNot { v =>
+  // globals omitted from assigns must stay unchanged
+  private def extractGlobalLocations(globals : Seq[CCVar],
+                                     constants : scala.collection.Set[ProgVarProxy],
+                                     values : ValSet) : Seq[ITerm] =
+    globals.filterNot { v =>
       val old = constants.find(p => p.name == v.name && p.isGlobal && p.isPreExec)
       val current = constants.find(p => p.name == v.name && p.isGlobal && p.isPostExec)
       (for (a <- old; b <- current) yield values.areEqual(IConstant(a), IConstant(b)))
@@ -130,13 +141,18 @@ object ACSLFrameInference {
                                   v.typ.isInstanceOf[CCHeapArrayPointer])) : ITerm
     }
 
-    val heapLocations = inv.postCondition.invariant.heapInfo match {
+  private def extractHeapLocations(inv : FunctionInvariants,
+                                   context : ACSLTranslator.FunctionContext,
+                                   constants : scala.collection.Set[ProgVarProxy],
+                                   values : ValSet) : Option[Seq[ITerm]] =
+    inv.postCondition.invariant.heapInfo match {
       case None => if (context.isHeapEnabled) None else Some(Seq.empty[ITerm])
       case Some(info) =>
         val before = constants.find(p => info.isHeap(p) && p.isPreExec)
         val after = constants.find(p => info.isHeap(p) && p.isPostExec)
         val visitor = new ACSLExpressionProcessor.ACSLExpressionVisitor(
-          info, inv.preCondition, pre &&& post)
+          info, inv.preCondition,
+          inv.preCondition.invariant.expression &&& inv.postCondition.invariant.expression)
 
         // assigns must be expressible using values at function entry
         def entryTerm(t : ITerm) : Boolean =
@@ -182,6 +198,4 @@ object ACSLFrameInference {
                .flatMap(_.variants).sortBy(_.toString).iterator
                .map(t => writes(t, IConstant(old))).collectFirst { case Some(cells) => cells }) yield heapLocations
     }
-    heapLocations.map(cells => (globalLocations ++ stackLocations ++ cells).distinct)
-  }
 }
