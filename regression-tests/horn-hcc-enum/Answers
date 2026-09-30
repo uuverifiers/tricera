@@ -73,3 +73,33 @@ SAFE
 
 enum-cast-unsigned-unsafe.hcc
 UNSAFE
+
+enum-negative-safe.c (math)
+SAFE
+
+enum-negative-unsafe.c (math)
+UNSAFE
+
+enum-arithmetic-safe.c (math)
+SAFE
+
+enum-arithmetic-unsafe.c (math)
+UNSAFE
+
+enum-negative-safe.c (ilp32)
+SAFE
+
+enum-negative-unsafe.c (ilp32)
+UNSAFE
+
+enum-arithmetic-safe.c (ilp32)
+SAFE
+
+enum-arithmetic-unsafe.c (ilp32)
+UNSAFE
+
+enum-wrap-safe.c (ilp32)
+SAFE
+
+enum-wrap-unsafe.c (ilp32)
+UNSAFE

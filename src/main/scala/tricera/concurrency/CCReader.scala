@@ -32,6 +32,7 @@ package tricera.concurrency
 import ap.basetypes.IdealInt
 import ap.parser._
 import ap.theories.{ADT, ExtArray}
+import ap.theories.bitvectors.ModuloArithmetic
 import ap.theories.heaps._
 import ap.types.{MonoSortedIFunction, MonoSortedPredicate}
 import ap.util.Seqs.reduceToSize
@@ -2367,14 +2368,19 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           enumerators += ((s.cident_, ind))
         }
         case s : EnumInit => {
-          val ind = translateConstantExpr(s.constant_expression_, symex).toTerm match {
+          def enumValue(t : ITerm) : IdealInt = t match {
             case IIntLit(v) => v
-            case ITimes(IdealInt(-1), IIntLit(v)) => -v
-            case IPlus(IIntLit(v1), IIntLit(v2)) => v1 + v2
+            case ITimes(coeff, t) => coeff * enumValue(t)
+            case IPlus(t1, t2) => enumValue(t1) + enumValue(t2)
+            case IFunApp(ModuloArithmetic.mod_cast,
+                         Seq(IIntLit(lower), IIntLit(upper), value)) =>
+              ModuloArithmetic.evalModCast(lower, upper, enumValue(value))
             case _ =>
               throw new TranslationException("cannot handle enumerator " +
                                              (printer print s))
           }
+          val ind = enumValue(
+            translateConstantExpr(s.constant_expression_, symex).toTerm)
           nextInd = ind + 1
           val v = new CCVar(s.cident_,
             Some(getSourceInfo(s)), CCInt, AutoStorage)

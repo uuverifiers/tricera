@@ -28,3 +28,21 @@ for name in $TESTS; do
     $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -E 'SAFE|UNSAFE'
 done
 
+TESTS="enum-negative-safe.c enum-negative-unsafe.c \
+       enum-arithmetic-safe.c enum-arithmetic-unsafe.c"
+
+for mode in math ilp32; do
+    for name in $TESTS; do
+        echo
+        echo "$name ($mode)"
+        $TRI_CMD -abstract:off "$@" -arithMode:$mode $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+    done
+done
+
+TESTS="enum-wrap-safe.c enum-wrap-unsafe.c"
+
+for name in $TESTS; do
+    echo
+    echo "$name (ilp32)"
+    $TRI_CMD -abstract:off "$@" -arithMode:ilp32 $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+done
