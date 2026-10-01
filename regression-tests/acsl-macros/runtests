@@ -1,0 +1,51 @@
+#!/bin/sh
+
+# C macros used inside ACSL annotations, expanded by tri-pp.
+# Without -cpp or -cppLight, macros in C code are not expanded, so those
+# tests use macros only inside annotations.
+# Tests run through cc must not print line numbers: the number of builtin
+# #defines kept by -dD depends on the host compiler.
+# A SAFE verdict shows that the expansion happened, since an unexpanded macro
+# is an error; UNSAFE variants exist where a wrong expansion could give SAFE.
+
+run() {
+    flags="$1"
+    name="$2"
+    shift 2
+    echo
+    echo "$name${flags:+ ($flags)}"
+    $TRI_CMD "$@" $flags $name 2>&1 | grep -v 'at '
+}
+
+# Macros only in annotations: no C preprocessor needed
+run "" good-assert-safe.c "$@"
+run "" good-assert-unsafe.c "$@"
+run "" object-nested-ghost-valid-safe.c "$@"
+run "" contract-old-macros-safe.c "$@"
+run "" undef-redef-safe.c "$@"
+run "" undef-redef-unsafe.c "$@"
+
+# Same, after the C preprocessor (#define directives kept by cc -dD)
+run "-cpp" good-assert-safe.c "$@"
+run "-cppLight" good-assert-safe.c "$@"
+run "-cpp" undef-redef-safe.c "$@"
+run "-cppLight" undef-redef-unsafe.c "$@"
+
+# Tests that need system headers or macros in C code: -cpp only
+run "-cpp" assert-keyword-safe.c "$@"
+run "-cpp" assert-keyword-unsafe.c "$@"
+run "-cpp" c-and-annot-safe.c "$@"
+run "-cpp" c-and-annot-unsafe.c "$@"
+run "-cpp -m:inc" limits-contract-safe.c "$@"
+run "-cpp -m:inc" limits-contract-unsafe.c "$@"
+
+# Line numbers must be preserved by the expansion of multi-line annotations
+run "-cex -m:inc" multiline-contract-unsafe.c "$@"
+
+# Annotations that tri-pp cannot expand are an error, also when tri-pp is
+# run again to determinize the input (-invEncoding)
+run "" skipped-annot-error.c "$@"
+run "-invEncoding" skipped-annot-error.c "$@"
+
+# Disabling the expansion reproduces the old behaviour
+run "-noAnnotMacros" good-assert-safe.c "$@"

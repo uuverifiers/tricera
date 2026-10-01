@@ -56,6 +56,7 @@ class TriCeraParameters extends GlobalParameters {
   var checkPP    : Boolean = false
   var dumpPP     : Boolean = false
   var noPP       : Boolean = false
+  var expandAnnotMacros : Boolean = true
   var logPPLevel : Int = 0 // 0: quiet, 1: errors only, 2: errors + warnings
 
   var cPreprocessor : Boolean = false
@@ -182,6 +183,7 @@ class TriCeraParameters extends GlobalParameters {
     case ppLogOption :: rest if (ppLogOption startsWith "-logPP:") =>
       logPPLevel = (ppLogOption drop 7).toInt; parseArgs(rest)
     case "-noPP" :: rest => noPP = true; parseArgs(rest)
+    case "-noAnnotMacros" :: rest => expandAnnotMacros = false; parseArgs(rest)
     case "-cpp"  :: rest => cPreprocessor = true; parseArgs(rest)
     case "-cppLight" :: rest => cPreprocessorLight = true; parseArgs(rest)
     case "-dumpClauses" :: rest => printIntermediateClauseSets = true; parseArgs(rest)
@@ -476,6 +478,7 @@ class TriCeraParameters extends GlobalParameters {
     |-logPP:n           Display TriCera preprocessor warnings and errors with verbosity n.
     |                     (0 <= n <= 2, default: 0)
     |-noPP              Turn off the TriCera preprocessor (typedefs are not allowed in this mode)
+    |-noAnnotMacros     Do not expand C macros inside ACSL annotations (tri-pp)
 
     |Debugging:
     |-assert            Enable assertions in TriCera

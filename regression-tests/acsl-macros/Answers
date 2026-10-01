@@ -1,0 +1,78 @@
+
+good-assert-safe.c
+SAFE
+
+good-assert-unsafe.c
+UNSAFE
+
+object-nested-ghost-valid-safe.c
+SAFE
+
+contract-old-macros-safe.c
+SAFE
+
+undef-redef-safe.c
+SAFE
+
+undef-redef-unsafe.c
+UNSAFE
+
+good-assert-safe.c (-cpp)
+SAFE
+
+good-assert-safe.c (-cppLight)
+SAFE
+
+undef-redef-safe.c (-cpp)
+SAFE
+
+undef-redef-unsafe.c (-cppLight)
+UNSAFE
+
+assert-keyword-safe.c (-cpp)
+SAFE
+
+assert-keyword-unsafe.c (-cpp)
+UNSAFE
+
+c-and-annot-safe.c (-cpp)
+SAFE
+
+c-and-annot-unsafe.c (-cpp)
+UNSAFE
+
+limits-contract-safe.c (-cpp -m:inc)
+SAFE
+
+limits-contract-unsafe.c (-cpp -m:inc)
+UNSAFE
+
+multiline-contract-unsafe.c (-cex -m:inc)
+
+----------------
+Init:
+ inc9_1(99, 99) 
+----------------
+Final:
+ inc9_1(99, 99) 
+----------------
+Failed assertion:
+false :- inc9_1(x, x_old), x = 100 - 1. (line:15 col:3) (property: user-assertion)
+
+UNSAFE
+
+skipped-annot-error.c
+(error "Macros in ACSL annotations could not be expanded:
+  8:3: the expansion would change where the comment ends: /*@ assert s != CLOSE; */")
+Other Error: Macros in ACSL annotations could not be expanded:
+  8:3: the expansion would change where the comment ends: /*@ assert s != CLOSE; */
+
+skipped-annot-error.c (-invEncoding)
+(error "Macros in ACSL annotations could not be expanded:
+  8:3: the expansion would change where the comment ends: /*@ assert s != CLOSE; */")
+Other Error: Macros in ACSL annotations could not be expanded:
+  8:3: the expansion would change where the comment ends: /*@ assert s != CLOSE; */
+
+good-assert-safe.c (-noAnnotMacros)
+Horn Translation Error: At (6:3)): Failed to process ACSL statement annotation (parse error or unsupported fragment)
+Unknown ACSL predicate 'GOOD'.

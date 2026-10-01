@@ -95,7 +95,8 @@ class TriCeraPreprocessor(val inputFilePath   : String,
                           val displayWarnings : Boolean,
                           val quiet           : Boolean,
                           val determinize     : Boolean,
-                          val noDeclSlice     : Boolean = false) {
+                          val noDeclSlice     : Boolean = false,
+                          val expandAnnotMacros : Boolean = false) {
   private val factsFile : File = File.createTempFile("tri-facts-", ".yml")
   factsFile.deleteOnExit()
 
@@ -124,10 +125,16 @@ class TriCeraPreprocessor(val inputFilePath   : String,
   }
 
   private val initialReturnCode = runPreprocessor(
-    if (noDeclSlice) Seq("--no-decl-slice") else Nil,
+    (if (noDeclSlice) Seq("--no-decl-slice") else Nil) ++
+    (if (expandAnnotMacros) Seq("--expand-annot-macros") else Nil),
     "TriCera preprocessor could not be executed.",
     inputFilePath, outputFilePath)
   val hasError : Boolean = initialReturnCode != 0
+
+  // only the initial run expands annotation macros, read what it skipped
+  // before the runs below overwrite the facts file
+  private val skippedAnnotations =
+    PreprocessorFacts.parseFile(factsFile.getAbsolutePath).skippedAnnotations
 
   if (determinize) {
     val determinizeSteps = Seq(
@@ -144,6 +151,7 @@ class TriCeraPreprocessor(val inputFilePath   : String,
   // Facts about the produced program reported by tri-pp
   val facts : PreprocessorFacts =
     PreprocessorFacts.parseFile(factsFile.getAbsolutePath)
+      .copy(skippedAnnotations = skippedAnnotations)
 }
 
 object PreprocessorFacts {
@@ -179,11 +187,35 @@ object PreprocessorFacts {
           }.toMap
         case _ => Map.empty
       }
-    PreprocessorFacts(flag("usesThrow"), flag("usesTryCatch"), typedefs)
+    val skippedAnnotations : Seq[SkippedAnnotation] =
+      fields.get(YamlString("skippedAnnotations")) match {
+        case Some(YamlArray(entries)) =>
+          entries.flatMap {
+            case YamlObject(m) =>
+              (m.get(YamlString("line")), m.get(YamlString("column")),
+               m.get(YamlString("reason")), m.get(YamlString("text"))) match {
+                case (Some(YamlNumber(l)), Some(YamlNumber(c)),
+                      Some(YamlString(r)), Some(YamlString(t))) =>
+                  Some(SkippedAnnotation(l.toInt, c.toInt, r, t))
+                case _ => None
+              }
+            case _ => None
+          }
+        case _ => Nil
+      }
+    PreprocessorFacts(flag("usesThrow"), flag("usesTryCatch"), typedefs,
+                      skippedAnnotations)
   }
 }
 
+// an annotation whose macros tri-pp could not expand
+case class SkippedAnnotation(line : Int, column : Int, reason : String,
+                             text : String) {
+  override def toString : String = s"$line:$column: $reason: $text"
+}
+
 case class PreprocessorFacts(usesThrow : Boolean, usesTryCatch : Boolean,
-                             typedefs : Map[String, String] = Map.empty) {
+                             typedefs : Map[String, String] = Map.empty,
+                             skippedAnnotations : Seq[SkippedAnnotation] = Nil) {
   def usesExceptions : Boolean = usesThrow || usesTryCatch
 }
