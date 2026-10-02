@@ -74,13 +74,15 @@ object CPreprocessor {
         // on macOS, cpp runs in -traditional-cpp mode, where the # and ##
         // operators do not exist (a macro body like #e then leaves a literal
         // '#' in the output). -x c makes inputs preprocess as C regardless of
-        // their extension (.hcc), and '-' reads the piped input.
-        cmdLine = Seq("cc", "-E", "-P", "-CC", "-nostdinc", "-undef", "-x", "c", "-")
+        // their extension (.hcc), and '-' reads the piped input. -dD keeps
+        // the #define directives in the output, so that tri-pp can expand
+        // macros used inside ACSL annotations.
+        cmdLine = Seq("cc", "-E", "-P", "-CC", "-dD", "-nostdinc", "-undef", "-x", "c", "-")
         val pipedInput = s"""#include "${macroHeaderTempFile.getAbsolutePath}"\n#include "$fileName"""""
         val inputStream = new java.io.ByteArrayInputStream(pipedInput.getBytes)
         (Process(cmdLine) #< inputStream #> preprocessedFile).!(errorSuppressingLogger)
       } else {
-        cmdLine = Seq("cc", "-E", "-P", "-CC", "-x", "c", fileName)
+        cmdLine = Seq("cc", "-E", "-P", "-CC", "-dD", "-x", "c", fileName)
         (Process(cmdLine) #> preprocessedFile).!(errorSuppressingLogger)
       }
     } catch {

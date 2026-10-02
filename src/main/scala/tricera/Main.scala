@@ -343,12 +343,17 @@ class Main (args: Array[String]) {
         quiet = logPPLevel == 0,
         entryFunction = TriCeraParameters.get.funcName,
         determinize = TriCeraParameters.get.determinizeInput,
-        noDeclSlice = hasACSL || TriCeraParameters.get.slice)
+        noDeclSlice = hasACSL || TriCeraParameters.get.slice,
+        expandAnnotMacros = TriCeraParameters.get.expandAnnotMacros)
       preprocessorFacts = pp.facts
       if (logPPLevel > 0) Console.withOut(outStream) {
         println("\n\nEnd of TriCera's preprocessor (tri-pp) warnings and errors")
         println("=" * 80)
       }
+      if (pp.facts.skippedAnnotations.nonEmpty)
+        throw new MainException(
+          "Macros in ACSL annotations could not be expanded:\n" +
+          pp.facts.skippedAnnotations.map("  " + _).mkString("\n"))
 
       if (pp.hasError && logPPLevel > 0)
         Util.warn(
