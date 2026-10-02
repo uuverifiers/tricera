@@ -384,11 +384,17 @@ case class StructInfo(name : String, fieldInfos : Seq[FieldInfo])
 /**
  * A struct field with a struct type
  */
-case class CCStructField(structName : String,
-                         structs    : MHashMap[String, CCStruct])
+case class CCStructField(structName : String)
+                        (val structs : MHashMap[String, CCStruct])
   extends CCType {
   override def toString: String = "field with type: " + structName
   def shortName = "field:" + structName
+}
+
+object CCStructField {
+  def unapply(f : CCStructField)
+      : Option[(String, MHashMap[String, CCStruct])] =
+    Some((f.structName, f.structs))
 }
 
 object CCStruct{

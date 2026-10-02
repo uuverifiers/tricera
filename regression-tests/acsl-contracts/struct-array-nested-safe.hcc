@@ -1,0 +1,14 @@
+struct Signal { int value; };
+struct Record { struct Signal signal; };
+struct Record first[2];
+struct Record second[2];
+/*@ ensures first[0].signal.value == 1;
+    ensures second[0].signal.value == 2;
+*/
+void main(void)
+{
+  first[0].signal.value = 1;
+  second[0].signal.value = 2;
+  //@ assert first[0].signal.value == 1;
+  //@ assert second[0].signal.value == 2;
+}

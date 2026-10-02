@@ -1,0 +1,16 @@
+struct Signal { int value; };
+struct Record { struct Signal signal; };
+
+/*@ requires \valid(p, q) && \separated(p, q);
+    ensures p->signal.value == 1;
+*/
+void foo(struct Record *p, struct Record *q) {
+  p->signal.value = 1;
+  q->signal.value = 2;
+}
+
+void main(void) {
+  struct Record *p = malloc(sizeof(*p));
+  struct Record *q = malloc(sizeof(*q));
+  foo(p, q);
+}

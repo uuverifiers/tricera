@@ -869,7 +869,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       assert(sels(j).name == fullFieldName)
       (sels(j),{
         val actualType = fieldInfos(j).typ match {
-        case Left(ind) => CCStructField(structInfos(ind).name, structDefs)
+        case Left(ind) => CCStructField(structInfos(ind).name)(structDefs)
         case Right(typ) =>
           typ match {
             case t : CCHeapArrayPointer => // replace with initialized heap
@@ -894,7 +894,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           CCStruct.rawToFullFieldName(curStruct.name, curStruct.fieldInfos(j).name)
         assert(sels(j).name == fullFieldName)
         (sels(j), curStruct.fieldInfos(j).typ match {
-          case Left(ind)  => CCStructField(structInfos(ind).name, structDefs)
+          case Left(ind)  => CCStructField(structInfos(ind).name)(structDefs)
           case Right(typ) => typ
         })
       }

@@ -139,6 +139,9 @@ UNSAFE
 separated-three-safe.hcc
 SAFE
 
+separated-struct-safe.hcc
+SAFE
+
 global-array-contract-safe.hcc
 SAFE
 
@@ -321,6 +324,9 @@ SAFE
 
 struct-field-access-4-false.hcc
 UNSAFE
+
+struct-array-nested-safe.hcc
+SAFE
 
 ternary-pred-safe.hcc
 SAFE
