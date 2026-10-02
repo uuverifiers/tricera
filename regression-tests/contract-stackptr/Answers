@@ -58,3 +58,16 @@ SAFE
 
 castalias_unsafe.c
 UNSAFE
+
+othercontract_safe.c
+
+Inferred ACSL annotations
+================================================================================
+/* contract for f */
+/*@
+  requires x == 3;
+  ensures \result == 4 && \old(x) == 3;
+*/
+================================================================================
+
+SAFE

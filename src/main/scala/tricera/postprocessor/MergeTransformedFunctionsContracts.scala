@@ -173,13 +173,17 @@ private object MapProgVarProxies
     // the conditions for the current function. We account for that by existentially
     // quantifying over the introduced variables that are not parameters to the current
     // function.
+    exQuantify(form, c => c.isParameter && !funcParamIds.contains(c.name))
+  }
+
+  def exQuantify(form: IFormula, toQuantify: ProgVarProxy => Boolean) : IFormula = {
     SimpleAPI.withProver{ p =>
       val constants = SymbolCollector.constants(form)
       p.addConstantsRaw(constants)
       collectAndAddTheories(p, form)
-      val toQuantify = constants
-        .filter({case c: ProgVarProxy => c.isParameter && !funcParamIds.contains(c.name)})
-      val projected = IExpression.quanConsts(Quantifier.EX, toQuantify, form)
+      val quantified = constants
+        .filter({case c: ProgVarProxy => toQuantify(c)})
+      val projected = IExpression.quanConsts(Quantifier.EX, quantified, form)
       val simplified = p.simplify(projected)
       simplified
     }
@@ -244,18 +248,46 @@ private class MergeTransformedFunctionsContracts(callSiteTransforms: CallSiteTra
         .map(o => o.get))
       .filter({ case (id, set) => !set.isEmpty})
 
-    transformedFuncInvsByOriginalId.map({case (originalId, transformedFuncInvs) => {
+    val merged = transformedFuncInvsByOriginalId.map({case (originalId, transformedFuncInvs) => {
+      val mapped = transformedFuncInvs.toSeq.map(transformed =>
+        MapProgVarProxies(
+          transformed,
+          astAdditions.globalVariableIdToParameterId,
+          astAdditions.originalFunctionIdToParamterIds(originalId)))
+      // the original may lack invariants, then meet the transformed ones alone
+      val funcInv = (funcInvs.find(i => i.id == originalId).toSeq ++ mapped)
+        .reduce((a, b) => a.meet(b)).copy(id = originalId)
       (originalId,
-       transformedFuncInvs.fold(funcInvs.find(i => i.id == originalId).get)(
-        (original, transformed) => 
-          original.meet(
-            MapProgVarProxies(
-              transformed,
-              astAdditions.globalVariableIdToParameterId,
-              astAdditions.originalFunctionIdToParamterIds(originalId)))))
-    }})
-    .map({ case (id, funcInv) => derefParameters(funcInv, astAdditions.originalFunctionIdToParamterIds(id)) })
-    .toSeq
+       derefParameters(
+         eliminateIntroducedGlobals(funcInv, astAdditions.globalVariableIdToParameterId),
+         astAdditions.originalFunctionIdToParamterIds(originalId)))
+    }}).toMap
+
+    // keep all other functions, dropping the transformed ones
+    val kept = funcInvs
+      .filterNot(i => astAdditions.transformedFunctionIdToOriginalId.contains(i.id))
+      .map(i => merged.getOrElse(i.id,
+        eliminateIntroducedGlobals(i, astAdditions.globalVariableIdToParameterId)))
+    kept ++ merged.values.filterNot(m => kept.exists(i => i.id == m.id))
+  }
+
+  private def eliminateIntroducedGlobals(funcInv: FunctionInvariants,
+                                         globalIdToParamId: MHashMap[String, String])
+  : FunctionInvariants = {
+    def project(form: IFormula): IFormula =
+      if (SymbolCollector.constants(form).exists({
+            case c: ProgVarProxy => globalIdToParamId.contains(c.name)
+            case _ => false }))
+        MapProgVarProxies.exQuantify(form, c => globalIdToParamId.contains(c.name))
+      else form
+    funcInv match {
+      case FunctionInvariants(id, isSrcAnnotated,
+             PreCondition(pre), PostCondition(post), loopInvariants) =>
+        FunctionInvariants(id, isSrcAnnotated,
+          PreCondition(pre.copy(expression = project(pre.expression))),
+          PostCondition(post.copy(expression = project(post.expression))),
+          loopInvariants.map(i => i.copy(expression = project(i.expression))))
+    }
   }
 
   private def derefParameters(funcInv: FunctionInvariants, funcParamsIds: List[String]): FunctionInvariants = funcInv match {
