@@ -708,9 +708,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     expr match {
       case e : AST.EPlus  => binArith(e.expr_1, e.expr_2)(_ + _)
       case e : AST.EMinus => binArith(e.expr_1, e.expr_2)(_ - _)
-      case e : AST.EMult  => binArith(e.expr_1, e.expr_2)(_ * _)
-      case e : AST.EDiv   => binArith(e.expr_1, e.expr_2)(_ / _)
-      case e : AST.EMod   => binArith(e.expr_1, e.expr_2)(_ % _)
+      case e : AST.EMult  => binArith(e.expr_1, e.expr_2)(mult(_, _))
+      case e : AST.EDiv   => binArith(e.expr_1, e.expr_2)(tDiv(_, _))
+      case e : AST.EMod   => binArith(e.expr_1, e.expr_2)(tMod(_, _))
       case _              =>
         throw new ACSLParseException(
           "Op is recognized, got " + (printer print expr), srcInfo)

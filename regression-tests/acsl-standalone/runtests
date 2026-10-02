@@ -35,7 +35,10 @@ TESTS="inc_safe.c \
        namedpost_safe.c \
        namedpost_unsafe.c \
        namedpre_safe.c \
-       namedpre_unsafe.c"
+       namedpre_unsafe.c \
+       divmod_safe.c \
+       divmod_unsafe.c \
+       divmod_unsafe2.c"
 
 for name in $TESTS; do
     echo
@@ -43,3 +46,8 @@ for name in $TESTS; do
     $TRI_CMD "$@" $name -memsafety -reachsafety
 done
 
+for name in arith_ilp32_safe.c arith_ilp32_unsafe.c; do
+    echo
+    echo $name
+    $TRI_CMD "$@" -arithMode:ilp32 $name -memsafety -reachsafety
+done

@@ -404,3 +404,66 @@ Failed assertion:
 false :- foo4_24_1(bar`x), bar`x < 0. (line:4 col:24) (property: precondition nonneg of function bar asserted at 4:24.)
 
 UNSAFE
+
+divmod_safe.c
+SAFE
+
+divmod_unsafe.c
+
+--------------
+Init:
+    foo2_3    
+--------------
+      |       
+      |       
+      V       
+ foo2_3_1(-7) 
+--------------
+Final:
+ foo2_3_1(-7) 
+--------------
+Failed assertion:
+false :- foo2_3_1(a), \eps int v0; (2 - (a - 2*v0) >= 1 & 2 + -1*-1*(a - 2*v0) >= 1 & (a - 2*v0 < 1 | a >= 1) & (-1 < a - 2*v0 | -1 >= a)) != -1*4. (line:3 col:3) (property: user-assertion)
+
+UNSAFE
+
+divmod_unsafe2.c
+
+--------------
+Init:
+    foo2_3    
+--------------
+      |       
+      |       
+      V       
+ foo2_3_1(-7) 
+--------------
+Final:
+ foo2_3_1(-7) 
+--------------
+Failed assertion:
+false :- foo2_3_1(a), \eps int v0; (2 - v0 >= 1 & 2 + -1*-1*v0 >= 1 & (v0 < 1 | a >= 1) & (-1 < v0 | -1 >= a) & \exists int v1; a = 2*v1 + v0) != 1. (line:3 col:3) (property: user-assertion)
+
+UNSAFE
+
+arith_ilp32_safe.c
+SAFE
+
+arith_ilp32_unsafe.c
+
+--------------------------------------
+Init:
+                foo4_3                
+--------------------------------------
+                  |                   
+                  |                   
+                  V                   
+ foo4_3_1(3600000.\as[signed bv[32]]) 
+--------------------------------------
+Final:
+ foo4_3_1(3600000.\as[signed bv[32]]) 
+--------------------------------------
+Failed assertion:
+false :- foo4_3_1(r), r != (60.\as[signed bv[32]].\as[int] * 60.\as[signed bv[32]].\as[int] * 1001.\as[signed bv[32]].\as[int]).\as[signed bv[32]]. (line:5 col:3) (property: user-assertion)
+
+UNSAFE
