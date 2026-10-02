@@ -34,7 +34,7 @@ import concurrent_c.Absyn._
 
 import scala.collection.mutable.{HashMap => MHashMap, ListBuffer}
 import scala.jdk.CollectionConverters._
-import tricera.concurrency.ccreader.CCExceptions.UnsupportedCFragmentException
+import tricera.concurrency.ccreader.CCExceptions.{TranslationException, UnsupportedCFragmentException}
 import tricera.parsers.AnnotationParser
 import tricera.parsers.AnnotationParser.MaybeACSLAnnotation
 import tricera.parsers.CommentPreprocessor.annotationMarker
@@ -674,7 +674,10 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
 
     if (callSiteTransforms.nonEmpty) {
       val additions = callSiteTransforms.map(t => t.getAstAdditions()).reduce((a,b) => {a += b})
-      val mainDefIndex = declarations.lastIndexOf(declarations.asScala.find(isEntryPointDefinition(_)).get)
+      val mainDef = declarations.asScala.find(isEntryPointDefinition(_)).getOrElse(
+        throw new TranslationException(
+          "entry function \"" + entryFunctionId + "\" not found"))
+      val mainDefIndex = declarations.lastIndexOf(mainDef)
       declarations.addAll(mainDefIndex, additions.introducedGlobalVariables.map(_._2).asJavaCollection)
       declarations.addAll(mainDefIndex, additions.wrapperDeclarations.map(_._2).asJavaCollection)
       declarations.addAll(mainDefIndex, additions.wrapperDefinitions.map(_._2).asJavaCollection)
