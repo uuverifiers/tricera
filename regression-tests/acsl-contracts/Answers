@@ -380,6 +380,12 @@ SAFE
 int-logical-negation-unsafe.hcc
 UNSAFE
 
+int-implicit-pred-safe.hcc
+SAFE
+
+int-implicit-pred-unsafe.hcc
+UNSAFE
+
 stmt-assert-shadow-safe.hcc
 SAFE
 

@@ -721,13 +721,16 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
    * Helper function to translate expressions into predicates.
    */
   def translatePred(expr : AST.Expr) : CCTerm = {
-    val srcInfo = getSourceInfo(expr)
     val t = translate(expr)
-    t match {
-      case pred : CCTerm if pred.originalFormula.nonEmpty => pred
+    t.typ match {
+      case _ if t.originalFormula.nonEmpty => t
+      case _ : CCArithType | CCMathInt | CCBool | _ : CCIntEnum |
+           _ : CCHeapPointer =>
+        CCTerm.fromFormula(t.toFormula, CCBool, t.srcInfo)
       case _ =>
         throw new ACSLParseException(
-          "Expected a predicate, but got " + (printer print expr), srcInfo)
+          "Expected a predicate, but got " + (printer print expr),
+          getSourceInfo(expr))
     }
   }
 

@@ -127,6 +127,8 @@ TESTS="nested-calls-safe.hcc \
        stmt-assert-arith-bare-minus-unsafe.hcc \
        int-logical-negation-safe.hcc \
        int-logical-negation-unsafe.hcc \
+       int-implicit-pred-safe.hcc \
+       int-implicit-pred-unsafe.hcc \
        stmt-assert-shadow-safe.hcc \
        stmt-assert-shadow-unsafe.hcc \
        stmt-assert-at-clabel-safe.hcc \

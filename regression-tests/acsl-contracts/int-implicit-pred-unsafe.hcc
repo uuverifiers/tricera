@@ -1,0 +1,15 @@
+int output;
+
+/*@
+  assigns output;
+  ensures \old(flag) ==> output == 1;
+  ensures !\old(flag) ==> output == 0;
+*/
+void update(unsigned char flag) {
+  output = flag ? 0 : 1;
+}
+
+int main(void) {
+  update(1);
+  return 0;
+}
