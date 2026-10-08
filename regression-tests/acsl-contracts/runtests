@@ -44,7 +44,6 @@ TESTS="nested-calls-safe.hcc \
        quant-exists-safe.hcc \
        cast-safe.hcc \
        cast-unsafe.hcc \
-       cast-modular-safe.hcc \
        separated-safe.hcc \
        separated-unsafe.hcc \
        separated-three-safe.hcc \
@@ -228,3 +227,7 @@ for heap in native array; do
         $TRI_CMD "$@" -valid-deref -heapModel:$heap "$name" 2>&1 | grep -v 'at '
     done
 done
+
+echo
+echo "cast-modular-safe.hcc (ilp32)"
+$TRI_CMD "$@" -arithMode:ilp32 cast-modular-safe.hcc 2>&1 | grep -v 'at '

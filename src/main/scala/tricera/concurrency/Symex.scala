@@ -685,9 +685,10 @@ class Symex private (context        : SymexContext,
                                       evalCtx.withEvaluatingLHS(true))
       val indexTerm = eval(index)
       arrayTerm.typ match {
-        case _ : CCHeapArrayPointer =>
+        case arrayPtr : CCHeapArrayPointer =>
           processHeapResult(heapModel.arrayWrite(
-            arrayTerm, indexTerm, wrapAsHeapObject(topVal),
+            arrayTerm, indexTerm,
+            wrapAsHeapObject(topVal.convertToType(arrayPtr.elementType)),
             values, getStaticLocationId(originalExp)))
         case _ : CCArray =>
           val lhsVal = eval(originalExp)(evalSettings,
@@ -784,7 +785,7 @@ class Symex private (context        : SymexContext,
           rhsVal,
           CCTerm.fromTerm(IIntLit(0), cellTyp, pointerVal.srcInfo))
         processHeapResult(heapModel.write(
-          pointerVal, wrapAsHeapObject(topVal),
+          pointerVal, wrapAsHeapObject(topVal.convertToType(cellTyp)),
           values, getStaticLocationId(originalExp)))
       } else {
         val lhsVal = eval(originalExp)(evalSettings,

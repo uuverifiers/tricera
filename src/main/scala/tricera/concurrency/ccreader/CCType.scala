@@ -259,6 +259,19 @@ abstract sealed class CCType {
     case _               => t
   }
 
+  // in math mode, unsigned types have sort nat and only negative values wrap
+  private def wrapNegativeIntoUnsignedRange(t : ITerm, fromType : CCType) : ITerm =
+    this match {
+      case typ : CCArithType if toSort == Sort.Nat && fromType.toSort != Sort.Nat =>
+        t match {
+          case Const(v) if v.signum < 0 => IIntLit(v % (typ.UNSIGNED_RANGE + 1))
+          case Const(_)                 => t
+          case _ =>
+            ite(t >= 0, t, cast2Interval(IdealInt.ZERO, typ.UNSIGNED_RANGE, t))
+        }
+      case _ => t
+    }
+
   def cast(e : CCTerm) : CCTerm = {
     if (!castIsAllowed(e.typ)) {
       throw new UnsupportedCastException(
@@ -266,7 +279,9 @@ abstract sealed class CCType {
         " Casts between pointer and arithmetic types are not supported.")
     }
     e match {
-      case CCTerm(t, _, srcInfo, None)    => CCTerm.fromTerm(cast(t), this, srcInfo)
+      case CCTerm(t, fromType, srcInfo, None) =>
+        CCTerm.fromTerm(cast(wrapNegativeIntoUnsignedRange(t, fromType)),
+                        this, srcInfo)
       case CCTerm(_, _, srcInfo, Some(f)) => CCTerm.fromFormula(f, this, srcInfo)
     }
   }

@@ -127,9 +127,6 @@ SAFE
 cast-unsafe.hcc
 UNSAFE
 
-cast-modular-safe.hcc
-SAFE
-
 separated-safe.hcc
 SAFE
 
@@ -683,3 +680,6 @@ UNSAFE
 
 assigns-freed-unsafe.hcc (array)
 UNSAFE
+
+cast-modular-safe.hcc (ilp32)
+SAFE

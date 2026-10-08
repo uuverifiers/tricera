@@ -13,7 +13,9 @@ TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-
        global-struct-array-1.c array-of-ptr-1.c \
        nondet-global-array-explicit-1.c nondet-global-array-explicit-2.c nondet-global-array-explicit-3.c \
        nondet-static-array-explicit-1.c nondet-static-array-explicit-2.c nondet-static-array-explicit-3.c \
-       calloc-2arg-array-safe.c calloc-2arg-array-unsafe.c"
+       calloc-2arg-array-safe.c calloc-2arg-array-unsafe.c \
+       cell-write-unsigned-enum-safe.c \
+       negative-to-unsigned-safe.c negative-to-unsigned-unsafe.c"
 
 MEMTRACKTESTS="simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
 
@@ -24,7 +26,8 @@ NONDETINITESTS="\
   nondet-static-array-opt-1.c nondet-static-array-opt-2.c nondet-static-array-opt-3.c"
 
 # Temporarily disabled: ilp32-bug-1.c repeatedly exceeds the 60s limit locally and in CI.
-ILP32TESTS=""
+ILP32TESTS="cell-write-unsigned-enum-safe.c \
+            negative-to-unsigned-safe.c negative-to-unsigned-unsafe.c"
 
 ## -heapModel:native
 

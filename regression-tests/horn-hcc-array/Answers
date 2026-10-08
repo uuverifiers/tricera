@@ -379,6 +379,31 @@ false :- main7_29_3(@h, a:1, n:4, p:6, i:7), get_int(heap.read(@h, heap.rangeNth
 
 UNSAFE
 
+cell-write-unsigned-enum-safe.c
+SAFE
+
+negative-to-unsigned-safe.c
+SAFE
+
+negative-to-unsigned-unsafe.c
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                     main2_3(heap.empty)                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                              |                                                                               
+                                                                              |                                                                               
+                                                                              V                                                                               
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(4294967295))), O_uint(5))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(4294967295))), O_uint(5))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main_2(@h, a:2), get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) + 1))) - get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) - 0))) < 1. (line:5 col:3) (property: user-assertion)
+
+UNSAFE
+
 simple-global-memsafety1.c
 SAFE
 
@@ -474,3 +499,28 @@ SAFE
 
 nondet-static-array-opt-3.c
 SAFE
+
+cell-write-unsigned-enum-safe.c
+SAFE
+
+negative-to-unsigned-safe.c
+SAFE
+
+negative-to-unsigned-unsafe.c
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                                 main2_3(heap.empty)                                                                                  
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                          |                                                                                           
+                                                                                          |                                                                                           
+                                                                                          V                                                                                           
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(4294967295.\as[bv[32]]))), O_uint(5.\as[bv[32]]))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(4294967295.\as[bv[32]]))), O_uint(5.\as[bv[32]]))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main_2(@h, a:2), get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) + 1))).\as[int] - get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) - 0))).\as[int] < 1. (line:5 col:3) (property: user-assertion)
+
+UNSAFE
