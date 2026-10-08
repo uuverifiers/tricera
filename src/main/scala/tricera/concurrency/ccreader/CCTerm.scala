@@ -30,7 +30,7 @@
 package tricera.concurrency.ccreader
 
 import ap.parser.{IBoolLit, IExpression, IFormula, IIntLit, ITerm, SymbolCollector}
-import tricera.Util.SourceInfo
+import tricera.Util.{SourceInfo, getLineStringShort}
 import CCExceptions._
 import ap.parser.IExpression._
 import tricera.concurrency.CCReader
@@ -52,7 +52,8 @@ case class CCTerm(t               : ITerm,
   }
   def occurringConstants: Seq[IExpression.ConstantTerm] =
     SymbolCollector constantsSorted t
-  def convertToType(newType: CCType): CCTerm = {
+  def convertToType(newType           : CCType,
+                    conversionSrcInfo : Option[SourceInfo] = srcInfo): CCTerm = {
     (typ, newType) match {
       case (oldType, newType) if (oldType == newType) =>
         this
@@ -91,7 +92,8 @@ case class CCTerm(t               : ITerm,
             newType : CCHeapPointer) =>
         if (!CCTerm.isCompatiblePointerConversion(typ, newType))
           throw new UnsupportedCastException(
-            "incompatible pointer types: cannot convert " + typ.shortName +
+            getLineStringShort(conversionSrcInfo) +
+            " incompatible pointer types: cannot convert " + typ.shortName +
             " to " + newType.shortName)
         this
       case _ =>

@@ -1246,7 +1246,8 @@ class Symex private (context        : SymexContext,
       pushVal(BinaryOperators.Mod(lhs, rhs).term)
     case exp : Etypeconv => {
       evalHelp(exp.exp_)
-      pushVal(popVal convertToType context.getType(exp.type_name_))
+      pushVal(popVal.convertToType(context.getType(exp.type_name_),
+                                   Some(getSourceInfo(exp))))
     }
     case _ : Epreinc | _ : Epredec =>
       val (expToUpdate, op) = exp match {

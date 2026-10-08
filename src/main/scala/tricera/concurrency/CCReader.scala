@@ -1885,7 +1885,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                           "pointers is 0 (NULL)")
                     }
                   case hp : CCHeapPointer =>
-                    val converted = res convertToType hp
+                    val converted = res.convertToType(hp, srcInfo)
                     converted.typ match {
                       case arrayPtr : CCHeapArrayPointer =>
                         // lhs is actually a heap array pointer
@@ -2725,7 +2725,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                              isNoReturn : Boolean,
                              functionName : String) : Unit = scope.LocalVars.withFunctionScope {
     scope.LocalVars pushFrame
-    val stm = pushArguments(FuncDef(functionDef), args).getOrElse {
+    val stm = pushArguments(FuncDef(functionDef), args, entry.srcInfo).getOrElse {
       throw new TranslationException("Only functions with bodies can be inlined.")
     }
 
@@ -2797,8 +2797,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   }
 
   // todo: refactor this to separate parsing and pushing
-  private def pushArguments(f : FuncDef,
-                            pointerArgs : List[CCTerm] = Nil) : Option[Compound_stm] = {
+  private def pushArguments(f           : FuncDef,
+                            pointerArgs : List[CCTerm] = Nil,
+                            callSrcInfo : Option[SourceInfo] = None) : Option[Compound_stm] = {
     val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
@@ -2808,7 +2809,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       if (pointerArgs.isEmpty) declaredType
       else pointerArgs(ind) match {
         case arg if arg.typ.isArithType => arg.typ
-        case arg => (arg convertToType declaredType).typ
+        case arg => arg.convertToType(declaredType, callSrcInfo).typ
       }
     }
     decl match {

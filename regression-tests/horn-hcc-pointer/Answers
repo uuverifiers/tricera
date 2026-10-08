@@ -90,10 +90,10 @@ ptr-conversions-safe.c
 SAFE
 
 incompatible-ptr-decl.c
-UNKNOWN (incompatible pointer types: cannot convert B* to A*)
+UNKNOWN (7:12 incompatible pointer types: cannot convert B* to A*)
 
 incompatible-ptr-unsigned.c
-UNKNOWN (incompatible pointer types: cannot convert uint* to int*)
+UNKNOWN (3:7 incompatible pointer types: cannot convert uint* to int*)
 
 incompatible-ptr-first-member-cast.c
-UNKNOWN (incompatible pointer types: cannot convert S* to int*)
+UNKNOWN (6:7 incompatible pointer types: cannot convert S* to int*)
