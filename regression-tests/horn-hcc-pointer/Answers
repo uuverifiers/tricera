@@ -85,3 +85,15 @@ UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
 stack-ptr-fun-ret.c
 Warning: no definition of function "nondet" available
 UNKNOWN (Unsupported C fragment. Returning stack pointers from functions is not yet supported.)
+
+ptr-conversions-safe.c
+SAFE
+
+incompatible-ptr-decl.c
+UNKNOWN (incompatible pointer types: cannot convert B* to A*)
+
+incompatible-ptr-unsigned.c
+UNKNOWN (incompatible pointer types: cannot convert uint* to int*)
+
+incompatible-ptr-first-member-cast.c
+UNKNOWN (incompatible pointer types: cannot convert S* to int*)

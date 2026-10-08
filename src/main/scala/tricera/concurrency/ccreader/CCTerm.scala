@@ -87,8 +87,12 @@ case class CCTerm(t               : ITerm,
           "Cannot cast pointer type to arithmetic type.")
       case (oldType: CCHeapPointer, newType: CCHeapPointer) =>
         newType cast this
-      case (oldType: CCStackPointer, newType: CCHeapPointer)
-          if oldType.typ == newType.typ =>
+      case (_ : CCStackPointer | _ : CCHeapArrayPointer | _ : CCArray,
+            newType : CCHeapPointer) =>
+        if (!CCTerm.isCompatiblePointerConversion(typ, newType))
+          throw new UnsupportedCastException(
+            "incompatible pointer types: cannot convert " + typ.shortName +
+            " to " + newType.shortName)
         this
       case _ =>
         throw new UnsupportedCastException(
@@ -110,6 +114,31 @@ object CCTerm {
     }
     CCTerm(fAsTerm, typ, srcInfo, Some(f))
   }
+
+  private def pointeeOrElementType(typ : CCType) : Option[CCType] = typ match {
+    case p : CCStackPointer     => Some(p.typ)
+    case p : CCHeapPointer      => Some(p.typ)
+    case a : CCHeapArrayPointer => Some(a.elementType)
+    case a : CCArray            => Some(a.elementType)
+    case _                      => None
+  }
+
+  private def underlyingType(typ : CCType) : CCType = typ match {
+    case f : CCStructField => f.structs(f.structName)
+    case _ : CCIntEnum     => CCInt
+    case _                 => typ
+  }
+
+  private def isSameCType(a : CCType, b : CCType) : Boolean =
+    (pointeeOrElementType(a), pointeeOrElementType(b)) match {
+      case (Some(pa), Some(pb)) => isSameCType(pa, pb)
+      case _ => underlyingType(a) == underlyingType(b)
+    }
+
+  private def isCompatiblePointerConversion(from : CCType, to : CCType) : Boolean =
+    pointeeOrElementType(from).contains(CCVoid) ||
+    pointeeOrElementType(to).contains(CCVoid) ||
+    isSameCType(from, to)
 
   def unifyTypes(a: CCTerm, b: CCTerm): (CCTerm, CCTerm) = {
     (a.typ, b.typ) match {

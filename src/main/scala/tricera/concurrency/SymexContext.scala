@@ -95,7 +95,7 @@ trait SymexContext {
   def inlineFunction(f          : Function_def,
                      entry      : CCPredicate,
                      exit       : CCPredicate,
-                     args       : List[CCType],
+                     args       : List[CCTerm],
                      isNoReturn : Boolean,
                      fName      : String) : Unit
   def isTermUsedInClauses(term : ConstantTerm) : Boolean

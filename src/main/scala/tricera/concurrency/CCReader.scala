@@ -362,7 +362,7 @@ class CCReader private (prog              : Program,
     override def inlineFunction(f          : Function_def,
                                 entry      : CCPredicate,
                                 exit       : CCPredicate,
-                                args       : List[CCType],
+                                args       : List[CCTerm],
                                 isNoReturn : Boolean,
                                 fName      : String) : Unit =
       CCReader.this.inlineFunction(f, entry, exit, args, isNoReturn, fName)
@@ -1884,17 +1884,21 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                           "allowed, and the only possible initialization value for " +
                           "pointers is 0 (NULL)")
                     }
-                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCHeapArrayPointer] =>
-                    // lhs is actually a heap array pointer
-                    // an initialzied ptr is not another declared array object
-                    (new CCVar(lhsVar.name, lhsVar.srcInfo,
-                               res.typ.asInstanceOf[CCHeapArrayPointer]
-                                 .copy(declaredSize = None),
-                               lhsVar.storage), res)
-                  case _ : CCHeapPointer if res.typ.isInstanceOf[CCStackPointer] =>
-                    // lhs is actually a stack pointer
-                    (new CCVar(lhsVar.name, lhsVar.srcInfo, res.typ,
-                               lhsVar.storage), res)
+                  case hp : CCHeapPointer =>
+                    val converted = res convertToType hp
+                    converted.typ match {
+                      case arrayPtr : CCHeapArrayPointer =>
+                        // lhs is actually a heap array pointer
+                        // an initialzied ptr is not another declared array object
+                        (new CCVar(lhsVar.name, lhsVar.srcInfo,
+                                   arrayPtr.copy(declaredSize = None),
+                                   lhsVar.storage), converted)
+                      case stackPtr : CCStackPointer =>
+                        // lhs is actually a stack pointer
+                        (new CCVar(lhsVar.name, lhsVar.srcInfo, stackPtr,
+                                   lhsVar.storage), converted)
+                      case _ => (lhsVar, converted)
+                    }
                   case _ => (lhsVar, res)
                 }
                 (actualLhsVar, actualRes, IExpression.i(true))
@@ -2717,7 +2721,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   private def inlineFunction(functionDef : Function_def,
                              entry : CCPredicate,
                              exit : CCPredicate,
-                             args : List[CCType],
+                             args : List[CCTerm],
                              isNoReturn : Boolean,
                              functionName : String) : Unit = scope.LocalVars.withFunctionScope {
     scope.LocalVars pushFrame
@@ -2794,10 +2798,18 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   // todo: refactor this to separate parsing and pushing
   private def pushArguments(f : FuncDef,
-                            pointerArgs : List[CCType] = Nil) : Option[Compound_stm] = {
+                            pointerArgs : List[CCTerm] = Nil) : Option[Compound_stm] = {
     val decl = f.decl match {
       case noPtr : NoPointer => noPtr.direct_declarator_
       case ptr   : BeginPointer => ptr.direct_declarator_
+    }
+    def pointerParamType(p : BeginPointer, typ : CCType, ind : Int) : CCType = {
+      val declaredType = createHeapPointer(p, typ)
+      if (pointerArgs.isEmpty) declaredType
+      else pointerArgs(ind) match {
+        case arg if arg.typ.isArithType => arg.typ
+        case arg => (arg convertToType declaredType).typ
+      }
     }
     decl match {
       case dec : NewFuncDec =>
@@ -2811,9 +2823,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               val name = getName(argDec.declarator_)
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
-                case _: BeginPointer if pointerArgs.nonEmpty => pointerArgs(ind)
-                case p : BeginPointer =>
-                  createHeapPointer(p, typ)
+                case p : BeginPointer => pointerParamType(p, typ, ind)
                 case np : NoPointer =>
                   np.direct_declarator_ match {
                     case _ : Incomplete
@@ -2834,8 +2844,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case argDec : TypeHintAndParam =>
               val typ = getType(argDec.listdeclaration_specifier_)
               val actualType = argDec.declarator_ match {
-                case _: BeginPointer if pointerArgs.nonEmpty => pointerArgs(ind)
-                case p : BeginPointer => createHeapPointer(p, typ)
+                case p : BeginPointer => pointerParamType(p, typ, ind)
                 case _ => typ
               }
               val declaredVar = new CCVar(getName(argDec.declarator_),

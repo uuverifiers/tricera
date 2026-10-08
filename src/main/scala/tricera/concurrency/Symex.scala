@@ -1861,7 +1861,7 @@ class Symex private (context        : SymexContext,
             pushVal(CCTerm.fromFormula(predDecl(argTerms), CCInt, None)) // todo:srcInfo
           case None =>
             val args =
-              (for (_ <- 0 until argCount) yield popVal.typ).toList.reverse
+              (for (_ <- 0 until argCount) yield popVal).toList.reverse
             // get rid of the local variables, which are later
             // replaced with the formal arguments
             // pointer arguments are saved and passed on
@@ -1871,7 +1871,7 @@ class Symex private (context        : SymexContext,
 
   private def callFunctionInlining(name : String,
                                    functionEntry : CCPredicate,
-                                   pointerArgs : List[CCType] = Nil) =
+                                   pointerArgs : List[CCTerm] = Nil) =
     context.functionDefs get name match {
       case Some(fundef) =>
         val typ = context.getType(fundef)

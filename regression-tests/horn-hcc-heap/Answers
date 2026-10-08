@@ -323,3 +323,27 @@ SAFE
 
 heap-guard-bug-2.c
 SAFE
+
+heap-ptr-arg-declared-type-unsafe.c
+
+-----------------------------------------------------------------------------------------------
+Init:
+                                      main9_3(heap.empty)                                      
+-----------------------------------------------------------------------------------------------
+                                               |                                               
+                                               |                                               
+                                               V                                               
+        main9_3_1(heap.heapAddrPair_1(heap.alloc(heap.empty, O_B(B(0)))), heap.addr(1))        
+-----------------------------------------------------------------------------------------------
+                                               |                                               
+                                               |                                               
+                                               V                                               
+ main11_10(heap.heapAddrPair_1(heap.alloc(heap.empty, O_B(B(2)))), heap.addr(1), heap.addr(1)) 
+-----------------------------------------------------------------------------------------------
+Final:
+ main11_10(heap.heapAddrPair_1(heap.alloc(heap.empty, O_B(B(2)))), heap.addr(1), heap.addr(1)) 
+-----------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main11_10(@h, b:9, a:6), !is_O_A(heap.read(@h, a:6)). (line:6 col:31) (property: valid-deref)
+
+UNSAFE
