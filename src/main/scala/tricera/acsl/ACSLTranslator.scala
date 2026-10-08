@@ -724,8 +724,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     val t = translate(expr)
     t.typ match {
       case _ if t.originalFormula.nonEmpty => t
-      case _ : CCArithType | CCMathInt | CCBool | _ : CCIntEnum |
-           _ : CCHeapPointer =>
+      case _ : CCArithType | CCMathInt | CCBool | _ : CCHeapPointer =>
         CCTerm.fromFormula(t.toFormula, CCBool, t.srcInfo)
       case _ =>
         throw new ACSLParseException(

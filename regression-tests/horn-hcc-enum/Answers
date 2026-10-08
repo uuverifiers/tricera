@@ -103,3 +103,9 @@ SAFE
 
 enum-wrap-unsafe.c (ilp32)
 UNSAFE
+
+enum-underlying-safe.c (ilp32)
+SAFE
+
+enum-widen-unsafe.c (ilp32)
+UNSAFE

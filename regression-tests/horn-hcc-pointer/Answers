@@ -97,3 +97,9 @@ UNKNOWN (3:7 incompatible pointer types: cannot convert uint* to int*)
 
 incompatible-ptr-first-member-cast.c
 UNKNOWN (6:7 incompatible pointer types: cannot convert S* to int*)
+
+incompatible-ptr-enum-int.c
+UNKNOWN (5:7 incompatible pointer types: cannot convert E* to int*)
+
+incompatible-ptr-enum-enum.c
+UNKNOWN (6:11 incompatible pointer types: cannot convert E* to E2*)

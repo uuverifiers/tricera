@@ -53,6 +53,7 @@ abstract sealed class CCType {
       this match {
         case CCBool                         => Sort.Bool
         case CCMathInt                      => Sort.Integer
+        case CCIntEnum(_, _)                => Sort.Integer
         case typ: CCArithType if typ.isUnsigned => Sort.Nat
         case CCDuration                     => Sort.Nat
         case CCHeap(heap)                   => heap.HeapSort
@@ -63,7 +64,6 @@ abstract sealed class CCType {
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
-        case CCIntEnum(_, _)                => Sort.Integer
         case _                              => Sort.Integer
       }
     case ArithmeticMode.ILP32 =>
@@ -85,7 +85,7 @@ abstract sealed class CCType {
         case p: CCHeapArrayPointer          => p.addressRangeSort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
-        case CCIntEnum(_, _)                => Sort.Integer
+        case e: CCIntEnum                   => e.underlying.toSort
         case _                              => Sort.Integer
       }
     case ArithmeticMode.LP64 =>
@@ -107,7 +107,7 @@ abstract sealed class CCType {
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
-        case CCIntEnum(_, _)                => Sort.Integer
+        case e: CCIntEnum                   => e.underlying.toSort
         case _                              => Sort.Integer
       }
     case ArithmeticMode.LLP64 =>
@@ -129,7 +129,7 @@ abstract sealed class CCType {
         case CCArray(_, _, _, s, _)         => s.sort
         case CCStruct(ctor, _)              => ctor.resSort
         case CCStructField(n, s)            => s(n).ctor.resSort
-        case CCIntEnum(_, _)                => Sort.Integer
+        case e: CCIntEnum                   => e.underlying.toSort
         case _                              => Sort.Integer
       }
   }
@@ -586,10 +586,15 @@ case class CCStruct(ctor : MonoSortedIFunction,
  * Type for enums that are directly mapped to integers
  */
 case class CCIntEnum(name:   String, enumerators: Seq[(String, IdealInt)])
-    extends CCType {
+    extends CCArithType {
   override def toString: String =
     "enum-int " + name + ": (" + enumerators.mkString + ")"
   def shortName = name
+  // use unsigned unless an enumerator is negative
+  val underlying : CCArithType =
+    if (enumerators.exists(_._2.signum < 0)) CCInt else CCUInt
+  val UNSIGNED_RANGE : IdealInt = underlying.UNSIGNED_RANGE
+  val isUnsigned     : Boolean  = underlying.isUnsigned
 }
 
 abstract sealed class CCPointer(typ: CCType) extends CCType {

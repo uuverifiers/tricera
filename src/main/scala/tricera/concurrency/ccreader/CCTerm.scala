@@ -68,10 +68,6 @@ case class CCTerm(t               : ITerm,
         CCTerm.fromTerm(toTerm, CCMathInt, srcInfo)
       case (CCMathInt, _: CCArithType) =>
         newType cast this
-      case (_: CCIntEnum, _: CCArithType) =>
-        newType cast this
-      case (_: CCArithType, _: CCIntEnum) =>
-        CCTerm.fromTerm(toTerm, newType, srcInfo)
       case (_, CCVoid) => this
       // todo: do not do anything for casts to void?
       case (_: CCArithType, newType: CCHeapPointer) =>
@@ -127,14 +123,17 @@ object CCTerm {
 
   private def underlyingType(typ : CCType) : CCType = typ match {
     case f : CCStructField => f.structs(f.structName)
-    case _ : CCIntEnum     => CCInt
     case _                 => typ
   }
 
   private def isSameCType(a : CCType, b : CCType) : Boolean =
     (pointeeOrElementType(a), pointeeOrElementType(b)) match {
       case (Some(pa), Some(pb)) => isSameCType(pa, pb)
-      case _ => underlyingType(a) == underlyingType(b)
+      case _ => (underlyingType(a), underlyingType(b)) match {
+        case (e : CCIntEnum, t) => e == t || e.underlying == t
+        case (t, e : CCIntEnum) => e.underlying == t
+        case (ua, ub)           => ua == ub
+      }
     }
 
   private def isCompatiblePointerConversion(from : CCType, to : CCType) : Boolean =
@@ -142,10 +141,17 @@ object CCTerm {
     pointeeOrElementType(to).contains(CCVoid) ||
     isSameCType(from, to)
 
+  private def enumUnificationType(e : CCIntEnum) : CCArithType =
+    if (TriCeraParameters.get.arithMode == CCReader.ArithmeticMode.Mathematical)
+      CCInt
+    else e.underlying
+
   def unifyTypes(a: CCTerm, b: CCTerm): (CCTerm, CCTerm) = {
     (a.typ, b.typ) match {
-      case (_ : CCIntEnum, _) => unifyTypes(a.convertToType(CCInt), b)
-      case (_, _ : CCIntEnum) => unifyTypes(a, b.convertToType(CCInt))
+      case (e : CCIntEnum, _) =>
+        unifyTypes(a.convertToType(enumUnificationType(e)), b)
+      case (_, e : CCIntEnum) =>
+        unifyTypes(a, b.convertToType(enumUnificationType(e)))
       case _ if a.typ == b.typ =>
         (a, b)
 
