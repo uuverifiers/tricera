@@ -98,6 +98,13 @@ case class CCTerm(t               : ITerm,
           " for term: " + toTerm + " (srcInfo: " + srcInfo + ")")
     }
   }
+
+  def convertIfInteger(targetType : CCType) : CCTerm =
+    (typ, targetType) match {
+      case (_ : CCArithType | CCMathInt, _ : CCArithType) =>
+        convertToType(targetType)
+      case _ => this
+    }
 }
 
 object CCTerm {
@@ -186,4 +193,15 @@ object CCTerm {
             a.typ + " vs " + b.typ)
     }
   }
+}
+
+class InitializerStack {
+  private val values = new scala.collection.mutable.Stack[CCTerm]
+  def push(value : CCTerm) : Unit = values.push(value)
+  def pop(targetType : CCType) : ITerm =
+    values.pop().convertIfInteger(targetType).toTerm
+  def isEmpty  : Boolean = values.isEmpty
+  def nonEmpty : Boolean = values.nonEmpty
+  def nextHasSort(sort : Sort) : Boolean =
+    values.nonEmpty && Sort.sortOf(values.top.toTerm) == sort
 }

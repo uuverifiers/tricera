@@ -26,3 +26,11 @@ echo
 echo bitwise3.hcc
 $TRI_CMD -arithMode:ilp32 "$@" bitwise3.hcc 2>&1
 
+TESTS="assign-conv-unsafe.c arg-conv-unsafe.c return-conv-unsafe.c \
+       struct-init-conv-unsafe.c unsigned-wrap-safe.c"
+
+for name in $TESTS; do
+    echo
+    echo $name
+    $TRI_CMD -arithMode:ilp32 "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+done

@@ -96,3 +96,18 @@ Warning: The following clause has different terms with the same name (term: i:4)
 main6_3(i:4, 0.\as[signed bv[32]]) :- i:4 >= -2147483648 & 2147483647 >= i:4 & i:4 = i:4.\as[signed bv[32]].
 
 SAFE
+
+assign-conv-unsafe.c
+UNSAFE
+
+arg-conv-unsafe.c
+UNSAFE
+
+return-conv-unsafe.c
+UNSAFE
+
+struct-init-conv-unsafe.c
+UNSAFE
+
+unsigned-wrap-safe.c
+SAFE

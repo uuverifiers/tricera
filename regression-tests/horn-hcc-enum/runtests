@@ -40,7 +40,7 @@ for mode in math ilp32; do
 done
 
 TESTS="enum-wrap-safe.c enum-wrap-unsafe.c \
-       enum-underlying-safe.c enum-widen-unsafe.c"
+       enum-underlying-safe.c enum-widen-unsafe.c enum-assign-conv-safe.c"
 
 for name in $TESTS; do
     echo

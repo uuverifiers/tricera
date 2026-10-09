@@ -41,3 +41,10 @@ for name in $TESTS; do
     echo $name
     $TRI_CMD "$@" $name 2>&1 | grep -v 'at '
 done
+
+for name in ghost_integer_assign_wraps_safe.c \
+            ghost_integer_assign_wraps_unsafe.c; do
+    echo
+    echo "$name (ilp32)"
+    $TRI_CMD "$@" -arithMode:ilp32 $name 2>&1 | grep -v 'at '
+done

@@ -45,7 +45,6 @@ import tricera.params.TriCeraParameters
 import java.io.StringReader
 import java.util.regex.{Matcher, Pattern}
 import scala.annotation.tailrec
-import scala.collection.mutable
 
 final class InvariantEncodingsFactory(
   context   : SymexContext,
@@ -308,7 +307,7 @@ class InvariantEncodingsModel(context  : SymexContext,
 
   override def allocAndInitArray(arrayPtr         : CCHeapArrayPointer,
                                  size             : ITerm,
-                                 initializers     : mutable.Stack[ITerm],
+                                 initializers     : InitializerStack,
                                  s                : Seq[CCTerm],
                                  loc              : CCTerm) : HeapOperationResult = {
     ???

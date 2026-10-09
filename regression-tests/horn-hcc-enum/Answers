@@ -109,3 +109,6 @@ SAFE
 
 enum-widen-unsafe.c (ilp32)
 UNSAFE
+
+enum-assign-conv-safe.c (ilp32)
+SAFE

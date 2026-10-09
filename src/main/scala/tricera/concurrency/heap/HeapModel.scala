@@ -40,8 +40,6 @@ import tricera.concurrency.SymexContext
 import tricera.concurrency.concurrent_c.Absyn.{Function_def, Stm}
 import tricera.properties.Property
 
-import scala.collection.mutable
-
 object HeapModel {
   object ModelType extends Enumeration {
     val TheoryOfHeaps, Invariants = Value
@@ -218,7 +216,7 @@ trait HeapModel {
   def allocAndInitArray(
     arrayPtr     : CCHeapArrayPointer,
     size         : ITerm,
-    initializers : mutable.Stack[ITerm],
+    initializers : InitializerStack,
     s            : scala.Seq[CCTerm],
     loc          : CCTerm) : HeapOperationResult
 

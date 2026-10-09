@@ -524,3 +524,25 @@ Failed assertion:
 false :- main_2(@h, a:2), get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) + 1))).\as[int] - get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) - 0))).\as[int] < 1. (line:5 col:3) (property: user-assertion)
 
 UNSAFE
+
+array-init-ilp32-safe.c
+SAFE
+
+array-init-ilp32-unsafe.c
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                                   main2_3(heap.empty)                                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                            |                                                                                            
+                                                                                            |                                                                                            
+                                                                                            V                                                                                            
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(5.\as[bv[32]]))), O_uint(4294967295.\as[bv[32]]))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main2_3_1(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(5.\as[bv[32]]))), O_uint(4294967295.\as[bv[32]]))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main2_3_1(@h, u:2), get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(u:2), arrayPtrOffset(u:2) - 0))).\as[int] - get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(u:2), arrayPtrOffset(u:2) + 1))).\as[int] < 1. (line:3 col:3) (property: user-assertion)
+
+UNSAFE

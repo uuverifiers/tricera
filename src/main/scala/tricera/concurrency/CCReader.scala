@@ -44,7 +44,7 @@ import lazabs.horn.abstractions.VerificationHints._
 import lazabs.horn.bottomup.HornClauses
 import IExpression.{ConstantTerm, Predicate, Sort, toFunApplier}
 
-import scala.collection.mutable.{ArrayBuffer, Stack, HashMap => MHashMap,
+import scala.collection.mutable.{ArrayBuffer, HashMap => MHashMap,
   HashSet => MHashSet}
 import tricera.Util._
 import tricera.acsl.{ACSLRewriter, ACSLTranslator, FunctionContract}
@@ -383,6 +383,8 @@ class CCReader private (prog              : Program,
       CCReader.this.getType(exp)
     override def getFunctionArgNames(f : Function_def) : scala.Seq[String] =
       CCReader.this.getFunctionArgNames(f)
+    override def getFunctionArgTypes(f : Function_def) : scala.Seq[CCType] =
+      CCReader.this.getFunctionArgTypes(f)
     override def translateClockValue(expr : CCTerm) : CCTerm =
       CCReader.this.translateClockValue(expr)
     override def translateDurationValue(expr : CCTerm): CCTerm =
@@ -2289,13 +2291,13 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         structInfos(i) = StructInfo(structName, fieldList)
     }
   }
-  private def getInitsStack(init: Initializer, s: Symex): Stack[ITerm] = {
-    val initStack = new Stack[ITerm]
+  private def getInitsStack(init: Initializer, s: Symex): InitializerStack = {
+    val initStack = new InitializerStack
     def fillInit(init: Initializer) {
       init match {
         case init: InitExpr =>
           initStack.push(s.eval(init.exp_)(
-            s.EvalSettings(), s.EvalContext()).toTerm)
+            s.EvalSettings(), s.EvalContext()))
         case init: InitListOne => fillInits(init.initializers_)
         case init: InitListTwo => fillInits(init.initializers_)
       }
@@ -2790,6 +2792,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       // arguments are not specified ...
         Nil
     }
+  }
+
+  private def getFunctionArgTypes(functionDef : Function_def) : scala.Seq[CCType] = {
+    scope.LocalVars.pushFrame
+    pushArguments(FuncDef(functionDef))
+    val argTypes = scope.LocalVars.getVarsInTopFrame.map(_.typ)
+    scope.LocalVars.popFrame
+    argTypes
   }
 
   // todo: refactor this to separate parsing and pushing
@@ -3831,8 +3841,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           }
           returnPred match {
             case Some(rp) =>
+              val resultType = rp.argVars.last.typ
               val args = (symex.getValuesAsTerms take(rp.arity - 1)) ++
-                         List(retValue.toTerm)
+                         List(retValue.convertIfInteger(resultType).toTerm)
               symex outputClause(atom(rp, args), srcInfo)
             case None     =>
               throw new TranslationException(

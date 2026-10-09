@@ -27,7 +27,8 @@ NONDETINITESTS="\
 
 # Temporarily disabled: ilp32-bug-1.c repeatedly exceeds the 60s limit locally and in CI.
 ILP32TESTS="cell-write-unsigned-enum-safe.c \
-            negative-to-unsigned-safe.c negative-to-unsigned-unsafe.c"
+            negative-to-unsigned-safe.c negative-to-unsigned-unsafe.c \
+            array-init-ilp32-safe.c array-init-ilp32-unsafe.c"
 
 ## -heapModel:native
 

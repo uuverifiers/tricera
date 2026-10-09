@@ -45,8 +45,6 @@ import tricera.params.TriCeraParameters
 import tricera.properties
 import tricera.properties.Property
 
-import scala.collection.mutable
-
 final class HeapTheoryFactory(context : SymexContext,
                               scope   : CCScope) extends HeapModelFactory {
   import HeapModel._
@@ -461,7 +459,7 @@ class HeapTheoryModel(context           : SymexContext,
 
   override def allocAndInitArray(arrayPtr     : CCHeapArrayPointer,
                                  size         : ITerm,
-                                 initializers : mutable.Stack[ITerm],
+                                 initializers : InitializerStack,
                                  s            : scala.Seq[CCTerm],
                                  loc : CCTerm)
   : HeapOperationResult = {
@@ -483,12 +481,12 @@ class HeapTheoryModel(context           : SymexContext,
       val valueToInit = if (initializers.nonEmpty) {
         arrayPtr.elementType match {
           case structType: CCStruct => structType.getInitialized(initializers)
-          case _ => initializers.pop()
+          case elementType => initializers.pop(elementType)
         }
       } else {
         arrayPtr.elementType.getZeroInit
       }
-      val wrappedValue = context.sortWrapperMap(Sort.sortOf(valueToInit))(valueToInit)
+      val wrappedValue = context.sortWrapperMap(arrayPtr.elementType.toSort)(valueToInit)
 
       val addrToWrite = context.heap.rangeNth(rawRange, i)
       val writeResult = write(

@@ -106,6 +106,7 @@ trait SymexContext {
   def getType(tn  : Type_name)      : CCType
   def getType(exp : Ebytestype)     : CCType
   def getFunctionArgNames(f : Function_def) : scala.Seq[String]
+  def getFunctionArgTypes(f : Function_def) : scala.Seq[CCType]
 
   def translateClockValue   (value : CCTerm) : CCTerm
   def translateDurationValue(value : CCTerm) : CCTerm

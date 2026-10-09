@@ -97,3 +97,9 @@ Horn Translation Error: Ghost code cannot modify non-ghost variable `s`.
 
 ghost_identifier_integer_outside_safe.c
 SAFE
+
+ghost_integer_assign_wraps_safe.c (ilp32)
+SAFE
+
+ghost_integer_assign_wraps_unsafe.c (ilp32)
+UNSAFE

@@ -277,9 +277,11 @@ class Symex private (context        : SymexContext,
       case stackPtr: CCStackPointer => stackPtr.targetInd
       case _ => ind
     }
-    values = values.updated(actualInd, t)
+    val storedVal = t convertIfInteger getVar(actualInd).typ
+    values = values.updated(actualInd, storedVal)
     touchedGlobalState =
-      touchedGlobalState || actualInd < scope.GlobalVars.size || !scope.freeFromGlobal(t)
+      touchedGlobalState || actualInd < scope.GlobalVars.size ||
+      !scope.freeFromGlobal(storedVal)
   }
 
   def setGhostValue(name : String, t : CCTerm,
@@ -449,13 +451,13 @@ class Symex private (context        : SymexContext,
           case Left(t) =>
             val structType = context.structDefs(t.sort.name)
             val fieldAddress = structType.getFieldAddress(fieldSelectors)
-            CCTerm.fromTerm(structType.setFieldTerm(t, rhs.toTerm, fieldAddress),
+            CCTerm.fromTerm(structType.setFieldTerm(t, rhs, fieldAddress),
                    structType, rhs.srcInfo)
           case Right(f) =>
             val structType =
               context.structDefs(f.fun.asInstanceOf[MonoSortedIFunction].resSort.name)
             val fieldAddress = structType.getFieldAddress(fieldSelectors)
-            CCTerm.fromTerm(structType.setFieldTerm(f, rhs.toTerm, fieldAddress),
+            CCTerm.fromTerm(structType.setFieldTerm(f, rhs, fieldAddress),
                    structType, rhs.srcInfo)
         }
       case _ => rhs // a non ADT
@@ -525,26 +527,28 @@ class Symex private (context        : SymexContext,
 
     /**
      * Performs the state update for this LHS and returns the value of the
-     * assignment expression. `final` so that the [[pushVal]]/[[popVal]]
-     * bracket around [[doUpdate]] cannot be bypassed: it protects the RHS
-     * across any clause boundary [[doUpdate]] may emit (notably the function
-     * call inside a heap write in the invariant encoding).
+     * assignment expression, i.e., the RHS converted to the type of the LHS.
+     * `final` so that the [[pushVal]]/[[popVal]] bracket around [[doUpdate]]
+     * cannot be bypassed: it protects the RHS across any clause boundary
+     * [[doUpdate]] may emit (notably the function call inside a heap write in
+     * the invariant encoding).
      */
     final def update(rhsVal         : CCTerm)
                     (implicit symex : Symex,
                      evalSettings   : EvalSettings,
                      evalCtx        : EvalContext) : CCTerm = {
       pushVal(rhsVal)
-      doUpdate(rhsVal)
-      popVal
+      val lhsType = doUpdate(rhsVal)
+      popVal convertIfInteger lhsType
     }
 
     /** Subclass hook for [[update]]. On entry the RHS is on top of the stack;
-     *  use [[topVal]] to access it, and leave the stack balanced on return. */
+     *  use [[topVal]] to access it, and leave the stack balanced on return.
+     *  Returns the type of the written location. */
     protected def doUpdate(rhsVal         : CCTerm)
                           (implicit symex : Symex,
                            evalSettings   : EvalSettings,
-                           evalCtx        : EvalContext) : Unit
+                           evalCtx        : EvalContext) : CCType
 
     /** Same as [[update]], but writes a non-deterministic value and returns it. */
     def updateNonDet(implicit symex : Symex,
@@ -580,7 +584,7 @@ class Symex private (context        : SymexContext,
     override protected def doUpdate(rhsVal         : CCTerm)
                                    (implicit symex : Symex,
                                     evalSettings   : EvalSettings,
-                                    evalCtx        : EvalContext) : Unit = {
+                                    evalCtx        : EvalContext) : CCType = {
       val lhsVal = eval(exp)(evalSettings, evalCtx.withEvaluatingLHS(true))
       val lhsName = asLValue(exp)
 
@@ -607,6 +611,7 @@ class Symex private (context        : SymexContext,
         case _ =>
       }
       setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
+      lhsVal.typ
     }
   }
 
@@ -616,7 +621,7 @@ class Symex private (context        : SymexContext,
     override protected def doUpdate(rhsVal         : CCTerm)
                                    (implicit symex : Symex,
                                     evalSettings   : EvalSettings,
-                                    evalCtx        : EvalContext) : Unit = {
+                                    evalCtx        : EvalContext) : CCType = {
       val baseLHSVal = eval(baseExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
       val locTerm = getStaticLocationId(originalExp)
       baseLHSVal.typ match {
@@ -639,34 +644,37 @@ class Symex private (context        : SymexContext,
             val oldStructTerm = popVal.toTerm // the result of the read
             val curBaseLHSVal = popVal        // the address to write
             val newStructTerm = structType.setFieldTerm(
-              oldStructTerm, topVal.toTerm, fieldAddress)
+              oldStructTerm, topVal, fieldAddress)
             val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(
-              newStructTerm, structType, topVal.srcInfo))
+              newStructTerm, structType, topVal.srcInfo), structType)
             processHeapResult(
               heapModel.write(curBaseLHSVal, newStructObj, values, locTerm))
           } else { // path.size == 1 && structType.sels.size == 1
-            val newStructTerm = structType.setFieldTerm(topVal.toTerm)
+            val newStructTerm = structType.setFieldTerm(topVal)
             val newStructObj = wrapAsHeapObject(CCTerm.fromTerm(
-              newStructTerm, structType, topVal.srcInfo))
+              newStructTerm, structType, topVal.srcInfo), structType)
             processHeapResult(
               heapModel.write(baseLHSVal, newStructObj, values, locTerm))
           }
+          fieldTerm.typ
 
         case structType : CCStruct => // s.f
           val varName = asLValue(baseExp)
           val fieldAddress = getFieldAddress(structType, path)
           val oldStructTerm = baseLHSVal.toTerm
           val newStructTerm = structType.setFieldTerm(
-            oldStructTerm, topVal.toTerm, fieldAddress)
+            oldStructTerm, topVal, fieldAddress)
           val newStructObj = CCTerm.fromTerm(newStructTerm, structType, topVal.srcInfo)
           setValue(varName, newStructObj, evalCtx.enclosingFunctionName)
           assignedToStruct = true
+          structType.getFieldType(fieldAddress)
 
         case _ : CCStackPointer => // ps->f
           val lhsVal = eval(originalExp)(evalSettings, evalCtx.withEvaluatingLHS(true))
           val lhsName = asLValue(originalExp)
           val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
           setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
+          lhsVal.typ
 
         case _ => throw new TranslationException(
           "Invalid base for a struct field access: " + baseLHSVal)
@@ -680,7 +688,7 @@ class Symex private (context        : SymexContext,
     override protected def doUpdate(rhsVal         : CCTerm)
                                    (implicit symex : Symex,
                                     evalSettings   : EvalSettings,
-                                    evalCtx        : EvalContext) : Unit = {
+                                    evalCtx        : EvalContext) : CCType = {
       val arrayTerm = eval(arrayBase)(evalSettings,
                                       evalCtx.withEvaluatingLHS(true))
       val indexTerm = eval(index)
@@ -688,21 +696,22 @@ class Symex private (context        : SymexContext,
         case arrayPtr : CCHeapArrayPointer =>
           processHeapResult(heapModel.arrayWrite(
             arrayTerm, indexTerm,
-            wrapAsHeapObject(topVal.convertToType(arrayPtr.elementType)),
+            wrapAsHeapObject(topVal, arrayPtr.elementType),
             values, getStaticLocationId(originalExp)))
-        case _ : CCArray =>
+          arrayPtr.elementType
+        case array : CCArray =>
           val lhsVal = eval(originalExp)(evalSettings,
                                          evalCtx.withEvaluatingLHS(true))
-          val newTerm = CCTerm.fromTerm(writeADT(
-            lhsVal.toTerm.asInstanceOf[IFunApp],
-            topVal.toTerm, context.heap.userHeapConstructors,
-            context.heap.userHeapSelectors), lhsVal.typ, topVal.srcInfo)
+          val IFunApp(_, scala.Seq(innerTerm, elementIndex)) = lhsVal.toTerm
+          val newTerm = CCTerm.fromTerm(
+            array.storeElement(innerTerm, elementIndex, topVal),
+            lhsVal.typ, topVal.srcInfo)
           val lhsName = asLValue(arrayBase)
           val oldLhsVal = getValue(lhsName, evalCtx.enclosingFunctionName)
-          val innerTerm = lhsVal.toTerm.asInstanceOf[IFunApp].args.head
           val actualLhsTerm = getActualAssignedTerm(
             CCTerm.fromTerm(innerTerm, oldLhsVal.typ, topVal.srcInfo), newTerm)
           setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
+          array.elementType
         case _ => throw new TranslationException(
           "Attempting array access on a non-array type.")
       }
@@ -716,7 +725,7 @@ class Symex private (context        : SymexContext,
     override protected def doUpdate(rhsVal         : CCTerm)
                                    (implicit symex : Symex,
                                     evalSettings   : EvalSettings,
-                                    evalCtx        : EvalContext) : Unit = {
+                                    evalCtx        : EvalContext) : CCType = {
       val arrayTerm = eval(arrayBase)(evalSettings, evalCtx.withEvaluatingLHS(true))
       val indexTerm = eval(index)
       arrayTerm.typ match {
@@ -731,13 +740,14 @@ class Symex private (context        : SymexContext,
           val structType = array.elementType.asInstanceOf[CCStruct]
           val fieldAddress = getFieldAddress(structType, path)
           val newStructInnerTerm = structType.setFieldTerm(
-            oldStructTerm, topVal.toTerm, fieldAddress)
+            oldStructTerm, topVal, fieldAddress)
           val newArrayTerm = array.arrayTheory.store(
             arrayTerm.toTerm, indexTerm.toTerm, newStructInnerTerm)
           val arrayVarName = asLValue(arrayBase)
           setValue(arrayVarName, CCTerm.fromTerm(
             newArrayTerm, arrayTerm.typ, topVal.srcInfo),
                    evalCtx.enclosingFunctionName)
+          structType.getFieldType(fieldAddress)
 
         case array : CCHeapArrayPointer =>
           val locTerm = getStaticLocationId(originalExp)
@@ -747,12 +757,13 @@ class Symex private (context        : SymexContext,
           val structType = array.elementType.asInstanceOf[CCStruct]
           val fieldAddress = getFieldAddress(structType, path)
           val newStructInnerTerm =
-            structType.setFieldTerm(oldStructTerm, topVal.toTerm, fieldAddress)
+            structType.setFieldTerm(oldStructTerm, topVal, fieldAddress)
           val newStructObj = CCTerm.fromTerm(
             newStructInnerTerm, structType, topVal.srcInfo)
           processHeapResult(heapModel.arrayWrite(
-            arrayTerm, indexTerm, wrapAsHeapObject(newStructObj),
+            arrayTerm, indexTerm, wrapAsHeapObject(newStructObj, structType),
             values, locTerm))
+          structType.getFieldType(fieldAddress)
 
         case _ => throw new TranslationException(
           "Field access on an element of a non-struct array.")
@@ -765,7 +776,7 @@ class Symex private (context        : SymexContext,
     override protected def doUpdate(rhsVal         : CCTerm)
                                    (implicit symex : Symex,
                                     evalSettings   : EvalSettings,
-                                    evalCtx        : EvalContext) : Unit = {
+                                    evalCtx        : EvalContext) : CCType = {
       val pointerVal =
         eval(pointerExp)(evalSettings, evalCtx.withEvaluatingLHS(false))
       if (isHeapPointer(pointerVal)) {
@@ -785,8 +796,9 @@ class Symex private (context        : SymexContext,
           rhsVal,
           CCTerm.fromTerm(IIntLit(0), cellTyp, pointerVal.srcInfo))
         processHeapResult(heapModel.write(
-          pointerVal, wrapAsHeapObject(topVal.convertToType(cellTyp)),
+          pointerVal, wrapAsHeapObject(topVal, cellTyp),
           values, getStaticLocationId(originalExp)))
+        cellTyp
       } else {
         val lhsVal = eval(originalExp)(evalSettings,
                                        evalCtx.withEvaluatingLHS(true))
@@ -794,6 +806,7 @@ class Symex private (context        : SymexContext,
         maybeReplaceRhsWithNull(rhsVal, lhsVal)
         val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
         setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
+        lhsVal.typ
       }
     }
   }
@@ -881,13 +894,16 @@ class Symex private (context        : SymexContext,
     }
   }
 
-  private def wrapAsHeapObject(term : CCTerm) : CCTerm =
-    context.sortWrapperMap get term.typ.toSort match {
+  private def wrapAsHeapObject(value : CCTerm, cellType : CCType) : CCTerm = {
+    val cellValue = value convertToType cellType
+    context.sortWrapperMap get cellType.toSort match {
       case Some(wrapper) =>
-        CCTerm.fromTerm(wrapper(term.toTerm), CCHeapObject(context.heap), term.srcInfo)
+        CCTerm.fromTerm(wrapper(cellValue.toTerm), CCHeapObject(context.heap),
+                        cellValue.srcInfo)
       case None =>
-        context.forceHeapObjectWrappers(Seq(term.typ))
+        context.forceHeapObjectWrappers(Seq(cellType))
     }
+  }
 
   private def callFunction(name    : String,
                            args    : scala.Seq[CCTerm],
@@ -927,7 +943,7 @@ class Symex private (context        : SymexContext,
 
   def handleArrayInitialization(arrayPtr  : CCHeapArrayPointer,
                                 arraySize : CCTerm,
-                                initStack : mutable.Stack[ITerm],
+                                initStack : InitializerStack,
                                 locTerm   : CCTerm) : CCTerm = {
     val result =
       heapModel.allocAndInitArray(arrayPtr, arraySize.toTerm, initStack, values, locTerm)
@@ -1516,7 +1532,7 @@ class Symex private (context        : SymexContext,
                */
 
               val allocatedAddr = processHeapResult(
-                heapModel.alloc(wrapAsHeapObject(objectTerm), objectTerm.typ, values, getStaticLocationId(exp))).get
+                heapModel.alloc(wrapAsHeapObject(objectTerm, objectTerm.typ), objectTerm.typ, values, getStaticLocationId(exp))).get
 
               pushVal(allocatedAddr)
             case CCTerm(sizeExp, typ, _, _) if typ.isInstanceOf[CCArithType] =>
@@ -1555,7 +1571,7 @@ class Symex private (context        : SymexContext,
               }, typ, srcInfo)
 
               val allocatedAddr = processHeapResult(
-                heapModel.alloc(wrapAsHeapObject(objectTerm), objectTerm.typ, values, getStaticLocationId(exp))).get
+                heapModel.alloc(wrapAsHeapObject(objectTerm, objectTerm.typ), objectTerm.typ, values, getStaticLocationId(exp))).get
 
               pushVal(allocatedAddr)
             case _ =>
@@ -1592,8 +1608,21 @@ class Symex private (context        : SymexContext,
           val newEvalCtx = evalCtx
             .withHandlingFunContractArgs(handlingFunctionContractArgs)
             .incrementCallDepth
-          for (e <- exp.listexp_.asScala)
+          val paramTypes = context.functionContexts get name match {
+            case Some(ctx) => ctx.acslContext.getParams.map(_.typ)
+            case None      => context.functionDefs.get(name).toSeq.flatMap(
+                                context.getFunctionArgTypes)
+          }
+          for ((e, ind) <- exp.listexp_.asScala.zipWithIndex) {
             evalHelp(e)(evalSettings, newEvalCtx.withFunctionName(name))
+            for (paramType <- paramTypes.lift(ind)) {
+              val arg = topVal convertIfInteger paramType
+              if (arg ne topVal) {
+                popVal
+                pushVal(arg)
+              }
+            }
+          }
 
           // substitute fresh variable names (e.g., __eval) with actual function argument names
           val argCount = exp.listexp_.size

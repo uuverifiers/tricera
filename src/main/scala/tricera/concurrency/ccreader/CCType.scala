@@ -41,7 +41,7 @@ import tricera.Util.{SourceInfo, getLineString, getLineStringShort}
 import tricera.concurrency.heap.HeapModel
 import tricera.params.TriCeraParameters
 
-import scala.collection.mutable.{Stack, HashMap => MHashMap}
+import scala.collection.mutable.{HashMap => MHashMap}
 
 abstract sealed class CCType {
   def shortName : String
@@ -479,7 +479,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
     }
   }
   def setFieldTerm(rootTerm     :     ITerm,
-                   setVal       :       ITerm,
+                   setVal       :      CCTerm,
                    fieldAddress : List[Int]) : ITerm = {
     fieldAddress match {
       case hd :: tl => {
@@ -491,7 +491,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
               .setFieldTerm(getADTSelector(hd)(rootTerm), setVal, tl)
           //case nx: CCStruct if tl!= Nil =>
           //    nx.setFieldTerm(getADTSelector(hd)(rootTerm), setVal, tl)
-          case _ => setVal
+          case fieldType => setVal.convertIfInteger(fieldType).toTerm
         }
         val const =
           for (n <- sels.indices) yield {
@@ -509,9 +509,9 @@ case class CCStruct(ctor : MonoSortedIFunction,
   }
 
   // A helper to set a field of a struct containing a single field
-  def setFieldTerm(fieldVal : ITerm) : ITerm = {
+  def setFieldTerm(fieldVal : CCTerm) : ITerm = {
     assert(sels.size == 1)
-    ctor(fieldVal)
+    ctor(fieldVal.convertIfInteger(getFieldType(0)).toTerm)
   }
 
   def getADTSelector(ind: Int): MonoSortedIFunction = sels(ind)._1
@@ -521,22 +521,22 @@ case class CCStruct(ctor : MonoSortedIFunction,
   // The fields are initialized left to right depth-first.
   // If there are not enough values to initialize all the fields, then the
   // remaining fields are initialized to 0.
-  def getInitialized(values: Stack[ITerm]): ITerm = {
+  def getInitialized(values: InitializerStack): ITerm = {
     val const: IndexedSeq[ITerm] =
       for (field <- sels)
         yield
           field._2 match {
             case s: CCStructField // do not add ctor again if already struct
-              if values.nonEmpty && Sort.sortOf(values.top) == s.toSort =>
-              values.pop()
+              if values.nextHasSort(s.toSort) =>
+              values.pop(s)
             case CCStructField(name, structs) =>
               structs(name).getInitialized(values)
             case s: CCStruct // do not add ctor again if already struct
-              if values.nonEmpty && Sort.sortOf(values.top) == s.toSort =>
-              values.pop()
+              if values.nextHasSort(s.toSort) =>
+              values.pop(s)
             case s: CCStruct => s.getInitialized(values)
             case p: CCHeapPointer =>
-              if (values.isEmpty) p.nullAddr else values.pop()
+              if (values.isEmpty) p.nullAddr else values.pop(p)
             case _: CCHeapArrayPointer =>
               throw new TranslationException(
                 "Heap arrays inside structs are" +
@@ -569,7 +569,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
                         //  have access to
                         //   rich types here
                       }
-                    } else values.pop()
+                    } else values.pop(elemTyp)
                   )
                   arrayBatchStore(innerArr, ind + 1, n)
                 }
@@ -579,8 +579,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
               if (values.isEmpty)
                 Int2ITerm(0)
               else
-                values
-                  .pop()
+                values.pop(field._2)
           }
     ctor(const: _*)
   }
@@ -686,6 +685,10 @@ case class CCArray(elementType:   CCType, // todo: multidimensional arrays?
     //typ + "[" + (if (size.nonEmpty) size.get else "") + "]"
     elementType + " array"
   def shortName = elementType + "[]"
+
+  def storeElement(arrayTerm : ITerm, index : ITerm, value : CCTerm) : ITerm =
+    arrayTheory.store(arrayTerm, index,
+                      value.convertIfInteger(elementType).toTerm)
 }
 
 case object CCClock extends CCType {
