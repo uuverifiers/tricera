@@ -104,11 +104,44 @@ SAFE
 enum-wrap-unsafe.c (ilp32)
 UNSAFE
 
-enum-underlying-safe.c (ilp32)
+enum-widen-safe.c (ilp32)
 SAFE
 
 enum-widen-unsafe.c (ilp32)
 UNSAFE
 
-enum-assign-conv-safe.c (ilp32)
+enum-truncating-cast-and-compound-assign-safe.c (ilp32)
 SAFE
+
+enum-truncating-cast-and-compound-assign-unsafe.c (ilp32)
+UNSAFE
+
+enum-unsigned-underlying-range-safe.c (ilp32)
+SAFE
+
+enum-unsigned-underlying-range-unsafe.c (ilp32)
+UNSAFE
+
+enum-struct-array-field-safe.c (ilp32)
+SAFE
+
+enum-struct-array-field-unsafe.c (ilp32)
+UNSAFE
+
+enum-pointer-as-underlying-type-safe.c (ilp32)
+SAFE
+
+enum-pointer-as-underlying-type-unsafe.c (ilp32)
+UNSAFE
+
+enum-assign-big-switch-safe.c (ilp32)
+SAFE
+
+enum-assign-big-switch-unsafe.c (ilp32)
+UNSAFE
+
+enum-assign-negative-to-unsigned-safe.c (ilp32)
+SAFE
+
+enum-assign-negative-to-unsigned-unsafe.c (ilp32)
+UNSAFE

@@ -86,8 +86,93 @@ stack-ptr-fun-ret.c
 Warning: no definition of function "nondet" available
 UNKNOWN (Unsupported C fragment. Returning stack pointers from functions is not yet supported.)
 
-ptr-conversions-safe.c
+ptr-void-round-trip-safe.c
 SAFE
+
+ptr-void-round-trip-unsafe.c
+
+------------------
+Init:
+    main3_3(1)    
+------------------
+        |         
+        |         
+        V         
+ main4_3(1, 0, 0) 
+------------------
+Final:
+ main4_3(1, 0, 0) 
+------------------
+Failed assertion:
+false :- main4_3(x:2, v:3, p:4), x:2 = 1. (line:5 col:3) (property: user-assertion)
+
+UNSAFE
+
+ptr-to-ptr-deref-safe.c
+SAFE
+
+ptr-to-ptr-deref-unsafe.c
+
+------------------
+Init:
+    main3_3(1)    
+------------------
+        |         
+        |         
+        V         
+ main4_3(1, 0, 1) 
+------------------
+Final:
+ main4_3(1, 0, 1) 
+------------------
+Failed assertion:
+false :- main4_3(x:2, p:3, pp:4), x:2 = 1. (line:5 col:3) (property: user-assertion)
+
+UNSAFE
+
+ptr-to-struct-field-safe.c
+SAFE
+
+ptr-to-struct-field-unsafe.c
+
+--------------------
+Init:
+   main5_3(S(2))    
+--------------------
+         |          
+         |          
+         V          
+ main5_3_1(S(2), 0) 
+--------------------
+Final:
+ main5_3_1(S(2), 0) 
+--------------------
+Failed assertion:
+false :- main5_3_1(s:4, q:5), S::f(s:4) = 2. (line:6 col:3) (property: user-assertion)
+
+UNSAFE
+
+ptr-array-as-argument-safe.c
+SAFE
+
+ptr-array-as-argument-unsafe.c
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                  main4_3(heap.empty)                                                                  
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                           |                                                                           
+                                                                           |                                                                           
+                                                                           V                                                                           
+ main1_1(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(3))), O_int(4))), arrayPtr(AddrRange(heap.addr(1), 2), 0), 3) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main1_1(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(3))), O_int(4))), arrayPtr(AddrRange(heap.addr(1), 2), 0), 3) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main1_1(@h, a:4, __eval1_7:1), __eval1_7:1 = 3. (line:5 col:3) (property: user-assertion)
+
+UNSAFE
 
 incompatible-ptr-decl.c
 UNKNOWN (7:12 incompatible pointer types: cannot convert B* to A*)

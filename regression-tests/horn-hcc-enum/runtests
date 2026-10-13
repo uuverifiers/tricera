@@ -40,7 +40,17 @@ for mode in math ilp32; do
 done
 
 TESTS="enum-wrap-safe.c enum-wrap-unsafe.c \
-       enum-underlying-safe.c enum-widen-unsafe.c enum-assign-conv-safe.c"
+       enum-widen-safe.c enum-widen-unsafe.c \
+       enum-truncating-cast-and-compound-assign-safe.c \
+       enum-truncating-cast-and-compound-assign-unsafe.c \
+       enum-unsigned-underlying-range-safe.c \
+       enum-unsigned-underlying-range-unsafe.c \
+       enum-struct-array-field-safe.c enum-struct-array-field-unsafe.c \
+       enum-pointer-as-underlying-type-safe.c \
+       enum-pointer-as-underlying-type-unsafe.c \
+       enum-assign-big-switch-safe.c enum-assign-big-switch-unsafe.c \
+       enum-assign-negative-to-unsigned-safe.c \
+       enum-assign-negative-to-unsigned-unsafe.c"
 
 for name in $TESTS; do
     echo

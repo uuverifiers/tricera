@@ -1,6 +1,6 @@
 enum E { A, B };
 
-void main() {
+int main() {
   long long big = 4294967296;
   enum E e = B;
   e = big;
@@ -8,7 +8,5 @@ void main() {
     case A: break;
     default: assert(0);
   }
-
-  e = -1;
-  assert(e > 0);
+  return 0;
 }
