@@ -1395,7 +1395,7 @@ class Symex private (context        : SymexContext,
           }
         case _ : Plus       => // nothing
         case _ : Negative   =>
-          val t = popVal mapTerm (-(_))
+          val t = popVal.applyIntegerPromotion mapTerm (-(_))
           pushVal(CCTerm.fromTerm(t.toTerm, t.typ, srcInfo))
 //          case _ : Complement.  Unary_operator ::= "~" ;
         case _ : Logicalneg =>

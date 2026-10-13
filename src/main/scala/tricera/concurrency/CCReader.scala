@@ -2961,11 +2961,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       case _ => false
     }
 
-    // a CCBool capture variable holds an int term, but toFormula tests a CCBool
-    // against BoolADT.True. A CCInt capture instead asserts as term != 0
-    private def boolToInt(t : CCTerm) : CCTerm =
-      if (t.typ == CCBool) CCTerm.fromTerm(t.toTerm, CCInt, t.srcInfo) else t
-
     // declares a capture variable at entry for each \at(e, label)
     def setupLabelCaptures(body    : Compound_stm,
                            entry   : CCPredicate,
@@ -3004,7 +2999,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             else new ACSLTranslator(
               new StatementContext(entrySymex, srcInfo, Some(entryDefined),
                                    labelEnvs.getOrElse(eat.id_, Map.empty)))
-          val t = boolToInt(
+          val t =
             try translator.translate(eat.expr_)
             catch {
               case NeedsHeapModelException => throw NeedsHeapModelException
@@ -3012,7 +3007,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 getLineString(Some(srcInfo)) +
                 "Failed to capture the expression for a labelled state in a " +
                 s"statement annotation ($hint)\n" + e.getMessage)
-            })
+            }
           if (isArrayType(t.typ))
             throw new TranslationException(getLineString(Some(srcInfo)) +
               "a whole-array value (logical array) cannot be captured; only " +
@@ -3045,7 +3040,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val translator = new ACSLTranslator(labelCtx)
         var bound : Map[Int, ITerm] = Map.empty
         for ((cvName, eAst) <- caps) {
-          val t = boolToInt(translator.translate(eAst))
+          val t = translator.translate(eAst)
           val cvIndex = scope.lookupVar(cvName, functionName)
           val cvVar   = scope.allFormalVars(cvIndex)
           if (t.typ != cvVar.typ)

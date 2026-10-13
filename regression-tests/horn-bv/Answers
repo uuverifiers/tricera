@@ -111,3 +111,135 @@ UNSAFE
 
 unsigned-wrap-safe.c
 SAFE
+
+bool-init-and-store-from-int-safe.c (math)
+SAFE
+
+bool-init-and-store-from-int-safe.c (ilp32)
+SAFE
+
+bool-init-and-store-from-int-unsafe.c (math)
+UNSAFE
+
+bool-init-and-store-from-int-unsafe.c (ilp32)
+UNSAFE
+
+bool-truth-test-safe.c (math)
+SAFE
+
+bool-truth-test-safe.c (ilp32)
+SAFE
+
+bool-truth-test-unsafe.c (math)
+UNSAFE
+
+bool-truth-test-unsafe.c (ilp32)
+UNSAFE
+
+bool-promotion-safe.c (math)
+SAFE
+
+bool-promotion-safe.c (ilp32)
+SAFE
+
+bool-promotion-unsafe.c (math)
+UNSAFE
+
+bool-promotion-unsafe.c (ilp32)
+UNSAFE
+
+bool-int-casts-safe.c (math)
+SAFE
+
+bool-int-casts-safe.c (ilp32)
+SAFE
+
+bool-int-casts-unsafe.c (math)
+UNSAFE
+
+bool-int-casts-unsafe.c (ilp32)
+UNSAFE
+
+bool-struct-field-safe.c (math)
+SAFE
+
+bool-struct-field-safe.c (ilp32)
+SAFE
+
+bool-struct-field-unsafe.c (math)
+UNSAFE
+
+bool-struct-field-unsafe.c (ilp32)
+UNSAFE
+
+bool-heap-and-array-write-safe.c (math)
+SAFE
+
+bool-heap-and-array-write-safe.c (ilp32)
+SAFE
+
+bool-heap-and-array-write-unsafe.c (math)
+UNSAFE
+
+bool-heap-and-array-write-unsafe.c (ilp32)
+UNSAFE
+
+bool-call-arg-and-return-safe.c (math)
+SAFE
+
+bool-call-arg-and-return-safe.c (ilp32)
+SAFE
+
+bool-call-arg-and-return-unsafe.c (math)
+UNSAFE
+
+bool-call-arg-and-return-unsafe.c (ilp32)
+UNSAFE
+
+bool-nondet-range-safe.c (math)
+SAFE
+
+bool-nondet-range-safe.c (ilp32)
+SAFE
+
+bool-nondet-range-unsafe.c (math)
+UNSAFE
+
+bool-nondet-range-unsafe.c (ilp32)
+UNSAFE
+
+bool-from-pointer-init-safe.c (math)
+SAFE
+
+bool-from-pointer-init-safe.c (ilp32)
+SAFE
+
+bool-from-pointer-init-unsafe.c (math)
+UNSAFE
+
+bool-from-pointer-init-unsafe.c (ilp32)
+UNSAFE
+
+bool-from-pointer-store-safe.c (math)
+SAFE
+
+bool-from-pointer-store-safe.c (ilp32)
+SAFE
+
+bool-from-pointer-store-unsafe.c (math)
+UNSAFE
+
+bool-from-pointer-store-unsafe.c (ilp32)
+UNSAFE
+
+bool-from-pointer-cast-safe.c (math)
+SAFE
+
+bool-from-pointer-cast-safe.c (ilp32)
+SAFE
+
+bool-from-pointer-cast-unsafe.c (math)
+UNSAFE
+
+bool-from-pointer-cast-unsafe.c (ilp32)
+UNSAFE

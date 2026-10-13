@@ -43,10 +43,10 @@ case class CCTerm(t               : ITerm,
   def toTerm : ITerm = t
   def toFormula : IFormula = originalFormula getOrElse {
     t match {
+      case _ if typ.isInstanceOf[CCStackPointer] => true
       case IIntLit(value) => !value.isZero
       case t if typ.isInstanceOf[CCHeapPointer] =>
         !IExpression.Eq(t, typ.asInstanceOf[CCHeapPointer].nullAddr)
-      case t if typ == CCBool => t === ap.theories.ADT.BoolADT.True
       case t => !IExpression.eqZero(t)
     }
   }
@@ -59,6 +59,8 @@ case class CCTerm(t               : ITerm,
         this
       case (_: CCArithType, newType: CCArithType) =>
         newType cast this
+      case (_: CCPointer, CCBool) =>
+        CCBool cast this
       case (_: CCArithType, CCDuration) => {
         if (!CCReader.useTime)
           throw NeedsTimeException
@@ -101,10 +103,16 @@ case class CCTerm(t               : ITerm,
 
   def convertIfInteger(targetType : CCType) : CCTerm =
     (typ, targetType) match {
-      case (_ : CCArithType | CCMathInt, _ : CCArithType) =>
+      case (_ : CCArithType | CCMathInt, _ : CCArithType) |
+           (_ : CCPointer, CCBool) =>
         convertToType(targetType)
       case _ => this
     }
+
+  def applyIntegerPromotion : CCTerm = typ match {
+    case t : CCArithType if t.isNarrowerThanInt => convertToType(CCInt)
+    case _ => this
+  }
 }
 
 object CCTerm {
@@ -159,6 +167,10 @@ object CCTerm {
         unifyTypes(a.convertToType(enumUnificationType(e)), b)
       case (_, e : CCIntEnum) =>
         unifyTypes(a, b.convertToType(enumUnificationType(e)))
+      case (aType : CCArithType, _) if aType.isNarrowerThanInt =>
+        unifyTypes(a.applyIntegerPromotion, b)
+      case (_, bType : CCArithType) if bType.isNarrowerThanInt =>
+        unifyTypes(a, b.applyIntegerPromotion)
       case _ if a.typ == b.typ =>
         (a, b)
 

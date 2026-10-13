@@ -192,7 +192,7 @@ class HeapTheoryModel(context           : SymexContext,
       val prophTerm = getValue(memCleanupVar.get, nextState)
       val newProphTerm = CCTerm.fromTerm(
         IExpression.ite(
-          nondetTerm === ap.theories.ADT.BoolADT.True,
+          nondetTerm === 0,
           newAddrTerm.toTerm,
           prophTerm.toTerm), prophTerm.typ, None)
       nextState = updateValue(memCleanupVar.get, newProphTerm, nextState)
@@ -378,7 +378,7 @@ class HeapTheoryModel(context           : SymexContext,
       val rawRangeFromPtr = arrayPtrOps.getRange(newAddrRange.toTerm)
       val newProphTerm = CCTerm.fromTerm(
         IExpression.ite(
-          nondetTerm === ap.theories.ADT.BoolADT.True & size > 0,
+          nondetTerm === 0 & size > 0,
           context.heap.rangeNth(rawRangeFromPtr, 0),
           prophTerm.toTerm), prophTerm.typ, None)
       nextState = updateValue(memCleanupVar.get, newProphTerm, nextState)

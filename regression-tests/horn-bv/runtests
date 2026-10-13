@@ -34,3 +34,23 @@ for name in $TESTS; do
     echo $name
     $TRI_CMD -arithMode:ilp32 "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
 done
+
+TESTS="bool-init-and-store-from-int-safe.c bool-init-and-store-from-int-unsafe.c \
+       bool-truth-test-safe.c bool-truth-test-unsafe.c \
+       bool-promotion-safe.c bool-promotion-unsafe.c \
+       bool-int-casts-safe.c bool-int-casts-unsafe.c \
+       bool-struct-field-safe.c bool-struct-field-unsafe.c \
+       bool-heap-and-array-write-safe.c bool-heap-and-array-write-unsafe.c \
+       bool-call-arg-and-return-safe.c bool-call-arg-and-return-unsafe.c \
+       bool-nondet-range-safe.c bool-nondet-range-unsafe.c \
+       bool-from-pointer-init-safe.c bool-from-pointer-init-unsafe.c \
+       bool-from-pointer-store-safe.c bool-from-pointer-store-unsafe.c \
+       bool-from-pointer-cast-safe.c bool-from-pointer-cast-unsafe.c"
+
+for name in $TESTS; do
+    for mode in math ilp32; do
+        echo
+        echo "$name ($mode)"
+        $TRI_CMD -arithMode:$mode "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+    done
+done

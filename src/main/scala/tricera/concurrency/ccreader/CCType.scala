@@ -51,7 +51,7 @@ abstract sealed class CCType {
   def toSort : Sort = tricera.params.TriCeraParameters.get.arithMode match {
     case ArithmeticMode.Mathematical =>
       this match {
-        case CCBool                         => Sort.Bool
+        case CCBool                         => Sort.Interval(Some(0), Some(1))
         case CCMathInt                      => Sort.Integer
         case CCIntEnum(_, _)                => Sort.Integer
         case typ: CCArithType if typ.isUnsigned => Sort.Nat
@@ -68,7 +68,7 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.ILP32 =>
       this match {
-        case CCBool                         => Sort.Bool
+        case CCBool                         => UnsignedBVSort(1)
         case CCInt                          => SignedBVSort(32)
         case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
@@ -90,7 +90,7 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.LP64 =>
       this match {
-        case CCBool                         => Sort.Bool
+        case CCBool                         => UnsignedBVSort(1)
         case CCInt                          => SignedBVSort(32)
         case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
@@ -112,7 +112,7 @@ abstract sealed class CCType {
       }
     case ArithmeticMode.LLP64 =>
       this match {
-        case CCBool                         => Sort.Bool
+        case CCBool                         => UnsignedBVSort(1)
         case CCInt                          => SignedBVSort(32)
         case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
@@ -208,6 +208,8 @@ abstract sealed class CCType {
         t >= 0
       case ModSort(lower, upper) =>
         t >= lower & t <= upper
+      case Sort.Interval(Some(lower), Some(upper)) =>
+        t >= lower & t <= upper
       case _ => true // includes Integer, HeapAddress,
       // ADTs
     }
@@ -242,6 +244,7 @@ abstract sealed class CCType {
   private def castIsAllowed(newType : CCType) : Boolean = {
     val isInvariantEncoding = TriCeraParameters.get.invEncoding.nonEmpty
     this match {
+      case CCBool if newType.isInstanceOf[CCPointer] => true
       case typ if !isInvariantEncoding &&
                   (typ.isArithType && newType.isPointerType
                    || typ.isPointerType && newType.isArithType) => false
@@ -249,8 +252,13 @@ abstract sealed class CCType {
     }
   }
 
-  def cast(t: ITerm) : ITerm = toSort match {
-    case s : ModSort => cast2Sort(s, t)
+  // converting to _Bool gives 1 for every nonzero value, not v % 2
+  def cast(t: ITerm) : ITerm = (this, toSort) match {
+    case (CCBool, _) => t match {
+      case Const(v) => IIntLit(if (v.isZero) 0 else 1)
+      case _        => ite(t === 0, 0, 1)
+    }
+    case (_, s : ModSort) => cast2Sort(s, t)
     case _ => t
   }
 
@@ -279,6 +287,8 @@ abstract sealed class CCType {
         " Casts between pointer and arithmetic types are not supported.")
     }
     e match {
+      case _ if this == CCBool =>
+        CCTerm.fromFormula(e.toFormula, this, e.srcInfo)
       case CCTerm(t, fromType, srcInfo, None) =>
         CCTerm.fromTerm(cast(wrapNegativeIntoUnsignedRange(t, fromType)),
                         this, srcInfo)
@@ -311,6 +321,7 @@ abstract sealed class CCType {
 abstract class CCArithType extends CCType {
   val UNSIGNED_RANGE : IdealInt
   val isUnsigned     : Boolean
+  def isNarrowerThanInt : Boolean = UNSIGNED_RANGE < CCInt.UNSIGNED_RANGE
 }
 
 case object CCVoid extends CCType {
@@ -318,10 +329,12 @@ case object CCVoid extends CCType {
   def shortName = "void"
 }
 
-// Logical type - only to be used in ghost code & annotations
-case object CCBool extends CCType {
+// _Bool, also the acsl boolean type
+case object CCBool extends CCArithType {
   override def toString : String = "boolean"
   def shortName = "boolean"
+  val UNSIGNED_RANGE : IdealInt = IdealInt.ONE
+  val isUnsigned     : Boolean  = true
 }
 
 case object CCInt extends CCArithType {
