@@ -373,15 +373,6 @@ class Main (args: Array[String]) {
         new FileOutputStream(dest).getChannel transferFrom(
           new FileInputStream(preprocessedFile) getChannel, 0, Long.MaxValue)
       }
-      //if (res.usesArrays)
-      //  return ExecutionSummary(ArrayError, Nil, false, 0, preprocessTimer.s)
-      //throw new MainException("C arrays are not supported (yet)")
-      //      /*else*/ if (res.isUnsupported)
-      //        return ExecutionSummary(
-      //          OtherError("Unsupported - detected by preprocessor"),
-      //            Nil, false,  0, preprocessTimer.s)
-      //throw new MainException("Input file has unsupported C features " +
-      //  "(e.g. varargs)") // todo: more detail
       if(preprocessedFile.length() == 0 && pp.hasError) {
         Util.warn(
           """TriCera preprocessor (tri-pp) returned an empty file - attempting
@@ -484,7 +475,7 @@ class Main (args: Array[String]) {
         }
       }
     }
-    if(devMode) // todo: make part of -assert?
+    if(devMode) // dev-mode check for same-named terms
       checkForSameNamedTerms
 
     modelledHeap = modelledHeapRes

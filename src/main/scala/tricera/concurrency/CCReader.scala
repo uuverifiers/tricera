@@ -808,8 +808,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           HeapTheoryObject.CtorSignature(List(("get" + name, signature.result)), ObjSort))
       })
 
-  // TODO: use ADT/Heap depending on HeapModel, and move heap theory declaration
-  //       to HeapModel.
+  // todo: use an ADT or the heap theory depending on the HeapModel, and move
+  //       the heap theory declaration into HeapModel
   val heap = TriCeraParameters.get.heapModel match {
     case TriCeraParameters.NativeHeap =>
       new NativeHeap("Heap", "Addr", "AddrRange", ObjSort,
@@ -851,7 +851,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   val sortCtorIdMap : Map[Sort, Int] =
     objectSorts.zip(0 until wrapperCount).toMap
 
-  // todo: get rid of this
+  // todo: collect heap object types before translation instead of restarting
   def forceHeapObjectWrappers(typs : Iterable[CCType]) : Nothing = {
     val fresh = typs.filter(t => CCReader.forcedObjectWrapperTypes.put(t.toSort, t).isEmpty).toList
     if (fresh.nonEmpty) throw NeedsObjectWrapperException
@@ -1117,7 +1117,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         (AnnotationParser(annot), getSourceInfo(annot))
       }).flatten)
     }
-    // todo: what about functions without definitions? replace Afunc type
     val functionAnnotations : Map[FuncDef, scala.Seq[(AnnotationInfo, SourceInfo)]] =
       prog.asInstanceOf[Progr].listexternal_declaration_.asScala.collect {
         case f : Afunc  =>
@@ -1289,12 +1288,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         }
 
         override val annotationBeginSourceInfo : SourceInfo = fun.sourceInfo
-
-        override val annotationNumLines : Int = // todo: this is currently incorrect - to be fixed!
-          functionAnnotations(fun).head._1 match {
-            case inv : MaybeACSLAnnotation => inv.annot.count(_ == '\n')+1
-            case _ => 1
-          }
       }
 
       val funContext = new FunctionContext(prePred, postPred,
@@ -1361,7 +1354,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           val exitPred = newPred(resVar, Some(getLastSourceInfo(b)))
           output(addRichClause(
             entryPred(prePredArgs ++ prePredArgs) :- prePred(prePredArgs),
-            Some(f.sourceInfo)))// todo: correct source info?
+            Some(f.sourceInfo)))
           val translator = FunctionTranslator(exitPred, name)
           if (bodyCaptures(stm).nonEmpty)
             throw new TranslationException(getLineString(Some(f.sourceInfo)) +
@@ -1648,7 +1641,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             // function declaration
             case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
               CCFunctionDeclaration(name, typeWithPtrs, directDecl,
-                initDeclWrapper.sourceInfo) // todo: check that typeWithPtrs is correct here
+                initDeclWrapper.sourceInfo)
             // array declaration
             case _: InitArray | _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
               val (arrayType, initArrayExpr) = {
@@ -1670,8 +1663,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 (heapModelFactory.makeArrayPointer(typeWithPtrs, arrayLocation)
                    .copy(declaredSize = declaredSize), initArrayExpr)
               }
-              // todo: adjust needsHeap below if an array type does not require heap
-              // for instance if we model arrays using the theory of arrays or unroll
               CCVarDeclaration(name, arrayType, initDeclWrapper.maybeInitializer,
                 initDeclWrapper.hints, isArray = true, isStatic = isStatic,
                 needsHeap = true, initArrayExpr = initArrayExpr,
@@ -1693,8 +1684,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 }
                 (CCArray(typeWithPtrs, sizeTerm, sizeInt, ExtArray(scala.Seq(CCInt.toSort), typeWithPtrs.toSort), arrayLocation), initArrayExpr)
               }
-              // todo: adjust needsHeap below if an array type does not require heap
-              // for instance if we model arrays using the theory of arrays or unroll
               CCVarDeclaration(name, arrayType, initDeclWrapper.maybeInitializer,
                 initDeclWrapper.hints, isArray = true, isStatic = isStatic,
                 needsHeap = false, initArrayExpr = initArrayExpr,
@@ -2024,7 +2013,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             values.restoreState
             interpPredDefs += predExp.cident_ -> predFormula
         }
-      case CCNoDeclaration => // todo: nothing?
+      case CCNoDeclaration =>
     }
   }
 
@@ -2203,7 +2192,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     spec.struct_or_union_spec_ match {
       case _ : Unique => collectStructInfo(spec, getAnonStructName)
       case tagged : Tag => collectStructInfo(spec, tagged.cident_)
-      case _ => // todo: do nothing for TagType
+      case _ : TagType => // a tag reference defines no fields
     }
   }
 
@@ -2250,14 +2239,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               Left(structInfos.size - 1)
             case i => Left(i)
           }
-        // todo: get pointer depth
-        /*case t : Tstruct if t.struct_or_union_spec_.isInstanceOf[TagType] &&
-          (getStructName(t) == structName || structIsDeclared(getStructName(t))) &&
-          field.asInstanceOf[Structen].liststruct_declarator_(0).asInstanceOf[Decl].declarator_.isInstanceOf[BeginPointer] =>
-          CCDeclarationOnlyPointer(getStructName(t))
-        //todo: some error handling here?
-        case t : Tstruct if structInfos contains getStructName(t) =>
-          getType(field)*/
         case _ => Right(getType(field))
       }
       val declarators = field.asInstanceOf[Structen].liststruct_declarator_.asScala.toSeq
@@ -2273,7 +2254,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           case _ : BeginPointer => 1 //todo:heap find out actual depth
           case _ => 0
         }
-        FieldInfo(fieldName, fieldType, ptrDepth) // todo: deal with pointer fields
+        FieldInfo(fieldName, fieldType, ptrDepth)
       }
     }).toList.flatten.toIndexedSeq
 
@@ -2403,21 +2384,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     }
   }
 
-  /*private def updateArraySize (arrayTyp : CCArray, decl : OnlyDecl) = {
-    if (arraySizes contains arrayTyp)
-      throw new TranslationException(
-        "size of " + arrayTyp + " is already defined")
-
-    val symex = Symex(symexContext, scope, null) // a temporary Symex to collect the array size
-
-    /*val arraySize = decl match {
-      case initArray : InitArray => // todo: maybe this can be calculated beforehand, so we actually have an integer constant here?
-        Some(symex.eval(initArray.constant_expression_.asInstanceOf[Especial].exp_)) // todo: n-d arrays?
-      case _ : Incomplete => None // no size information
-    }*/
-    arraySizes += ((arrayTyp, arraySize))
-  }*/
-
   private def getType(typespec : Type_specifier) : CCType = {
     getType(scala.Seq(typespec).iterator)
   }
@@ -2488,7 +2454,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         getType(listDeclSpecs)
       case None => CCInt
     }
-    if(f.decl.isInstanceOf[BeginPointer]) heapModelFactory.makePointer(typ) // SSSOWO Still relevant: todo: can be stack pointer too, this needs to be fixed
+    if(f.decl.isInstanceOf[BeginPointer]) heapModelFactory.makePointer(typ) // todo: the return type can also be a stack pointer
     else typ
   }
   private def getType(functionDef : Function_def) : CCType = {
@@ -2953,7 +2919,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       override val getStructMap : Map[IFunction, CCStruct] =
         structDefs.values.map((struct : CCStruct) => (struct.ctor, struct)).toMap
       override val annotationBeginSourceInfo : SourceInfo = srcInfo
-      override val annotationNumLines : Int = 1
     }
 
     private def isArrayType(t : CCType) : Boolean = t match {
@@ -3419,9 +3384,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           val decSymex = Symex(symexContext, scope, entryPred, heapModel)
           collectVarDecls(stmsIt.next.asInstanceOf[DecS].dec_,
                           false, decSymex, functionName, false)
-          val srcInfo = entryPred.srcInfo // todo: correct srcInfo?
+          val srcInfo = entryPred.srcInfo
           entryPred = newPred(Nil,
-            if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None) // todo: correct?
+            if(stmsIt.hasNext) Some(getSourceInfo(stmsIt.peekNext)) else None)
           entryClause = merge((decSymex genClause(entryPred, srcInfo)).clause, entryClause)
         }
         output(addRichClause(entryClause, entryPred.srcInfo))
@@ -3789,7 +3754,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     private def translate(jump : Jump_stm,
                           entry : CCPredicate,
                           exit : CCPredicate) : Unit = {
-      val srcInfo = Some(getSourceInfo(jump)) // todo: correct line no?
+      val srcInfo = Some(getSourceInfo(jump))
       jump match {
         case jump : SjumpOne   => { // goto
           jumpLocs += ((jump.cident_, entry, scope.allFormalVarTerms, clauses.size,

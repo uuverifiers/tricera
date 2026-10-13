@@ -66,7 +66,6 @@ object Symex {
 
   private implicit class toRichTerm(val expr : CCTerm) extends AnyVal {
     def mapTerm(m : ITerm => ITerm) : CCTerm =
-      // TODO: type promotion when needed
       CCTerm.fromTerm(expr.typ cast m(expr.toTerm), expr.typ, expr.srcInfo)
   }
 }
@@ -143,7 +142,7 @@ class Symex private (context        : SymexContext,
 
       val varMapping =
         (for (d <- v.occurringConstants.iterator;
-              index = scope.lookupVarNoException(d.name, "")) // TODO: can probably specify enclosing function?
+              index = scope.lookupVarNoException(d.name, "")) // todo: "" misses static locals; pass the function or look up by term
         yield (d -> index)).toMap
 
       if (varMapping forall { case (_, ind) => ind >= 0 }) {
@@ -409,7 +408,7 @@ class Symex private (context        : SymexContext,
       pushVal(CCTerm.fromFormula(true, CCVoid, None))
       for (exp <- exps) {
         popVal
-        evalHelp(exp)(EvalSettings(), evalCtx) // todo: EvalSettings(true)?
+        evalHelp(exp)(EvalSettings(), evalCtx)
       }
     }
 
@@ -465,8 +464,6 @@ class Symex private (context        : SymexContext,
   }
 
   // Returns the root term and a list of selectors pointing to the given field.
-  // todo: this works incorrectly when root is not a pointer but the field is
-  // e.g. getInt(read(h, f(someStruct)))
   private def getFieldInfo(nested : IFunApp) :
   (List[IFunction], Either[SortedConstantTerm, IFunApp]) = {
     val fieldSelectors = List()
@@ -1381,7 +1378,7 @@ class Symex private (context        : SymexContext,
           }
         case _ : Indirection =>
           val v = popVal
-          v.typ match { // todo: type checking?
+          v.typ match {
             case ptr : CCStackPointer => pushVal(getPointedTerm(ptr))
             case   _ : CCHeapPointer =>
               if(evalCtx.evaluatingLHS) pushVal(v)
@@ -1601,9 +1598,7 @@ class Symex private (context        : SymexContext,
           // then we inline the called function
 
           // evaluate the arguments
-          // todo: if we are to handle a function contract, arguments are handled
-          // as heap pointers. if the function is to be inlined, then arguments
-          // are handled as stack pointers. here we set a flag to notify this
+          // contract calls take pointer arguments as heap pointers, inlined calls as stack pointers
           val handlingFunctionContractArgs = context.functionContexts.contains(name)
           val newEvalCtx = evalCtx
             .withHandlingFunContractArgs(handlingFunctionContractArgs)
@@ -1689,7 +1684,7 @@ class Symex private (context        : SymexContext,
       val rawFieldName = exp.cident_
       val term = subexpr.typ match {
         case ptrType : CCStackPointer => getPointedTerm(ptrType)
-        case _ : CCHeapPointer =>  //todo: error here if field is null
+        case _ : CCHeapPointer =>
           processHeapResult(heapModel.read(subexpr, values, getStaticLocationId(exp))).get
         case _ => throw new TranslationException(
           "Trying to access field '->" + rawFieldName + "' of non pointer.")

@@ -239,15 +239,14 @@ abstract sealed class CCType {
    *       In fact this check would be too strong in some cases (e.g., *p = 0),
    *       checking the values is needed to relax this check, which is not
    *       possible to do in this class.
-   * @todo Do we still need this?
    */
-  private def castIsAllowed(newType : CCType) : Boolean = {
+  private def castIsAllowed(sourceType : CCType) : Boolean = {
     val isInvariantEncoding = TriCeraParameters.get.invEncoding.nonEmpty
     this match {
-      case CCBool if newType.isInstanceOf[CCPointer] => true
+      case CCBool if sourceType.isInstanceOf[CCPointer] => true
       case typ if !isInvariantEncoding &&
-                  (typ.isArithType && newType.isPointerType
-                   || typ.isPointerType && newType.isArithType) => false
+                  (typ.isArithType && sourceType.isPointerType
+                   || typ.isPointerType && sourceType.isArithType) => false
       case _ => true
     }
   }
@@ -558,7 +557,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
                          sizeExpr,
                          Some(arraySize),
                          arrayTheory,
-                         arrayLocation) => // todo: use arrLoc?
+                         arrayLocation) =>
               val initialArrayTerm =
                 new SortedConstantTerm(field._1.name, arrayTheory.objSort)
               def arrayBatchStore(arr: ITerm, ind: Int, n: Int): ITerm = {

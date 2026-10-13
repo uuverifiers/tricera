@@ -71,7 +71,6 @@ case class CCTerm(t               : ITerm,
       case (CCMathInt, _: CCArithType) =>
         newType cast this
       case (_, CCVoid) => this
-      // todo: do not do anything for casts to void?
       case (_: CCArithType, newType: CCHeapPointer) =>
         toTerm match {
           case lit: IIntLit if lit.value.intValue == 0 =>

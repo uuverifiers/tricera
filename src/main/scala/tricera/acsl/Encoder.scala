@@ -45,12 +45,10 @@ import tricera.concurrency.CCReader.{CCAssertionClause, CCClause}
 
 
 // FIXME: Maybe just object? Or create companion?
-// FIXME: We should try not to have to pass around the reader object itself,
-//        but only necessary data therein.
+// todo: pass only the data Encoder needs instead of the reader
 class Encoder(reader : CCReader) {
   import tricera.Literals.{predPostSuffix, predPreSuffix}
   // FIXME: Static, goes in companion object?
-  // FIXME: Check if correct construction of false head.
   val falseHead = new IAtom(FALSE, Seq())
 
   // FIXME: Maybe access these via some Context object?

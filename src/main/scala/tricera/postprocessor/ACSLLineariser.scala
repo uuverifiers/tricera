@@ -456,7 +456,9 @@ object ACSLLineariser {
         case IFunApp(fun, _) => {
           if (fun.arity == 1) {
             allButLast(ctxt setPrecLevel 0, ".", "." + ACSLExpression.fun2Identifier(fun), 1)
-          } else if (fun.arity > 0) { // todo: should not be possible in ACSL
+          } else if (fun.arity > 0) {
+            // todo: should not be reached; these functions have no ACSL
+            //       counterpart and are printed as plain applications
             print(ACSLExpression.fun2Identifier(fun))
             print("(")
             allButLast(ctxt setPrecLevel 0, ", ", ")", fun.arity)

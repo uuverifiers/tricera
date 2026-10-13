@@ -706,10 +706,6 @@ class CCAstStackPtrArgToGlobalTransformer(val entryFunctionId: String)
      functionDeclarations.get(funcName)) match {
       case (Some(_), Some(funcDef), _) =>
         val exp = super.visit(callSite, transforms)
-        // TODO: This will not work if function is invoked through
-        //   a pointer. Then we don't know the name of the function
-        //   being invoked. Therefore we can't create/invoke a
-        //   transformed function.
         transformCall(CallSiteTransform(this, funcDef, callSite), exp)
       case (Some(_), None, Some(funcDecl)) =>
         // bodyless callee: stays bodyless so the contract is assumed, not checked

@@ -61,7 +61,6 @@ object ACSLTranslator {
     def getOldHeapTerm : ITerm
     val getStructMap: Map[IFunction, CCStruct]
     val annotationBeginSourceInfo : SourceInfo
-    val annotationNumLines : Int
     def enumeratorDefs : scala.collection.Map[String, CCTerm] = Map.empty
     def acslPredicateDefs : scala.collection.Map[String, PredicateDef] = Map.empty
   }
@@ -253,7 +252,6 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   var vars: Map[String, CCVar] = Map()
   var inPostCond = false
   var useOldHeap = false
-  // TODO: Make all `translate` private?
 
   // maps a predicate's label parameter to the `\at` label it is bound to
   private val labelBindings = new MHashMap[String, String]
@@ -261,7 +259,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   private var inliningStack  : List[String] = Nil
 
   // ---- Statement annotations (e.g., assertions) -----------
-  def translate(assertAnnotation : AST.Assertion,
+  private def translate(assertAnnotation : AST.Assertion,
                 stmCtx           : StatementAnnotationContext)
   : StatementAnnotation = {
     val srcInfo = getSourceInfo(assertAnnotation)
@@ -287,7 +285,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   }
 
   // ---- Loop annotations -----------------------------------
-  def translate(loopInvariantAnnotation : AST.LoopInvariant,
+  private def translate(loopInvariantAnnotation : AST.LoopInvariant,
                 stmCtx                  : StatementAnnotationContext)
   : LoopAnnotation = {
     loopInvariantAnnotation match {
@@ -298,7 +296,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   }
 
   // ---- Contracts ------------------------------------------
-  def translate(contract : AST.FunctionContract) : FunctionContract = contract match {
+  private def translate(contract : AST.FunctionContract) : FunctionContract = contract match {
     case c : AST.Contract =>
       val rcs = c.listrequiresclause_.asScala.toList
       val scs = c.listsimpleclause_.asScala.toList
@@ -445,7 +443,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   }
 
   // FIXME: Return ITerm directly?
-  def translateAssigns(clause : AST.AssignsClause)
+  private def translateAssigns(clause : AST.AssignsClause)
     : (Set[CCTerm], Set[CCTerm], Set[(String, CCArray, CCTerm)]) = {
     val srcInfo = getSourceInfo(clause)
     val funCtx = ctx.asInstanceOf[FunctionContext]
@@ -522,12 +520,12 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   /**
    * Translates assigns / ensures clauses.
    */
-  def translate(clause : AST.SimpleClause) : CCTerm = clause match {
+  private def translate(clause : AST.SimpleClause) : CCTerm = clause match {
     case ac : AST.SimpleClauseAssigns => throwNotImpl(ac)
     case ec : AST.SimpleClauseEnsures => translate(ec.ensuresclause_)
   }
 
-  def translate(clause : AST.EnsuresClause) : CCTerm = {
+  private def translate(clause : AST.EnsuresClause) : CCTerm = {
     val funCtx = ctx.asInstanceOf[FunctionContext]
     inPostCond = true
     // params shadow globals in annotations
@@ -538,7 +536,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     res
   }
 
-  def translate(clause : AST.RequiresClause) : CCTerm = {
+  private def translate(clause : AST.RequiresClause) : CCTerm = {
     val funCtx = ctx.asInstanceOf[FunctionContext]
     vars = (ctx.getGlobals.map(v => (v.name, funCtx.getOldGlobalVar(v.name).get)) ++
         funCtx.getParams.map(v => (v.name, funCtx.getOldVar(v.name).get))).toMap
@@ -604,7 +602,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     case e : AST.EResult      => translateResultExpr(e)
   }
 
-  def translateLitExpr(lit : AST.Lit) : CCTerm = {
+  private def translateLitExpr(lit : AST.Lit) : CCTerm = {
     import IExpression._
     import ap.basetypes.IdealInt
     val srcInfo = Some(getSourceInfo(lit))
@@ -646,7 +644,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateComparison(expr : AST.EComparison) : CCTerm = {
+  private def translateComparison(expr : AST.EComparison) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
     val comparisons = expr.listcomparison_.asScala.toList.map(
       _.asInstanceOf[AST.AComparison])
@@ -687,7 +685,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     CCTerm.fromFormula(IExpression.and(formulas), CCBool, Some(srcInfo))
   }
 
-  def translateArith(expr : AST.Expr) : CCTerm = {
+  private def translateArith(expr : AST.Expr) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
     def binArith(l : AST.Expr, r : AST.Expr)
                 (op : (ITerm, ITerm) => ITerm) : CCTerm = {
@@ -720,7 +718,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
   /**
    * Helper function to translate expressions into predicates.
    */
-  def translatePred(expr : AST.Expr) : CCTerm = {
+  private def translatePred(expr : AST.Expr) : CCTerm = {
     val t = translate(expr)
     t.typ match {
       case _ if t.originalFormula.nonEmpty => t
@@ -737,7 +735,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
    * Helper function to translate expressions into terms.
    * Throws an error if the expression is not an actual term.
    */
-  def translateTerm(expr : AST.Expr) : CCTerm = {
+  private def translateTerm(expr : AST.Expr) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
     val t = translate(expr)
     t match {
@@ -752,7 +750,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
    * Translate logical operators that are only applicable to predicates.
    * I.e.,: "&&" | "||" | "==>" | "<==>" | "^^"
    */
-  def translateBinaryLogicOp(expr : AST.Expr) : CCTerm = {
+  private def translateBinaryLogicOp(expr : AST.Expr) : CCTerm = {
     val srcInfo = Some(getSourceInfo(expr))
     expr match {
       case e : AST.EEquiv => // <==>
@@ -788,7 +786,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
    *   term ? pred : pred -> pred
    *   pred ? pred : pred -> pred
    */
-  def translateTernary(expr : AST.ETernary) : CCTerm = {
+  private def translateTernary(expr : AST.ETernary) : CCTerm = {
     val cond : CCTerm = translate(expr.expr_1)
     val left : CCTerm = translate(expr.expr_2)
     val right : CCTerm = translate(expr.expr_3)
@@ -820,7 +818,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateBinding(expr : AST.EBinding) : CCTerm = {
+  private def translateBinding(expr : AST.EBinding) : CCTerm = {
     val bound = translate(expr.expr_1)
     val saved = locals.put(expr.id_, bound)
     try translate(expr.expr_2) finally {
@@ -831,7 +829,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateQuantified(pred : AST.Expr) : CCTerm = {
+  private def translateQuantified(pred : AST.Expr) : CCTerm = {
     val srcInfo = getSourceInfo(pred)
     val (binders, bodyExpr, quantifier) = pred match {
       case expr : AST.EForAll =>
@@ -946,13 +944,12 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
 //    translate(pred.predicate_)
 //  }
 
-  // todo: this probably should work for statement annotations too
-  def translateValidExpr(expr : AST.EValid) : CCTerm =
+  private def translateValidExpr(expr : AST.EValid) : CCTerm =
     translateValidLocations(
       expr.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_),
       getSourceInfo(expr))
 
-  def translateValidReadExpr(expr : AST.EValidRead) : CCTerm = {
+  private def translateValidReadExpr(expr : AST.EValidRead) : CCTerm = {
     tricera.Util.warn(
       "\\valid_read is treated as \\valid (read-only memory is not modeled)")
     translateValidLocations(
@@ -1022,7 +1019,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       case t => throwNotImpl(t)
     }
 
-  def translateSeparatedExpr(expr : AST.ESeparated) : CCTerm = {
+  private def translateSeparatedExpr(expr : AST.ESeparated) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
     val tSets : List[AST.TSet] =
       expr.listlocation_.asScala.toList.map(_.asInstanceOf[AST.ALocation].tset_)
@@ -1038,7 +1035,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     CCTerm.fromFormula(res, CCBool, Some(srcInfo))
   }
 
-  def translateIdentExpr(t : AST.EIdent) : CCTerm = {
+  private def translateIdentExpr(t : AST.EIdent) : CCTerm = {
     val srcInfo = getSourceInfo(t)
     val ident = t.id_
     // Predicate parameters and quantified variables shadow program variables.
@@ -1057,8 +1054,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         s"Identifier $ident not found in scope.", srcInfo))
   }
 
-  def translateUnary(expr : AST.EUnary) : CCTerm = {
-    // FIXME: Probably needs type conversions.
+  private def translateUnary(expr : AST.EUnary) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
     expr.unaryop_ match {
       case _ : AST.UnaryPlus =>
@@ -1093,7 +1089,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateAddressOfArrayElement(term : AST.EArrayAccess) : CCTerm = {
+  private def translateAddressOfArrayElement(term : AST.EArrayAccess) : CCTerm = {
     val srcInfo = getSourceInfo(term)
     val array = translateTerm(term.expr_1)
     val index = translateTerm(term.expr_2)
@@ -1109,12 +1105,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  // todo: move heap getters to Context from FunctionContext, these should be usable from statement annoations too
-  //  otherwise we cannot use array accesses inside assertions.
-  def translateArrayAccessExpr(term : AST.EArrayAccess) : CCTerm = {
+  private def translateArrayAccessExpr(term : AST.EArrayAccess) : CCTerm = {
     import ap.parser.IExpression.toFunApplier
     val srcInfo = getSourceInfo(term)
-    // TODO: Untested
     val array = translateTerm(term.expr_1)
     val index = translateTerm(term.expr_2)
     array.typ match {
@@ -1137,23 +1130,22 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
           throw new ACSLParseException(s"Cannot access $array[$index].", srcInfo)
         )
         CCTerm.fromTerm(getObj(readObj), p.elementType, array.srcInfo)
-      case p : CCArray => // todo: currently does not use wrappers, should match the encoding in CCReader
+      case p : CCArray =>
         val readObj: IFunApp = p.arrayTheory.select(array.toTerm, index.toTerm)
         val getObj: IFunction = ctx.sortGetter(p.elementType.toSort).getOrElse(
           throw new ACSLParseException(s"Cannot access $array[$index].", srcInfo)
         )
-        //CCTerm.fromTerm(getObj(readObj), p.elementType, array.srcInfo)
         CCTerm.fromTerm(readObj, p.elementType, array.srcInfo)
       case _ =>
         throw new ACSLParseException("Array access could not be handled.", srcInfo)
     }
   }
 
-  def translateStructFieldAccessExpr(expr: AST.EStructFieldAccess) : CCTerm =
+  private def translateStructFieldAccessExpr(expr: AST.EStructFieldAccess) : CCTerm =
     getField(translate(expr.expr_), expr.id_,
                  printer.print(expr), getSourceInfo(expr))
 
-  def translateStructPtrFieldAccessExpr(expr : AST.EStructPtrFieldAccess)
+  private def translateStructPtrFieldAccessExpr(expr : AST.EStructPtrFieldAccess)
   : CCTerm = {
     val srcInfo = getSourceInfo(expr)
     val ptr     = translate(expr.expr_)
@@ -1207,7 +1199,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     res
   }
 
-  def translateOldExpr(expr : AST.EOld) : CCTerm =
+  private def translateOldExpr(expr : AST.EOld) : CCTerm =
     if (ctx.isInstanceOf[FunctionContext]) translateInOldState(expr.expr_)
     else throw new ACSLParseException(
       "\\old is not visible in a statement annotation; use \\at(e, Pre)",
@@ -1228,7 +1220,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateAtExpr(expr : AST.EAt) : CCTerm = {
+  private def translateAtExpr(expr : AST.EAt) : CCTerm = {
     val labelId = labelBindings.getOrElse(expr.id_, expr.id_)
     Label(labelId) match {
       case Label.Pre | Label.Old if ctx.isInstanceOf[FunctionContext] =>
@@ -1240,7 +1232,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateApplicationExpr(expr : AST.EApplication) : CCTerm =
+  private def translateApplicationExpr(expr : AST.EApplication) : CCTerm =
     inlinePredicate(expr.id_, expr.listexpr_.asScala.toList, getSourceInfo(expr))
 
   private def inlinePredicate(name     : String,
@@ -1276,7 +1268,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     }
   }
 
-  def translateResultExpr(expr : AST.EResult) : CCTerm = {
+  private def translateResultExpr(expr : AST.EResult) : CCTerm = {
     val srcInfo = getSourceInfo(expr)
     if (!ctx.isInstanceOf[FunctionContext])
       throw new ACSLParseException(

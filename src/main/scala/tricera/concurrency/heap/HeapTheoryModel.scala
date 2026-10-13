@@ -113,7 +113,7 @@ final class HeapTheoryFactory(context : SymexContext,
 class HeapTheoryModel(context           : SymexContext,
                       scope             : CCScope,
                       val heapVar       : CCVar, // TODO: make these private, currently not because of ACSL
-                      val memCleanupVar : Option[CCVar],
+                      memCleanupVar : Option[CCVar],
                       val arrayPtrOps   : ArrayPtrOps) extends HeapModel {
   import HeapModel._
 
@@ -160,7 +160,6 @@ class HeapTheoryModel(context           : SymexContext,
         CCInt, loc.srcInfo)
       assertions = (safetyFormula, properties.MemValidDeref) :: assertions
       assumptions = safetyFormula :: assumptions
-      // todo: add tester methods for user ADT sorts?
     }
     SimpleResult(
       returnValue = Some(CCTerm.fromTerm(objectGetter(readObj), typ, p.srcInfo)),
@@ -283,7 +282,6 @@ class HeapTheoryModel(context           : SymexContext,
         }
       case arrayPtr: CCHeapArrayPointer =>
         val rawRange = arrayPtrOps.getRange(p.toTerm)
-        // todo: what about ADTs?
         if (context.propertiesToCheck.contains(properties.MemValidFree)) {
           arrayPtr.arrayLocation match {
             case ArrayLocation.Heap =>
@@ -351,7 +349,7 @@ class HeapTheoryModel(context           : SymexContext,
                           size     : ITerm,
                           arrayLoc : ArrayLocation.Value,
                           s        : scala.Seq[CCTerm]) : HeapOperationResult = {
-    // TODO: remvoe the wrappers from here too!
+    // todo: take an already wrapped object, as alloc does
     val newBatchAlloc =
       context.heap.allocRange(getValue(heapVar, s).toTerm,
                               context.sortWrapperMap.getOrElse(o.typ.toSort,
