@@ -9,3 +9,9 @@ for name in $TESTS; do
     echo $name
     $TRI_CMD -invEncoding:RW-fun-tag-opt-p -reachsafety "$@" ../horn-hcc-heap/$name 2>&1 | grep -v 'at '
 done
+
+for name in simple-struct.c simple-struct-unsafe.c; do
+    echo
+    echo $name R-tag-opt
+    $TRI_CMD -invEncoding:R-tag-opt -reachsafety "$@" ../horn-hcc-heap/$name 2>&1 | grep -v 'at '
+done

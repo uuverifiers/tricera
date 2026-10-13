@@ -111,3 +111,9 @@ illegal-access-002.c
 tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer assignment only supports 0 (NULL)
 (error "Pointer assignment only supports 0 (NULL)")
 Other Error: Pointer assignment only supports 0 (NULL)
+
+simple-struct.c R-tag-opt
+SAFE
+
+simple-struct-unsafe.c R-tag-opt
+UNSAFE

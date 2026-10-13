@@ -238,6 +238,12 @@ trait HeapModel {
   def getExitAssertions(exitPreds : scala.Seq[CCPredicate]) : scala.Seq[CCAssertionClause]
 
   /**
+   * Terms that code injected by the model calls by name, 
+   * e.g., the default object in the invariant encoding.
+   */
+  def builtinTerms : Map[String, CCTerm]
+
+  /**
    * Hooks for the ACSL translator to get the pre/post-state heap terms.
    * These assume [[HeapTheoryModel]], so ideally should not be part of this
    * interface.

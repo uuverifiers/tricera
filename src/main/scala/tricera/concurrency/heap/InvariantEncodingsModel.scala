@@ -277,6 +277,10 @@ class InvariantEncodingsModel(context  : SymexContext,
 
   override def getExitAssertions(exitPreds : Seq[CCPredicate]) = Seq()
 
+  override val builtinTerms : Map[String, CCTerm] = Map(
+    "$HEAP_TYPE_DEFAULT" -> CCTerm.fromTerm(context.heap.defaultObject,
+                                            CCHeapObject(context.heap), None))
+
   // ACSL stuff, these should be refactored to not require a heap term
   override def getACSLPreStateHeapTerm(
     acslContext : ACSLTranslator.FunctionContext) : ITerm = ???

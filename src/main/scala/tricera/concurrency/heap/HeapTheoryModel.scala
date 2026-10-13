@@ -579,4 +579,6 @@ class HeapTheoryModel(context           : SymexContext,
       scala.Seq()
     }
   }
+
+  override def builtinTerms : Map[String, CCTerm] = Map()
 }

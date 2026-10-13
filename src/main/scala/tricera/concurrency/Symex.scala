@@ -1438,10 +1438,8 @@ class Symex private (context        : SymexContext,
           /** Treat abort as assert(0). */
           assertProperty(false, srcInfo, properties.UserAssertion())
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
-        case "$HEAP_TYPE_DEFAULT" =>
-          /** A builtin to access the default object of the heap */
-          pushVal(CCTerm.fromTerm(context.heap.defaultObject,
-                                  CCHeapObject(context.heap), srcInfo))
+        case name if maybeHeapModel.exists(_.builtinTerms contains name) =>
+          pushVal(heapModel.builtinTerms(name).copy(srcInfo = srcInfo))
         case name =>
           outputClause(srcInfo)
           handleFunction(name, initPred, 0)
