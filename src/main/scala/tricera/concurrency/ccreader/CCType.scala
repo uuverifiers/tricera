@@ -477,17 +477,8 @@ case class CCStruct(ctor : MonoSortedIFunction,
     val hd :: tl = fieldAddress
     val sel      = getADTSelector(hd)
     getFieldType(hd) match {
-      case nested: CCStructField =>
-        tl match {
-          case Nil => sel(t)
-          case _   => nested.structs(nested.structName).getFieldTerm(sel(t), tl)
-        }
-      case nested: CCStruct => // todo: simplify
-        tl match {
-          case Nil => sel(t)
-          case _   => nested.getFieldTerm(sel(t), tl)
-        }
-      case _ => sel(t)
+      case nested : CCStruct if tl.nonEmpty => nested.getFieldTerm(sel(t), tl)
+      case _                                => sel(t)
     }
   }
   def setFieldTerm(rootTerm     :     ITerm,
@@ -567,21 +558,8 @@ case class CCStruct(ctor : MonoSortedIFunction,
                   val innerArr = arrayTheory.store(
                     arr,
                     Int2ITerm(ind),
-                    if (values.isEmpty) {
-                      if (elemTyp
-                            .isInstanceOf[CCArithType]) {
-                        IIntLit(0)
-                        // todo: use actual
-                        //  sorts! need rich
-                        //  types here
-                      } else {
-                        throw new TranslationException("")
-                        // todo: this can be
-                        //  supported if we
-                        //  have access to
-                        //   rich types here
-                      }
-                    } else values.pop(elemTyp)
+                    if (values.isEmpty) elemTyp.getZeroInit
+                    else values.pop(elemTyp)
                   )
                   arrayBatchStore(innerArr, ind + 1, n)
                 }

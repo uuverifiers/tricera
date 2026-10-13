@@ -257,6 +257,28 @@ switch2.hcc
 Warning: no definition of function "nondet" available
 SAFE
 
+switch-no-matching-case-safe.c
+SAFE
+
+switch-no-matching-case-unsafe.c
+
+---------------
+Init:
+ main6_3(2, 0) 
+---------------
+       |       
+       |       
+       V       
+ main_4(2, 10) 
+---------------
+Final:
+ main_4(2, 10) 
+---------------
+Failed assertion:
+false :- main_4(x:4, y:5), y:5 = 10. (line:15 col:3) (property: user-assertion)
+
+UNSAFE
+
 hints.hcc
 SAFE
 

@@ -293,6 +293,19 @@ class Symex private (context        : SymexContext,
     else
       scope.lookupVarNoException(name, evalCtx.enclosingFunctionName)
 
+  private def lookupVarOrEnumerator(name    : String,
+                                    exp     : Exp,
+                                    evalCtx : EvalContext) : CCTerm =
+    varLookup(name, evalCtx) match {
+      case -1 =>
+        context.enumeratorDefs get name match {
+          case Some(e) => e.copy(srcInfo = Some(getSourceInfo(exp)))
+          case None => throw new TranslationException(
+            getLineString(exp) + "Symbol " + name + " is not declared")
+        }
+      case ind => getValue(ind, false)
+    }
+
   private def getVar(ind: Int): CCVar = {
     if (ind < scope.GlobalVars.size) scope.GlobalVars.vars(ind)
     else scope.LocalVars.vars(ind - scope.GlobalVars.size)
@@ -1705,40 +1718,10 @@ class Symex private (context        : SymexContext,
       pushVal(CCTerm.fromTerm(sel(term.toTerm), fieldType, srcInfo))
 
     case exp : Evar =>
-      // todo: Unify with EvarWithType, they should always be treated the same.
-      val name = exp.cident_
-      name match {
-        // TODO: FIX!!
-        case "HEAP_TYPE_DEFAULT" =>
-          pushVal(CCTerm.fromTerm(context.heap.defaultObject,
-                                  CCHeapObject(context.heap), Some(getSourceInfo(exp))))
-        case _ =>
-          pushVal(varLookup(name, evalCtx) match {
-                    case -1 =>
-                      (context.enumeratorDefs get name) match {
-                        case Some(e) => e
-                        case None => throw new TranslationException(
-                          getLineString(exp) + "Symbol " + name + " is not declared")
-                      }
-                    case ind =>
-                      getValue(ind, false)
-                  })
-      }
-
+      pushVal(lookupVarOrEnumerator(exp.cident_, exp, evalCtx))
 
     case exp : EvarWithType =>
-      // todo: Unify with Evar, they should always be treated the same.
-      val name = exp.cident_
-      pushVal(varLookup(name, evalCtx) match {
-                case -1 =>
-                  (context.enumeratorDefs get name) match {
-                    case Some(e) => e
-                    case None => throw new TranslationException(
-                      getLineString(exp) + "Symbol " + name + " is not declared")
-                  }
-                case ind =>
-                  getValue(ind, false)
-              })
+      pushVal(lookupVarOrEnumerator(exp.cident_, exp, evalCtx))
 
     case exp : Econst => evalHelp(exp.constant_)
     case exp : Estring => // todo: implement this properly
@@ -1871,7 +1854,7 @@ class Symex private (context        : SymexContext,
 
         for (((c, t), n) <- (postGlobalVars.iterator zip
                              scope.GlobalVars.formalTypes.iterator).zipWithIndex)
-          setValue(n, CCTerm.fromTerm(c, t, None)) // todo: srcInfo?
+          setValue(n, CCTerm.fromTerm(c, t, functionEntry.srcInfo))
 
         resVar match {
           case scala.Seq(v) => pushVal(CCTerm.fromTerm(v.term, v.typ, v.srcInfo))
@@ -1884,7 +1867,8 @@ class Symex private (context        : SymexContext,
             for (_ <- 0 until argCount) {
               argTerms = popVal.toTerm :: argTerms
             }
-            pushVal(CCTerm.fromFormula(predDecl(argTerms), CCInt, None)) // todo:srcInfo
+            pushVal(CCTerm.fromFormula(predDecl(argTerms), CCInt,
+                                       functionEntry.srcInfo))
           case None =>
             val args =
               (for (_ <- 0 until argCount) yield popVal).toList.reverse

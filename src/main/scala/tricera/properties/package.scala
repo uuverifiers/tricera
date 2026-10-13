@@ -158,13 +158,4 @@ package object properties {
   case object Termination extends Property {
     override def toString : String = "termination"
   }
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Other properties
-
-  /**
-   * In `switch` statements that we never try to jump to a case that does not
-   * exist.
-   */
-  case object SwitchCaseValidJump extends Property
 }

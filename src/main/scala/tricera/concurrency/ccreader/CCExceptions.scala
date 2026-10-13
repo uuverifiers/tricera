@@ -34,7 +34,8 @@ object CCExceptions {
   class TranslationException(msg : String) extends Exception(msg)
   class UnsupportedCastException(msg : String) extends Exception(msg)
   class UnsupportedCFragmentException(msg : String) extends Exception(msg)
-  object NeedsTimeException extends Exception
-  object NeedsHeapModelException extends Exception
-  object NeedsObjectWrapperException extends Exception
+  sealed abstract class RestartTranslationException extends Exception
+  object NeedsTimeException extends RestartTranslationException
+  object NeedsHeapModelException extends RestartTranslationException
+  object NeedsObjectWrapperException extends RestartTranslationException
 }

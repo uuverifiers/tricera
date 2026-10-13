@@ -42,6 +42,28 @@ emptyStruct.hcc
 Warning: Struct a was declared, but never defined, or it has no fields.
 SAFE
 
+ptr-to-ptr-field-safe.c
+SAFE
+
+ptr-to-ptr-field-unsafe.c
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                           main9_3(heap.empty, S(heap.null))                                                           
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                           |                                                                           
+                                                                           |                                                                           
+                                                                           V                                                                           
+ main12_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Addr(heap.addr(2)))), O_int(3))), S(heap.addr(1)), heap.addr(2)) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main12_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_Addr(heap.addr(2)))), O_int(3))), S(heap.addr(1)), heap.addr(2)) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main12_3(@h, s:8, p:12), get_int(heap.read(@h, p:12)) = 3. (line:13 col:3) (property: user-assertion)
+
+UNSAFE
+
 race.hcc
 UNSAFE
 

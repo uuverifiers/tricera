@@ -880,9 +880,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case _ => typ
           }
       }
-      if(fieldInfos(j).ptrDepth > 0)
-        heapModelFactory.makePointer(actualType)
-      else actualType})}
+      (1 to fieldInfos(j).ptrDepth).foldLeft(actualType)(
+        (t, _) => heapModelFactory.makePointer(t))})}
     structDefs += ((ctor.name, CCStruct(ctor, fieldsWithType)))
   }
 
@@ -1313,10 +1312,19 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               ann => ACSLRewriter.rewrite(ann, ACSLRewriter.globalizeParams(paramToGlobal))
             case None => identity
           }
-        // todo: try / catch and print msg?
-        val contract = ACSLTranslator.translateACSL(
-          "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext,
-          astTransform)
+        val contract =
+          try ACSLTranslator.translateACSL(
+            "/*@" + possibleACSLAnnotation.annot + "*/", funContext.acslContext,
+            astTransform)
+          catch {
+            case e : RestartTranslationException => throw e
+            case e : Exception =>
+              throw new TranslationException(
+                getLineString(Some(srcInfo)) +
+                s"Failed to process ACSL contract of function '$name' (parse " +
+                "error or unsupported fragment)\n" +
+                e.getMessage)
+          }
 
         if (fun.body.isDefined &&
             possibleACSLAnnotation.annot.contains("\\from"))
@@ -2251,7 +2259,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
         val fieldName = getName(declarator)
         val ptrDepth = declarator match {
-          case _ : BeginPointer => 1 //todo:heap find out actual depth
+          case d : BeginPointer => pointerLevels(d.pointer_)
           case _ => 0
         }
         FieldInfo(fieldName, fieldType, ptrDepth)
@@ -2379,7 +2387,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
       enumDefs.put(enumName, newEnum)
 
       for ((n, v) <- enumerators)
-        addEnumerator(n, CCTerm.fromTerm(v, CCInt, None)) // todo: srcInfo?
+        addEnumerator(n, CCTerm.fromTerm(v, CCInt, None))
       newEnum
     }
   }
@@ -2715,6 +2723,12 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     scope.LocalVars popFrame
   }
 
+  private def pointerLevels(ptr : Pointer) : Int = ptr match {
+    case p : PointPoint     => 1 + pointerLevels(p.pointer_)
+    case p : PointQualPoint => 1 + pointerLevels(p.pointer_)
+    case _                  => 1
+  }
+
   private def createHeapPointer(decl : BeginPointer, typ : CCType) : CCType =
     createHeapPointerHelper(decl.pointer_, typ)
 
@@ -2967,7 +2981,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           val t =
             try translator.translate(eat.expr_)
             catch {
-              case NeedsHeapModelException => throw NeedsHeapModelException
+              case e : RestartTranslationException => throw e
               case e : Throwable => throw new TranslationException(
                 getLineString(Some(srcInfo)) +
                 "Failed to capture the expression for a labelled state in a " +
@@ -3211,7 +3225,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           val assumed =
             try{translate(stm.annotation_, entry)}
             catch {
-              case NeedsHeapModelException => throw NeedsHeapModelException
+              case e : RestartTranslationException => throw e
               case e : Exception =>
                 throw new TranslationException(
                   getLineString(Some(getSourceInfo(stm))) +
@@ -3732,22 +3746,15 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           selectorSymex.restoreState
         }
 
-        defaults.toSeq match {
-          case scala.Seq() =>
-            // add an assertion that we never try to jump to a case that
-            // does not exist. TODO: add a parameter for this?
-            selectorSymex assertProperty(
-              or(guards), Some(getSourceInfo(stm)),
-              properties.SwitchCaseValidJump)
-          case scala.Seq((_, target)) => {
-            selectorSymex.saveState
-            selectorSymex addGuard ~or(guards)
-            dispatchToCase(target)
-            selectorSymex.restoreState
-          }
+        // without a default, no matching case skips the body
+        val noMatchTarget = defaults.toSeq match {
+          case scala.Seq()            => exit
+          case scala.Seq((_, target)) => target
           case _ =>
             throw new TranslationException("multiple default cases in switch")
         }
+        selectorSymex addGuard ~or(guards)
+        dispatchToCase(noMatchTarget)
       }
     }
 
