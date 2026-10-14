@@ -39,7 +39,8 @@ for mode in math ilp32; do
     done
 done
 
-TESTS="enum-wrap-safe.c enum-wrap-unsafe.c \
+TESTS="enum-wrap-value-safe.c enum-wrap-value-unsafe.c \
+       enum-wrap-next-safe.c enum-wrap-next-unsafe.c \
        enum-widen-safe.c enum-widen-unsafe.c \
        enum-truncating-cast-and-compound-assign-safe.c \
        enum-truncating-cast-and-compound-assign-unsafe.c \

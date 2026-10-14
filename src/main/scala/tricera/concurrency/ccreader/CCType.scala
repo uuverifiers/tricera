@@ -234,19 +234,6 @@ abstract sealed class CCType {
       // ADTs
     }
 
-  def range : (Option[IdealInt], Option[IdealInt]) = {
-    toSort match {
-      case Sort.Nat     => (Some(IdealInt(0)), None)
-      case Sort.Integer => (None, None)
-      case ModSort(lower, upper) =>
-        (Some(lower), Some(upper))
-      case otherSort =>
-        throw new TranslationException(
-          "Do not know how to get range for " +
-            " sort " + otherSort)
-    }
-  }
-
   def newConstant(name : String) : ConstantTerm = toSort newConstant name
 
   def isPointerType : Boolean =

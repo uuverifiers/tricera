@@ -3,8 +3,8 @@ enum Values {
   NEXT
 };
 
-void main(void)
+int main(void)
 {
   assert(WRAPPED == 0);
-  assert(NEXT == 1);
+  return 0;
 }
