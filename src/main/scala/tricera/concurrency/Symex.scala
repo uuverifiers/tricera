@@ -1968,49 +1968,80 @@ class Symex private (context        : SymexContext,
 
   ////////////////////////////////////////////////////////////////////////////
 
+  // the type of an integer literal is the first of its candidate types that
+  // can represent its value
+  private val decimalLiteralTypes =
+    Seq[CCArithType](CCInt, CCLong, CCLongLong)
+  private val decimalLongLiteralTypes =
+    Seq[CCArithType](CCLong, CCLongLong)
+  private val hexOctalLiteralTypes =
+    Seq[CCArithType](CCInt, CCUInt, CCLong, CCULong, CCLongLong, CCULongLong)
+  private val hexOctalLongLiteralTypes =
+    Seq[CCArithType](CCLong, CCULong, CCLongLong, CCULongLong)
+  private val unsignedLiteralTypes =
+    Seq[CCArithType](CCUInt, CCULong, CCULongLong)
+  private val unsignedLongLiteralTypes =
+    Seq[CCArithType](CCULong, CCULongLong)
+
+  private def integerLiteralType(value      : IdealInt,
+                                 candidates : Seq[CCArithType]) : CCArithType =
+    candidates.find { t =>
+      val valueBits = 8 * t.sizeInBytes - (if (t.isUnsigned) 0 else 1)
+      value < IdealInt(2).pow(valueBits)
+    }.getOrElse(candidates.last)
+
   private def evalHelp(constant : Constant) : Unit = {
     val srcInfo = Some(getSourceInfo(constant))
+    def pushIntegerLiteral(digits     : String,
+                           radix      : Int,
+                           candidates : Seq[CCArithType]) : Unit = {
+      val value = IdealInt(digits, radix)
+      pushVal(CCTerm.fromTerm(
+        IIntLit(value), integerLiteralType(value, candidates), srcInfo))
+    }
     constant match {
 //      case constant : Efloat.        Constant ::= Double;
       case constant : Echar =>
         pushVal(CCTerm.fromTerm(IdealInt(constant.char_.toInt), CCInt, srcInfo))
       case constant : Eunsigned =>
-        pushVal(CCTerm.fromTerm(IdealInt(
-          constant.unsigned_.substring(
-            0, constant.unsigned_.size - 1)), CCUInt, srcInfo))
+        pushIntegerLiteral(
+          constant.unsigned_.dropRight(1), 10, unsignedLiteralTypes)
       case constant : Elong =>
-        pushVal(CCTerm.fromTerm(IdealInt(
-          constant.long_.substring(
-            0, constant.long_.size - 1)), CCLong, srcInfo))
+        pushIntegerLiteral(
+          constant.long_.dropRight(1), 10, decimalLongLiteralTypes)
       case constant : Eunsignlong =>
-        pushVal(CCTerm.fromTerm(IdealInt(
-          constant.unsignedlong_.substring(
-            0, constant.unsignedlong_.size - 2)), CCULong, srcInfo))
+        pushIntegerLiteral(
+          constant.unsignedlong_.dropRight(2), 10, unsignedLongLiteralTypes)
       case constant : Ehexadec =>
-        pushVal(CCTerm.fromTerm(IdealInt(
-          constant.hexadecimal_ substring 2, 16), CCInt, srcInfo))
+        pushIntegerLiteral(
+          constant.hexadecimal_.drop(2), 16, hexOctalLiteralTypes)
       case constant : Ehexaunsign =>
-        pushVal(CCTerm.fromTerm(IdealInt(constant.hexunsigned_.substring(
-          2, constant.hexunsigned_.size - 1), 16), CCUInt, srcInfo))
+        pushIntegerLiteral(
+          constant.hexunsigned_.drop(2).dropRight(1), 16, unsignedLiteralTypes)
       case constant : Ehexalong =>
-        pushVal(CCTerm.fromTerm(IdealInt(constant.hexlong_.substring(
-          2, constant.hexlong_.size - 1), 16), CCLong, srcInfo))
+        pushIntegerLiteral(
+          constant.hexlong_.drop(2).dropRight(1), 16, hexOctalLongLiteralTypes)
       case constant : Ehexaunslong =>
-        pushVal(CCTerm.fromTerm(IdealInt(constant.hexunslong_.substring(
-          2, constant.hexunslong_.size - 2), 16), CCULong, srcInfo))
+        pushIntegerLiteral(
+          constant.hexunslong_.drop(2).dropRight(2), 16,
+          unsignedLongLiteralTypes)
       case constant : Eoctal =>
-        pushVal(CCTerm.fromTerm(IdealInt(constant.octal_, 8), CCInt, srcInfo))
-//      case constant : Eoctalunsign.  Constant ::= OctalUnsigned;
+        pushIntegerLiteral(constant.octal_, 8, hexOctalLiteralTypes)
+      case constant : Eoctalunsign =>
+        pushIntegerLiteral(
+          constant.octalunsigned_.dropRight(1), 8, unsignedLiteralTypes)
       case constant : Eoctallong =>
-        pushVal(CCTerm.fromTerm(IdealInt(constant.octallong_.substring(
-          0, constant.octallong_.size - 1), 8), CCLong, srcInfo))
-//      case constant : Eoctalunslong. Constant ::= OctalUnsLong;
+        pushIntegerLiteral(
+          constant.octallong_.dropRight(1), 8, hexOctalLongLiteralTypes)
+      case constant : Eoctalunslong =>
+        pushIntegerLiteral(
+          constant.octalunslong_.dropRight(2), 8, unsignedLongLiteralTypes)
 //      case constant : Ecdouble.      Constant ::= CDouble;
 //      case constant : Ecfloat.       Constant ::= CFloat;
 //      case constant : Eclongdouble.  Constant ::= CLongDouble;
       case constant : Eint =>
-        pushVal(CCTerm.fromTerm(IExpression.i(IdealInt(
-          constant.unboundedinteger_)), CCInt, srcInfo))
+        pushIntegerLiteral(
+          constant.unboundedinteger_, 10, decimalLiteralTypes)
       case constant => throw new TranslationException(
         "Unimplemented type: " + constant.getClass)
     }

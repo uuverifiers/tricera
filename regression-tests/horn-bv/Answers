@@ -316,6 +316,30 @@ UNSAFE
 complement-unsafe.c (ilp32)
 UNSAFE
 
+literal-hex-unsigned-safe.c (math)
+SAFE
+
+literal-hex-unsigned-safe.c (ilp32)
+SAFE
+
+literal-hex-unsigned-unsafe.c (math)
+UNSAFE
+
+literal-hex-unsigned-unsafe.c (ilp32)
+UNSAFE
+
+literal-unsigned-suffix-safe.c (math)
+SAFE
+
+literal-unsigned-suffix-safe.c (ilp32)
+SAFE
+
+literal-unsigned-suffix-unsafe.c (math)
+UNSAFE
+
+literal-unsigned-suffix-unsafe.c (ilp32)
+UNSAFE
+
 uchar-wrap-safe.c (ilp32)
 SAFE
 
@@ -368,6 +392,12 @@ uint-compound-bitwise-safe.c (ilp32)
 SAFE
 
 uint-compound-bitwise-unsafe.c (ilp32)
+UNSAFE
+
+literal-hex-int-store-safe.c (ilp32)
+SAFE
+
+literal-hex-int-store-unsafe.c (ilp32)
 UNSAFE
 
 specifier-order-safe.c (lp64)

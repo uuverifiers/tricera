@@ -60,7 +60,9 @@ TESTS="uchar-promotion-safe.c uchar-promotion-unsafe.c \
        uchar-heap-array-safe.c uchar-heap-array-unsafe.c \
        char-short-struct-field-safe.c char-short-struct-field-unsafe.c \
        uchar-ushort-decrement-safe.c uchar-ushort-decrement-unsafe.c \
-       complement-safe.c complement-unsafe.c"
+       complement-safe.c complement-unsafe.c \
+       literal-hex-unsigned-safe.c literal-hex-unsigned-unsafe.c \
+       literal-unsigned-suffix-safe.c literal-unsigned-suffix-unsafe.c"
 
 for name in $TESTS; do
     for mode in math ilp32; do
@@ -78,7 +80,8 @@ TESTS="uchar-wrap-safe.c uchar-wrap-unsafe.c \
        uchar-ushort-compound-bitwise-safe.c uchar-ushort-compound-bitwise-unsafe.c \
        unsigned-shift-right-safe.c unsigned-shift-right-unsafe.c \
        shift-operand-types-safe.c shift-operand-types-unsafe.c \
-       uint-compound-bitwise-safe.c uint-compound-bitwise-unsafe.c"
+       uint-compound-bitwise-safe.c uint-compound-bitwise-unsafe.c \
+       literal-hex-int-store-safe.c literal-hex-int-store-unsafe.c"
 
 for name in $TESTS; do
     echo
