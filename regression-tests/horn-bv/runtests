@@ -59,7 +59,8 @@ TESTS="uchar-promotion-safe.c uchar-promotion-unsafe.c \
        char-short-sizeof-safe.c char-short-sizeof-unsafe.c \
        uchar-heap-array-safe.c uchar-heap-array-unsafe.c \
        char-short-struct-field-safe.c char-short-struct-field-unsafe.c \
-       uchar-ushort-decrement-safe.c uchar-ushort-decrement-unsafe.c"
+       uchar-ushort-decrement-safe.c uchar-ushort-decrement-unsafe.c \
+       complement-safe.c complement-unsafe.c"
 
 for name in $TESTS; do
     for mode in math ilp32; do
@@ -74,7 +75,10 @@ TESTS="uchar-wrap-safe.c uchar-wrap-unsafe.c \
        char-nondet-range-safe.c char-nondet-range-unsafe.c \
        short-nondet-range-safe.c short-nondet-range-unsafe.c \
        short-assign-conversion-safe.c short-assign-conversion-unsafe.c \
-       uchar-ushort-compound-bitwise-safe.c uchar-ushort-compound-bitwise-unsafe.c"
+       uchar-ushort-compound-bitwise-safe.c uchar-ushort-compound-bitwise-unsafe.c \
+       unsigned-shift-right-safe.c unsigned-shift-right-unsafe.c \
+       shift-operand-types-safe.c shift-operand-types-unsafe.c \
+       uint-compound-bitwise-safe.c uint-compound-bitwise-unsafe.c"
 
 for name in $TESTS; do
     echo
@@ -82,7 +86,8 @@ for name in $TESTS; do
     $TRI_CMD -arithMode:ilp32 "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
 done
 
-for name in specifier-order-safe.c specifier-order-unsafe.c; do
+for name in specifier-order-safe.c specifier-order-unsafe.c \
+            unsigned-shift-right-safe.c unsigned-shift-right-unsafe.c; do
     echo
     echo "$name (lp64)"
     $TRI_CMD -arithMode:lp64 "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'

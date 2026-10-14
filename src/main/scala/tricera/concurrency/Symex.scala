@@ -31,7 +31,7 @@ package tricera.concurrency
 
 import ap.basetypes.IdealInt
 import ap.parser._
-import ap.theories.{ExtArray, ModuloArithmetic}
+import ap.theories.ExtArray
 import ap.types.{MonoSortedIFunction, SortedConstantTerm}
 import hornconcurrency.ParametricEncoder
 import lazabs.horn.abstractions.VerificationHints.VerifHintInitPred
@@ -1097,20 +1097,15 @@ class Symex private (context        : SymexContext,
             case _ => lhsE.toTerm - rhsE.toTerm
           }
         case _ : AssignLeft =>
-          ModuloArithmetic.bvshl(resultType cast2Unsigned lhsE.toTerm,
-                                 resultType cast2Unsigned rhsE.toTerm)
+          BinaryOperators.ShiftLeft(lhsE, rhsE).term.toTerm
         case _ : AssignRight =>
-          ModuloArithmetic.bvashr(resultType cast2Unsigned lhsE.toTerm,
-                                  resultType cast2Unsigned rhsE.toTerm)
+          BinaryOperators.ShiftRight(lhsE, rhsE).term.toTerm
         case _ : AssignAnd =>
-          ModuloArithmetic.bvand(resultType cast2Unsigned lhsE.toTerm,
-                                 resultType cast2Unsigned rhsE.toTerm)
+          BinaryOperators.BitwiseAnd(lhsE, rhsE).term.toTerm
         case _ : AssignXor =>
-          ModuloArithmetic.bvxor(resultType cast2Unsigned lhsE.toTerm,
-                                 resultType cast2Unsigned rhsE.toTerm)
+          BinaryOperators.BitwiseXor(lhsE, rhsE).term.toTerm
         case _ : AssignOr =>
-          ModuloArithmetic.bvor(resultType cast2Unsigned lhsE.toTerm,
-                                resultType cast2Unsigned rhsE.toTerm)
+          BinaryOperators.BitwiseOr(lhsE, rhsE).term.toTerm
       }), resultType, lhsE.srcInfo)
 
       implicit val symex: Symex = this
@@ -1408,7 +1403,15 @@ class Symex private (context        : SymexContext,
         case _ : Negative   =>
           val t = popVal.applyIntegerPromotion mapTerm (-(_))
           pushVal(CCTerm.fromTerm(t.toTerm, t.typ, srcInfo))
-//          case _ : Complement.  Unary_operator ::= "~" ;
+        case _ : Complement =>
+          val operand = popVal.applyIntegerPromotion
+          val t = operand.typ match {
+            case typ : CCArithType if typ.isUnsigned =>
+              operand mapTerm (IIntLit(typ.UNSIGNED_RANGE) - _)
+            case _ =>
+              operand mapTerm (-_ - 1)
+          }
+          pushVal(CCTerm.fromTerm(t.toTerm, t.typ, srcInfo))
         case _ : Logicalneg =>
           pushVal(CCTerm.fromFormula(~popVal.toFormula, CCInt, srcInfo))
       }

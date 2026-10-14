@@ -270,7 +270,8 @@ abstract sealed class CCType {
 
   def cast2Unsigned(t : ITerm) : ITerm = toSort match {
     case SignedBVSort(n) => cast2UnsignedBV(n, t)
-    case _               => t
+    case s @ UnsignedBVSort(n) if Sort.sortOf(t) != s => cast2UnsignedBV(n, t)
+    case _ => t
   }
 
   // in math mode, unsigned types have sort nat and only negative values wrap

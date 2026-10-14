@@ -44,8 +44,12 @@ object CCBinaryExpressions {
           true
         case _ => false
       }
-      val (lhs, rhs) =
-        if (isFormula) (_lhs, _rhs) else CCTerm.unifyTypes(_lhs, _rhs)
+      val (lhs, rhs) = this match {
+        case _ if isFormula => (_lhs, _rhs)
+        case _ : ShiftLeft | _ : ShiftRight =>
+          (_lhs.applyIntegerPromotion, _rhs.applyIntegerPromotion)
+        case _ => CCTerm.unifyTypes(_lhs, _rhs)
+      }
       // to note: pointer arithmetic types (arrayptr, arith) are not unified.
       // these should be handled in relevant cases supporting pointer arithmetic,
       // e.g., addition
@@ -115,9 +119,16 @@ object CCBinaryExpressions {
 
     case class ShiftRight(_lhs: CCTerm, _rhs: CCTerm)
         extends BinaryOperation(_lhs, _rhs) {
-      override def getIntRes =
-        ModuloArithmetic.bvashr(lhs.typ cast2Unsigned lhs.toTerm,
-                                lhs.typ cast2Unsigned rhs.toTerm)
+      override def getIntRes = {
+        val shifted = lhs.typ cast2Unsigned lhs.toTerm
+        val count   = lhs.typ cast2Unsigned rhs.toTerm
+        lhs.typ match {
+          case t : CCArithType if t.isUnsigned =>
+            ModuloArithmetic.bvlshr(shifted, count)
+          case _ =>
+            ModuloArithmetic.bvashr(shifted, count)
+        }
+      }
       override def getFloatRes = ???
     }
 

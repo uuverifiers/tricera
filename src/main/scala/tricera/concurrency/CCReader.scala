@@ -3706,7 +3706,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                                  .withFunctionName(functionName)
                                                  .withGhostVisible(inGhostMode)
                                                  .withGhostMode(inGhostMode)
-        val selector = (selectorSymex eval stm.exp_).toTerm
+        val selector = (selectorSymex eval stm.exp_).applyIntegerPromotion
 
         val newEntry = newPred(Nil, Some(getSourceInfo(stm)))
         val collector = new SwitchCaseCollector
@@ -3727,7 +3727,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         }
 
         val (defaults, cases) = collector partition (_._1 == null)
-        val guards = for ((value, _) <- cases) yield (selector === value.toTerm)
+        val guards = for ((value, _) <- cases)
+                     yield selector.toTerm ===
+                             value.convertToType(selector.typ).toTerm
 
         for (((_, target), guard) <- cases.iterator zip guards.iterator) {
           selectorSymex.saveState

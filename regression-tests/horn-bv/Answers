@@ -304,6 +304,18 @@ UNSAFE
 uchar-ushort-decrement-unsafe.c (ilp32)
 UNSAFE
 
+complement-safe.c (math)
+SAFE
+
+complement-safe.c (ilp32)
+SAFE
+
+complement-unsafe.c (math)
+UNSAFE
+
+complement-unsafe.c (ilp32)
+UNSAFE
+
 uchar-wrap-safe.c (ilp32)
 SAFE
 
@@ -340,8 +352,32 @@ SAFE
 uchar-ushort-compound-bitwise-unsafe.c (ilp32)
 UNSAFE
 
+unsigned-shift-right-safe.c (ilp32)
+SAFE
+
+unsigned-shift-right-unsafe.c (ilp32)
+UNSAFE
+
+shift-operand-types-safe.c (ilp32)
+SAFE
+
+shift-operand-types-unsafe.c (ilp32)
+UNSAFE
+
+uint-compound-bitwise-safe.c (ilp32)
+SAFE
+
+uint-compound-bitwise-unsafe.c (ilp32)
+UNSAFE
+
 specifier-order-safe.c (lp64)
 SAFE
 
 specifier-order-unsafe.c (lp64)
+UNSAFE
+
+unsigned-shift-right-safe.c (lp64)
+SAFE
+
+unsigned-shift-right-unsafe.c (lp64)
 UNSAFE

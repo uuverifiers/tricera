@@ -47,3 +47,13 @@ for name in $TESTS; do
     echo $name
     $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -E 'SAFE|UNSAFE'
 done
+
+TESTS="switch-case-conversion-safe.c switch-case-conversion-unsafe.c"
+
+for name in $TESTS; do
+    for mode in math ilp32; do
+        echo
+        echo "$name ($mode)"
+        $TRI_CMD -arithMode:$mode "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+    done
+done

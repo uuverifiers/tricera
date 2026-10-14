@@ -315,3 +315,15 @@ UNSAFE
 
 switch-scoped-decl-fallthrough.hcc
 SAFE
+
+switch-case-conversion-safe.c (math)
+SAFE
+
+switch-case-conversion-safe.c (ilp32)
+SAFE
+
+switch-case-conversion-unsafe.c (math)
+UNSAFE
+
+switch-case-conversion-unsafe.c (ilp32)
+UNSAFE
