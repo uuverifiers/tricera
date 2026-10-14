@@ -1,9 +1,8 @@
-int x, y;
-extern int nondet();
+int x;
 
 int *get_stack_ptr()
 {
-    return (nondet() ? &x : &y);
+    return &x;
 }
 
 void main()

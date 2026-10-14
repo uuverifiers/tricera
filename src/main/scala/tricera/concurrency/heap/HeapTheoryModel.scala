@@ -36,8 +36,9 @@ import ap.theories.ADT
 import ap.types.MonoSortedIFunction
 import lazabs.horn.bottomup.HornClauses.toPrologSyntax
 import tricera.acsl.ACSLTranslator
+import tricera.Util.getLineStringShort
 import tricera.concurrency.CCReader.CCAssertionClause
-import tricera.concurrency.ccreader.CCExceptions.TranslationException
+import tricera.concurrency.ccreader.CCExceptions.{TranslationException, UnsupportedCFragmentException}
 import tricera.concurrency.ccreader._
 import tricera.concurrency.SymexContext
 import tricera.concurrency.concurrent_c.Absyn.{Function_def, Stm}
@@ -298,11 +299,16 @@ class HeapTheoryModel(context           : SymexContext,
                 (context.heap.rangeWithin(rawRange, readAddr) ==>
                  (readObj =/= context.heap.defaultObject)), CCInt, loc.srcInfo)
               assertions = (assertion, properties.MemValidFree) :: assertions
-            case _ =>
+            case ArrayLocation.Stack | ArrayLocation.Global =>
               /**
                * Freeing non-heap memory is undefined behaviour.
                */
               assertions = (CCTerm.fromFormula(i(false), CCInt, loc.srcInfo), properties.MemValidFree) :: assertions
+            case ArrayLocation.Unknown =>
+              throw new UnsupportedCFragmentException(
+                getLineStringShort(loc.srcInfo) + " Freeing a pointer which may" +
+                " point to the heap or to a stack or global array is not" +
+                " supported.")
           }
         }
 

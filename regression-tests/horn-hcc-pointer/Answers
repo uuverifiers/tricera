@@ -83,7 +83,6 @@ ptr-to-int-cast.c
 UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
 
 stack-ptr-fun-ret.c
-Warning: no definition of function "nondet" available
 UNKNOWN (Unsupported C fragment. Returning stack pointers from functions is not yet supported.)
 
 ptr-void-round-trip-safe.c
@@ -191,3 +190,31 @@ UNKNOWN (6:11 incompatible pointer types: cannot convert E* to E2*)
 
 incompatible-ptr-char-int.c
 UNKNOWN (3:8 incompatible pointer types: cannot convert int* to char*)
+
+conditional-null-ptr-safe.c
+SAFE
+
+conditional-null-ptr-unsafe.c
+
+--------------------------------------------------------------------------------------------
+Init:
+                                    main4_3(heap.empty)                                     
+--------------------------------------------------------------------------------------------
+                                             |                                              
+                                             |                                              
+                                             V                                              
+ main8_7(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(1))), heap.addr(1), heap.addr(1)) 
+--------------------------------------------------------------------------------------------
+Final:
+ main8_7(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(1))), heap.addr(1), heap.addr(1)) 
+--------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main8_7(@h, p:4, q:6), get_int(heap.read(@h, q:6)) = 1. (line:8 col:10) (property: user-assertion)
+
+UNSAFE
+
+conditional-ptr-kinds.c
+UNKNOWN (Unsupported C fragment. 5:12 Conditional expressions whose operands are pointers of different kinds are not supported.)
+
+conditional-stack-ptrs.c
+UNKNOWN (Unsupported C fragment. 5:12 Conditional expressions whose operands are stack pointers to different objects are not supported.)

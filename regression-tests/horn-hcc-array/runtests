@@ -19,7 +19,9 @@ TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-
        negative-to-unsigned-array-element-safe.c negative-to-unsigned-array-element-unsafe.c \
        negative-to-unsigned-heap-cell-safe.c negative-to-unsigned-heap-cell-unsafe.c \
        negative-to-unsigned-declaration-safe.c negative-to-unsigned-declaration-unsafe.c \
-       negative-to-unsigned-int-variable-safe.c negative-to-unsigned-int-variable-unsafe.c"
+       negative-to-unsigned-int-variable-safe.c negative-to-unsigned-int-variable-unsafe.c \
+       conditional-array-sizes-safe.c conditional-array-sizes-unsafe.c \
+       conditional-heap-stack-array-safe.c conditional-heap-stack-array-unsafe.c"
 
 MEMTRACKTESTS="simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
 

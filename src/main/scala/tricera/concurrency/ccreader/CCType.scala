@@ -684,10 +684,12 @@ case class CCHeapPointer(addressSort: Sort, nullAddr: ITerm,
  * `Heap`   : arrays allocated via memory allocation functions.
  * `Stack`  : arrays declared on the stack, or allocated via `alloca`.
  * `Global` : global arrays.
+ * `Unknown`: arrays whose location is not known statically, e.g. the result
+ *            of `c ? heapArray : stackArray`.
  */
 object ArrayLocation extends Enumeration {
   type ArrayLocation = Value
-  val Global, Stack, Heap = Value
+  val Global, Stack, Heap, Unknown = Value
 }
 import ArrayLocation._
 

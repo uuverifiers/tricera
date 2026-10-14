@@ -100,11 +100,15 @@ class Symex private (context        : SymexContext,
 
   def initAtomArgs = if(initAtom != null) Some(initAtom.args) else None
 
-  private val savedStates = new Stack[(IAtom, scala.Seq[CCTerm], IFormula, /*IFormula,*/ Boolean, Boolean, Boolean)]
+  private type State = (IAtom, scala.Seq[CCTerm], IFormula, /*IFormula,*/ Boolean, Boolean, Boolean)
+  private val savedStates = new Stack[State]
+  private def currentState : State =
+    (initAtom, values.toList, guard, touchedGlobalState, assignedToStruct, calledFunction)
   def saveState =
-    savedStates push ((initAtom, values.toList, guard, touchedGlobalState, assignedToStruct, calledFunction))
-  def restoreState = {
-    val (oldAtom, oldValues, oldGuard, /*oldPullGuard,*/ oldTouched, oldAssignedToStruct, oldCalledFunction) = savedStates.pop
+    savedStates push currentState
+  def restoreState = setState(savedStates.pop)
+  private def setState(state : State) : Unit = {
+    val (oldAtom, oldValues, oldGuard, /*oldPullGuard,*/ oldTouched, oldAssignedToStruct, oldCalledFunction) = state
     initAtom = oldAtom
     values = oldValues
     scope.LocalVars.pop(scope.LocalVars.size - values.size + scope.GlobalVars.size)
@@ -1140,30 +1144,39 @@ class Symex private (context        : SymexContext,
                                          "side effect free: " +
                                          context.printer.print(exp) + " at line " +
                                          srcInfo.get.line)
-        // throw exceptioon if t1.typ != t2.typ
-        if(t1.typ != t2.typ)
-          throw new TranslationException("Unsupported operation: ternary " +
-                                         "expression with different types: " + context.printer.print(exp) +
-                                         " at line " + srcInfo.get.line)
-        pushVal(CCTerm.fromTerm(IExpression.ite(cond.toFormula, t1.toTerm, t2.toTerm),
-                       t1.typ, srcInfo))
+        val resultType = CCTerm.conditionalResultType(t1, t2, srcInfo)
+        pushVal(CCTerm.fromTerm(
+          IExpression.ite(cond.toFormula,
+                          t1.convertToType(resultType, srcInfo).toTerm,
+                          t2.convertToType(resultType, srcInfo).toTerm),
+          resultType, srcInfo))
       } else { // evalSettings.noExtraClauseForTernaryExp == false
         val cond = eval(exp.exp_1).toFormula
         saveState
         addGuard(cond)
         evalHelp(exp.exp_2)
-        outputClause(Some(getSourceInfo(exp)))
-        val intermediatePred = initPred
+        val thenVal = topVal
+        val thenState = currentState
 
         restoreState
         addGuard(~cond)
         evalHelp(exp.exp_3)
+        val resultType = CCTerm.conditionalResultType(thenVal, topVal, srcInfo)
+        def convertTopVal() : Unit =
+          values = values.init :+ topVal.convertToType(resultType, srcInfo)
+
         val lastLocalVar = scope.LocalVars.last
         scope.LocalVars.update(scope.LocalVars.size - 1,
                          new CCVar(s"ite_${srcInfo.get.line}_${srcInfo.get.col}",
-                                   lastLocalVar.srcInfo, lastLocalVar.typ,
+                                   lastLocalVar.srcInfo, resultType,
                                    lastLocalVar.storage))
-        outputClause(intermediatePred, srcInfo)
+        convertTopVal()
+        outputClause(srcInfo)
+        val mergePred = initPred
+
+        setState(thenState)
+        convertTopVal()
+        outputClause(mergePred, srcInfo)
       }
     case exp : Elor =>
       val srcInfo = Some(getSourceInfo(exp))

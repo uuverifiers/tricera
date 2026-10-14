@@ -86,3 +86,6 @@ UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
 
 valid-memcleanup-4-false.c
 UNSAFE
+
+valid-free-heap-or-stack-array-true.c
+UNKNOWN (Unsupported C fragment. 7:10 Freeing a pointer which may point to the heap or to a stack or global array is not supported.)

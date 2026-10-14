@@ -511,6 +511,50 @@ false :- main3_3(m:2, v:3), 5 < v:3. (line:4 col:3) (property: user-assertion)
 
 UNSAFE
 
+conditional-array-sizes-safe.c
+SAFE
+
+conditional-array-sizes-unsafe.c
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                    main4_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 5)), arrayPtr(AddrRange(heap.addr(1), 2), 0), arrayPtr(AddrRange(heap.addr(3), 3), 0))                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                                |                                                                                                                                                
+                                                                                                                                                |                                                                                                                                                
+                                                                                                                                                V                                                                                                                                                
+ main7_10(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), O_int(5))), O_int(0))), arrayPtr(AddrRange(heap.addr(1), 2), 0), arrayPtr(AddrRange(heap.addr(3), 3), 0), 0, arrayPtr(AddrRange(heap.addr(3), 3), 0), 0) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main7_10(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(0), 3)), O_int(5))), O_int(0))), arrayPtr(AddrRange(heap.addr(1), 2), 0), arrayPtr(AddrRange(heap.addr(3), 3), 0), 0, arrayPtr(AddrRange(heap.addr(3), 3), 0), 0) 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main7_10(@h, a:2, b:2, c:4, p:5, ite_7_10:2), ite_7_10:2 = 0. (line:7 col:3) (property: user-assertion)
+
+UNSAFE
+
+conditional-heap-stack-array-safe.c
+SAFE
+
+conditional-heap-stack-array-unsafe.c
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                                     main4_3(heap.empty)                                                                                      
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                              |                                                                                               
+                                                                                              |                                                                                               
+                                                                                              V                                                                                               
+ main(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(12))), O_int(5))), arrayPtr(AddrRange(heap.addr(1), 2), 0), 0, arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(12))), O_int(5))), arrayPtr(AddrRange(heap.addr(1), 2), 0), 0, arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main(@h, b:4, c:5, p:6), c:5 = 0 & get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(b:4), arrayPtrOffset(b:4) + 1))) = 5. (line:8 col:3) (property: user-assertion)
+
+UNSAFE
+
 simple-global-memsafety1.c
 SAFE
 

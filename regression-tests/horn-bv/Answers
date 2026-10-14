@@ -340,6 +340,18 @@ UNSAFE
 literal-unsigned-suffix-unsafe.c (ilp32)
 UNSAFE
 
+conditional-arith-conversion-safe.c (math)
+SAFE
+
+conditional-arith-conversion-safe.c (ilp32)
+SAFE
+
+conditional-arith-conversion-unsafe.c (math)
+UNSAFE
+
+conditional-arith-conversion-unsafe.c (ilp32)
+UNSAFE
+
 uchar-wrap-safe.c (ilp32)
 SAFE
 

@@ -80,13 +80,16 @@ case class CCTerm(t               : ITerm,
               "pointer arithmetic is not allowed, cannot convert " + this + " to" +
               " " + newType)
         }
+      case (_: CCArithType, _: CCHeapArrayPointer) if isNullPointerConstant =>
+        this
       case (oldType : CCHeapPointer, newType : CCArithType) =>
         throw new UnsupportedCastException(
           "Cannot cast pointer type to arithmetic type.")
       case (oldType: CCHeapPointer, newType: CCHeapPointer) =>
         newType cast this
       case (_ : CCStackPointer | _ : CCHeapArrayPointer | _ : CCArray,
-            newType : CCHeapPointer) =>
+            _ : CCHeapPointer) |
+           (_ : CCHeapArrayPointer, _ : CCHeapArrayPointer) =>
         if (!CCTerm.isCompatiblePointerConversion(typ, newType))
           throw new UnsupportedCastException(
             getLineStringShort(conversionSrcInfo) +
@@ -107,6 +110,11 @@ case class CCTerm(t               : ITerm,
         convertToType(targetType)
       case _ => this
     }
+
+  private def isNullPointerConstant : Boolean = toTerm match {
+    case IIntLit(value) => value.isZero
+    case _              => false
+  }
 
   def applyIntegerPromotion : CCTerm = typ match {
     case t : CCArithType if t.isNarrowerThanInt => convertToType(CCInt)
@@ -202,6 +210,59 @@ object CCTerm {
         throw new TranslationException(
           "incompatible types: " +
             a.typ + " vs " + b.typ)
+    }
+  }
+
+  /** The type of `c ? thenVal : elseVal`, to which both operands are
+   *  converted. */
+  def conditionalResultType(thenVal : CCTerm,
+                            elseVal : CCTerm,
+                            srcInfo : Option[SourceInfo]) : CCType = {
+    def unsupported(operands : String) =
+      throw new UnsupportedCFragmentException(
+        getLineStringShort(srcInfo) + " Conditional expressions whose " +
+        "operands are " + operands + " are not supported.")
+    // an integer operand next to a pointer has to be null, and null is only
+    // representable as a heap or array pointer
+    def isNullable(typ : CCType) =
+      typ.isInstanceOf[CCHeapPointer] || typ.isInstanceOf[CCHeapArrayPointer]
+    def isPointer(typ : CCType) =
+      isNullable(typ) || typ.isInstanceOf[CCStackPointer]
+    (thenVal.typ, elseVal.typ) match {
+      case (_ : CCArithType | CCMathInt, _ : CCArithType | CCMathInt) =>
+        unifyTypes(thenVal, elseVal)._1.typ
+      case (thenType, elseType) if thenType == elseType =>
+        thenType
+      case (thenType, _ : CCArithType) if isNullable(thenType) =>
+        thenType
+      case (_ : CCArithType, elseType) if isNullable(elseType) =>
+        elseType
+      case (thenType : CCHeapPointer, elseType : CCHeapPointer)
+          if isCompatiblePointerConversion(thenType, elseType) =>
+        if (elseType.typ == CCVoid) elseType else thenType
+      case (thenType : CCHeapArrayPointer, elseType : CCHeapArrayPointer)
+          if isCompatiblePointerConversion(thenType, elseType) =>
+        thenType.copy(
+          arrayLocation =
+            if (thenType.arrayLocation == elseType.arrayLocation)
+              thenType.arrayLocation
+            else ArrayLocation.Unknown,
+          declaredSize =
+            if (thenType.declaredSize == elseType.declaredSize)
+              thenType.declaredSize
+            else None)
+      case (thenType : CCStackPointer, elseType : CCStackPointer)
+          if thenType.targetInd != elseType.targetInd ||
+             thenType.fieldAddress != elseType.fieldAddress =>
+        unsupported("stack pointers to different objects")
+      case (thenType, elseType) if isPointer(thenType) && isPointer(elseType) =>
+        if (isCompatiblePointerConversion(thenType, elseType))
+          unsupported("pointers of different kinds")
+        else
+          unsupported("pointers to incompatible types")
+      case (thenType, elseType) =>
+        unsupported("of types " + thenType.shortName + " and " +
+                    elseType.shortName)
     }
   }
 }
