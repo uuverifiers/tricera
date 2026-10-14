@@ -902,21 +902,25 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
             yield specifier.asInstanceOf[AST.CType].ctypespec_)
   }
 
+  // acsl ast has its own spec classes, so only resolution of
+  // integer keywords is shared with the c front end
   private def getType(specs : Iterator[AST.CTypeSpec]) : CCType = {
-    // by default assume that the type is int
-    var typ : CCType = CCInt
+    val (integerSpecs, otherSpecs) = specs.toList.partitionMap {
+      case _ : AST.Tchar     => Left(IntegerSpecifier.Char)
+      case _ : AST.Tshort    => Left(IntegerSpecifier.Short)
+      case _ : AST.Tint      => Left(IntegerSpecifier.Int)
+      case _ : AST.Tlong     => Left(IntegerSpecifier.Long)
+      case _ : AST.Tsigned   => Left(IntegerSpecifier.Signed)
+      case _ : AST.Tunsigned => Left(IntegerSpecifier.Unsigned)
+      case other             => Right(other)
+    }
+    otherSpecs.map(getNonIntegerType).lastOption
+      .getOrElse(CCArithType.fromSpecifiers(integerSpecs))
+  }
 
-    for (specifier <- specs)
+  private def getNonIntegerType(specifier : AST.CTypeSpec) : CCType =
       specifier match {
-        case _ : AST.Tvoid                   => typ = CCVoid
-        case _ : AST.Tint                    => // ignore
-        case _ : AST.Tchar                   => // ignore
-        case _ : AST.Tsigned                 => typ = CCInt
-        case _ : AST.Tunsigned               => typ = CCUInt
-        case _ : AST.Tlong if typ == CCInt   => typ = CCLong
-        case _ : AST.Tlong if typ == CCUInt  => typ = CCULong
-        case _ : AST.Tlong if typ == CCLong  => typ = CCLongLong
-        case _ : AST.Tlong if typ == CCULong => typ = CCULongLong
+        case _ : AST.Tvoid                   => CCVoid
         case e : AST.Tcollection =>
           throw new ACSLParseException(
             s"type ${printer print e} is currently not supported in ACSL" +
@@ -932,8 +936,6 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         case x => throw new ACSLParseException(
           s"type ${printer print x} not supported.", getSourceInfo(x))
       }
-    typ
-  }
 
   // `INamedPart` relevant?
 //  def translate(pred : AST.PredSyntacticNaming) : IFormula = {

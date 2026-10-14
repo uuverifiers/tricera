@@ -69,6 +69,10 @@ abstract sealed class CCType {
     case ArithmeticMode.ILP32 =>
       this match {
         case CCBool                         => UnsignedBVSort(1)
+        case CCChar                         => SignedBVSort(8)
+        case CCUChar                        => UnsignedBVSort(8)
+        case CCShort                        => SignedBVSort(16)
+        case CCUShort                       => UnsignedBVSort(16)
         case CCInt                          => SignedBVSort(32)
         case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
@@ -91,6 +95,10 @@ abstract sealed class CCType {
     case ArithmeticMode.LP64 =>
       this match {
         case CCBool                         => UnsignedBVSort(1)
+        case CCChar                         => SignedBVSort(8)
+        case CCUChar                        => UnsignedBVSort(8)
+        case CCShort                        => SignedBVSort(16)
+        case CCUShort                       => UnsignedBVSort(16)
         case CCInt                          => SignedBVSort(32)
         case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
@@ -113,6 +121,10 @@ abstract sealed class CCType {
     case ArithmeticMode.LLP64 =>
       this match {
         case CCBool                         => UnsignedBVSort(1)
+        case CCChar                         => SignedBVSort(8)
+        case CCUChar                        => UnsignedBVSort(8)
+        case CCShort                        => SignedBVSort(16)
+        case CCUShort                       => UnsignedBVSort(16)
         case CCInt                          => SignedBVSort(32)
         case CCMathInt                      => Sort.Integer
         case CCUInt                         => UnsignedBVSort(32)
@@ -139,6 +151,8 @@ abstract sealed class CCType {
       case ArithmeticMode.Mathematical =>
         this match {
           case CCBool                                      => 1
+          case CCChar | CCUChar                            => 1
+          case CCShort | CCUShort                          => 2
           case CCInt | CCUInt                              => 4
           case CCLong | CCULong | CCLongLong | CCULongLong => 8
           case CCFloat                                     => 4
@@ -155,6 +169,8 @@ abstract sealed class CCType {
       case ArithmeticMode.ILP32 =>
         this match {
           case CCBool                             => 1
+          case CCChar | CCUChar                   => 1
+          case CCShort | CCUShort                 => 2
           case CCInt | CCUInt | CCLong | CCULong  => 4
           case CCLongLong | CCULongLong           => 8
           case CCFloat                            => 4
@@ -171,6 +187,8 @@ abstract sealed class CCType {
       case ArithmeticMode.LP64 =>
         this match {
           case CCBool                                      => 1
+          case CCChar | CCUChar                            => 1
+          case CCShort | CCUShort                          => 2
           case CCInt | CCUInt                              => 4
           case CCLong | CCULong | CCLongLong | CCULongLong => 8
           case CCFloat                                     => 4
@@ -187,6 +205,8 @@ abstract sealed class CCType {
       case ArithmeticMode.LLP64 =>
         this match {
           case CCBool                             => 1
+          case CCChar | CCUChar                   => 1
+          case CCShort | CCUShort                 => 2
           case CCInt | CCUInt | CCLong | CCULong  => 4
           case CCLongLong | CCULongLong           => 8
           case CCFloat                            => 4
@@ -323,6 +343,25 @@ abstract class CCArithType extends CCType {
   def isNarrowerThanInt : Boolean = UNSIGNED_RANGE < CCInt.UNSIGNED_RANGE
 }
 
+object IntegerSpecifier extends Enumeration {
+  val Char, Short, Int, Long, Signed, Unsigned = Value
+}
+
+object CCArithType {
+  def fromSpecifiers(specs : Seq[IntegerSpecifier.Value]) : CCArithType = {
+    val isUnsigned = specs contains IntegerSpecifier.Unsigned
+    if (specs contains IntegerSpecifier.Char) {
+      if (isUnsigned) CCUChar else CCChar
+    } else if (specs contains IntegerSpecifier.Short) {
+      if (isUnsigned) CCUShort else CCShort
+    } else specs.count(_ == IntegerSpecifier.Long) match {
+      case 0 => if (isUnsigned) CCUInt      else CCInt
+      case 1 => if (isUnsigned) CCULong     else CCLong
+      case _ => if (isUnsigned) CCULongLong else CCLongLong
+    }
+  }
+}
+
 case object CCVoid extends CCType {
   override def toString : String = "void"
   def shortName = "void"
@@ -333,6 +372,34 @@ case object CCBool extends CCArithType {
   override def toString : String = "boolean"
   def shortName = "boolean"
   val UNSIGNED_RANGE : IdealInt = IdealInt.ONE
+  val isUnsigned     : Boolean  = true
+}
+
+case object CCChar extends CCArithType {
+  override def toString : String = "char"
+  def shortName = "char"
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FF", 16) // 8bit
+  val isUnsigned     : Boolean  = false
+}
+
+case object CCUChar extends CCArithType {
+  override def toString : String = "unsigned char"
+  def shortName = "uchar"
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FF", 16) // 8bit
+  val isUnsigned     : Boolean  = true
+}
+
+case object CCShort extends CCArithType {
+  override def toString : String = "short"
+  def shortName = "short"
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFF", 16) // 16bit
+  val isUnsigned     : Boolean  = false
+}
+
+case object CCUShort extends CCArithType {
+  override def toString : String = "unsigned short"
+  def shortName = "ushort"
+  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFF", 16) // 16bit
   val isUnsigned     : Boolean  = true
 }
 

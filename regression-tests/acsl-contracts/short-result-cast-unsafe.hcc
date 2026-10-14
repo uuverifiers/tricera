@@ -1,0 +1,10 @@
+/*@
+  ensures \result == (short) x;
+*/
+short narrow(int x) { return x; }
+
+int main() {
+  short s = narrow(40000);
+  assert(s != -25536);
+  return 0;
+}

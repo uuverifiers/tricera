@@ -34,7 +34,8 @@ import concurrent_c.Absyn._
 import scala.jdk.CollectionConverters._
 
 import tricera.acsl.ACSLTranslator
-import tricera.concurrency.ccreader.{CCType, CCInt, CCUInt, StructInfo}
+import tricera.concurrency.ccreader.{CCType, CCInt, CCUInt, CCChar, CCUChar,
+                                     CCShort, CCUShort, StructInfo}
 
 // Facts about the program: how each type is used and in which function
 // (None = global).
@@ -198,8 +199,11 @@ class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
     }
 
     // heap types from ACSL annotations
-    // struct tags + int/uint
+    // struct tags + int types an annotation may read through a pointer
     // TODO: proper detection of scalar types
+    private val annotationScalarTypes =
+      Seq[CCType](CCInt, CCUInt, CCChar, CCUChar, CCShort, CCUShort)
+
     override def visit(annot : Annot1, arg : Option[String]) : Seq[TypeUsage] = {
       val marker = tricera.Literals.annotationMarker.length
       val text   = annot.annotationstring_
@@ -211,7 +215,7 @@ class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
         catch { case _ : Throwable => Set.empty[String] }
       val structs = structInfos.map(_.name).filter(names)
         .map(n => TypeUsage(arg, UsedType.Struct(n), ContractPtr))
-      val scalars = Seq[CCType](CCInt, CCUInt)
+      val scalars = annotationScalarTypes
         .map(t => TypeUsage(arg, UsedType.Scalar(t), ContractPtr))
       structs ++ scalars ++ super.visit(annot, arg)
     }
@@ -227,7 +231,7 @@ class CCAstProgramInfoCollector(structInfos  : Seq[StructInfo],
         catch { case _ : Throwable => Set.empty[String] }
       val structs = structInfos.map(_.name).filter(names)
         .map(n => TypeUsage(arg, UsedType.Struct(n), ContractPtr))
-      val scalars = Seq[CCType](CCInt, CCUInt)
+      val scalars = annotationScalarTypes
         .map(t => TypeUsage(arg, UsedType.Scalar(t), ContractPtr))
       structs ++ scalars ++ super.visit(decl, arg)
     }

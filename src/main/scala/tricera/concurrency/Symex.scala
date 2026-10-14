@@ -1071,8 +1071,9 @@ class Symex private (context        : SymexContext,
       if (lhsE.typ == CCClock || lhsE.typ == CCDuration)
         throw new TranslationException("unsupported assignment to clock")
 
+      val resultType = lhsE.applyIntegerPromotion.typ
       val valueToAssign = CCTerm.fromTerm(
-        lhsE.typ cast (exp.assignment_op_ match {
+        resultType cast (exp.assignment_op_ match {
         case _ : AssignMul =>
           ap.theories.nia.GroebnerMultiplication.mult(lhsE.toTerm, rhsE.toTerm)
         case _ : AssignDiv =>
@@ -1096,21 +1097,21 @@ class Symex private (context        : SymexContext,
             case _ => lhsE.toTerm - rhsE.toTerm
           }
         case _ : AssignLeft =>
-          ModuloArithmetic.bvshl(lhsE.typ cast2Unsigned lhsE.toTerm,
-                                 lhsE.typ cast2Unsigned rhsE.toTerm)
+          ModuloArithmetic.bvshl(resultType cast2Unsigned lhsE.toTerm,
+                                 resultType cast2Unsigned rhsE.toTerm)
         case _ : AssignRight =>
-          ModuloArithmetic.bvashr(lhsE.typ cast2Unsigned lhsE.toTerm,
-                                  lhsE.typ cast2Unsigned rhsE.toTerm)
+          ModuloArithmetic.bvashr(resultType cast2Unsigned lhsE.toTerm,
+                                  resultType cast2Unsigned rhsE.toTerm)
         case _ : AssignAnd =>
-          ModuloArithmetic.bvand(lhsE.typ cast2Unsigned lhsE.toTerm,
-                                 lhsE.typ cast2Unsigned rhsE.toTerm)
+          ModuloArithmetic.bvand(resultType cast2Unsigned lhsE.toTerm,
+                                 resultType cast2Unsigned rhsE.toTerm)
         case _ : AssignXor =>
-          ModuloArithmetic.bvxor(lhsE.typ cast2Unsigned lhsE.toTerm,
-                                 lhsE.typ cast2Unsigned rhsE.toTerm)
+          ModuloArithmetic.bvxor(resultType cast2Unsigned lhsE.toTerm,
+                                 resultType cast2Unsigned rhsE.toTerm)
         case _ : AssignOr =>
-          ModuloArithmetic.bvor(lhsE.typ cast2Unsigned lhsE.toTerm,
-                                lhsE.typ cast2Unsigned rhsE.toTerm)
-      }), lhsE.typ, lhsE.srcInfo)
+          ModuloArithmetic.bvor(resultType cast2Unsigned lhsE.toTerm,
+                                resultType cast2Unsigned rhsE.toTerm)
+      }), resultType, lhsE.srcInfo)
 
       implicit val symex: Symex = this
       pushVal(getAssignmentTarget(exp.exp_1).update(valueToAssign))
@@ -1291,7 +1292,7 @@ class Symex private (context        : SymexContext,
           oldVal mapTerm { t =>
             ops.mkArrayPtr(ops.getRange(t), ops.getOffset(t) + op)
           }
-        case _ => oldVal mapTerm (_ + op)
+        case _ => oldVal.applyIntegerPromotion mapTerm (_ + op)
       }
       implicit val symex: Symex = this
       pushVal(getAssignmentTarget(expToUpdate).update(newValue))
@@ -1311,7 +1312,7 @@ class Symex private (context        : SymexContext,
           topVal mapTerm { t =>
             ops.mkArrayPtr(ops.getRange(t), ops.getOffset(t) + op)
           }
-        case _ => topVal mapTerm (_ + op)
+        case _ => topVal.applyIntegerPromotion mapTerm (_ + op)
       }
       val updatedPostValue = // the pre-update value is already on the stack
         getAssignmentTarget(expToUpdate).update(incrementedValue)

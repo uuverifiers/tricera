@@ -202,7 +202,9 @@ TESTS="nested-calls-safe.hcc \
        stmt-assert-at-clabel-ptr-deref-unsafe.hcc \
        stmt-assert-at-clabel-ptrptr-deref-safe.hcc \
        stmt-assert-at-clabel-ptrptr-deref-unsafe.hcc \
-       stmt-assert-pre-ptr-deref-unsafe.hcc"
+       stmt-assert-pre-ptr-deref-unsafe.hcc \
+       uchar-param-safe.hcc \
+       uchar-param-unsafe.hcc"
 
 for name in $TESTS; do
     echo
@@ -231,3 +233,9 @@ done
 echo
 echo "cast-modular-safe.hcc (ilp32)"
 $TRI_CMD "$@" -arithMode:ilp32 cast-modular-safe.hcc 2>&1 | grep -v 'at '
+
+for name in short-result-cast-safe.hcc short-result-cast-unsafe.hcc; do
+    echo
+    echo "$name (ilp32)"
+    $TRI_CMD "$@" -arithMode:ilp32 $name 2>&1 | grep -v 'at '
+done

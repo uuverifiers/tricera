@@ -1,0 +1,10 @@
+/*@
+  ensures \result == c + 1;
+*/
+int next(unsigned char c) { return c + 1; }
+
+int main() {
+  int r = next(-1);
+  assert(r == 256);
+  return 0;
+}

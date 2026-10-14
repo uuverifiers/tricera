@@ -711,8 +711,10 @@ class CCReader private (prog              : Program,
   // the scalar types the program puts on the heap
   val predefSignatures = {
     val seen = new MHashSet[Sort]
-    (programInfo.heapTypes.toList.collect { case UsedType.Scalar(t) => t } ++
-       forcedScalarTypes)
+    val (intTypes, otherTypes) =
+      (programInfo.heapTypes.toList.collect { case UsedType.Scalar(t) => t } ++
+         forcedScalarTypes).partition(Set[CCType](CCInt, CCUInt))
+    (intTypes ++ otherTypes)
       .filter(t => seen.add(t.toSort)).map(scalarWrapper) ++
     HeapModel.addressWrapperSignatures(heapModelType, ObjSort)
   }
@@ -2397,65 +2399,53 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
   }
 
   private def getType(specs : Iterator[Type_specifier]) : CCType = {
-    // by default assume that the type is int
-    var typ : CCType = CCInt
-
-    for (specifier <- specs)
-      specifier match {
-            case _ : Tvoid =>
-              typ = CCVoid
-            case _ : Tint =>
-              // ignore
-            case _ : Tchar =>
-              // ignore
-            case _ : Tsigned =>
-              typ = CCInt
-            case _ : Tunsigned =>
-              typ = CCUInt
-            case _ : Tlong if typ == CCInt =>
-              typ = CCLong
-            case _ : Tlong if typ == CCUInt =>
-              typ = CCULong
-            case _ : Tlong if typ == CCLong =>
-              typ = CCLongLong
-            case _ : Tlong if typ == CCULong =>
-              typ = CCULongLong
-            case structOrUnion : Tstruct =>
-              val structName = getStructName(structOrUnion)
-              typ = structDefs get structName match {
-                case None => throw new TranslationException(
-                  "struct " + structName + " not found!")
-                case Some(structType) => structType
-              }
-            case enum : Tenum =>
-              typ = getEnumType(enum)
-            case _ : Tclock => {
-              if (!useTime)
-                throw NeedsTimeException
-              typ = CCClock
-            }
-            case _ : Tduration => {
-              if (!useTime)
-                throw NeedsTimeException
-              typ = CCDuration
-            }
-            case _ : THeapObject => {
-              if (!modelHeap)
-                throw NeedsHeapModelException
-              typ = CCHeapObject(heap)
-            }
-            case _ : Tmathint =>
-              typ = CCMathInt
-            case _ : Tbool =>
-              typ = CCBool
-            case x => {
-              warn("type " + (printer print x) +
-                   " not supported, assuming int")
-              typ = CCInt
-            }
-          }
-    typ
+    val (integerSpecs, otherSpecs) = specs.toList.partitionMap {
+      case _ : Tchar     => Left(IntegerSpecifier.Char)
+      case _ : Tshort    => Left(IntegerSpecifier.Short)
+      case _ : Tint      => Left(IntegerSpecifier.Int)
+      case _ : Tlong     => Left(IntegerSpecifier.Long)
+      case _ : Tsigned   => Left(IntegerSpecifier.Signed)
+      case _ : Tunsigned => Left(IntegerSpecifier.Unsigned)
+      case other         => Right(other)
+    }
+    otherSpecs.map(getNonIntegerType).lastOption
+      .getOrElse(CCArithType.fromSpecifiers(integerSpecs))
   }
+
+  private def getNonIntegerType(specifier : Type_specifier) : CCType =
+    specifier match {
+      case _ : Tvoid =>
+        CCVoid
+      case structOrUnion : Tstruct =>
+        val structName = getStructName(structOrUnion)
+        structDefs get structName match {
+          case None => throw new TranslationException(
+            "struct " + structName + " not found!")
+          case Some(structType) => structType
+        }
+      case enum : Tenum =>
+        getEnumType(enum)
+      case _ : Tclock =>
+        if (!useTime)
+          throw NeedsTimeException
+        CCClock
+      case _ : Tduration =>
+        if (!useTime)
+          throw NeedsTimeException
+        CCDuration
+      case _ : THeapObject =>
+        if (!modelHeap)
+          throw NeedsHeapModelException
+        CCHeapObject(heap)
+      case _ : Tmathint =>
+        CCMathInt
+      case _ : Tbool =>
+        CCBool
+      case x =>
+        warn("type " + (printer print x) +
+             " not supported, assuming int")
+        CCInt
+    }
   private def getType(f: FuncDef) : CCType = {
       val typ = f.declSpecs match {
       case Some(listDeclSpecs) =>

@@ -243,3 +243,105 @@ UNSAFE
 
 bool-from-pointer-cast-unsafe.c (ilp32)
 UNSAFE
+
+uchar-promotion-safe.c (math)
+SAFE
+
+uchar-promotion-safe.c (ilp32)
+SAFE
+
+uchar-promotion-unsafe.c (math)
+UNSAFE
+
+uchar-promotion-unsafe.c (ilp32)
+UNSAFE
+
+char-short-sizeof-safe.c (math)
+SAFE
+
+char-short-sizeof-safe.c (ilp32)
+SAFE
+
+char-short-sizeof-unsafe.c (math)
+UNSAFE
+
+char-short-sizeof-unsafe.c (ilp32)
+UNSAFE
+
+uchar-heap-array-safe.c (math)
+SAFE
+
+uchar-heap-array-safe.c (ilp32)
+SAFE
+
+uchar-heap-array-unsafe.c (math)
+UNSAFE
+
+uchar-heap-array-unsafe.c (ilp32)
+UNSAFE
+
+char-short-struct-field-safe.c (math)
+SAFE
+
+char-short-struct-field-safe.c (ilp32)
+SAFE
+
+char-short-struct-field-unsafe.c (math)
+UNSAFE
+
+char-short-struct-field-unsafe.c (ilp32)
+UNSAFE
+
+uchar-ushort-decrement-safe.c (math)
+SAFE
+
+uchar-ushort-decrement-safe.c (ilp32)
+SAFE
+
+uchar-ushort-decrement-unsafe.c (math)
+UNSAFE
+
+uchar-ushort-decrement-unsafe.c (ilp32)
+UNSAFE
+
+uchar-wrap-safe.c (ilp32)
+SAFE
+
+uchar-wrap-unsafe.c (ilp32)
+UNSAFE
+
+schar-range-safe.c (ilp32)
+SAFE
+
+schar-range-unsafe.c (ilp32)
+UNSAFE
+
+char-nondet-range-safe.c (ilp32)
+SAFE
+
+char-nondet-range-unsafe.c (ilp32)
+UNSAFE
+
+short-nondet-range-safe.c (ilp32)
+SAFE
+
+short-nondet-range-unsafe.c (ilp32)
+UNSAFE
+
+short-assign-conversion-safe.c (ilp32)
+SAFE
+
+short-assign-conversion-unsafe.c (ilp32)
+UNSAFE
+
+uchar-ushort-compound-bitwise-safe.c (ilp32)
+SAFE
+
+uchar-ushort-compound-bitwise-unsafe.c (ilp32)
+UNSAFE
+
+specifier-order-safe.c (lp64)
+SAFE
+
+specifier-order-unsafe.c (lp64)
+UNSAFE

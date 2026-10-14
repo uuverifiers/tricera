@@ -615,6 +615,12 @@ UNSAFE
 stmt-assert-pre-ptr-deref-unsafe.hcc
 UNSAFE
 
+uchar-param-safe.hcc
+SAFE
+
+uchar-param-unsafe.hcc
+UNSAFE
+
 global-array-offset-safe.hcc (native)
 SAFE
 
@@ -683,3 +689,9 @@ UNSAFE
 
 cast-modular-safe.hcc (ilp32)
 SAFE
+
+short-result-cast-safe.hcc (ilp32)
+SAFE
+
+short-result-cast-unsafe.hcc (ilp32)
+UNSAFE

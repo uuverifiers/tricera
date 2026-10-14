@@ -188,3 +188,6 @@ UNKNOWN (5:7 incompatible pointer types: cannot convert E* to int*)
 
 incompatible-ptr-enum-enum.c
 UNKNOWN (6:11 incompatible pointer types: cannot convert E* to E2*)
+
+incompatible-ptr-char-int.c
+UNKNOWN (3:8 incompatible pointer types: cannot convert int* to char*)
