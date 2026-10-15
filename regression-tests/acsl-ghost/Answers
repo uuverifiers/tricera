@@ -104,6 +104,12 @@ SAFE
 ghost_boolean_from_relation_unsafe.c
 UNSAFE
 
+ghost_true_false_safe.c
+SAFE
+
+ghost_true_false_unsafe.c
+UNSAFE
+
 ghost_integer_assign_wraps_safe.c (ilp32)
 SAFE
 
@@ -114,4 +120,10 @@ ghost_boolean_from_relation_safe.c (ilp32)
 SAFE
 
 ghost_boolean_from_relation_unsafe.c (ilp32)
+UNSAFE
+
+ghost_true_false_safe.c (ilp32)
+SAFE
+
+ghost_true_false_unsafe.c (ilp32)
 UNSAFE

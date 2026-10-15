@@ -545,7 +545,8 @@ class Symex private (context        : SymexContext,
     }
   }
 
-  /** Throws on stack pointers stored to non-`_Bool` targets. */
+  /** An exception is thrown for stack pointers stored to non-`_Bool` targets
+   *  and for stores to stack-pointer targets. */
   private def rejectStackPointerStore(rhsVal     : CCTerm,
                                       targetType : CCType) : Unit =
     rhsVal.typ match {
@@ -553,6 +554,10 @@ class Symex private (context        : SymexContext,
         throw new UnsupportedCFragmentException(
           getLineStringShort(rhsVal.srcInfo) +
           " Only limited support for stack pointers")
+      case _ if targetType.isInstanceOf[CCStackPointer] =>
+        throw new UnsupportedCFragmentException(
+          getLineStringShort(rhsVal.srcInfo) +
+          " Reassigning a stack pointer is not supported.")
       case _ =>
     }
 

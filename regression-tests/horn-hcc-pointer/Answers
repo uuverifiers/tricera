@@ -225,6 +225,21 @@ UNKNOWN (6:3 incompatible pointer types: cannot convert [] to char*)
 incompatible-ptr-return.c
 UNKNOWN (3:20 incompatible pointer types: cannot convert [] to char*)
 
+implicit-ptr-to-int-assign.c
+UNKNOWN (6:3 Conversions between pointer and arithmetic types are not supported.)
+
+implicit-stack-ptr-to-int-init.c
+UNKNOWN (3:7 Conversions between pointer and arithmetic types are not supported.)
+
+implicit-ptr-to-int-return.c
+UNKNOWN (3:24 Conversions between pointer and arithmetic types are not supported.)
+
+implicit-ptr-to-int-arg.c
+UNKNOWN (7:11 Conversions between pointer and arithmetic types are not supported.)
+
+stack-ptr-null-assign.c
+UNKNOWN (Unsupported C fragment. 4:3 Reassigning a stack pointer is not supported.)
+
 stack-ptr-to-bool-safe.c
 SAFE
 

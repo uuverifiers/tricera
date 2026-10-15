@@ -145,7 +145,7 @@ object CommentPreprocessor {
     new BufferedReader(new StringReader(
       rewriteGlobalAnnotations(
         substituteTypedefsInAnnotations(
-          rewriteGhostLogicTypes(stringWriter.getBuffer.toString), typedefs))))
+          rewriteGhostLogicTokens(stringWriter.getBuffer.toString), typedefs))))
     // todo: benchmark this with files, >1 MB, benchmark this whole class
   }
 
@@ -169,8 +169,10 @@ object CommentPreprocessor {
         open + (if (isEmpty) body.replace('@', ' ') else body) + close)
     })
 
+  private val quotedLiteral = """"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'"""
+
   private val quotedOrLineComment =
-    """(?s)"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|//@|//[^\r\n]*""".r
+    ("(?s)" + quotedLiteral + """|//@|//[^\r\n]*""").r
 
   private def stripLineComments(body : String) : String =
     quotedOrLineComment.replaceAllIn(body, m =>
@@ -198,18 +200,28 @@ object CommentPreprocessor {
             annotationMarker, annotationMarker)
   }
 
-  // ACSL treats `integer` and `boolean` as logic-type keywords
-  // inside annotations. Regular C code may still use them as plain
-  // identifiers. Rewrite them to internal (`$MathInt`, `_Bool`)
+  // in ACSL annotations, `integer` and `boolean` are logic-type keywords and
+  // `\true` and `\false` are boolean constants, while in regular C code the
+  // keywords may be used as plain identifiers. In ghost code they are
+  // rewritten to internal C, except inside string and character literals
   private val ghostSpanRegex =
     new scala.util.matching.Regex(
       "(?s)" + java.util.regex.Pattern.quote(ghostOpenMarker) + "(.*?)" +
       java.util.regex.Pattern.quote(ghostCloseMarker), "body")
-  private def rewriteGhostLogicTypes(s : String) : String =
+  private val ghostLogicTokenReplacements = Map(
+    "integer" -> "$MathInt",
+    "boolean" -> "_Bool",
+    "\\true"  -> "((_Bool)1)",
+    "\\false" -> "((_Bool)0)")
+  private val quotedOrGhostLogicToken =
+    ("(?s)" + quotedLiteral +
+     """|(?<![\w$])(?:integer|boolean|\\true|\\false)(?![\w$])""").r
+  private def rewriteGhostLogicTokens(s : String) : String =
     ghostSpanRegex.replaceAllIn(s, m => {
-      val body = stripLineComments(m.group("body"))
-        .replaceAll("\\binteger\\b", "\\$MathInt")
-        .replaceAll("\\bboolean\\b", "_Bool")
+      val body = quotedOrGhostLogicToken.replaceAllIn(
+        stripLineComments(m.group("body")), t =>
+          java.util.regex.Matcher.quoteReplacement(
+            ghostLogicTokenReplacements.getOrElse(t.matched, t.matched)))
       java.util.regex.Matcher.quoteReplacement(
         ghostOpenMarker + body + ghostCloseMarker)
     })

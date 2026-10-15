@@ -36,7 +36,9 @@ TESTS="ghost_global_safe.c \
        ghost_writes_non_ghost_field_rejected.c \
        ghost_identifier_integer_outside_safe.c \
        ghost_boolean_from_relation_safe.c \
-       ghost_boolean_from_relation_unsafe.c"
+       ghost_boolean_from_relation_unsafe.c \
+       ghost_true_false_safe.c \
+       ghost_true_false_unsafe.c"
 
 for name in $TESTS; do
     echo
@@ -47,7 +49,9 @@ done
 for name in ghost_integer_assign_wraps_safe.c \
             ghost_integer_assign_wraps_unsafe.c \
             ghost_boolean_from_relation_safe.c \
-            ghost_boolean_from_relation_unsafe.c; do
+            ghost_boolean_from_relation_unsafe.c \
+            ghost_true_false_safe.c \
+            ghost_true_false_unsafe.c; do
     echo
     echo "$name (ilp32)"
     $TRI_CMD "$@" -arithMode:ilp32 $name 2>&1 | grep -v 'at '
