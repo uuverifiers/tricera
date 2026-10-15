@@ -1,0 +1,4 @@
+void main() {
+  int x = _;
+  clock c = x;
+}

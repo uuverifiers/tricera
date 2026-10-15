@@ -20,7 +20,9 @@ TESTS="inc_safe.c \
        cast_unsafe.c \
        castalias_safe.c \
        castalias_unsafe.c \
-       othercontract_safe.c"
+       othercontract_safe.c \
+       global_stackptr_safe.c \
+       global_stackptr_unsafe.c"
 
 for name in $TESTS; do
     echo

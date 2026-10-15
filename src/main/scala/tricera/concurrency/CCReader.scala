@@ -385,10 +385,6 @@ class CCReader private (prog              : Program,
       CCReader.this.getFunctionArgNames(f)
     override def getFunctionArgTypes(f : Function_def) : scala.Seq[CCType] =
       CCReader.this.getFunctionArgTypes(f)
-    override def translateClockValue(expr : CCTerm) : CCTerm =
-      CCReader.this.translateClockValue(expr)
-    override def translateDurationValue(expr : CCTerm): CCTerm =
-      CCReader.this.translateDurationValue(expr)
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -549,7 +545,6 @@ class CCReader private (prog              : Program,
   }
 
   private var atomicMode = false
-  private var evaluatingInjectedCode = false
 
   private def inAtomicMode[A](comp : => A) : A = {
       val oldAtomicMode = atomicMode
@@ -557,12 +552,6 @@ class CCReader private (prog              : Program,
       val res = comp
       atomicMode = oldAtomicMode
       res
-  }
-
-  private def inInjectedCode[A](comp : => A) : A = {
-    val old = evaluatingInjectedCode
-    evaluatingInjectedCode = true
-    try { comp } finally { evaluatingInjectedCode = old }
   }
 
   private var prefix : String = ""
@@ -941,7 +930,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     }
   }
 
-  private val (injectedFunctionNames, injectedInitCode) : (Set[String], scala.Seq[String]) =
+  private val injectedInitCode : scala.Seq[String] =
     if (modelHeap) {
       val (funcs, initCode) = heapModelFactory.getCodeToInject(inputVars)
       for ((name, funcDefAst) <- funcs) {
@@ -951,8 +940,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         }
         functionDefs.put(name, funcDefAst)
       }
-      (funcs.keySet, initCode)
-    } else (Set(), scala.Seq())
+      initCode
+    } else scala.Seq()
 
   private val heapVars : Map[String, CCVar] = if (modelHeap) {
     (for (v <- heapModelFactory.requiredVars) yield {
@@ -1872,19 +1861,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                 val res = values.eval(actualInitExp)(
                   values.EvalSettings(), evalContext)
                 val (actualLhsVar, actualRes) = lhsVar.typ match {
-                  case hp : CCHeapPointer if res.typ.isInstanceOf[CCArithType] =>
-                    res.toTerm match {
-                      case IIntLit(v) if v.intValue == 0 =>
-                        (lhsVar, CCTerm.fromTerm(hp.nullAddr, varDec.typ, srcInfo))
-                      case _ if evaluatingInjectedCode =>
-                        // Allow pointer arithmetic inside code injected by the heap model
-                        // (e.g., injected init code or injected function bodies)
-                        (lhsVar, res)
-                      case _ =>
-                        throw new TranslationException("Pointer arithmetic is not " +
-                          "allowed, and the only possible initialization value for " +
-                          "pointers is 0 (NULL)")
-                    }
                   case hp : CCHeapPointer =>
                     val converted = res.convertToType(hp, srcInfo)
                     converted.typ match {
@@ -1900,7 +1876,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                    lhsVar.storage), converted)
                       case _ => (lhsVar, converted)
                     }
-                  case _ => (lhsVar, res)
+                  case _ =>
+                    (lhsVar, res.copy(srcInfo = srcInfo).convertToType(
+                               lhsVar.typ, srcInfo))
                 }
                 (actualLhsVar, actualRes, IExpression.i(true))
             case Some(_ : InitListOne) | Some(_: InitListTwo) => {
@@ -1961,14 +1939,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           scope.LocalVars addVar actualLhsVar
         }
 
-        actualLhsVar.typ match {
-          case CCClock =>
-            values addValue translateClockValue(initValue)
-          case CCDuration =>
-            values addValue translateDurationValue(initValue)
-          case _ =>
-            values addValue (actualLhsVar.typ cast initValue)
-        }
+        values addValue initValue
 
         values addGuard (
           if(varDec.typ == actualLhsVar.typ) initGuard
@@ -2460,38 +2431,6 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     getType(f)
   }
 
-  private def translateClockValue(expr : CCTerm) : CCTerm = {
-    import IExpression._
-    if (!useTime)
-      throw NeedsTimeException
-    expr.toTerm match {
-      case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm.fromTerm(GT.term + GTU.term*(-v), CCClock, expr.srcInfo)
-      case t if (expr.typ == CCClock) =>
-        CCTerm.fromTerm(t, CCClock, expr.srcInfo)
-      case t if (expr.typ == CCDuration) =>
-        CCTerm.fromTerm(GT.term - t, CCClock, expr.srcInfo)
-      case t =>
-        throw new TranslationException(
-          "clocks can only be set to or compared with integers")
-    }
-  }
-
-  private def translateDurationValue(expr : CCTerm) : CCTerm = {
-    import IExpression._
-    if (!useTime)
-      throw NeedsTimeException
-    expr.toTerm match {
-      case _ if (expr.typ == CCDuration) =>
-        expr
-      case IIntLit(v) if (expr.typ.isInstanceOf[CCArithType]) =>
-        CCTerm.fromTerm(GTU.term*v, CCDuration, expr.srcInfo)
-      case t =>
-        throw new TranslationException(
-          "duration variable cannot be set or compared to " + t)
-    }
-  }
-
   //////////////////////////////////////////////////////////////////////////////
 
   private def translateConstantExpr(expr : Constant_expression,
@@ -2696,20 +2635,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
     // assertion is not necessarily true:
     // assert(entry.arity == scope.allFormalVars.size)
 
-    val isInjected = injectedFunctionNames contains functionName
     val translator = FunctionTranslator(exit, functionName)
     // entry parameters, needed by setupLabelCaptures to resolve captured expressions
     translator.setParams(scope.LocalVars.getVarsInTopFrame)
     val bodyEntry =
       translator.setupLabelCaptures(stm, entry, getSourceInfo(stm))
     val finalPred =
-      if (isInjected) inInjectedCode {
-        if (isNoReturn) { translator.translateNoReturn(stm, bodyEntry); exit }
-        else translator.translateWithReturn(stm, bodyEntry)
-      } else {
-        if (isNoReturn) { translator.translateNoReturn(stm, bodyEntry); exit }
-        else translator.translateWithReturn(stm, bodyEntry)
-      }
+      if (isNoReturn) { translator.translateNoReturn(stm, bodyEntry); exit }
+      else translator.translateWithReturn(stm, bodyEntry)
     scope.LocalVars popFrame
   }
 
@@ -3416,7 +3349,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         val initStmsPeek = ap.util.PeekIterator(initStmts)
         if (initStmsPeek.hasNext) {
           val midPred = newPred(Nil, None)
-          inInjectedCode { translateStmSeq(initStmsPeek, bodyEntry, midPred) }
+          translateStmSeq(initStmsPeek, bodyEntry, midPred)
           translateStmSeq(ap.util.PeekIterator(stmsIt), midPred, exit)
         } else {
           translateStmSeq(ap.util.PeekIterator(stmsIt), bodyEntry, exit)
@@ -3802,7 +3735,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
             case Some(rp) =>
               val resultType = rp.argVars.last.typ
               val args = (symex.getValuesAsTerms take(rp.arity - 1)) ++
-                         List(retValue.convertIfInteger(resultType).toTerm)
+                         List(retValue.convertToType(
+                                resultType, srcInfo).toTerm)
               symex outputClause(atom(rp, args), srcInfo)
             case None     =>
               throw new TranslationException(

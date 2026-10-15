@@ -246,7 +246,7 @@ SAFE
 
 stackptr-ilp32.hcc
 Warning: The following clause has different terms with the same name (term: globalf1_0p:10)
-main10_5(@h, globalf1_0p:10, c:9.\as[signed bv[32]]) :- c:9 >= -2147483648 & 2147483647 >= c:9 & globalf1_0p:10 >= -2147483648 & 2147483647 >= globalf1_0p:10 & @h = heap.empty & globalf1_0p:10 = 0.\as[signed bv[32]].
+main10_5(@h, globalf1_0p:10, c:9) :- c:9 >= -2147483648 & 2147483647 >= c:9 & globalf1_0p:10 >= -2147483648 & 2147483647 >= globalf1_0p:10 & @h = heap.empty & globalf1_0p:10 = 0.
 
 
 Inferred ACSL annotations

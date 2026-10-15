@@ -555,6 +555,28 @@ false :- main(@h, b:4, c:5, p:6), c:5 = 0 & get_int(heap.read(@h, heap.rangeNth(
 
 UNSAFE
 
+array-deref-write-safe.c
+SAFE
+
+array-deref-write-unsafe.c
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Init:
+                                                                main4_3(heap.empty)                                                                
+---------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                         |                                                                         
+                                                                         |                                                                         
+                                                                         V                                                                         
+ main_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), O_int(5))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Final:
+ main_3(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_int(0))), O_int(5))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main_3(@h, a:4), get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:4), arrayPtrOffset(a:4) - 0))) = 0. (line:8 col:3) (property: user-assertion)
+
+UNSAFE
+
 simple-global-memsafety1.c
 SAFE
 

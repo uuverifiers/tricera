@@ -485,7 +485,8 @@ class HeapTheoryModel(context           : SymexContext,
       val valueToInit = if (initializers.nonEmpty) {
         arrayPtr.elementType match {
           case structType: CCStruct => structType.getInitialized(initializers)
-          case elementType => initializers.pop(elementType)
+          case elementType =>
+            initializers.pop().convertToType(elementType).toTerm
         }
       } else {
         arrayPtr.elementType.getZeroInit

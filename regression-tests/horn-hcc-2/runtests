@@ -9,7 +9,10 @@ TESTS="atomic3e.hcc atomic3f.hcc \
        duration1.hcc duration2.hcc \
        duration3.hcc duration3b.hcc duration3c.hcc duration3d.hcc \
        nonlinear1.hcc nonlinear2.hcc typedef1.hcc switch1.hcc switch2.hcc \
-       switch-no-matching-case-safe.c switch-no-matching-case-unsafe.c"
+       switch-no-matching-case-safe.c switch-no-matching-case-unsafe.c \
+       clock-param-int-arg-safe.hcc clock-param-int-arg-unsafe.hcc \
+       clock-set-from-variable.hcc \
+       clock-heap-field-safe.hcc clock-heap-field-unsafe.hcc"
 
 for name in $TESTS; do
     echo

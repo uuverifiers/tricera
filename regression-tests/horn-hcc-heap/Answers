@@ -116,14 +116,10 @@ typecastSafe-001.c
 SAFE
 
 illegal-access-001.c
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
-(error "Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)")
-Other Error: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
+UNKNOWN (3:7 Conversions between pointer and arithmetic types are not supported.)
 
 illegal-access-002.c
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer assignment only supports 0 (NULL)
-(error "Pointer assignment only supports 0 (NULL)")
-Other Error: Pointer assignment only supports 0 (NULL)
+UNKNOWN (3:3 Conversions between pointer and arithmetic types are not supported.)
 
 postop.c
 SAFE
@@ -166,7 +162,7 @@ stackptr-to-heapptr.c
 SAFE
 
 stackptr-to-heapptr-double.c
-UNKNOWN (Unsupported C fragment. 6:8 Only limited support for stack pointers)
+UNKNOWN (Unsupported C fragment. 6:3 Only limited support for stack pointers)
 
 free-1-unsafe.c
 

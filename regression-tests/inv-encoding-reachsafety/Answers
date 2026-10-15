@@ -103,14 +103,19 @@ list-unsafe.c
 UNSAFE
 
 illegal-access-001.c
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
-(error "Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)")
-Other Error: Pointer arithmetic is not allowed, and the only possible initialization value for pointers is 0 (NULL)
+UNKNOWN (3:7 Conversions between pointer and arithmetic types are not supported.)
 
 illegal-access-002.c
-tricera.concurrency.ccreader.CCExceptions$TranslationException: Pointer assignment only supports 0 (NULL)
-(error "Pointer assignment only supports 0 (NULL)")
-Other Error: Pointer assignment only supports 0 (NULL)
+UNKNOWN (3:3 Conversions between pointer and arithmetic types are not supported.)
+
+inv-ptr-to-int-cast.c
+UNKNOWN (5:7 Conversions between pointer and arithmetic types are not supported.)
+
+void-ptr-round-trip-safe.c
+SAFE
+
+void-ptr-round-trip-unsafe.c
+UNSAFE
 
 simple-struct.c R-tag-opt
 SAFE

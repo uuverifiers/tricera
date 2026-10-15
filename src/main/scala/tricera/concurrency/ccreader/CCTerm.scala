@@ -59,42 +59,56 @@ case class CCTerm(t               : ITerm,
         this
       case (_: CCArithType, newType: CCArithType) =>
         newType cast this
-      case (_: CCPointer, CCBool) =>
+      case (_ : CCPointer | _ : CCHeapArrayPointer, CCBool) =>
         CCBool cast this
       case (_: CCArithType, CCDuration) => {
         if (!CCReader.useTime)
           throw NeedsTimeException
-        CCTerm.fromTerm(CCReader.GTU.term * toTerm, CCDuration, srcInfo)
+        toTerm match {
+          case IIntLit(value) =>
+            CCTerm.fromTerm(CCReader.GTU.term * value, CCDuration, srcInfo)
+          case _ =>
+            throw new UnsupportedCFragmentException(
+              getLineStringShort(conversionSrcInfo) +
+              " Only integer literals are supported as clock or duration" +
+              " values.")
+        }
       }
+      case (_: CCArithType | CCDuration, CCClock) =>
+        val elapsed = convertToType(CCDuration, conversionSrcInfo).toTerm
+        CCTerm.fromTerm(CCReader.GT.term - elapsed, CCClock, srcInfo)
       case (_: CCArithType, CCMathInt) =>
         CCTerm.fromTerm(toTerm, CCMathInt, srcInfo)
       case (CCMathInt, _: CCArithType) =>
         newType cast this
       case (_, CCVoid) => this
-      case (_: CCArithType, newType: CCHeapPointer) =>
-        toTerm match {
-          case lit: IIntLit if lit.value.intValue == 0 =>
-            CCTerm.fromTerm(newType.nullAddr, newType, srcInfo)
-          case _ =>
-            throw new UnsupportedCastException(
-              "pointer arithmetic is not allowed, cannot convert " + this + " to" +
-              " " + newType)
-        }
+      case (_: CCArithType, newType: CCHeapPointer) if isNullPointerConstant =>
+        CCTerm.fromTerm(newType.nullAddr, newType, srcInfo)
       case (_: CCArithType, _: CCHeapArrayPointer) if isNullPointerConstant =>
         this
-      case (oldType : CCHeapPointer, newType : CCArithType) =>
+      case (_: CCArithType, _: CCHeapPointer | _: CCHeapArrayPointer) |
+           (_: CCPointer | _: CCHeapArrayPointer, _: CCArithType) =>
         throw new UnsupportedCastException(
-          "Cannot cast pointer type to arithmetic type.")
+          getLineStringShort(conversionSrcInfo) +
+          " Conversions between pointer and arithmetic types are not supported.")
       case (oldType: CCHeapPointer, newType: CCHeapPointer) =>
         newType cast this
       case (_ : CCStackPointer | _ : CCHeapArrayPointer | _ : CCArray,
             _ : CCHeapPointer) |
-           (_ : CCHeapArrayPointer, _ : CCHeapArrayPointer) =>
+           (_ : CCHeapArrayPointer, _ : CCHeapArrayPointer) |
+           (_ : CCArray, _ : CCArray) =>
         if (!CCTerm.isCompatiblePointerConversion(typ, newType))
           throw new UnsupportedCastException(
             getLineStringShort(conversionSrcInfo) +
             " incompatible pointer types: cannot convert " + typ.shortName +
             " to " + newType.shortName)
+        this
+      case (_ : CCPointer | _ : CCArray, _ : CCHeapArrayPointer) =>
+        throw new UnsupportedCFragmentException(
+          getLineStringShort(conversionSrcInfo) + " Converting " +
+          typ.shortName + " to an array pointer is not supported.")
+      case (_ : CCStruct | _ : CCStructField, _ : CCStruct | _ : CCStructField)
+          if CCTerm.underlyingType(typ) == CCTerm.underlyingType(newType) =>
         this
       case _ =>
         throw new UnsupportedCastException(
@@ -102,14 +116,6 @@ case class CCTerm(t               : ITerm,
           " for term: " + toTerm + " (srcInfo: " + srcInfo + ")")
     }
   }
-
-  def convertIfInteger(targetType : CCType) : CCTerm =
-    (typ, targetType) match {
-      case (_ : CCArithType | CCMathInt, _ : CCArithType) |
-           (_ : CCPointer, CCBool) =>
-        convertToType(targetType)
-      case _ => this
-    }
 
   private def isNullPointerConstant : Boolean = toTerm match {
     case IIntLit(value) => value.isZero
@@ -270,8 +276,7 @@ object CCTerm {
 class InitializerStack {
   private val values = new scala.collection.mutable.Stack[CCTerm]
   def push(value : CCTerm) : Unit = values.push(value)
-  def pop(targetType : CCType) : ITerm =
-    values.pop().convertIfInteger(targetType).toTerm
+  def pop() : CCTerm = values.pop()
   def isEmpty  : Boolean = values.isEmpty
   def nonEmpty : Boolean = values.nonEmpty
   def nextHasSort(sort : Sort) : Boolean =

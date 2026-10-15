@@ -82,7 +82,7 @@ Warning: no definition of function "nondet" available
 SAFE
 
 valid-free-12-false.c
-UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
+UNKNOWN (5:7 Conversions between pointer and arithmetic types are not supported.)
 
 valid-memcleanup-4-false.c
 UNSAFE

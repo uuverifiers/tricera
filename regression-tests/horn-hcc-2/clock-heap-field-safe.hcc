@@ -1,0 +1,7 @@
+struct T { clock c; int v; };
+
+void main() {
+  struct T *t = malloc(sizeof(struct T));
+  t->c = 5;
+  assert(t->c >= 5);
+}

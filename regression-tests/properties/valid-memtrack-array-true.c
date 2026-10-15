@@ -1,11 +1,7 @@
 #include <stdlib.h>
 
-void* allocArray(int n) {
-  return malloc(sizeof(int)*n);
-}
-
 void main() {
-  int p[] = (int*) allocArray(10);
+  int *p = malloc(sizeof(int)*10);
   // This violates memcleanup, but not memtrack.
   // Note, if there would have been a return statement, this would
   // have violated memtrack too.

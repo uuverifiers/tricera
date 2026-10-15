@@ -80,7 +80,7 @@ ptrptr-bug-2.c
 SAFE
 
 ptr-to-int-cast.c
-UNKNOWN (4:7 Casts between pointer and arithmetic types are not supported.)
+UNKNOWN (5:7 Conversions between pointer and arithmetic types are not supported.)
 
 stack-ptr-fun-ret.c
 UNKNOWN (Unsupported C fragment. Returning stack pointers from functions is not yet supported.)
@@ -218,3 +218,39 @@ UNKNOWN (Unsupported C fragment. 5:12 Conditional expressions whose operands are
 
 conditional-stack-ptrs.c
 UNKNOWN (Unsupported C fragment. 5:12 Conditional expressions whose operands are stack pointers to different objects are not supported.)
+
+incompatible-ptr-field-assign.c
+UNKNOWN (6:3 incompatible pointer types: cannot convert [] to char*)
+
+incompatible-ptr-return.c
+UNKNOWN (3:20 incompatible pointer types: cannot convert [] to char*)
+
+stack-ptr-to-bool-safe.c
+SAFE
+
+stack-ptr-to-bool-unsafe.c
+
+-----------------
+Init:
+     main4_3     
+-----------------
+        |        
+        |        
+        V        
+  main(0, 1, 1)  
+-----------------
+        |        
+        |        
+        V        
+ main_2(0, 1, 1) 
+-----------------
+Final:
+ main_2(0, 1, 1) 
+-----------------
+Failed assertion:
+false :- main_2(x:4, c:5, d:6), d:6 = 1. (line:9 col:3) (property: user-assertion)
+
+UNSAFE
+
+ptr-to-array-param.c
+UNKNOWN (Unsupported C fragment. 8:3 Converting int* to an array pointer is not supported.)

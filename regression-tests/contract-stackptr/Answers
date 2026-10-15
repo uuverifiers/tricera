@@ -71,3 +71,9 @@ Inferred ACSL annotations
 ================================================================================
 
 SAFE
+
+global_stackptr_safe.c
+SAFE
+
+global_stackptr_unsafe.c
+UNSAFE

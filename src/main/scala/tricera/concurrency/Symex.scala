@@ -280,10 +280,13 @@ class Symex private (context        : SymexContext,
       case stackPtr: CCStackPointer => stackPtr.targetInd
       case _ => ind
     }
-    val storedVal = t convertIfInteger getVar(actualInd).typ
-    values = values.updated(actualInd, storedVal)
+    setValueWithoutDeref(actualInd, t)
+  }
+  private def setValueWithoutDeref(ind : Int, t : CCTerm) : Unit = {
+    val storedVal = t convertToType getVar(ind).typ
+    values = values.updated(ind, storedVal)
     touchedGlobalState =
-      touchedGlobalState || actualInd < scope.GlobalVars.size ||
+      touchedGlobalState || ind < scope.GlobalVars.size ||
       !scope.freeFromGlobal(storedVal)
   }
 
@@ -339,39 +342,6 @@ class Symex private (context        : SymexContext,
       throw new TranslationException(
         "Can only handle assignments to variables, not " +
         (context.printer print exp))
-  }
-
-  private def lookupTypeOf(name              : String,
-                           enclosingFunction : String) : Option[CCType] = {
-    val idx = scope.lookupAnyVarNoException(name, enclosingFunction)
-    if (idx < 0) None
-    else Some(getValue(idx, false).typ)
-  }
-
-  private def isClockVariable(exp : Exp, enclosingFunction : String)
-  : Boolean = exp match {
-    case exp : Evar =>
-      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCClock)
-    case exp : EvarWithType =>
-      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCClock)
-    case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
-    case exp =>
-      throw new TranslationException(getLineString(exp) +
-                                     "Can only handle assignments to variables, not " +
-                                     (context.printer print exp))
-  }
-
-  private def isDurationVariable(exp : Exp, enclosingFunction : String)
-  : Boolean = exp match {
-    case exp : Evar =>
-      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCDuration)
-    case exp : EvarWithType =>
-      lookupTypeOf(exp.cident_, enclosingFunction).contains(CCDuration)
-    case _ : Eselect | _ : Epreop | _ : Epoint | _ : Earray => false
-    case exp =>
-      throw new TranslationException(getLineString(exp) +
-                                     "Can only handle assignments to variables, not " +
-                                     (context.printer print exp))
   }
 
   private def isHeapPointer(t : CCTerm) =
@@ -551,9 +521,10 @@ class Symex private (context        : SymexContext,
                     (implicit symex : Symex,
                      evalSettings   : EvalSettings,
                      evalCtx        : EvalContext) : CCTerm = {
-      pushVal(rhsVal)
-      val lhsType = doUpdate(rhsVal)
-      popVal convertIfInteger lhsType
+      val assignedVal = rhsVal.copy(srcInfo = Some(getSourceInfo(originalExp)))
+      pushVal(assignedVal)
+      val lhsType = doUpdate(assignedVal)
+      popVal convertToType lhsType
     }
 
     /** Subclass hook for [[update]]. On entry the RHS is on top of the stack;
@@ -574,22 +545,27 @@ class Symex private (context        : SymexContext,
     }
   }
 
-  /** If `rhsVal` is a literal `0` being assigned to a heap-pointer-typed
-   *  `target`, replaces the stack top with a null pointer term. Throws on
-   *  stack pointers and non-zero literal assignments to heap pointers. */
-  private def maybeReplaceRhsWithNull(rhsVal : CCTerm, target : CCTerm) : Unit =
-    rhsVal match {
-      case CCTerm(_, _: CCStackPointer, srcInfo, _) =>
+  /** Throws on stack pointers stored to non-`_Bool` targets. */
+  private def rejectStackPointerStore(rhsVal     : CCTerm,
+                                      targetType : CCType) : Unit =
+    rhsVal.typ match {
+      case _ : CCStackPointer if targetType != CCBool =>
         throw new UnsupportedCFragmentException(
-          getLineStringShort(srcInfo) + " Only limited support for stack pointers")
-      case CCTerm(IIntLit(value), _, _, _) if isHeapPointer(target) =>
-        if (value.intValue != 0)
-          throw new TranslationException("Pointer assignment only supports 0 (NULL)")
+          getLineStringShort(rhsVal.srcInfo) +
+          " Only limited support for stack pointers")
+      case _ =>
+    }
+
+  /** For a pointer, clock or duration target, only literal arithmetic values
+   *  are supported, so they are converted to targetType here. */
+  private def convertLiteralOnlyRhs(rhsVal     : CCTerm,
+                                    targetType : CCType) : Unit =
+    rhsVal.typ match {
+      case _ : CCArithType if targetType.isPointerType ||
+                              targetType == CCClock ||
+                              targetType == CCDuration =>
         popVal
-        pushVal(CCTerm.fromTerm(
-          heapModel.nullAddr(),
-          heapModel.makePointer(target.typ),
-          rhsVal.srcInfo))
+        pushVal(rhsVal convertToType targetType)
       case _ =>
     }
 
@@ -602,7 +578,8 @@ class Symex private (context        : SymexContext,
       val lhsVal = eval(exp)(evalSettings, evalCtx.withEvaluatingLHS(true))
       val lhsName = asLValue(exp)
 
-      maybeReplaceRhsWithNull(rhsVal, lhsVal)
+      rejectStackPointerStore(rhsVal, lhsVal.typ)
+      convertLiteralOnlyRhs(rhsVal, lhsVal.typ)
 
       val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
 
@@ -649,7 +626,8 @@ class Symex private (context        : SymexContext,
 
           val fieldAddress = getFieldAddress(structType, path)
           val fieldTerm = structType.getFieldTerm(baseLHSVal, fieldAddress)
-          maybeReplaceRhsWithNull(rhsVal, fieldTerm)
+          rejectStackPointerStore(rhsVal, fieldTerm.typ)
+          convertLiteralOnlyRhs(rhsVal, fieldTerm.typ)
 
           if (structType.sels.size > 1 || path.size > 1) {
             pushVal(baseLHSVal) // keep the address to be written in case we generate clauses
@@ -719,7 +697,7 @@ class Symex private (context        : SymexContext,
           val IFunApp(_, scala.Seq(innerTerm, elementIndex)) = lhsVal.toTerm
           val newTerm = CCTerm.fromTerm(
             array.storeElement(innerTerm, elementIndex, topVal),
-            lhsVal.typ, topVal.srcInfo)
+            array, topVal.srcInfo)
           val lhsName = asLValue(arrayBase)
           val oldLhsVal = getValue(lhsName, evalCtx.enclosingFunctionName)
           val actualLhsTerm = getActualAssignedTerm(
@@ -803,21 +781,28 @@ class Symex private (context        : SymexContext,
               s"Ghost code cannot write through non-ghost pointer `$ptrName`.")
         }
         val cellTyp = pointerVal.typ match {
-          case p : CCHeapPointer => p.typ
-          case other             => other
+          case p : CCHeapPointer      => p.typ
+          case a : CCHeapArrayPointer => a.elementType
         }
-        maybeReplaceRhsWithNull(
-          rhsVal,
-          CCTerm.fromTerm(IIntLit(0), cellTyp, pointerVal.srcInfo))
-        processHeapResult(heapModel.write(
-          pointerVal, wrapAsHeapObject(topVal, cellTyp),
-          values, getStaticLocationId(originalExp)))
+        rejectStackPointerStore(rhsVal, cellTyp)
+        convertLiteralOnlyRhs(rhsVal, cellTyp)
+        val cellObj = wrapAsHeapObject(topVal, cellTyp)
+        val locTerm = getStaticLocationId(originalExp)
+        processHeapResult(pointerVal.typ match {
+          case _ : CCHeapArrayPointer =>
+            heapModel.arrayWrite(
+              pointerVal, CCTerm.fromTerm(IIntLit(0), CCInt, pointerVal.srcInfo),
+              cellObj, values, locTerm)
+          case _ =>
+            heapModel.write(pointerVal, cellObj, values, locTerm)
+        })
         cellTyp
       } else {
         val lhsVal = eval(originalExp)(evalSettings,
                                        evalCtx.withEvaluatingLHS(true))
         val lhsName = asLValue(originalExp)
-        maybeReplaceRhsWithNull(rhsVal, lhsVal)
+        rejectStackPointerStore(rhsVal, lhsVal.typ)
+        convertLiteralOnlyRhs(rhsVal, lhsVal.typ)
         val actualLhsTerm = getActualAssignedTerm(lhsVal, topVal)
         setValue(lhsName, actualLhsTerm, evalCtx.enclosingFunctionName)
         lhsVal.typ
@@ -1031,20 +1016,6 @@ class Symex private (context        : SymexContext,
       popVal
       maybeOutputClause(Some(getSourceInfo(exp)))
       evalHelp(exp.exp_2)
-    case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign] &&
-                           isClockVariable(exp.exp_1,
-                                           evalCtx.enclosingFunctionName)) =>
-      evalHelp(exp.exp_2)
-      maybeOutputClause(Some(getSourceInfo(exp)))
-      setValue(asLValue(exp.exp_1), context.translateClockValue(topVal),
-               evalCtx.enclosingFunctionName)
-    case exp : Eassign if (exp.assignment_op_.isInstanceOf[Assign] &&
-                           isDurationVariable(exp.exp_1,
-                                              evalCtx.enclosingFunctionName)) =>
-      evalHelp(exp.exp_2)
-      maybeOutputClause(Some(getSourceInfo(exp)))
-      setValue(asLValue(exp.exp_1), context.translateDurationValue(topVal),
-               evalCtx.enclosingFunctionName)
     case exp : Eassign if exp.assignment_op_.isInstanceOf[Assign] => // Simple assignment: '='
       implicit val symex : Symex = this
       exp.exp_2 match {
@@ -1639,7 +1610,7 @@ class Symex private (context        : SymexContext,
           for ((e, ind) <- exp.listexp_.asScala.zipWithIndex) {
             evalHelp(e)(evalSettings, newEvalCtx.withFunctionName(name))
             for (paramType <- paramTypes.lift(ind)) {
-              val arg = topVal convertIfInteger paramType
+              val arg = topVal.convertToType(paramType, srcInfo)
               if (arg ne topVal) {
                 popVal
                 pushVal(arg)
@@ -1869,7 +1840,7 @@ class Symex private (context        : SymexContext,
 
         for (((c, t), n) <- (postGlobalVars.iterator zip
                              scope.GlobalVars.formalTypes.iterator).zipWithIndex)
-          setValue(n, CCTerm.fromTerm(c, t, functionEntry.srcInfo))
+          setValueWithoutDeref(n, CCTerm.fromTerm(c, t, functionEntry.srcInfo))
 
         resVar match {
           case scala.Seq(v) => pushVal(CCTerm.fromTerm(v.term, v.typ, v.srcInfo))

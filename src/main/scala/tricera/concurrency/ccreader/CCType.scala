@@ -247,16 +247,13 @@ abstract sealed class CCType {
    *       checking the values is needed to relax this check, which is not
    *       possible to do in this class.
    */
-  private def castIsAllowed(sourceType : CCType) : Boolean = {
-    val isInvariantEncoding = TriCeraParameters.get.invEncoding.nonEmpty
+  private def castIsAllowed(sourceType : CCType) : Boolean =
     this match {
       case CCBool if sourceType.isInstanceOf[CCPointer] => true
-      case typ if !isInvariantEncoding &&
-                  (typ.isArithType && sourceType.isPointerType
-                   || typ.isPointerType && sourceType.isArithType) => false
+      case typ if typ.isArithType && sourceType.isPointerType
+                  || typ.isPointerType && sourceType.isArithType => false
       case _ => true
     }
-  }
 
   // converting to _Bool gives 1 for every nonzero value, not v % 2
   def cast(t: ITerm) : ITerm = (this, toSort) match {
@@ -291,7 +288,7 @@ abstract sealed class CCType {
     if (!castIsAllowed(e.typ)) {
       throw new UnsupportedCastException(
         getLineStringShort(e.srcInfo) +
-        " Casts between pointer and arithmetic types are not supported.")
+        " Conversions between pointer and arithmetic types are not supported.")
     }
     e match {
       case _ if this == CCBool =>
@@ -549,7 +546,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
               .setFieldTerm(getADTSelector(hd)(rootTerm), setVal, tl)
           //case nx: CCStruct if tl!= Nil =>
           //    nx.setFieldTerm(getADTSelector(hd)(rootTerm), setVal, tl)
-          case fieldType => setVal.convertIfInteger(fieldType).toTerm
+          case fieldType => setVal.convertToType(fieldType).toTerm
         }
         val const =
           for (n <- sels.indices) yield {
@@ -569,7 +566,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
   // A helper to set a field of a struct containing a single field
   def setFieldTerm(fieldVal : CCTerm) : ITerm = {
     assert(sels.size == 1)
-    ctor(fieldVal.convertIfInteger(getFieldType(0)).toTerm)
+    ctor(fieldVal.convertToType(getFieldType(0)).toTerm)
   }
 
   def getADTSelector(ind: Int): MonoSortedIFunction = sels(ind)._1
@@ -586,15 +583,16 @@ case class CCStruct(ctor : MonoSortedIFunction,
           field._2 match {
             case s: CCStructField // do not add ctor again if already struct
               if values.nextHasSort(s.toSort) =>
-              values.pop(s)
+              values.pop().convertToType(s).toTerm
             case CCStructField(name, structs) =>
               structs(name).getInitialized(values)
             case s: CCStruct // do not add ctor again if already struct
               if values.nextHasSort(s.toSort) =>
-              values.pop(s)
+              values.pop().convertToType(s).toTerm
             case s: CCStruct => s.getInitialized(values)
             case p: CCHeapPointer =>
-              if (values.isEmpty) p.nullAddr else values.pop(p)
+              if (values.isEmpty) p.nullAddr
+              else values.pop().convertToType(p).toTerm
             case _: CCHeapArrayPointer =>
               throw new TranslationException(
                 "Heap arrays inside structs are" +
@@ -614,7 +612,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
                     arr,
                     Int2ITerm(ind),
                     if (values.isEmpty) elemTyp.getZeroInit
-                    else values.pop(elemTyp)
+                    else values.pop().convertToType(elemTyp).toTerm
                   )
                   arrayBatchStore(innerArr, ind + 1, n)
                 }
@@ -624,7 +622,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
               if (values.isEmpty)
                 Int2ITerm(0)
               else
-                values.pop(field._2)
+                values.pop().convertToType(field._2).toTerm
           }
     ctor(const: _*)
   }
@@ -735,7 +733,7 @@ case class CCArray(elementType:   CCType, // todo: multidimensional arrays?
 
   def storeElement(arrayTerm : ITerm, index : ITerm, value : CCTerm) : ITerm =
     arrayTheory.store(arrayTerm, index,
-                      value.convertIfInteger(elementType).toTerm)
+                      value.convertToType(elementType).toTerm)
 }
 
 case object CCClock extends CCType {

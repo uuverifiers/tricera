@@ -279,6 +279,63 @@ false :- main_4(x:4, y:5), y:5 = 10. (line:15 col:3) (property: user-assertion)
 
 UNSAFE
 
+clock-param-int-arg-safe.hcc
+Warning: enabling time
+SAFE
+
+clock-param-int-arg-unsafe.hcc
+Warning: enabling time
+
+--------------------
+Init:
+   main4_3(0, 1)    
+--------------------
+         |          
+         |          
+         V          
+ main4_11(0, 1, -2) 
+--------------------
+         |          
+         |          
+         V          
+  main1_1(0, 1, 1)  
+--------------------
+Final:
+  main1_1(0, 1, 1)  
+--------------------
+Failed assertion:
+false :- main1_1(_GT, _GTU, __eval1_5:1), __eval1_5:1 != 0. (line:4 col:3) (property: user-assertion)
+
+UNSAFE
+
+clock-set-from-variable.hcc
+Warning: enabling time
+UNKNOWN (Unsupported C fragment. 3:9 Only integer literals are supported as clock or duration values.)
+
+clock-heap-field-safe.hcc
+Warning: enabling time
+SAFE
+
+clock-heap-field-unsafe.hcc
+Warning: enabling time
+
+--------------------------------------------------------------------------------------
+Init:
+                              main4_3(10, 1, heap.empty)                              
+--------------------------------------------------------------------------------------
+                                          |                                           
+                                          |                                           
+                                          V                                           
+ main(10, 1, heap.heapAddrPair_1(heap.alloc(heap.empty, O_T(T(5, 3)))), heap.addr(1)) 
+--------------------------------------------------------------------------------------
+Final:
+ main(10, 1, heap.heapAddrPair_1(heap.alloc(heap.empty, O_T(T(5, 3)))), heap.addr(1)) 
+--------------------------------------------------------------------------------------
+Failed assertion:
+false :- main(_GT, _GTU, @h, t:4), 5*_GTU - (_GT - T::c(getT(heap.read(@h, t:4)))) < 1. (line:6 col:3) (property: user-assertion)
+
+UNSAFE
+
 hints.hcc
 SAFE
 

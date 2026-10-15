@@ -1,0 +1,5 @@
+int atLeastTwo(clock c) { return c >= 2; }
+
+void main() {
+  assert(!atLeastTwo(2));
+}
