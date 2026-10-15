@@ -691,7 +691,7 @@ Final:
  main_4(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(5.\as[bv[32]]))), O_uint(6.\as[bv[32]]))), arrayPtr(AddrRange(heap.addr(1), 1), 0), heap.addr(2)) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_4(@h, a:4, p:6), get_uint(heap.read(@h, p:6)) = 6. (line:9 col:5) (property: user-assertion)
+false :- main_4(@h, a:4, p:6), get_uint(heap.read(@h, p:6)) = 6.\as[bv[32]]. (line:9 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -713,7 +713,7 @@ Final:
  main_4(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_E(1.\as[bv[32]]))), O_E(0.\as[bv[32]]))), arrayPtr(AddrRange(heap.addr(1), 1), 0), heap.addr(2)) 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_4(@h, e:6, q:8), get_E(heap.read(@h, q:8)) = 0. (line:11 col:5) (property: user-assertion)
+false :- main_4(@h, e:6, q:8), get_E(heap.read(@h, q:8)).\as[bv[32]] = 0.\as[bv[32]]. (line:11 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -735,7 +735,7 @@ Final:
  main_2(heap.heapAddrPair_1(heap.alloc(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(4294967295.\as[bv[32]]))), O_uint(5.\as[bv[32]]))), arrayPtr(AddrRange(heap.addr(1), 2), 0)) 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_2(@h, a:2), 5 < get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) - 0))). (line:5 col:3) (property: user-assertion)
+false :- main_2(@h, a:2), 5.\as[bv[32]] < get_uint(heap.read(@h, heap.rangeNth(arrayPtrRange(a:2), arrayPtrOffset(a:2) - 0))). (line:5 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -757,7 +757,7 @@ Final:
  main_3(heap.heapAddrPair_1(heap.alloc(heap.empty, O_uint(4294967295.\as[bv[32]]))), heap.addr(1)) 
 ---------------------------------------------------------------------------------------------------
 Failed assertion:
-false :- main_3(@h, p:4), 5 < get_uint(heap.read(@h, p:4)). (line:7 col:5) (property: user-assertion)
+false :- main_3(@h, p:4), 5.\as[bv[32]] < get_uint(heap.read(@h, p:4)). (line:7 col:5) (property: user-assertion)
 
 UNSAFE
 
@@ -779,7 +779,7 @@ Final:
  main2_3_1(4294967295.\as[bv[32]]) 
 -----------------------------------
 Failed assertion:
-false :- main2_3_1(u:2), u:2 = 4294967295. (line:3 col:3) (property: user-assertion)
+false :- main2_3_1(u:2), u:2.\as[signed bv[64]] = 4294967295. (line:3 col:3) (property: user-assertion)
 
 UNSAFE
 
@@ -801,7 +801,7 @@ Final:
  main3_3((-1).\as[signed bv[32]], 4294967295.\as[bv[32]]) 
 ----------------------------------------------------------
 Failed assertion:
-false :- main3_3(m:2, v:3), 5 < v:3. (line:4 col:3) (property: user-assertion)
+false :- main3_3(m:2, v:3), 5.\as[bv[32]] < v:3. (line:4 col:3) (property: user-assertion)
 
 UNSAFE
 

@@ -63,7 +63,9 @@ TESTS="uchar-promotion-safe.c uchar-promotion-unsafe.c \
        complement-safe.c complement-unsafe.c \
        literal-hex-unsigned-safe.c literal-hex-unsigned-unsafe.c \
        literal-unsigned-suffix-safe.c literal-unsigned-suffix-unsafe.c \
-       conditional-arith-conversion-safe.c conditional-arith-conversion-unsafe.c"
+       conditional-arith-conversion-safe.c conditional-arith-conversion-unsafe.c \
+       unsigned-negative-equality-safe.c unsigned-negative-equality-unsafe.c \
+       signed-unsigned-relational-safe.c signed-unsigned-relational-unsafe.c"
 
 for name in $TESTS; do
     for mode in math ilp32; do

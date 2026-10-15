@@ -45,7 +45,9 @@ object CCBinaryExpressions {
         case _ => false
       }
       val (lhs, rhs) = this match {
-        case _ if isFormula => (_lhs, _rhs)
+        case _ if isFormula &&
+                  !(_lhs.typ.isArithType && _rhs.typ.isArithType) =>
+          (_lhs, _rhs)
         case _ : ShiftLeft | _ : ShiftRight =>
           (_lhs.applyIntegerPromotion, _rhs.applyIntegerPromotion)
         case _ => CCTerm.unifyTypes(_lhs, _rhs)

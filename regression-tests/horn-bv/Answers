@@ -346,6 +346,30 @@ UNSAFE
 conditional-arith-conversion-unsafe.c (ilp32)
 UNSAFE
 
+unsigned-negative-equality-safe.c (math)
+SAFE
+
+unsigned-negative-equality-safe.c (ilp32)
+SAFE
+
+unsigned-negative-equality-unsafe.c (math)
+UNSAFE
+
+unsigned-negative-equality-unsafe.c (ilp32)
+UNSAFE
+
+signed-unsigned-relational-safe.c (math)
+SAFE
+
+signed-unsigned-relational-safe.c (ilp32)
+SAFE
+
+signed-unsigned-relational-unsafe.c (math)
+UNSAFE
+
+signed-unsigned-relational-unsafe.c (ilp32)
+UNSAFE
+
 uchar-wrap-safe.c (ilp32)
 SAFE
 
