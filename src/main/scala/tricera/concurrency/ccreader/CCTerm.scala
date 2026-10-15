@@ -188,11 +188,8 @@ object CCTerm {
         (a, b)
 
       case (aType: CCArithType, bType: CCArithType) =>
-        if ((aType.UNSIGNED_RANGE > bType.UNSIGNED_RANGE) ||
-            (aType.UNSIGNED_RANGE == bType.UNSIGNED_RANGE && aType.isUnsigned))
-          (a, b convertToType aType)
-        else
-          (a convertToType bType, b)
+        val commonType = CCArithType.commonType(aType, bType)
+        (a convertToType commonType, b convertToType commonType)
 
       case (_: CCArithType, CCDuration) =>
         (a convertToType CCDuration, b)

@@ -98,3 +98,20 @@ for name in specifier-order-safe.c specifier-order-unsafe.c \
     echo "$name (lp64)"
     $TRI_CMD -arithMode:lp64 "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
 done
+
+# long is as wide as int under ilp32 and llp64
+for name in long-unsigned-common-type-safe.c long-unsigned-common-type-unsafe.c; do
+    for mode in ilp32 llp64; do
+        echo
+        echo "$name ($mode)"
+        $TRI_CMD -arithMode:$mode "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+    done
+done
+
+for name in long-llong-common-type-safe.c long-llong-common-type-unsafe.c; do
+    for mode in math ilp32 lp64 llp64; do
+        echo
+        echo "$name ($mode)"
+        $TRI_CMD -arithMode:$mode "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+    done
+done

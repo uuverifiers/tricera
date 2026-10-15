@@ -441,3 +441,39 @@ SAFE
 
 unsigned-shift-right-unsafe.c (lp64)
 UNSAFE
+
+long-unsigned-common-type-safe.c (ilp32)
+SAFE
+
+long-unsigned-common-type-safe.c (llp64)
+SAFE
+
+long-unsigned-common-type-unsafe.c (ilp32)
+UNSAFE
+
+long-unsigned-common-type-unsafe.c (llp64)
+UNSAFE
+
+long-llong-common-type-safe.c (math)
+SAFE
+
+long-llong-common-type-safe.c (ilp32)
+SAFE
+
+long-llong-common-type-safe.c (lp64)
+SAFE
+
+long-llong-common-type-safe.c (llp64)
+SAFE
+
+long-llong-common-type-unsafe.c (math)
+UNSAFE
+
+long-llong-common-type-unsafe.c (ilp32)
+UNSAFE
+
+long-llong-common-type-unsafe.c (lp64)
+UNSAFE
+
+long-llong-common-type-unsafe.c (llp64)
+UNSAFE

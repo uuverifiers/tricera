@@ -323,8 +323,8 @@ abstract sealed class CCType {
 }
 
 abstract class CCArithType extends CCType {
-  val UNSIGNED_RANGE : IdealInt
   val isUnsigned     : Boolean
+  def UNSIGNED_RANGE : IdealInt = IdealInt.pow2MinusOne(8 * sizeInBytes)
   def isNarrowerThanInt : Boolean = UNSIGNED_RANGE < CCInt.UNSIGNED_RANGE
 }
 
@@ -333,6 +333,32 @@ object IntegerSpecifier extends Enumeration {
 }
 
 object CCArithType {
+  private def rank(typ : CCArithType) : Int = typ match {
+    case CCBool                   => 0
+    case CCChar | CCUChar         => 1
+    case CCShort | CCUShort       => 2
+    case CCInt | CCUInt           => 3
+    case CCLong | CCULong         => 4
+    case CCLongLong | CCULongLong => 5
+  }
+
+  private def unsignedCounterpart(typ : CCArithType) : CCArithType = typ match {
+    case CCInt      => CCUInt
+    case CCLong     => CCULong
+    case CCLongLong => CCULongLong
+  }
+
+  // "the usual arithmetic conversions" for already promoted operands
+  def commonType(a : CCArithType, b : CCArithType) : CCArithType =
+    if (a.isUnsigned == b.isUnsigned) {
+      if (rank(a) >= rank(b)) a else b
+    } else {
+      val (unsignedType, signedType) = if (a.isUnsigned) (a, b) else (b, a)
+      if (rank(unsignedType) >= rank(signedType)) unsignedType
+      else if (signedType.UNSIGNED_RANGE > unsignedType.UNSIGNED_RANGE) signedType
+      else unsignedCounterpart(signedType)
+    }
+
   def fromSpecifiers(specs : Seq[IntegerSpecifier.Value]) : CCArithType = {
     val isUnsigned = specs contains IntegerSpecifier.Unsigned
     if (specs contains IntegerSpecifier.Char) {
@@ -356,42 +382,37 @@ case object CCVoid extends CCType {
 case object CCBool extends CCArithType {
   override def toString : String = "boolean"
   def shortName = "boolean"
-  val UNSIGNED_RANGE : IdealInt = IdealInt.ONE
+  override val UNSIGNED_RANGE : IdealInt = IdealInt.ONE
   val isUnsigned     : Boolean  = true
 }
 
 case object CCChar extends CCArithType {
   override def toString : String = "char"
   def shortName = "char"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FF", 16) // 8bit
   val isUnsigned     : Boolean  = false
 }
 
 case object CCUChar extends CCArithType {
   override def toString : String = "unsigned char"
   def shortName = "uchar"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FF", 16) // 8bit
   val isUnsigned     : Boolean  = true
 }
 
 case object CCShort extends CCArithType {
   override def toString : String = "short"
   def shortName = "short"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFF", 16) // 16bit
   val isUnsigned     : Boolean  = false
 }
 
 case object CCUShort extends CCArithType {
   override def toString : String = "unsigned short"
   def shortName = "ushort"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFF", 16) // 16bit
   val isUnsigned     : Boolean  = true
 }
 
 case object CCInt extends CCArithType {
   override def toString : String = "int"
   def shortName = "int"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
   val isUnsigned     : Boolean  = false
 }
 
@@ -404,35 +425,30 @@ case object CCMathInt extends CCType {
 case object CCUInt extends CCArithType {
   override def toString: String = "unsigned int"
   def shortName = "uint"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFF", 16) // 32bit
   val isUnsigned     : Boolean  = true
 }
 
 case object CCLong extends CCArithType {
   override def toString: String = "long"
   def shortName = "long"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
   val isUnsigned     : Boolean  = false
 }
 
 case object CCULong extends CCArithType {
   override def toString: String = "unsigned long"
   def shortName = "ulong"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
   val isUnsigned     : Boolean  = true
 }
 
 case object CCLongLong extends CCArithType {
   override def toString: String = "long long"
   def shortName = "llong"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
   val isUnsigned     : Boolean  = false
 }
 
 case object CCULongLong extends CCArithType {
   override def toString : String = "unsigned long long"
   def shortName = "ullong"
-  val UNSIGNED_RANGE : IdealInt = IdealInt("FFFFFFFFFFFFFFFF", 16) // 64bit
   val isUnsigned     : Boolean  = true
 }
 
@@ -650,7 +666,6 @@ case class CCIntEnum(name:   String, enumerators: Seq[(String, IdealInt)])
   // use unsigned unless an enumerator is negative
   val underlying : CCArithType =
     if (enumerators.exists(_._2.signum < 0)) CCInt else CCUInt
-  val UNSIGNED_RANGE : IdealInt = underlying.UNSIGNED_RANGE
   val isUnsigned     : Boolean  = underlying.isUnsigned
 }
 
