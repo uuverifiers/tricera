@@ -220,7 +220,7 @@ class InvariantEncodingsModel(context  : SymexContext,
       "There is no explicit heap term in the invariant encoding for heaps, " +
       "please use the theory of heaps.")
   override def nullAddr() : ITerm = CCInt.cast(IIntLit(0))
-  override def zeroInitAddrRange() : ITerm =
+  override def nullArrayPtr() : ITerm =
     throw new TranslationException(
       "Modelling arrays using the invariant encoding for heaps is not yet " +
       "supported, please use the theory of heaps or -mathArrays.")

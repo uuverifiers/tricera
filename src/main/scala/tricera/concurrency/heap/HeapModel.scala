@@ -167,7 +167,7 @@ trait HeapModel {
   def objectSort          : Sort
   def heapSort            : Sort
   def nullAddr()          : ITerm
-  def zeroInitAddrRange() : ITerm
+  def nullArrayPtr()      : ITerm
 
   def makePointer(typ : CCType) : CCHeapPointer =
     CCHeapPointer(addressSort, nullAddr(), typ)

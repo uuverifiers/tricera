@@ -69,14 +69,14 @@ final class HeapTheoryFactory(context : SymexContext,
 
   val arrayPtrOps = ArrayPtrOps(arrayPtrCtor, arrayPtrRangeSel, arrayPtrOffsetSel)
 
-  private def zeroInitArrayPtr : ITerm =
+  private def nullArrayPtr : ITerm =
     arrayPtrCtor(context.heap.range(0, IIntLit(1)), IIntLit(0))
 
   override def makePointer(typ: CCType): CCHeapPointer =
     CCHeapPointer(context.heap.AddressSort, context.heap.nullAddr(), typ)
   override def makeArrayPointer(elementType: CCType,
                                 arrayLocation: ArrayLocation.Value): CCHeapArrayPointer =
-    CCHeapArrayPointer(arrayPtrSort, zeroInitArrayPtr, elementType,
+    CCHeapArrayPointer(arrayPtrSort, nullArrayPtr, elementType,
                        arrayLocation, arrayPtrOps)
 
   private val heapVarName = "@h"
@@ -123,12 +123,12 @@ class HeapTheoryModel(context           : SymexContext,
   override def objectSort       : Sort  = context.heap.ObjectSort
   override def heapSort         : Sort  = context.heap.HeapSort
   override def nullAddr()          : ITerm = context.heap.nullAddr()
-  override def zeroInitAddrRange() : ITerm =
+  override def nullArrayPtr()      : ITerm =
     arrayPtrOps.mkArrayPtr(context.heap.range(0, IIntLit(1)), IIntLit(0))
 
   override def makeArrayPointer(elementType   : CCType,
                                 arrayLocation : ArrayLocation.Value) : CCHeapArrayPointer =
-    CCHeapArrayPointer(addressRangeSort, zeroInitAddrRange(), elementType,
+    CCHeapArrayPointer(addressRangeSort, nullArrayPtr(), elementType,
                        arrayLocation, arrayPtrOps)
 
   private def updateValue(v : CCVar, newVal : CCTerm, s : scala.Seq[CCTerm]) : scala.Seq[CCTerm] = {
@@ -295,7 +295,7 @@ class HeapTheoryModel(context           : SymexContext,
               val readAddr = context.heap.rangeNth(rawRange, ind.term)
               val readObj = context.heap.read(getValue(heapVar, nextState).toTerm, readAddr)
               val assertion = CCTerm.fromFormula(
-                p.toTerm === zeroInitAddrRange() |||
+                p.toTerm === nullArrayPtr() |||
                 (context.heap.rangeWithin(rawRange, readAddr) ==>
                  (readObj =/= context.heap.defaultObject)), CCInt, loc.srcInfo)
               assertions = (assertion, properties.MemValidFree) :: assertions

@@ -299,6 +299,12 @@ UNKNOWN (Unsupported C fragment. 2:12 Unsupported calloc argument(s): calloc <[ 
 calloc-ambiguous-sizeof.c
 UNKNOWN (Unsupported C fragment. 2:12 Unsupported calloc argument(s): calloc <[ unsigned long * calloc ]> (sizeof (int), sizeof (char)). TriCera derives the allocated type from a sizeof(T); supported forms are calloc(sizeof(T)), calloc(n*sizeof(T)), or calloc(n, sizeof(T)).)
 
+heap-ptr-plus-int.c
+UNKNOWN (Unsupported C fragment. 4:12 Arithmetic on non-array pointers is not supported.)
+
+heap-ptr-postinc.c
+UNKNOWN (Unsupported C fragment. 4:3 Arithmetic on non-array pointers is not supported.)
+
 stack-array-1-unsafe.c
 UNSAFE
 

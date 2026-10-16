@@ -577,6 +577,72 @@ false :- main_3(@h, a:4), get_int(heap.read(@h, heap.rangeNth(arrayPtrRange(a:4)
 
 UNSAFE
 
+array-ptr-ne-null-safe.c
+SAFE
+
+array-ptr-ne-null-unsafe.c
+
+------------------------------------------------------------------------------------------------------------
+Init:
+                                            main3_3(heap.empty)                                             
+------------------------------------------------------------------------------------------------------------
+                                                     |                                                      
+                                                     |                                                      
+                                                     V                                                      
+ main(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(7), 2)), arrayPtr(AddrRange(heap.null, 1), 0)) 
+------------------------------------------------------------------------------------------------------------
+Final:
+ main(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(7), 2)), arrayPtr(AddrRange(heap.null, 1), 0)) 
+------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main(@h, p:3), p:3 = arrayPtr(heap.range(0, 1), 0). (line:5 col:3) (property: user-assertion)
+
+UNSAFE
+
+array-ptr-truth-safe.c
+SAFE
+
+array-ptr-truth-unsafe.c
+
+-----------------------------------------------------------------------------------------------------------------
+Init:
+                                             main4_3(heap.empty, 0)                                              
+-----------------------------------------------------------------------------------------------------------------
+                                                        |                                                        
+                                                        |                                                        
+                                                        V                                                        
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(6), 2)), 0, arrayPtr(AddrRange(heap.null, 1), 0)) 
+-----------------------------------------------------------------------------------------------------------------
+Final:
+ main_2(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(6), 2)), 0, arrayPtr(AddrRange(heap.null, 1), 0)) 
+-----------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main_2(@h, x:3, p:4), x:3 != 1. (line:7 col:3) (property: user-assertion)
+
+UNSAFE
+
+array-ptr-to-bool-safe.c
+SAFE
+
+array-ptr-to-bool-unsafe.c
+
+------------------------------------------------------------------------------------------------------------------
+Init:
+                                               main3_3(heap.empty)                                                
+------------------------------------------------------------------------------------------------------------------
+                                                        |                                                         
+                                                        |                                                         
+                                                        V                                                         
+ main5_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(6), 2)), arrayPtr(AddrRange(heap.null, 1), 0), 0) 
+------------------------------------------------------------------------------------------------------------------
+Final:
+ main5_3(heap.heapRangePair_1(heap.allocRange(heap.empty, O_int(6), 2)), arrayPtr(AddrRange(heap.null, 1), 0), 0) 
+------------------------------------------------------------------------------------------------------------------
+Failed assertion:
+false :- main5_3(@h, a:3, b:5), b:5 = 0. (line:6 col:3) (property: user-assertion)
+
+UNSAFE
+
 simple-global-memsafety1.c
 SAFE
 

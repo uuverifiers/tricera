@@ -269,3 +269,47 @@ UNSAFE
 
 ptr-to-array-param.c
 UNKNOWN (Unsupported C fragment. 8:3 Converting int* to an array pointer is not supported.)
+
+stack-ptr-ne-null-safe.c
+SAFE
+
+stack-ptr-ne-null-unsafe.c
+
+-----------------
+Init:
+   main3_3(0)    
+-----------------
+        |        
+        |        
+        V        
+ main3_3_1(0, 0) 
+-----------------
+Final:
+ main3_3_1(0, 0) 
+-----------------
+Failed assertion:
+false :- main3_3_1(x:2, p:3), p:3 != -1. (line:4 col:3) (property: user-assertion)
+
+UNSAFE
+
+stack-ptr-truth-safe.c
+SAFE
+
+stack-ptr-truth-unsafe.c
+
+---------------
+Init:
+  main3_3(0)   
+---------------
+       |       
+       |       
+       V       
+ main(0, 0, 1) 
+---------------
+Final:
+ main(0, 0, 1) 
+---------------
+Failed assertion:
+false :- main(x:2, p:3, y:4), y:4 != 0. (line:6 col:3) (property: user-assertion)
+
+UNSAFE

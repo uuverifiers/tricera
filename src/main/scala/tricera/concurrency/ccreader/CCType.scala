@@ -157,7 +157,6 @@ abstract sealed class CCType {
           case CCLong | CCULong | CCLongLong | CCULongLong => 8
           case CCFloat                                     => 4
           case _: CCPointer                                => 8
-          case _: CCHeapArrayPointer                       => 8
           case CCIntEnum(_, _)                             => 4
           case CCArray(elemTyp, _, Some(n), _, _)          => elemTyp.sizeInBytes * n
           case s: CCStruct                                 => s.structSizeInBytes
@@ -175,7 +174,6 @@ abstract sealed class CCType {
           case CCLongLong | CCULongLong           => 8
           case CCFloat                            => 4
           case _: CCPointer                       => 4
-          case _: CCHeapArrayPointer              => 4
           case CCIntEnum(_, _)                    => 4
           case CCArray(elemTyp, _, Some(n), _, _) => elemTyp.sizeInBytes * n
           case s: CCStruct                        => s.structSizeInBytes
@@ -193,7 +191,6 @@ abstract sealed class CCType {
           case CCLong | CCULong | CCLongLong | CCULongLong => 8
           case CCFloat                                     => 4
           case _: CCPointer                                => 8
-          case _: CCHeapArrayPointer                       => 8
           case CCIntEnum(_, _)                             => 4
           case CCArray(elemTyp, _, Some(n), _, _)          => elemTyp.sizeInBytes * n
           case s: CCStruct                                 => s.structSizeInBytes
@@ -211,7 +208,6 @@ abstract sealed class CCType {
           case CCLongLong | CCULongLong           => 8
           case CCFloat                            => 4
           case _: CCPointer                       => 8
-          case _: CCHeapArrayPointer              => 8
           case CCIntEnum(_, _)                    => 4
           case CCArray(elemTyp, _, Some(n), _, _) => elemTyp.sizeInBytes * n
           case s: CCStruct                        => s.structSizeInBytes
@@ -236,8 +232,7 @@ abstract sealed class CCType {
 
   def newConstant(name : String) : ConstantTerm = toSort newConstant name
 
-  def isPointerType : Boolean =
-    this.isInstanceOf[CCHeapPointer] || this.isInstanceOf[CCHeapArrayPointer]
+  def isPointerType : Boolean = this.isInstanceOf[CCPointer]
   def isArithType : Boolean = this.isInstanceOf[CCArithType]
 
   /**
@@ -249,7 +244,7 @@ abstract sealed class CCType {
    */
   private def castIsAllowed(sourceType : CCType) : Boolean =
     this match {
-      case CCBool if sourceType.isInstanceOf[CCPointer] => true
+      case CCBool if sourceType.isPointerType => true
       case typ if typ.isArithType && sourceType.isPointerType
                   || typ.isPointerType && sourceType.isArithType => false
       case _ => true
@@ -314,8 +309,8 @@ abstract sealed class CCType {
               case _                            => fieldType.getZeroInit
             }
       structType.ctor(const: _*)
-    case p : CCHeapPointer                => p.nullAddr
-    case p : CCHeapArrayPointer           => p.zeroInitAddrRange
+    case p : CCHeapPointer                => p.nullPointer
+    case p : CCHeapArrayPointer           => p.nullPointer
     case CCArray(elementType, _, _, arrayTheory, _) =>
       arrayTheory.const(elementType.getZeroInit)
     case _                                => IIntLit(0)
@@ -607,7 +602,7 @@ case class CCStruct(ctor : MonoSortedIFunction,
               values.pop().convertToType(s).toTerm
             case s: CCStruct => s.getInitialized(values)
             case p: CCHeapPointer =>
-              if (values.isEmpty) p.nullAddr
+              if (values.isEmpty) p.nullPointer
               else values.pop().convertToType(p).toTerm
             case _: CCHeapArrayPointer =>
               throw new TranslationException(
@@ -669,18 +664,23 @@ case class CCIntEnum(name:   String, enumerators: Seq[(String, IdealInt)])
   val isUnsigned     : Boolean  = underlying.isUnsigned
 }
 
-abstract sealed class CCPointer(typ: CCType) extends CCType {
+sealed trait CCPointer extends CCType {
+  def nullPointer : ITerm
+}
+
+abstract sealed class CCNonArrayPointer(typ: CCType) extends CCPointer {
   def shortName = typ.shortName + "*"
 }
 
 case class CCStackPointer(targetInd:    Int,
                           typ:          CCType,
                           fieldAddress: List[Int] = Nil)
-    extends CCPointer(typ) {
+    extends CCNonArrayPointer(typ) {
   override def toString: String =
     typ.shortName +
       " pointer (to: " + targetInd + ")"
 
+  def nullPointer : ITerm = IIntLit(-1)
 }
 
 // todo: how to support heap pointers to adt fields? should we?
@@ -688,8 +688,8 @@ case class CCStackPointer(targetInd:    Int,
 //       needs to be a Heap.Address along with a way to reach the field
 //       maybe another class for this? CCHeapADTFieldPointer...
 /** Do not construct directly, use [[HeapModelFactory.makePointer]] instead. */
-case class CCHeapPointer(addressSort: Sort, nullAddr: ITerm,
-                         typ: CCType) extends CCPointer(typ) {
+case class CCHeapPointer(addressSort: Sort, nullPointer: ITerm,
+                         typ: CCType) extends CCNonArrayPointer(typ) {
   override def toString: String = typ.shortName + " pointer to heap"
 }
 
@@ -723,12 +723,12 @@ case class ArrayPtrOps(ctor      : MonoSortedIFunction,
 
 /** Do not construct directly, use [[HeapModelFactory.makeArrayPointer]] instead. */
 case class CCHeapArrayPointer(addressRangeSort: Sort,
-                              zeroInitAddrRange: ITerm,
+                              nullPointer:       ITerm,
                               elementType:       CCType,
                               arrayLocation:     ArrayLocation,
                               ptrOps:            ArrayPtrOps,
                               declaredSize:      Option[Int] = None)
-    extends CCType {
+    extends CCPointer {
   def shortName = "[]"
 }
 

@@ -694,9 +694,9 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
       (lhs.typ, rhs.typ, expr) match {
         case (_: CCHeapArrayPointer, _: CCArithType, _: AST.EPlus) |
              (_: CCArithType, _: CCHeapArrayPointer, _: AST.EPlus) =>
-          CCBinaryExpressions.BinaryOperators.Plus(lhs, rhs).term
+          CCBinaryExpressions.BinaryOperators.Plus(lhs, rhs, Some(srcInfo)).term
         case (_: CCHeapArrayPointer, _: CCArithType, _: AST.EMinus) =>
-          CCBinaryExpressions.BinaryOperators.Minus(lhs, rhs).term
+          CCBinaryExpressions.BinaryOperators.Minus(lhs, rhs, Some(srcInfo)).term
         case (_: CCHeapArrayPointer, _, _) | (_, _: CCHeapArrayPointer, _) =>
           throw new ACSLParseException("Unsupported array pointer arithmetic.", srcInfo)
         case _ =>
@@ -992,7 +992,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
         mathArrayElementBounds(t.expr_) getOrElse {
           val term = translateTerm(t.expr_)
           term.typ match {
-            // FIXME: Handle CCPointer in general? (Need access to field `typ`)
+            // FIXME: Handle CCNonArrayPointer in general? (Need access to field `typ`)
             case p : CCHeapPointer =>
               import ap.parser.IExpression.{toFunApplier, toPredApplier}
               val sort : Sort = p.typ.toSort

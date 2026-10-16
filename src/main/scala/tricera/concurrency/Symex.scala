@@ -1035,21 +1035,23 @@ class Symex private (context        : SymexContext,
     case exp : Eassign => // Compound assignment: '+=', '-=', etc.
       // IMPORTANT: Compound assignments are non-atomic so must be handled
       // separately from simple assignments.
+      val srcInfo = Some(getSourceInfo(exp))
       evalHelp(exp.exp_1)
-      maybeOutputClause(Some(getSourceInfo(exp)))
+      maybeOutputClause(srcInfo)
       val lhsE = topVal
       val rhsE = exp.exp_2 match {
         case _ : Enondet => CCTerm.fromTerm(
           lhsE.typ.getNonDet, lhsE.typ, Some(getSourceInfo(exp.exp_2)))
         case _ =>
           evalHelp(exp.exp_2)
-          maybeOutputClause(Some(getSourceInfo(exp)))
+          maybeOutputClause(srcInfo)
           popVal
       }
       popVal
 
       if (lhsE.typ == CCClock || lhsE.typ == CCDuration)
         throw new TranslationException("unsupported assignment to clock")
+      BinaryOperators.rejectNonArrayPointerArithmetic(srcInfo, lhsE, rhsE)
 
       val resultType = lhsE.applyIntegerPromotion.typ
       val valueToAssign = CCTerm.fromTerm(
@@ -1077,15 +1079,15 @@ class Symex private (context        : SymexContext,
             case _ => lhsE.toTerm - rhsE.toTerm
           }
         case _ : AssignLeft =>
-          BinaryOperators.ShiftLeft(lhsE, rhsE).term.toTerm
+          BinaryOperators.ShiftLeft(lhsE, rhsE, srcInfo).term.toTerm
         case _ : AssignRight =>
-          BinaryOperators.ShiftRight(lhsE, rhsE).term.toTerm
+          BinaryOperators.ShiftRight(lhsE, rhsE, srcInfo).term.toTerm
         case _ : AssignAnd =>
-          BinaryOperators.BitwiseAnd(lhsE, rhsE).term.toTerm
+          BinaryOperators.BitwiseAnd(lhsE, rhsE, srcInfo).term.toTerm
         case _ : AssignXor =>
-          BinaryOperators.BitwiseXor(lhsE, rhsE).term.toTerm
+          BinaryOperators.BitwiseXor(lhsE, rhsE, srcInfo).term.toTerm
         case _ : AssignOr =>
-          BinaryOperators.BitwiseOr(lhsE, rhsE).term.toTerm
+          BinaryOperators.BitwiseOr(lhsE, rhsE, srcInfo).term.toTerm
       }), resultType, lhsE.srcInfo)
 
       implicit val symex: Symex = this
@@ -1210,52 +1212,52 @@ class Symex private (context        : SymexContext,
       }
     case exp : Ebitor =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.BitwiseOr(lhs, rhs).term)
+      pushVal(BinaryOperators.BitwiseOr(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Ebitexor =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.BitwiseXor(lhs, rhs).term)
+      pushVal(BinaryOperators.BitwiseXor(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Ebitand =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.BitwiseAnd(lhs, rhs).term)
+      pushVal(BinaryOperators.BitwiseAnd(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Eeq =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Equality(lhs, rhs).term)
+      pushVal(BinaryOperators.Equality(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Eneq =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Disequality(lhs, rhs).term)
+      pushVal(BinaryOperators.Disequality(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Elthen =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Less(lhs, rhs).term)
+      pushVal(BinaryOperators.Less(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Egrthen =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Greater(lhs, rhs).term)
+      pushVal(BinaryOperators.Greater(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Ele =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.LessEqual(lhs, rhs).term)
+      pushVal(BinaryOperators.LessEqual(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Ege =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.GreaterEqual(lhs, rhs).term)
+      pushVal(BinaryOperators.GreaterEqual(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Eleft =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.ShiftLeft(lhs, rhs).term)
+      pushVal(BinaryOperators.ShiftLeft(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Eright =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.ShiftRight(lhs, rhs).term)
+      pushVal(BinaryOperators.ShiftRight(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Eplus =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Plus(lhs, rhs).term)
+      pushVal(BinaryOperators.Plus(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Eminus =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Minus(lhs, rhs).term)
+      pushVal(BinaryOperators.Minus(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Etimes =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Times(lhs, rhs).term)
+      pushVal(BinaryOperators.Times(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Ediv =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Div(lhs, rhs).term)
+      pushVal(BinaryOperators.Div(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Emod =>
       val (lhs, rhs) = evalBinExpArgs(exp.exp_1, exp.exp_2)
-      pushVal(BinaryOperators.Mod(lhs, rhs).term)
+      pushVal(BinaryOperators.Mod(lhs, rhs, Some(getSourceInfo(exp))).term)
     case exp : Etypeconv => {
       evalHelp(exp.exp_)
       pushVal(popVal.convertToType(context.getType(exp.type_name_),
@@ -1267,9 +1269,11 @@ class Symex private (context        : SymexContext,
         case e: Epredec => (e.exp_, -1)
       }
 
+      val srcInfo = Some(getSourceInfo(exp))
       evalHelp(expToUpdate)
-      maybeOutputClause(Some(getSourceInfo(exp)))
+      maybeOutputClause(srcInfo)
       val oldVal = popVal
+      BinaryOperators.rejectNonArrayPointerArithmetic(srcInfo, oldVal)
       val newValue = oldVal.typ match {
         case arrTyp: CCHeapArrayPointer =>
           val ops = arrTyp.ptrOps
@@ -1287,8 +1291,10 @@ class Symex private (context        : SymexContext,
         case e: Epostdec => (e.exp_, -1)
       }
 
+      val srcInfo = Some(getSourceInfo(exp))
       evalHelp(expToUpdate)
-      maybeOutputClause(Some(getSourceInfo(exp)))
+      maybeOutputClause(srcInfo)
+      BinaryOperators.rejectNonArrayPointerArithmetic(srcInfo, topVal)
       implicit val symex: Symex = this
       val incrementedValue = topVal.typ match {
         case arrTyp: CCHeapArrayPointer =>
@@ -1907,52 +1913,29 @@ class Symex private (context        : SymexContext,
       }
     }
 
-  private def checkPointerIntComparison(t1 : CCTerm, t2 : CCTerm) :
-  (CCTerm, CCTerm) = {
-    (t1.typ, t2.typ) match {
-      case (_ : CCHeapPointer, _ : CCArithType) =>
-        if (t2.toTerm != IIntLit(IdealInt(0)))
-          throw new TranslationException("Pointers can only compared with `null` or `0`. " +
-                                         getLineString(t2.srcInfo))
-        else {
-          (t1, CCTerm.fromTerm(heapModel.nullAddr(), t1.typ, t1.srcInfo))
-        }
-      case (_: CCArithType, _: CCHeapPointer) =>
-        if (t1.toTerm != IIntLit(IdealInt(0)))
-          throw new TranslationException("Pointers can only compared with `null` or `0`. " +
-                                         getLineString(t2.srcInfo))
-        else {
-          (CCTerm.fromTerm(heapModel.nullAddr(), t2.typ, t2.srcInfo), t2)
-        }
-      case _ => (t1, t2)
-    }
-  }
-
   private def evalBinExpArgs(left : Exp, right : Exp)
                             (implicit evalSettings : EvalSettings,
                              evalContext  : EvalContext) :
   (CCTerm, CCTerm) = {
-    val (lhs, rhs) =
-      if (evalSettings.noClausesForExprs) {
-        (eval(left), eval(right))
-      } else {
-        // Do not push/pop lhs if it is a simple constant.
-        val maybeLHS = eval(left) match {
-          case lhs@CCTerm(IIntLit(v), _, _, _) => Some(lhs)
-          case lhs =>
-            pushVal(lhs)
-            None
-        }
-        maybeOutputClause(Some(getSourceInfo(left)))
-        evalHelp(right)
-        val rhs = popVal
-        val lhs = maybeLHS match {
-          case Some(lhs) => lhs
-          case None => popVal
-        }
-        (lhs, rhs)
+    if (evalSettings.noClausesForExprs) {
+      (eval(left), eval(right))
+    } else {
+      // Do not push/pop lhs if it is a simple constant.
+      val maybeLHS = eval(left) match {
+        case lhs@CCTerm(IIntLit(v), _, _, _) => Some(lhs)
+        case lhs =>
+          pushVal(lhs)
+          None
       }
-    checkPointerIntComparison(lhs, rhs)
+      maybeOutputClause(Some(getSourceInfo(left)))
+      evalHelp(right)
+      val rhs = popVal
+      val lhs = maybeLHS match {
+        case Some(lhs) => lhs
+        case None => popVal
+      }
+      (lhs, rhs)
+    }
   }
 
   ////////////////////////////////////////////////////////////////////////////

@@ -22,7 +22,10 @@ TESTS="out-of-bounds-line1.c out-of-bounds-line2.c out-of-bounds-line3.c out-of-
        negative-to-unsigned-int-variable-safe.c negative-to-unsigned-int-variable-unsafe.c \
        conditional-array-sizes-safe.c conditional-array-sizes-unsafe.c \
        conditional-heap-stack-array-safe.c conditional-heap-stack-array-unsafe.c \
-       array-deref-write-safe.c array-deref-write-unsafe.c"
+       array-deref-write-safe.c array-deref-write-unsafe.c \
+       array-ptr-ne-null-safe.c array-ptr-ne-null-unsafe.c \
+       array-ptr-truth-safe.c array-ptr-truth-unsafe.c \
+       array-ptr-to-bool-safe.c array-ptr-to-bool-unsafe.c"
 
 MEMTRACKTESTS="simple-global-memsafety1.c simple-alloca-memsafety1.c simple-alloca-memsafety2.c"
 

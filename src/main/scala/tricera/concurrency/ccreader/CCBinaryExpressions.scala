@@ -33,17 +33,20 @@ import ap.theories.ModuloArithmetic
 import tricera.concurrency.CCReader._
 import tricera.concurrency.ccreader.CCExceptions._
 import IExpression._
-import tricera.Util.getLineString
+import tricera.Util.{SourceInfo, getLineString, getLineStringShort}
 
 object CCBinaryExpressions {
   object BinaryOperators {
-    abstract sealed class BinaryOperation(_lhs: CCTerm, _rhs: CCTerm) {
+    abstract sealed class BinaryOperation(_lhs: CCTerm, _rhs: CCTerm,
+                                          srcInfo: Option[SourceInfo]) {
       def isFormula = this match {
         case _: Equality | _: Disequality | _: Less | _: LessEqual |
             _: Greater | _: GreaterEqual =>
           true
         case _ => false
       }
+      if (!isFormula)
+        rejectNonArrayPointerArithmetic(srcInfo, _lhs, _rhs)
       val (lhs, rhs) = this match {
         case _ if isFormula &&
                   !(_lhs.typ.isArithType && _rhs.typ.isArithType) =>
@@ -67,7 +70,7 @@ object CCBinaryExpressions {
         }} catch {
           case e : IllegalArgumentException =>
             throw new TranslationException(
-              getLineString(lhs.srcInfo) +
+              getLineString(srcInfo) +
               s"Could not apply binary operator: $this\n")
           case e : Throwable => throw e
         }
@@ -87,40 +90,45 @@ object CCBinaryExpressions {
     ////////////////////////////////////////////////////////////////////////////
     // Bitwise binary functions
     // note: cast2unsigned is important because rhs might be IdealInt
-    case class BitwiseOr(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class BitwiseOr(_lhs: CCTerm, _rhs: CCTerm,
+                         srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes =
         ModuloArithmetic.bvor(lhs.typ cast2Unsigned lhs.toTerm,
                               lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
     }
 
-    case class BitwiseAnd(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class BitwiseAnd(_lhs: CCTerm, _rhs: CCTerm,
+                          srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes =
         ModuloArithmetic.bvand(lhs.typ cast2Unsigned lhs.toTerm,
                                lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
     }
 
-    case class BitwiseXor(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class BitwiseXor(_lhs: CCTerm, _rhs: CCTerm,
+                          srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes =
         ModuloArithmetic.bvxor(lhs.typ cast2Unsigned lhs.toTerm,
                                lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
     }
 
-    case class ShiftLeft(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class ShiftLeft(_lhs: CCTerm, _rhs: CCTerm,
+                         srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes =
         ModuloArithmetic.bvshl(lhs.typ cast2Unsigned lhs.toTerm,
                                lhs.typ cast2Unsigned rhs.toTerm)
       override def getFloatRes = ???
     }
 
-    case class ShiftRight(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class ShiftRight(_lhs: CCTerm, _rhs: CCTerm,
+                          srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes = {
         val shifted = lhs.typ cast2Unsigned lhs.toTerm
         val count   = lhs.typ cast2Unsigned rhs.toTerm
@@ -137,49 +145,55 @@ object CCBinaryExpressions {
     ////////////////////////////////////////////////////////////////////////////
     // Binary predicates
     // && and || are encoded in CCReader
-    case class Equality(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
-      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
+    case class Equality(_lhs: CCTerm, _rhs: CCTerm,
+                        srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
+      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs, srcInfo)
 
       override def getIntRes   = lhsTerm === rhsTerm
       override def getFloatRes = ???
     }
 
-    case class Disequality(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
-      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
+    case class Disequality(_lhs: CCTerm, _rhs: CCTerm,
+                           srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
+      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs, srcInfo)
 
       override def getIntRes   = lhsTerm =/= rhsTerm
       override def getFloatRes = ???
     }
 
-    case class Less(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
-      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
+    case class Less(_lhs: CCTerm, _rhs: CCTerm,
+                    srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
+      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs, srcInfo)
 
       override def getIntRes   = lhsTerm < rhsTerm
       override def getFloatRes = ???
     }
 
-    case class Greater(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
-      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
+    case class Greater(_lhs: CCTerm, _rhs: CCTerm,
+                       srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
+      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs, srcInfo)
 
       override def getIntRes   = lhsTerm > rhsTerm
       override def getFloatRes = ???
     }
 
-    case class LessEqual(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
-      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
+    case class LessEqual(_lhs: CCTerm, _rhs: CCTerm,
+                         srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
+      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs, srcInfo)
 
       override def getIntRes   = lhsTerm <= rhsTerm
       override def getFloatRes = ???
     }
 
-    case class GreaterEqual(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
-      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs)
+    case class GreaterEqual(_lhs: CCTerm, _rhs: CCTerm,
+                            srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
+      val (lhsTerm, rhsTerm) = getActualOperandsForBinPred(lhs, rhs, srcInfo)
 
       override def getIntRes   = lhsTerm >= rhsTerm
       override def getFloatRes = ???
@@ -197,8 +211,9 @@ object CCBinaryExpressions {
 
     ////////////////////////////////////////////////////////////////////////////
     // Binary functions
-    case class Plus(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class Plus(_lhs: CCTerm, _rhs: CCTerm,
+                    srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes = lhs.toTerm + rhs.toTerm
       override def getFloatRes = ???
       override def term : CCTerm = (lhs.typ, rhs.typ) match {
@@ -210,10 +225,11 @@ object CCBinaryExpressions {
       }
     }
 
-    case class Minus(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class Minus(_lhs: CCTerm, _rhs: CCTerm,
+                     srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes = {
-        throwErrorIfPointerArithmetic(lhs, rhs)
+        throwErrorIfPointerArithmetic(lhs, rhs, srcInfo)
         lhs.toTerm - rhs.toTerm
       }
       override def getFloatRes = ???
@@ -224,45 +240,60 @@ object CCBinaryExpressions {
       }
     }
 
-    case class Times(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class Times(_lhs: CCTerm, _rhs: CCTerm,
+                     srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes = {
-        throwErrorIfPointerArithmetic(lhs, rhs)
+        throwErrorIfPointerArithmetic(lhs, rhs, srcInfo)
         ap.theories.nia.GroebnerMultiplication.mult(lhs.toTerm, rhs.toTerm)
       }
       override def getFloatRes = ???
     }
 
-    case class Div(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class Div(_lhs: CCTerm, _rhs: CCTerm,
+                   srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes = {
-        throwErrorIfPointerArithmetic(lhs, rhs)
+        throwErrorIfPointerArithmetic(lhs, rhs, srcInfo)
         ap.theories.nia.GroebnerMultiplication.tDiv(lhs.toTerm, rhs.toTerm)
       }
       override def getFloatRes = ???
     }
 
-    case class Mod(_lhs: CCTerm, _rhs: CCTerm)
-        extends BinaryOperation(_lhs, _rhs) {
+    case class Mod(_lhs: CCTerm, _rhs: CCTerm,
+                   srcInfo: Option[SourceInfo])
+        extends BinaryOperation(_lhs, _rhs, srcInfo) {
       override def getIntRes = {
-        throwErrorIfPointerArithmetic(lhs, rhs)
+        throwErrorIfPointerArithmetic(lhs, rhs, srcInfo)
         ap.theories.nia.GroebnerMultiplication.tMod(lhs.toTerm, rhs.toTerm)
       }
       override def getFloatRes = ???
     }
 
     private def throwErrorIfPointerArithmetic(lhs: CCTerm,
-                                              rhs: CCTerm): Unit = {
+                                              rhs: CCTerm,
+                                              srcInfo: Option[SourceInfo]):
+    Unit = {
       (lhs.typ, rhs.typ) match {
         case (_: CCHeapArrayPointer, _) =>
           throw new TranslationException(
+            getLineString(srcInfo) +
             "This operation is not supported for array pointers.")
         case _ => // nothing
       }
     }
 
+    def rejectNonArrayPointerArithmetic(srcInfo: Option[SourceInfo],
+                                        operands: CCTerm*): Unit =
+      if (operands.exists(_.typ.isInstanceOf[CCNonArrayPointer]))
+        throw new UnsupportedCFragmentException(
+          getLineStringShort(srcInfo) +
+          " Arithmetic on non-array pointers is not supported.")
+
     private def getActualOperandsForBinPred(lhs: CCTerm,
-                                            rhs: CCTerm): (ITerm, ITerm) = {
+                                            rhs: CCTerm,
+                                            srcInfo: Option[SourceInfo]):
+    (ITerm, ITerm) = {
       (lhs.typ, rhs.typ) match {
         case (CCClock, _: CCArithType) =>
           (GT.term - lhs.toTerm, GTU.term * rhs.toTerm)
@@ -280,6 +311,10 @@ object CCBinaryExpressions {
           (GT.term - lhs.toTerm, rhs.toTerm)
         case (CCDuration, CCClock) =>
           (lhs.toTerm, GT.term - rhs.toTerm)
+        case (ptrType, _ : CCArithType) if ptrType.isPointerType =>
+          (lhs.toTerm, rhs.convertToType(ptrType, srcInfo).toTerm)
+        case (_ : CCArithType, ptrType) if ptrType.isPointerType =>
+          (lhs.convertToType(ptrType, srcInfo).toTerm, rhs.toTerm)
         case _ =>
           (lhs.toTerm, rhs.toTerm)
       }

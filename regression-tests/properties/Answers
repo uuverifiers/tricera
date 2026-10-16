@@ -89,3 +89,9 @@ UNSAFE
 
 valid-free-heap-or-stack-array-true.c
 UNKNOWN (Unsupported C fragment. 7:10 Freeing a pointer which may point to the heap or to a stack or global array is not supported.)
+
+valid-free-array-null-true.c
+SAFE
+
+valid-free-array-null-false.c
+UNSAFE
