@@ -241,6 +241,11 @@ class Symex private (context        : SymexContext,
       context.mkRichAssertionClause(clause, srcInfo, propertyType))
   }
 
+  private def exitProgram(srcInfo : Option[SourceInfo]) : Unit = {
+    context.programExitPred.foreach(pred => outputClause(asAtom(pred), srcInfo))
+    addGuard(IBoolLit(false))
+  }
+
   def addValue(t : CCTerm) = {
     values = values ++ scala.Seq(t)
     touchedGlobalState = touchedGlobalState || !scope.freeFromGlobal(t)
@@ -1434,8 +1439,7 @@ class Symex private (context        : SymexContext,
             assertProperty(false, srcInfo, properties.Reachability)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "abort" =>
-          /** Treat abort as assert(0). */
-          assertProperty(false, srcInfo, properties.UserAssertion())
+          exitProgram(srcInfo)
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case name if maybeHeapModel.exists(_.builtinTerms contains name) =>
           pushVal(heapModel.builtinTerms(name).copy(srcInfo = srcInfo))
@@ -1474,8 +1478,12 @@ class Symex private (context        : SymexContext,
           assertProperty(property, srcInfo, properties.UserAssertion())
           pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "exit" if exp.listexp_.size == 1 =>
-          addGuard(IBoolLit(false))
+          exitProgram(srcInfo)
           pushVal(CCTerm.fromFormula(false, CCInt, srcInfo))
+        case "__assert_fail" =>
+          assertProperty(false, srcInfo, properties.UserAssertion())
+          exitProgram(srcInfo)
+          pushVal(CCTerm.fromFormula(true, CCInt, srcInfo))
         case "assume" if exp.listexp_.size == 1 =>
           val specCtx = evalCtx.withGhostVisible(true)
           val property = exp.listexp_.asScala.head match {

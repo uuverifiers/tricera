@@ -17,7 +17,9 @@ TESTS="valid-free-10-true.c  valid-free-3-true.c   valid-free-7-false.c \
        valid-free-12-false.c valid-memcleanup-4-false.c \
        valid-free-heap-or-stack-array-true.c \
        valid-free-array-null-true.c valid-free-array-null-false.c \
-       valid-free-array-offset-true.c valid-free-array-offset-false.c"
+       valid-free-array-offset-true.c valid-free-array-offset-false.c \
+       valid-memcleanup-4-true.c valid-memcleanup-5-false.c \
+       valid-memcleanup-5-true.c"
 
 for name in $TESTS; do
     echo

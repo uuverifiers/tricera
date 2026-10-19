@@ -277,28 +277,51 @@ abort-1.c
 SAFE
 
 abort-2.c
+SAFE
 
---------------
+abort-ends-path-false.c
+
+----------
 Init:
- main3_3(42)  
---------------
-      |       
-      |       
-      V       
- main3_15(42) 
---------------
-      |       
-      |       
-      V       
-   main(42)   
---------------
+ main9_3  
+----------
+    |     
+    |     
+    V     
+ main(1)  
+----------
 Final:
-   main(42)   
---------------
+ main(1)  
+----------
 Failed assertion:
-false :- main(x:2). (line:8 col:3) (property: user-assertion)
+false :- main(x:9), 0 < x:9. (line:11 col:3) (property: user-assertion)
 
 UNSAFE
+
+abort-ends-path-true.c
+SAFE
+
+assert-fail-direct-false.c
+
+-------------
+Init:
+   main5_3   
+-------------
+      |      
+      |      
+      V      
+ main7_7(10) 
+-------------
+Final:
+ main7_7(10) 
+-------------
+Failed assertion:
+false :- main7_7(x:5). (line:8 col:5) (property: user-assertion)
+
+UNSAFE
+
+assert-fail-direct-true.c
+SAFE
 
 inits2-opt.hcc
 

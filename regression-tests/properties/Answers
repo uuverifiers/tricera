@@ -101,3 +101,12 @@ SAFE
 
 valid-free-array-offset-false.c
 UNSAFE
+
+valid-memcleanup-4-true.c
+SAFE
+
+valid-memcleanup-5-false.c
+UNSAFE
+
+valid-memcleanup-5-true.c
+SAFE

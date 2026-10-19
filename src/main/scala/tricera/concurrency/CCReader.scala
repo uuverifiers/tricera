@@ -342,6 +342,8 @@ class CCReader private (prog              : Program,
       CCReader.this.atom(p, a)
     override def atom(p : CCPredicate) : IAtom =
       CCReader.this.atom(p)
+    override def programExitPred : Option[CCPredicate] =
+      CCReader.this.programExitPred
     override def getRichClause(c : HornClauses.Clause) : Option[CCClause] =
       CCReader.this.getRichClause(c)
     override def addRichClause(c : HornClauses.Clause,
@@ -979,6 +981,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
    */
   private val globalExitPred = newPred("exit", scope.allFormalVars, None)
 
+  // globalExitPred belongs to the entry function, so it is only set
+  // when entry is translated
+  private var programExitPred : Option[CCPredicate] = None
+
   private def translateProgram : Unit = {
     // First collect all declarations. This is a bit more
     // generous than actual C semantics, where declarations
@@ -1466,12 +1472,14 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
            * return type, the function can still end without reaching a
            * return statement - which is why there can be multiple `finalPreds`.
            */
+          programExitPred = Some(globalExitPred)
           val finalPreds = scala.Seq(globalExitPred) ++ (
             if (returnType != CCVoid) {
               val exitWithoutReturnPred = translator.translateWithReturn(stm)
               scala.Seq(exitWithoutReturnPred, exitPred)
             }
             else scala.Seq(translator.translateNoReturn(stm)))
+          programExitPred = None
 
           /** The heap model might want to add some final assertions, for
            *  instance assertions related to memory safety. */

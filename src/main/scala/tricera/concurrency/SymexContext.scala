@@ -87,6 +87,7 @@ trait SymexContext {
                             p       : properties.Property) : CCAssertionClause
   def atom(p : CCPredicate, a       : scala.Seq[ITerm]) : IAtom
   def atom(p : CCPredicate) : IAtom
+  def programExitPred : Option[CCPredicate]
 
   // --- Control Flow & Inlining ---
   def inAtomicMode[A](comp : => A) : A

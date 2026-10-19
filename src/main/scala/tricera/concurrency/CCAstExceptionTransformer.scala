@@ -348,7 +348,11 @@ object CCAstExceptionTransformer {
     )
 
     private val emptyReturnStm = new JumpS(new SjumpFour)
-    private val abortStm = new ExprS(new SexprTwo(new Efunk(new Evar("abort"))))
+    private val uncaughtExceptionStm = {
+      val args = new ListExp
+      args.add(new Econst(new Eint("0")))
+      new ExprS(new SexprTwo(new Efunkpar(new Evar("assert"), args)))
+    }
 
     private def returnStm(e: Exp): Stm = {
       new JumpS(new SjumpFive(e))
@@ -597,7 +601,7 @@ object CCAstExceptionTransformer {
           case None => {
             // No handler can catch the exception
             if (outerFuncName == "main") {
-              cases.addOne((exceptionType, abortStm))
+              cases.addOne((exceptionType, uncaughtExceptionStm))
             } else {
               cases.addOne((exceptionType, exceptionPropagationReturn(outerFuncName)))
             }
@@ -691,7 +695,7 @@ object CCAstExceptionTransformer {
               } case None => {
                   // No handler can catch the exception
                   if (funcName == "main") {
-                    stmList.add(abortStm)
+                    stmList.add(uncaughtExceptionStm)
                   } else {
                     stmList.add(exceptionPropagationReturn(funcName))
                   }
@@ -717,7 +721,7 @@ object CCAstExceptionTransformer {
                       } case None => {
                         // No handler can catch the exception
                         if (funcName == "main") {
-                          stmList.add(abortStm)
+                          stmList.add(uncaughtExceptionStm)
                         } else {
                           stmList.add(exceptionPropagationReturn(funcName))
                         }
@@ -729,7 +733,7 @@ object CCAstExceptionTransformer {
               case None => {
                 // Empty throw statement not inside catch
                 // no exception to rethrow
-                stmList.add(abortStm)
+                stmList.add(uncaughtExceptionStm)
               }
             }
 
