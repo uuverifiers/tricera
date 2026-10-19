@@ -315,6 +315,22 @@ abstract sealed class CCType {
       arrayTheory.const(elementType.getZeroInit)
     case _                                => IIntLit(0)
   }
+
+  // the value of this type initialised from the elements of a braced list
+  def getInitialized(values : InitializerStack) : ITerm = this match {
+    case structType : CCStruct =>
+      structType.ctor(structType.sels.indices.map(i =>
+        values.popInitialized(structType.getFieldType(i))) : _*)
+    case CCArray(elementType, _, Some(arraySize), arrayTheory, _) =>
+      (0 until arraySize).foldLeft(getZeroInit)((array, i) =>
+        arrayTheory.store(array, Int2ITerm(i),
+                          values.popInitialized(elementType)))
+    case _ : CCHeapArrayPointer =>
+      throw new TranslationException(
+        "Heap arrays inside structs are" +
+          "not supported.")
+    case _ => values.popInitialized(this)
+  }
 }
 
 abstract class CCArithType extends CCType {
@@ -581,62 +597,6 @@ case class CCStruct(ctor : MonoSortedIFunction,
   }
 
   def getADTSelector(ind: Int): MonoSortedIFunction = sels(ind)._1
-
-  // Initializes a struct using a stack and returns the initialized term.
-  // The stack's top value must be the first term of the struct.
-  // The fields are initialized left to right depth-first.
-  // If there are not enough values to initialize all the fields, then the
-  // remaining fields are initialized to 0.
-  def getInitialized(values: InitializerStack): ITerm = {
-    val const: IndexedSeq[ITerm] =
-      for (field <- sels)
-        yield
-          field._2 match {
-            case s: CCStructField // do not add ctor again if already struct
-              if values.nextHasSort(s.toSort) =>
-              values.pop().convertToType(s).toTerm
-            case CCStructField(name, structs) =>
-              structs(name).getInitialized(values)
-            case s: CCStruct // do not add ctor again if already struct
-              if values.nextHasSort(s.toSort) =>
-              values.pop().convertToType(s).toTerm
-            case s: CCStruct => s.getInitialized(values)
-            case p: CCHeapPointer =>
-              if (values.isEmpty) p.nullPointer
-              else values.pop().convertToType(p).toTerm
-            case _: CCHeapArrayPointer =>
-              throw new TranslationException(
-                "Heap arrays inside structs are" +
-                  "not supported.")
-            case CCArray(elemTyp,
-                         sizeExpr,
-                         Some(arraySize),
-                         arrayTheory,
-                         arrayLocation) =>
-              val initialArrayTerm =
-                new SortedConstantTerm(field._1.name, arrayTheory.objSort)
-              def arrayBatchStore(arr: ITerm, ind: Int, n: Int): ITerm = {
-                if (ind >= n)
-                  arr
-                else {
-                  val innerArr = arrayTheory.store(
-                    arr,
-                    Int2ITerm(ind),
-                    if (values.isEmpty) elemTyp.getZeroInit
-                    else values.pop().convertToType(elemTyp).toTerm
-                  )
-                  arrayBatchStore(innerArr, ind + 1, n)
-                }
-              }
-              arrayBatchStore(initialArrayTerm, 0, arraySize)
-            case _ =>
-              if (values.isEmpty)
-                Int2ITerm(0)
-              else
-                values.pop().convertToType(field._2).toTerm
-          }
-    ctor(const: _*)
-  }
 
   def structSizeInBytes : Int = {
     sels.foldLeft(0) {

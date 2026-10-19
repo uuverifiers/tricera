@@ -72,3 +72,51 @@ UNSAFE
 
 init-copy-nested-unsafe.c
 UNSAFE
+
+init-sub-array-zero-safe.c (math)
+SAFE
+
+init-sub-array-zero-safe.c (ilp32)
+SAFE
+
+init-sub-array-zero-unsafe.c (math)
+UNSAFE
+
+init-sub-array-zero-unsafe.c (ilp32)
+UNSAFE
+
+init-sub-array-next-safe.c (math)
+SAFE
+
+init-sub-array-next-safe.c (ilp32)
+SAFE
+
+init-sub-array-next-unsafe.c (math)
+UNSAFE
+
+init-sub-array-next-unsafe.c (ilp32)
+UNSAFE
+
+init-sub-struct-next-safe.c (math)
+SAFE
+
+init-sub-struct-next-safe.c (ilp32)
+SAFE
+
+init-sub-struct-next-unsafe.c (math)
+UNSAFE
+
+init-sub-struct-next-unsafe.c (ilp32)
+UNSAFE
+
+init-struct-array-safe.c (math)
+SAFE
+
+init-struct-array-safe.c (ilp32)
+SAFE
+
+init-struct-array-unsafe.c (math)
+UNSAFE
+
+init-struct-array-unsafe.c (ilp32)
+UNSAFE

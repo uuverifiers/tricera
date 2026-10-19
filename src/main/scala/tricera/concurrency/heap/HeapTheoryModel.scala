@@ -483,15 +483,7 @@ class HeapTheoryModel(context           : SymexContext,
     }
 
     for (i <- 0 until arraySize) {
-      val valueToInit = if (initializers.nonEmpty) {
-        arrayPtr.elementType match {
-          case structType: CCStruct => structType.getInitialized(initializers)
-          case elementType =>
-            initializers.pop().convertToType(elementType).toTerm
-        }
-      } else {
-        arrayPtr.elementType.getZeroInit
-      }
+      val valueToInit = initializers.popInitialized(arrayPtr.elementType)
       val wrappedValue = context.sortWrapperMap(arrayPtr.elementType.toSort)(valueToInit)
 
       val addrToWrite = context.heap.rangeNth(rawRange, i)

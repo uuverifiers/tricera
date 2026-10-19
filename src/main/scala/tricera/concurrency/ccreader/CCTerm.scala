@@ -268,11 +268,24 @@ object CCTerm {
 }
 
 class InitializerStack {
-  private val values = new scala.collection.mutable.Stack[CCTerm]
-  def push(value : CCTerm) : Unit = values.push(value)
-  def pop() : CCTerm = values.pop()
-  def isEmpty  : Boolean = values.isEmpty
-  def nonEmpty : Boolean = values.nonEmpty
-  def nextHasSort(sort : Sort) : Boolean =
-    values.nonEmpty && Sort.sortOf(values.top.toTerm) == sort
+  private val values =
+    new scala.collection.mutable.Stack[Either[CCTerm, InitializerStack]]
+  def push(value : CCTerm) : Unit = values.push(Left(value))
+  def push(list : InitializerStack) : Unit = values.push(Right(list))
+
+  // a braced list initialises exactly one object, without braces an
+  // aggregate takes as many initialisers as it needs
+  def popInitialized(typ : CCType) : ITerm =
+    if (values.isEmpty) typ.getZeroInit
+    else (values.top, typ) match {
+      case (Right(list), _) =>
+        values.pop()
+        typ.getInitialized(list)
+      case (Left(value), _ : CCStruct | CCArray(_, _, Some(_), _, _))
+          if value.typ.toSort != typ.toSort =>
+        typ.getInitialized(this)
+      case (Left(value), _) =>
+        values.pop()
+        value.convertToType(typ).toTerm
+    }
 }

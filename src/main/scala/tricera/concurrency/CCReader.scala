@@ -2268,8 +2268,8 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         case init: InitExpr =>
           initStack.push(s.eval(init.exp_)(
             s.EvalSettings(), s.EvalContext()))
-        case init: InitListOne => fillInits(init.initializers_)
-        case init: InitListTwo => fillInits(init.initializers_)
+        case init: InitListOne => initStack.push(getInitsStack(init, s))
+        case init: InitListTwo => initStack.push(getInitsStack(init, s))
       }
     }
     def fillInits(inits: Initializers) {
@@ -2281,7 +2281,10 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
         }
       }
     }
-    fillInit(init)
+    init match {
+      case init: InitListOne => fillInits(init.initializers_)
+      case init: InitListTwo => fillInits(init.initializers_)
+    }
     initStack
   }
 

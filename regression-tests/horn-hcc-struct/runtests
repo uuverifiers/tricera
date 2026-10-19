@@ -20,3 +20,15 @@ for name in $NOCEXTESTS; do
     $TRI_CMD -abstract:off "$@" $name 2>&1 | grep -v 'at '
 done
 
+TESTS="init-sub-array-zero-safe.c init-sub-array-zero-unsafe.c \
+       init-sub-array-next-safe.c init-sub-array-next-unsafe.c \
+       init-sub-struct-next-safe.c init-sub-struct-next-unsafe.c \
+       init-struct-array-safe.c init-struct-array-unsafe.c"
+
+for name in $TESTS; do
+    for mode in math ilp32; do
+        echo
+        echo "$name ($mode)"
+        $TRI_CMD -abstract:off -arithMode:$mode "$@" $name 2>&1 | grep -E '^(SAFE|UNSAFE)$'
+    done
+done
