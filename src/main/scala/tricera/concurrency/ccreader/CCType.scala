@@ -389,6 +389,11 @@ case object CCVoid extends CCType {
   def shortName = "void"
 }
 
+case object CCStringLiteral extends CCType {
+  override def toString : String = "string literal"
+  def shortName = "string"
+}
+
 // _Bool, also the acsl boolean type
 case object CCBool extends CCArithType {
   override def toString : String = "boolean"

@@ -64,6 +64,13 @@ false :- main12_3(@h, s:8, p:12), get_int(heap.read(@h, p:12)) = 3. (line:13 col
 
 UNSAFE
 
+flexible-array-member.c
+UNKNOWN (Unsupported C fragment. 1:23 Flexible array members are not supported.)
+
+init-string-char-array.c
+Warning: ignoring string argument
+UNKNOWN (Unsupported C fragment. 4:17 String literals are not supported.)
+
 race.hcc
 UNSAFE
 

@@ -81,6 +81,10 @@ case class CCTerm(t               : ITerm,
       case (CCMathInt, _: CCArithType) =>
         newType cast this
       case (_, CCVoid) => this
+      case (CCStringLiteral, _) =>
+        throw new UnsupportedCFragmentException(
+          getLineStringShort(conversionSrcInfo) +
+          " String literals are not supported.")
       case (_: CCArithType, newType: CCPointer) if isNullPointerConstant =>
         CCTerm.fromTerm(newType.nullPointer, newType, srcInfo)
       case (_: CCArithType, _: CCPointer) |

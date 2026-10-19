@@ -1732,7 +1732,7 @@ class Symex private (context        : SymexContext,
     case exp : Estring => // todo: implement this properly
       warn("ignoring string argument")
       val srcInfo = Some(getSourceInfo(exp))
-      pushVal(CCTerm.fromTerm(IIntLit(IdealInt(1)), CCInt, srcInfo))
+      pushVal(CCTerm.fromTerm(IIntLit(IdealInt(1)), CCStringLiteral, srcInfo))
 
     case exp : Earray =>
       val srcInfo = Some(getSourceInfo(exp))

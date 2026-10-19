@@ -311,9 +311,11 @@ object CCBinaryExpressions {
           (GT.term - lhs.toTerm, rhs.toTerm)
         case (CCDuration, CCClock) =>
           (lhs.toTerm, GT.term - rhs.toTerm)
-        case (ptrType, _ : CCArithType) if ptrType.isPointerType =>
+        case (ptrType, _ : CCArithType | CCStringLiteral)
+            if ptrType.isPointerType =>
           (lhs.toTerm, rhs.convertToType(ptrType, srcInfo).toTerm)
-        case (_ : CCArithType, ptrType) if ptrType.isPointerType =>
+        case (_ : CCArithType | CCStringLiteral, ptrType)
+            if ptrType.isPointerType =>
           (lhs.convertToType(ptrType, srcInfo).toTerm, rhs.toTerm)
         case _ =>
           (lhs.toTerm, rhs.toTerm)

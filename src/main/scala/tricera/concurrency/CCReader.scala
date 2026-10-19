@@ -2126,8 +2126,9 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           throw new TranslationException("Functions as struct fields" +
             " are not supported.")
         case _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
-          if (!modelHeap) throw NeedsHeapModelException
-          heapModelFactory.makeArrayPointer(typ, ArrayLocation.Heap)
+          throw new UnsupportedCFragmentException(
+            getLineStringShort(sourceInfo) +
+            " Flexible array members are not supported.")
         case _: Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
           CCArray(typ, None, None,
             ExtArray(scala.Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap) // todo: only int indexed arrays
