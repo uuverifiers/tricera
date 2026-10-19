@@ -190,6 +190,8 @@ object ACSLLineariser {
 
     override def postVisit(t: IExpression, settings: PrepSettings, subres: Seq[IExpression])
     : IExpression = t match {
+      case ConstantAsProgVarProxy(p) if p.isResult =>
+        IConstant(new ConstantTerm("\\result"))
       case ConstantAsProgVarProxy(p) if settings.usePlainConstant =>
         IConstant(new ConstantTerm(p.name))
       case ConstantAsProgVarProxy(p) => 
@@ -198,8 +200,6 @@ object ACSLLineariser {
             IConstant(new ConstantTerm(f"\\at(${p.name}, Pre)")) 
           case _: PostCondition if p.isPreExec =>
             IConstant(new ConstantTerm(f"\\old(${p.name})"))
-          case _ if p.isResult =>
-            IConstant(new ConstantTerm("\\result"))
           case _ =>
             IConstant(new ConstantTerm(p.name))
         }

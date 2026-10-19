@@ -11,7 +11,8 @@ TESTS="get-1.c  \
        qualified-heapptr-to-stackptr.c \
        multi-arg-1.c multi-arg-2.c \
        alias-share-safe.c alias-share-unsafe.c \
-       alias-reject-overlap.c alias-reject-array.c alias-reject-deref.c"
+       alias-reject-overlap.c alias-reject-array.c alias-reject-deref.c \
+       result-deref.c"
 
 for name in $TESTS; do
     echo
