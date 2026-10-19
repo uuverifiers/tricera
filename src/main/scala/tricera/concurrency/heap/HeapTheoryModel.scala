@@ -287,7 +287,7 @@ class HeapTheoryModel(context           : SymexContext,
           arrayPtr.arrayLocation match {
             case ArrayLocation.Heap =>
               /**
-               * Assert that either `t` is `null`, or
+               * Assert that either `t` is `null`, or the offset of `t` is 0 and
                * forall ind. t[ind] =/= defObj
                * (or equivalently forall ind. read(h, nth(t, ind)) =/= defObj)
                */
@@ -296,8 +296,9 @@ class HeapTheoryModel(context           : SymexContext,
               val readObj = context.heap.read(getValue(heapVar, nextState).toTerm, readAddr)
               val assertion = CCTerm.fromFormula(
                 p.toTerm === nullArrayPtr() |||
-                (context.heap.rangeWithin(rawRange, readAddr) ==>
-                 (readObj =/= context.heap.defaultObject)), CCInt, loc.srcInfo)
+                (arrayPtrOps.getOffset(p.toTerm) === 0 &&&
+                 (context.heap.rangeWithin(rawRange, readAddr) ==>
+                  (readObj =/= context.heap.defaultObject))), CCInt, loc.srcInfo)
               assertions = (assertion, properties.MemValidFree) :: assertions
             case ArrayLocation.Stack | ArrayLocation.Global =>
               /**

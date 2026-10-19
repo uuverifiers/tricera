@@ -95,3 +95,9 @@ SAFE
 
 valid-free-array-null-false.c
 UNSAFE
+
+valid-free-array-offset-true.c
+SAFE
+
+valid-free-array-offset-false.c
+UNSAFE
