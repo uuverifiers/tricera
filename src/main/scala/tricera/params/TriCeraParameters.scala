@@ -308,12 +308,6 @@ class TriCeraParameters extends GlobalParameters {
     case "-noSlicing" :: rest => slicing = false; parseArgs(rest)
     //case "-array" :: rest => arrayRemoval = true; arguments(rest)
     case "-princess" :: rest => princess = true; parseArgs(rest)
-    case "-stac" :: rest => staticAccelerate = true; parseArgs(rest)
-    case "-dynac" :: rest => dynamicAccelerate = true; parseArgs(rest)
-    case "-unap" :: rest => underApproximate = true; parseArgs(rest)
-    case "-tem" :: rest => template = true; parseArgs(rest)
-    case "-dinq" :: rest => dumpInterpolationQuery = true; parseArgs(rest)
-    case "-brew" :: rest => babarew = true; parseArgs(rest)
     /*      case "-bfs" :: rest => searchMethod = BFS; arguments(rest)
           case "-prq" :: rest => searchMethod = PRQ; arguments(rest)
           case "-dfs" :: rest => searchMethod = DFS; arguments(rest)
@@ -452,7 +446,6 @@ class TriCeraParameters extends GlobalParameters {
     |-symDepth:n        Set a max depth for symbolic execution (underapproximate)
     |                     (currently only supported with bfs)
     |-disj              Use disjunctive interpolation
-    |-stac              Static acceleration of loops
     |-lbe               Disable preprocessor (e.g., clause inlining)
     |-arrayQuans:n      Introduce n quantifiers for each array argument (default: 1)
     |-noSlicing         Disable slicing of clauses

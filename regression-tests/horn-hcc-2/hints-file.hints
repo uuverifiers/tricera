@@ -1,0 +1,3 @@
+(initial-predicates main3_3 ((i Int) (j Int))
+  (= i j)
+  (<= i 10))

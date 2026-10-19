@@ -361,6 +361,10 @@ hints4.hcc
 CEGAR iterations:                                      0
 SAFE
 
+hints-file.c
+CEGAR iterations:                                      0
+SAFE
+
 switch-scoped-decl.hcc
 SAFE
 

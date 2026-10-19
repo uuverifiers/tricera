@@ -38,6 +38,7 @@ import ap.parser.{IAtom, IConstant, IFormula, VariableSubstVisitor}
 import hornconcurrency.ParametricEncoder
 import lazabs.horn.bottomup.HornClauses.Clause
 import lazabs.horn.Util.NullStream
+import lazabs.horn.abstractions.{AbsReader, VerificationHints}
 import lazabs.prover._
 import tricera.concurrency.{CCReader, PreprocessorFacts, TriCeraPreprocessor}
 import tricera.Util.{SourceInfo, printlnDebug}
@@ -253,6 +254,29 @@ object Main {
     finally src.close()
   }
 
+  private def readHintsFile(fileName : String,
+                            system   : ParametricEncoder.System)
+                          : VerificationHints = {
+    val input = new java.io.BufferedReader(new java.io.FileReader(fileName))
+    val hintsReader = try new AbsReader(input) finally input.close()
+    val nameToPred = system.allLocalPreds.map(p => p.name -> p).toMap
+    val (knownHints, unknownHints) = hintsReader.allHints.partition {
+      case (name, _) => nameToPred contains name
+    }
+    for (name <- unknownHints.keys.toSeq.sorted)
+      Util.warn(s"Ignoring hints for $name")
+    VerificationHints(
+      for ((name, hints) <- knownHints) yield {
+        val pred = nameToPred(name)
+        val declaredArity = hintsReader.predArities(name)
+        if (pred.arity != declaredArity)
+          throw new MainException(
+            s"Wrong number of arguments for $name in $fileName: " +
+            s"expected ${pred.arity}, found $declaredArity")
+        pred -> hints
+      })
+  }
+
 }
 
 class Main (args: Array[String]) {
@@ -435,10 +459,17 @@ class Main (args: Array[String]) {
 
     import tricera.acsl.Encoder
 
-    val (system, maybeEnc : Option[Encoder]) = if (reader.funToContract.nonEmpty) {
+    val (translatedSystem, maybeEnc : Option[Encoder]) = if (reader.funToContract.nonEmpty) {
       val enc = new Encoder(reader)
       (enc.encode, Some(enc))
     } else (reader.system, None)
+
+    val system =
+      if (cegarHintsFile.isEmpty) translatedSystem
+      else translatedSystem.copy(hints = translatedSystem.hints ++
+        Console.withOut(outStream) {
+          readHintsFile(cegarHintsFile, translatedSystem)
+        })
 
     def checkForSameNamedTerms = {
       val clausesWithSameNamedTerms =
