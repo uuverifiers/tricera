@@ -30,7 +30,7 @@
 package tricera.concurrency.ccreader
 
 import ap.parser.{IBoolLit, IExpression, IFormula, IIntLit, ITerm, SymbolCollector}
-import tricera.Util.{SourceInfo, getLineStringShort}
+import tricera.Util.{SourceInfo, getLineString, getLineStringShort}
 import CCExceptions._
 import ap.parser.IExpression._
 import tricera.concurrency.CCReader
@@ -175,16 +175,17 @@ object CCTerm {
       CCInt
     else e.underlying
 
-  def unifyTypes(a: CCTerm, b: CCTerm): (CCTerm, CCTerm) = {
+  def unifyTypes(a: CCTerm, b: CCTerm,
+                 srcInfo: Option[SourceInfo]): (CCTerm, CCTerm) = {
     (a.typ, b.typ) match {
       case (e : CCIntEnum, _) =>
-        unifyTypes(a.convertToType(enumUnificationType(e)), b)
+        unifyTypes(a.convertToType(enumUnificationType(e)), b, srcInfo)
       case (_, e : CCIntEnum) =>
-        unifyTypes(a, b.convertToType(enumUnificationType(e)))
+        unifyTypes(a, b.convertToType(enumUnificationType(e)), srcInfo)
       case (aType : CCArithType, _) if aType.isNarrowerThanInt =>
-        unifyTypes(a.applyIntegerPromotion, b)
+        unifyTypes(a.applyIntegerPromotion, b, srcInfo)
       case (_, bType : CCArithType) if bType.isNarrowerThanInt =>
-        unifyTypes(a, b.applyIntegerPromotion)
+        unifyTypes(a, b.applyIntegerPromotion, srcInfo)
       case _ if a.typ == b.typ =>
         (a, b)
 
@@ -212,7 +213,7 @@ object CCTerm {
 
       case _ =>
         throw new TranslationException(
-          "incompatible types: " +
+          getLineString(srcInfo) + "incompatible types: " +
             a.typ + " vs " + b.typ)
     }
   }
@@ -233,7 +234,7 @@ object CCTerm {
       typ.isInstanceOf[CCHeapPointer] || typ.isInstanceOf[CCHeapArrayPointer]
     (thenVal.typ, elseVal.typ) match {
       case (_ : CCArithType | CCMathInt, _ : CCArithType | CCMathInt) =>
-        unifyTypes(thenVal, elseVal)._1.typ
+        unifyTypes(thenVal, elseVal, srcInfo)._1.typ
       case (thenType, elseType) if thenType == elseType =>
         thenType
       case (thenType, _ : CCArithType) if isNullable(thenType) =>

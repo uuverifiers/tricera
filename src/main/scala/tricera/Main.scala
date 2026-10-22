@@ -69,7 +69,7 @@ object Main {
     if (res.executionResult != DidNotExecute)
       println(res.executionResult)
   } catch {
-    case e : MainException if args.contains("-checkPP") =>
+    case e : MainException =>
       Console.err.println(e.getMessage)
       sys.exit(1)
   }

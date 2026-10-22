@@ -53,7 +53,7 @@ object CCBinaryExpressions {
           (_lhs, _rhs)
         case _ : ShiftLeft | _ : ShiftRight =>
           (_lhs.applyIntegerPromotion, _rhs.applyIntegerPromotion)
-        case _ => CCTerm.unifyTypes(_lhs, _rhs)
+        case _ => CCTerm.unifyTypes(_lhs, _rhs, srcInfo)
       }
       // to note: pointer arithmetic types (arrayptr, arith) are not unified.
       // these should be handled in relevant cases supporting pointer arithmetic,

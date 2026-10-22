@@ -479,8 +479,7 @@ class TriCeraParameters extends GlobalParameters {
     |""".stripMargin)
       false
     case arg :: _ if arg.startsWith("-") =>
-      showHelp
-      throw new MainException(s"unrecognized option '$arg'")
+      throw new MainException(s"unrecognized option '$arg' (see -h)")
     case fn :: rest =>
       fileName = fn; in = new FileReader(fileName); parseArgs(rest)
   }

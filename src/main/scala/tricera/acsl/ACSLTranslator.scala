@@ -690,7 +690,7 @@ class ACSLTranslator(ctx : ACSLTranslator.AnnotationContext) {
     def binArith(l : AST.Expr, r : AST.Expr)
                 (op : (ITerm, ITerm) => ITerm) : CCTerm = {
       // the result keeps the operands' unified arithmetic type, not a predicate type
-      val (lhs, rhs) = CCTerm.unifyTypes(translateTerm(l), translateTerm(r))
+      val (lhs, rhs) = CCTerm.unifyTypes(translateTerm(l), translateTerm(r), Some(srcInfo))
       (lhs.typ, rhs.typ, expr) match {
         case (_: CCHeapArrayPointer, _: CCArithType, _: AST.EPlus) |
              (_: CCArithType, _: CCHeapArrayPointer, _: AST.EPlus) =>
