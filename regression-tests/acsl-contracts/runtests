@@ -113,6 +113,12 @@ TESTS="nested-calls-safe.hcc \
        ternary-pred-unsafe.hcc \
        stmt-assert-flow-safe.hcc \
        stmt-assert-flow-unsafe.hcc \
+       stmt-assert-if-branch-safe.hcc \
+       stmt-assert-if-branch-unsafe.hcc \
+       stmt-assert-if-else-safe.hcc \
+       stmt-assert-if-else-unsafe.hcc \
+       stmt-assert-before-decl-safe.hcc \
+       stmt-assert-before-decl-unsafe.hcc \
        stmt-assert-untranslatable-error.hcc \
        stmt-assert-pre-safe.hcc \
        stmt-assert-pre-unsafe.hcc \

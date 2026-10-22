@@ -87,7 +87,8 @@ object CCReader {
     val programReader = new java.io.StringReader(programText)
 
     def entry(parser : concurrent_c.parser) = parser.pProgram
-    val prog = parseWithEntry(programReader, entry _)
+    val prog = CCAstAnnotationNormaliser.transform(
+      parseWithEntry(programReader, entry _))
     val exceptionTransformedProg = if (facts.usesExceptions) {
       CCAstExceptionTransformer.transform(prog)
     } else {

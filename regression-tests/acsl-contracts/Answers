@@ -337,6 +337,24 @@ SAFE
 stmt-assert-flow-unsafe.hcc
 UNSAFE
 
+stmt-assert-if-branch-safe.hcc
+SAFE
+
+stmt-assert-if-branch-unsafe.hcc
+UNSAFE
+
+stmt-assert-if-else-safe.hcc
+SAFE
+
+stmt-assert-if-else-unsafe.hcc
+UNSAFE
+
+stmt-assert-before-decl-safe.hcc
+SAFE
+
+stmt-assert-before-decl-unsafe.hcc
+UNSAFE
+
 stmt-assert-untranslatable-error.hcc
 Horn Translation Error: At (2:3)): Failed to capture the expression for a labelled state in a statement annotation (referenced name not in function-entry scope, or unsupported)
 Identifier y not found in scope.

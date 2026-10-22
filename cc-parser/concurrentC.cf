@@ -245,9 +245,14 @@ IterS.          Stm ::= Iter_stm ;
 JumpS.          Stm ::= Jump_stm ;
 DecS.           Stm ::= Dec ; -- beyond ANSI-C
 AtomicS.        Stm ::= Atomic_stm ;
+internal
 AnnotationS.    Stm ::= Annotation ;
+internal
 AnnotatedIterS. Stm ::= Annotation Iter_stm ;
 GhostStm.       Stm ::= "⟦" [Stm] "⟧" ;
+
+AnnotatedS.           Stm  ::= Annotation Stm ;
+BlockEndAnnotationsS. Stm1 ::= [Annotation] ;
 
 -- Try catch
 TryCatchS.      Stm ::= Try_stm ;
@@ -290,7 +295,9 @@ SatomicOne. Atomic_stm ::= "atomic" Stm;
 SatomicTwo. Atomic_stm ::= "within" "(" Exp ")" Stm;
 
 
-separator nonempty Stm "";
+(:[]).  [Stm] ::= Stm ;
+(:[]).  [Stm] ::= Stm1 ;
+(:).    [Stm] ::= Stm [Stm] ;
 
 token CIdent (letter | '_' | '$' | '\\') (letter | digit | '_' | '$')*;
 

@@ -1,0 +1,7 @@
+// the annotation and the assignment after it form the branch
+int main(void) {
+  int c = 0, x = 0;
+  if (c) /*@ assert x == 1; */ x = 1;
+  assert(x == 1);
+  return 0;
+}
