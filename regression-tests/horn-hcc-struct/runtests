@@ -24,7 +24,8 @@ done
 TESTS="init-sub-array-zero-safe.c init-sub-array-zero-unsafe.c \
        init-sub-array-next-safe.c init-sub-array-next-unsafe.c \
        init-sub-struct-next-safe.c init-sub-struct-next-unsafe.c \
-       init-struct-array-safe.c init-struct-array-unsafe.c"
+       init-struct-array-safe.c init-struct-array-unsafe.c \
+       grouped-field-declarators-safe.c grouped-field-declarators-unsafe.c"
 
 for name in $TESTS; do
     for mode in math ilp32; do

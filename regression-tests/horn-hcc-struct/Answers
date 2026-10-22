@@ -127,3 +127,15 @@ UNSAFE
 
 init-struct-array-unsafe.c (ilp32)
 UNSAFE
+
+grouped-field-declarators-safe.c (math)
+SAFE
+
+grouped-field-declarators-safe.c (ilp32)
+SAFE
+
+grouped-field-declarators-unsafe.c (math)
+UNSAFE
+
+grouped-field-declarators-unsafe.c (ilp32)
+UNSAFE

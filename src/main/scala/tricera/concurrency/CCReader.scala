@@ -2094,65 +2094,44 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
   private def getType(exp : Ebytestype) : CCType = getType(exp.type_name_)
 
-  // get type of struct field
-  private def getType(fields : Struct_dec) : CCType = {
-    val specs =
-      (for (qual <- fields.asInstanceOf[Structen].listspec_qual_.asScala.iterator;
-           if (qual.isInstanceOf[TypeSpec]))
-        yield qual.asInstanceOf[TypeSpec].type_specifier_).toList
-    val (maybeDecl, maybeConstExpr) =
-      fields.asInstanceOf[Structen].liststruct_declarator_.asScala.head match {
-        case f : Decl =>
-          (Some(f.declarator_), None)
-        case f : Field =>
-          (None, f.constant_expression_)
-        case f : DecField =>
-          (Some(f.declarator_), Some(f.constant_expression_))
-      }
-
-    val typ = getType(specs.iterator)
+  private def getFieldType(typ : CCType, declarator : Declarator) : CCType = {
     // todo: unify this with code from collectVarDecl
-    val actualTyp = if (maybeDecl isEmpty) {
-      typ
-    } else {
-      val (directDecl, isPointer, sourceInfo) = maybeDecl.get match {
-        case decl: NoPointer => (decl.direct_declarator_, false,
-          Some(getSourceInfo(decl)))
-        case decl: BeginPointer => (decl.direct_declarator_, true,
-          Some(getSourceInfo(decl)))
-      }
-      directDecl match {
-        case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
-          throw new TranslationException("Functions as struct fields" +
-            " are not supported.")
-        case _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
-          throw new UnsupportedCFragmentException(
-            getLineStringShort(sourceInfo) +
-            " Flexible array members are not supported.")
-        case _: Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
-          CCArray(typ, None, None,
-            ExtArray(scala.Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap) // todo: only int indexed arrays
-        case initArray: InitArray =>
-          val arraySizeSymex = Symex(symexContext, scope, null, heapModel)
-          val evalSettings = arraySizeSymex.EvalSettings()
-          val evalContext = arraySizeSymex.EvalContext()
-          val arraySizeExp = arraySizeSymex.eval(
-            initArray.constant_expression_.asInstanceOf[Especial].exp_)(
-            evalSettings, evalContext
-          )
-          val arraySize = arraySizeExp match {
-            case CCTerm(IIntLit(IdealInt(n)), typ, srcInfo, _)
-              if typ.isInstanceOf[CCArithType] => n
-            case _ => throw new TranslationException("Array with non-integer" +
-              "size specified inside struct definition!")
-          }
-          CCArray(typ, Some(arraySizeExp), Some(arraySize),
-            ExtArray(scala.Seq(arraySizeExp.typ.toSort), typ.toSort),
-                  ArrayLocation.Heap)
-        case _ => typ
-      }
+    val (directDecl, isPointer, sourceInfo) = declarator match {
+      case decl: NoPointer => (decl.direct_declarator_, false,
+        Some(getSourceInfo(decl)))
+      case decl: BeginPointer => (decl.direct_declarator_, true,
+        Some(getSourceInfo(decl)))
     }
-    actualTyp
+    directDecl match {
+      case _: NewFuncDec /* | _ : OldFuncDef */ | _: OldFuncDec =>
+        throw new TranslationException("Functions as struct fields" +
+          " are not supported.")
+      case _: Incomplete if !TriCeraParameters.parameters.value.useArraysForHeap =>
+        throw new UnsupportedCFragmentException(
+          getLineStringShort(sourceInfo) +
+          " Flexible array members are not supported.")
+      case _: Incomplete if TriCeraParameters.parameters.value.useArraysForHeap =>
+        CCArray(typ, None, None,
+          ExtArray(scala.Seq(CCInt.toSort), typ.toSort), ArrayLocation.Heap) // todo: only int indexed arrays
+      case initArray: InitArray =>
+        val arraySizeSymex = Symex(symexContext, scope, null, heapModel)
+        val evalSettings = arraySizeSymex.EvalSettings()
+        val evalContext = arraySizeSymex.EvalContext()
+        val arraySizeExp = arraySizeSymex.eval(
+          initArray.constant_expression_.asInstanceOf[Especial].exp_)(
+          evalSettings, evalContext
+        )
+        val arraySize = arraySizeExp match {
+          case CCTerm(IIntLit(IdealInt(n)), typ, srcInfo, _)
+            if typ.isInstanceOf[CCArithType] => n
+          case _ => throw new TranslationException("Array with non-integer" +
+            "size specified inside struct definition!")
+        }
+        CCArray(typ, Some(arraySizeExp), Some(arraySize),
+          ExtArray(scala.Seq(arraySizeExp.typ.toSort), typ.toSort),
+                ArrayLocation.Heap)
+      case _ => typ
+    }
   }
 
   private var anonCount = 0
@@ -2211,7 +2190,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
 
       // if specs has a struct or union field we cannot simply get the type,
       // as the field itself might be defining a struct or union
-      val fieldType : Either[Integer, CCType] =
+      val specType : Either[Integer, CCType] =
       specs.find(s => s.isInstanceOf[Tstruct]) match {
         case Some(ts) =>
           val t = ts.asInstanceOf[Tstruct]
@@ -2229,7 +2208,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
               Left(structInfos.size - 1)
             case i => Left(i)
           }
-        case _ => Right(getType(field))
+        case _ => Right(getType(specs.iterator))
       }
       val declarators = field.asInstanceOf[Structen].liststruct_declarator_.asScala.toSeq
 
@@ -2244,7 +2223,7 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
           case d : BeginPointer => pointerLevels(d.pointer_)
           case _ => 0
         }
-        FieldInfo(fieldName, fieldType, ptrDepth)
+        FieldInfo(fieldName, specType.map(getFieldType(_, declarator)), ptrDepth)
       }
     }).toList.flatten.toIndexedSeq
 
