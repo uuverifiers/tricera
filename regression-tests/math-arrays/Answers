@@ -20,3 +20,9 @@ main_3(arr:7, old_arr:8) :- select(old_arr:8, 1) = select(arr:7, 1).
 ================================================================================
 
 SAFE
+
+vla-global-size-safe.c
+SAFE
+
+vla-global-size-unsafe.c
+UNSAFE

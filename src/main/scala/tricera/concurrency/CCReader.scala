@@ -2450,12 +2450,16 @@ assert(ctorObjSorts.toSet.size == ctorObjSorts.size)
                                     Symex(symexContext, scope, null, heapModel))
   : CCTerm = {
     symex.saveState
-    val res = symex.eval(expr.asInstanceOf[Especial].exp_)(
-      symex.EvalSettings(), symex.EvalContext())
-    if (!symex.atomValuesUnchanged)
-      throw new TranslationException(
-        "constant expression is not side-effect free")
-    res
+    try {
+      val res = symex.eval(expr.asInstanceOf[Especial].exp_)(
+        symex.EvalSettings(), symex.EvalContext())
+      if (!symex.atomValuesUnchanged)
+        throw new TranslationException(
+          "constant expression is not side-effect free")
+      res
+    } finally {
+      symex.restoreState
+    }
   }
 
   //////////////////////////////////////////////////////////////////////////////

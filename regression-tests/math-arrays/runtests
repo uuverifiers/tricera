@@ -9,3 +9,9 @@ for name in $TESTS; do
     echo $name
     $TRI_CMD -cex -abstract:off -mathArrays -sol "$@" $name 2>&1 | grep -v 'at '
 done
+
+for name in vla-global-size-safe.c vla-global-size-unsafe.c; do
+    echo
+    echo $name
+    $TRI_CMD -mathArrays "$@" $name 2>&1 | grep -v 'at '
+done
