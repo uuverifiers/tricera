@@ -274,7 +274,8 @@ abstract sealed class CCType {
           case Const(v) if v.signum < 0 => IIntLit(v % (typ.UNSIGNED_RANGE + 1))
           case Const(_)                 => t
           case _ =>
-            ite(t >= 0, t, cast2Interval(IdealInt.ZERO, typ.UNSIGNED_RANGE, t))
+            ite(t >= 0, t,
+                cast2Int(cast2Interval(IdealInt.ZERO, typ.UNSIGNED_RANGE, t)))
         }
       case _ => t
     }
